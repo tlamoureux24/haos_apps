@@ -1,0 +1,6 @@
+#!/usr/bin/with-contenv bashio
+set -e
+
+bashio::log.info "Démarrage du runner Rsync Manager"
+
+exec /usr/local/bin/rsync_runner.sh

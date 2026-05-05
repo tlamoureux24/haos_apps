@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Rsync Manager Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        body { background: #f4f7f6; padding: 20px; }
+        .tab-content { background: white; padding: 25px; border-radius: 0 0 10px 10px; border: 1px solid #dee2e6; border-top: none; }
+        .job-card { border: 1px solid #eee; padding: 15px; margin-bottom: 15px; border-radius: 8px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h3 class="mb-4 text-primary">Rsync Manager</h3>
+
+    <ul class="nav nav-tabs" id="mainTab">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#jobsPane">JOBS</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#configPane">SMTP</button></li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="jobsPane">
+            <div id="jobsList"></div>
+            <hr>
+            <button class="btn btn-primary" id="add-job-btn" type="button">+ Nouveau Job</button>
+            <button class="btn btn-success" id="save-jobs-btn" type="button">Sauvegarder les Jobs</button>
+            <div id="jobs-status" class="alert mt-3 d-none" role="alert"></div>
+        </div>
+
+        <div class="tab-pane fade" id="configPane">
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="email_enabled">
+                <label class="form-check-label fw-bold">Activer les emails</label>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6"><label>Serveur</label><input type="text" id="smtp_host" class="form-control"></div>
+                <div class="col-md-2"><label>Port</label><input type="number" id="smtp_port" class="form-control"></div>
+                <div class="col-md-4"><label>Authentification</label>
+                    <select id="smtp_auth" class="form-select"><option value="on">Oui</option><option value="off">Non</option></select>
+                </div>
+                <div class="col-md-6"><label>Utilisateur</label><input type="text" id="smtp_user" class="form-control"></div>
+                <div class="col-md-6"><label>Mot de passe</label><input type="password" id="smtp_pass" class="form-control"></div>
+                <div class="col-md-4"><label>TLS actif</label>
+                    <select id="smtp_tls" class="form-select"><option value="on">Oui</option><option value="off">Non</option></select>
+                </div>
+                <div class="col-md-4"><label>STARTTLS (Port 587)</label>
+                    <select id="smtp_starttls" class="form-select"><option value="on">Oui</option><option value="off">Non</option></select>
+                </div>
+                <div class="col-md-4"><label>Expéditeur</label><input type="text" id="mail_from" class="form-control"></div>
+                <div class="col-md-12"><label>Destinataire</label><input type="text" id="mail_to" class="form-control"></div>
+            </div>
+            <hr>
+            <button class="btn btn-success" id="save-config-btn" type="button">Sauvegarder Config</button>
+            <button class="btn btn-outline-info" id="test-email-btn" type="button">Envoyer un Test</button>
+            <div id="email-status" class="alert mt-3 d-none" role="alert"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+let jobs = [];
+const API = 'cgi-bin/api.sh';
+const statusTimers = {};
+
+function setStatus(message, type = 'info', target = 'email-status', autoHide = true) {
+    const el = document.getElementById(target);
+    clearTimeout(statusTimers[target]);
+
+    el.className = `alert alert-${type} mt-3 d-none`;
+    void el.offsetWidth;
+    el.className = `alert alert-${type} mt-3`;
+    el.textContent = message;
+
+    if (autoHide) {
+        statusTimers[target] = setTimeout(() => {
+            el.className = `alert alert-${type} mt-3 d-none`;
+            el.textContent = '';
+        }, 5000);
+    }
+}
+
+async function apiFetch(action, options = {}) {
+    const res = await fetch(`${API}?action=${action}`, {
+        cache: 'no-store',
+        ...options
+    });
+    const text = await res.text();
+
+    if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        throw new Error(`Réponse API non JSON pour ${action}: ${text.slice(0, 300)}`);
+    }
+}
+
+async function load() {
+    try {
+        jobs = await apiFetch('list_jobs');
+        const conf = await apiFetch('get_config');
+        for (let k in conf) {
+            let el = document.getElementById(k);
+            if(el) el.type === 'checkbox' ? el.checked = conf[k] : el.value = conf[k];
+        }
+        render();
+    } catch (e) {
+        setStatus(e.message, 'danger', 'jobs-status');
+    }
+}
+
+function escapeAttr(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function normalizeSide(side = {}) {
+    if (typeof side === 'string') {
+        return {
+            type: 'local',
+            path: side,
+            host: '',
+            share: '',
+            subpath: '',
+            domain: '',
+            vers: '3.0',
+            sec: 'ntlmssp',
+            options: 'noserverino,nounix',
+            user: '',
+            pass: ''
+        };
+    }
+
+    let host = side.host || '';
+    let share = side.share || '';
+    let subpath = side.subpath || '';
+    const path = side.path || '';
+
+    if (side.type === 'cifs' && (!host || !share) && path.startsWith('//')) {
+        const parts = path.replace(/^\/+/, '').split('/');
+        host = host || parts.shift() || '';
+        share = share || parts.shift() || '';
+        subpath = subpath || parts.join('/');
+    }
+
+    if (side.type === 'cifs' && share.includes('/')) {
+        const parts = share.replace(/^\/+/, '').split('/');
+        if (host && parts[0] === host) parts.shift();
+        share = parts.shift() || '';
+        subpath = subpath || parts.join('/');
+    }
+
+    return {
+        type: side.type || 'local',
+        path,
+        host,
+        share,
+        subpath,
+        domain: side.domain || '',
+        vers: side.vers || '3.0',
+        sec: side.sec || 'ntlmssp',
+        options: side.options || 'noserverino,nounix',
+        user: side.user || '',
+        pass: side.pass || ''
+    };
+}
+
+function setSideType(index, sideName, type) {
+    jobs[index][sideName] = normalizeSide(jobs[index][sideName]);
+    jobs[index][sideName].type = type;
+    render();
+}
+
+function setSideField(index, sideName, field, value) {
+    jobs[index][sideName] = normalizeSide(jobs[index][sideName]);
+    jobs[index][sideName][field] = value;
+}
+
+function sideFields(job, index, sideName) {
+    const side = normalizeSide(job[sideName]);
+
+    if (side.type === 'cifs') {
+        return `
+            <div class="row g-2 mt-1">
+                <div class="col-md-6">
+                    <input class="form-control form-control-sm" value="${escapeAttr(side.host)}" onchange="setSideField(${index}, '${sideName}', 'host', this.value)" placeholder="Adresse IP ou nom">
+                </div>
+                <div class="col-md-6">
+                    <input class="form-control form-control-sm" value="${escapeAttr(side.share)}" onchange="setSideField(${index}, '${sideName}', 'share', this.value)" placeholder="Partage réseau">
+                </div>
+                <div class="col-md-12">
+                    <input class="form-control form-control-sm" value="${escapeAttr(side.subpath)}" onchange="setSideField(${index}, '${sideName}', 'subpath', this.value)" placeholder="Sous-dossier dans le partage (optionnel)">
+                </div>
+                <div class="col-md-6">
+                    <input class="form-control form-control-sm" value="${escapeAttr(side.user)}" onchange="setSideField(${index}, '${sideName}', 'user', this.value)" placeholder="Login">
+                </div>
+                <div class="col-md-6">
+                    <input class="form-control form-control-sm" type="password" value="${escapeAttr(side.pass)}" onchange="setSideField(${index}, '${sideName}', 'pass', this.value)" placeholder="Mot de passe">
+                </div>
+                <div class="col-md-4">
+                    <input class="form-control form-control-sm" value="${escapeAttr(side.domain)}" onchange="setSideField(${index}, '${sideName}', 'domain', this.value)" placeholder="Domaine/Workgroup (optionnel)">
+                </div>
+                <div class="col-md-4">
+                    <select class="form-select form-select-sm" onchange="setSideField(${index}, '${sideName}', 'vers', this.value)">
+                        <option value="3.0" ${side.vers==='3.0'?'selected':''}>SMB 3.0</option>
+                        <option value="3.1.1" ${side.vers==='3.1.1'?'selected':''}>SMB 3.1.1</option>
+                        <option value="2.1" ${side.vers==='2.1'?'selected':''}>SMB 2.1</option>
+                        <option value="2.0" ${side.vers==='2.0'?'selected':''}>SMB 2.0</option>
+                        <option value="1.0" ${side.vers==='1.0'?'selected':''}>SMB 1.0</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <select class="form-select form-select-sm" onchange="setSideField(${index}, '${sideName}', 'sec', this.value)">
+                        <option value="ntlmssp" ${side.sec==='ntlmssp'?'selected':''}>sec=ntlmssp</option>
+                        <option value="" ${side.sec===''?'selected':''}>sec auto</option>
+                        <option value="ntlmv2" ${side.sec==='ntlmv2'?'selected':''}>sec=ntlmv2</option>
+                        <option value="ntlm" ${side.sec==='ntlm'?'selected':''}>sec=ntlm</option>
+                    </select>
+                </div>
+                <div class="col-md-12">
+                    <input class="form-control form-control-sm" value="${escapeAttr(side.options)}" onchange="setSideField(${index}, '${sideName}', 'options', this.value)" placeholder="Options CIFS avancées (défaut: noserverino,nounix)">
+                </div>
+            </div>`;
+    }
+
+    return `<input class="form-control form-control-sm" value="${escapeAttr(side.path)}" onchange="setSideField(${index}, '${sideName}', 'path', this.value)" placeholder="Chemin local">`;
+}
+
+function render() {
+    jobs = jobs.map(job => ({
+        ...job,
+        source: normalizeSide(job.source),
+        target: normalizeSide(job.target)
+    }));
+
+    document.getElementById('jobsList').innerHTML = jobs.map((j, i) => `
+        <div class="job-card bg-light p-3 mb-3 border rounded">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-4"><input class="form-control fw-bold" value="${escapeAttr(j.name)}" onchange="jobs[${i}].name=this.value"></div>
+                <div class="col-md-3"><input class="form-control text-muted" value="${escapeAttr(j.cron)}" onchange="jobs[${i}].cron=this.value"></div>
+                <div class="col-md-5 text-end">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="runJob(${i}, 'dry')">Simuler</button>
+                    <button class="btn btn-sm btn-primary" onclick="runJob(${i}, 'run')">Lancer</button>
+                    <button class="btn btn-sm btn-danger" onclick="jobs.splice(${i},1);render()">X</button>
+                </div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-md-6 text-start">
+                    <small class="fw-bold text-secondary text-uppercase" style="font-size:0.7rem">Source</small>
+                    <select class="form-select form-select-sm mb-1" onchange="setSideType(${i}, 'source', this.value)">
+                        <option value="local" ${j.source.type==='local'?'selected':''}>Local</option>
+                        <option value="cifs" ${j.source.type==='cifs'?'selected':''}>SMB/CIFS</option>
+                    </select>
+                    ${sideFields(j, i, 'source')}
+                </div>
+                <div class="col-md-6 text-start">
+                    <small class="fw-bold text-secondary text-uppercase" style="font-size:0.7rem">Cible</small>
+                    <select class="form-select form-select-sm mb-1" onchange="setSideType(${i}, 'target', this.value)">
+                        <option value="local" ${j.target.type==='local'?'selected':''}>Local</option>
+                        <option value="cifs" ${j.target.type==='cifs'?'selected':''}>SMB/CIFS</option>
+                    </select>
+                    ${sideFields(j, i, 'target')}
+                </div>
+            </div>
+        </div>`).join('');
+}
+
+function addJob() { jobs.push({name:"Backup", cron:"0 3 * * *", source:normalizeSide(), target:normalizeSide()}); render(); }
+async function saveJobs() {
+    try {
+        const data = await apiFetch('save_jobs', {
+            method:'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:JSON.stringify(jobs)
+        });
+        if (data.status !== 'ok') throw new Error(data.error || 'Sauvegarde jobs refusée');
+        setStatus("Jobs enregistrés et planification cron mise à jour.", 'success', 'jobs-status');
+    } catch (e) {
+        setStatus(e.message, 'danger', 'jobs-status');
+    }
+}
+async function saveConfig(showAlert = true) {
+    try {
+        const c = {}; document.querySelectorAll('#configPane input, #configPane select').forEach(el => { c[el.id] = el.type==='checkbox'?el.checked:el.value; });
+        const data = await apiFetch('save_config', {
+            method:'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:JSON.stringify(c)
+        });
+        if (data.status !== 'ok') throw new Error(data.error || "Erreur sauvegarde inconnue");
+        if (showAlert) setStatus("Configuration enregistrée.", 'success', 'email-status');
+        return true;
+    } catch (e) {
+        setStatus(e.message, 'danger', 'email-status');
+        return false;
+    }
+}
+async function testEmail() {
+    if (!await saveConfig(false)) return;
+    setStatus("Test email en cours...", 'info', 'email-status');
+    try {
+        const data = await apiFetch('test_email');
+        if (data.status === 'sent') {
+            setStatus("Email de test envoyé.", 'success', 'email-status');
+        } else {
+            setStatus("Erreur envoi email : " + (data.error || "inconnue"), 'danger', 'email-status');
+        }
+    } catch (e) {
+        setStatus(e.message, 'danger', 'email-status');
+    }
+}
+async function runJob(i, m) {
+    try {
+        const res = await fetch(`${API}?action=${m}&index=${i}`, {cache: 'no-store'});
+        const data = await res.json();
+        if (data.status !== 'started') throw new Error(data.error || 'Action refusée');
+        const action = m === 'dry' ? 'Dry-run' : 'Run manuel';
+        const name = jobs[i]?.name ? ` pour ${jobs[i].name}` : '';
+        setStatus(`${action}${name} lancé. Les logs détaillés sont disponibles dans le journal de l'addon.`, 'success', 'jobs-status');
+    } catch (e) {
+        setStatus(e.message, 'danger', 'jobs-status');
+    }
+}
+
+document.getElementById('add-job-btn').addEventListener('click', addJob);
+document.getElementById('save-jobs-btn').addEventListener('click', saveJobs);
+document.getElementById('save-config-btn').addEventListener('click', () => saveConfig(true));
+document.getElementById('test-email-btn').addEventListener('click', testEmail);
+
+load();
+</script>
+</body>
+</html>

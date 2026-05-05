@@ -1,0 +1,6 @@
+#!/usr/bin/with-contenv bashio
+set -e
+
+bashio::log.info "Démarrage du démon cron (crond)"
+# -c indique le dossier des crontabs
+exec crond -f -l 8 -L /proc/1/fd/1 -c /var/spool/cron/crontabs
