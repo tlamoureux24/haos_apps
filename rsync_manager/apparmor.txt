@@ -1,0 +1,68 @@
+#include <tunables/global>
+
+profile rsync_manager flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/bash>
+  #include <abstractions/nameservice>
+
+  # Base container/service permissions
+  capability,
+  file,
+  network,
+  mount,
+  umount,
+
+  capability setgid,
+  capability setuid,
+  capability sys_admin,
+  capability dac_read_search,
+
+  signal,
+
+  # S6-overlay startup and services
+  /init ix,
+  /bin/** ix,
+  /sbin/** ix,
+  /usr/bin/** ix,
+  /usr/sbin/** ix,
+  /usr/local/bin/** ix,
+  /run/{s6,s6-rc*,service}/** ix,
+  /package/** ix,
+  /command/** ix,
+  /etc/services.d/** rwix,
+  /etc/cont-init.d/** rwix,
+  /etc/cont-finish.d/** rwix,
+  /run/{,**} rwk,
+  /dev/tty rw,
+
+  # Bashio and temporary files
+  /usr/lib/bashio/** ix,
+  /tmp/** rwk,
+
+  # Add-on persistent data and generated crontab
+  /data/** rw,
+  /var/spool/cron/crontabs/** rwk,
+
+  # Ingress web UI and CGI scripts
+  /www/** rix,
+  /etc/lighttpd/** r,
+
+  # Home Assistant mapped folders from config.yaml
+  /config/** rw,
+  /share/** rw,
+  /media/** rw,
+  /backup/** rw,
+  /addons/** r,
+  /ssl/** r,
+
+  # Rsync Manager network mounts
+  /mnt/** rwk,
+
+  # Logging through the container init stdout/stderr descriptors.
+  /proc/1/fd/1 rw,
+  /proc/1/fd/2 rw,
+  /proc/[0-9]*/fd/** rw,
+
+  # Process discovery used by pidof/crond/service supervision.
+  /proc/** r,
+}

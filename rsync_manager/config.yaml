@@ -1,7 +1,8 @@
 name: "Rsync Manager"
 slug: "rsync_manager"
-version: "1.0.26"
+version: "1.0.29"
 description: "Gestion de jobs rsync via UI Ingress"
+codenotary: "thibaut.lamoureux@gmail.com"
 arch:
   - amd64
 startup: services
@@ -25,7 +26,7 @@ privileged:
   - SYS_ADMIN
   - DAC_READ_SEARCH
 
-apparmor: false
+apparmor: true
 
 options: {}
 schema: {}

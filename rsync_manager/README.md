@@ -74,6 +74,33 @@ Dans le conteneur, ces dossiers sont accessibles via:
 /ssl
 ```
 
+### Synchronisation avec AppArmor
+
+Quand AppArmor est active, les dossiers exposes a l'addon doivent etre declares a deux endroits:
+
+- dans `config.yaml`, avec `map`, pour demander a Home Assistant de monter le dossier dans le conteneur;
+- dans `apparmor.txt`, pour autoriser le processus de l'addon a lire ou ecrire dans ce chemin.
+
+Les deux declarations doivent rester coherentes. Si un dossier est monte en lecture/ecriture dans `config.yaml`, mais autorise seulement en lecture dans `apparmor.txt`, l'ecriture sera bloquee. A l'inverse, si `apparmor.txt` autorise l'ecriture mais que `config.yaml` monte le dossier en lecture seule, l'ecriture restera impossible.
+
+Exemple correspondant au `map` ci-dessus:
+
+```apparmor
+/config/** rw,
+/share/** rw,
+/media/** rw,
+/backup/** rw,
+/addons/** r,
+/ssl/** r,
+```
+
+Regle pratique:
+
+- `config.yaml` dit quels dossiers sont montes dans le conteneur;
+- `apparmor.txt` dit ce que l'addon a le droit de faire sur ces dossiers.
+
+Quand vous ajoutez, retirez ou changez un dossier dans `map`, mettez aussi a jour la section correspondante dans `apparmor.txt`.
+
 Exemples de chemins locaux:
 
 ```text
