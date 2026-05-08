@@ -52,8 +52,8 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted) {
   /share/** rw,
   /media/** rw,
   /backup/** rw,
-  /addons/** r,
-  /ssl/** r,
+  /addons/** rw,
+  /ssl/** rw,
 
   # Rsync Manager network mounts
   /mnt/** rwk,

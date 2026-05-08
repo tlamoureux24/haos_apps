@@ -1,6 +1,6 @@
 name: "Rsync Manager"
 slug: "rsync_manager"
-version: "1.0.29"
+version: "1.0.30"
 description: "Gestion de jobs rsync via UI Ingress"
 codenotary: "thibaut.lamoureux@gmail.com"
 arch:
@@ -19,8 +19,8 @@ panel_title: "Rsync Manager"
 #  - share:rw     # Le dossier d'échange entre tous les addons
 #  - media:rw     # Photos, vidéos et dossiers multimédias
 #  - backup:rw    # Les sauvegardes (.tar) créées par HA lui-même
-#  - addons:ro    # (Optionnel) Lecture seule pour sauvegarder tes propres configurations d'addons
-#  - ssl:ro       # (Optionnel) Pour les certificats si besoin
+#  - addons:rw    # (Optionnel) Lecture seule pour sauvegarder tes propres configurations d'addons
+#  - ssl:rw       # (Optionnel) Pour les certificats si besoin
 
 privileged:
   - SYS_ADMIN
