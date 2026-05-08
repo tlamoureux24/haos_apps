@@ -4,6 +4,83 @@ DATA_DIR="${DATA_DIR:-/data}"
 JOBS_FILE="$DATA_DIR/jobs.json"
 CONFIG_FILE="$DATA_DIR/config.json"
 
+generate_job_id() {
+    printf 'job_%s_%s' "$(date +%s%N)" "$RANDOM"
+}
+
+normalize_jobs_file() {
+    local INPUT_FILE="$1"
+    local OUTPUT_FILE="$2"
+    local NORMALIZED_TMP
+    local SEEN_IDS_TMP
+    local COUNT
+    local JOB
+    local JOB_ID
+    local UPDATED_TMP
+    local STATUS
+
+    NORMALIZED_TMP=$(mktemp)
+    SEEN_IDS_TMP=$(mktemp)
+
+    echo '[]' > "$NORMALIZED_TMP"
+    : > "$SEEN_IDS_TMP"
+
+    if [ ! -f "$INPUT_FILE" ] || ! jq -e 'type == "array"' "$INPUT_FILE" >/dev/null 2>&1; then
+        rm -f "$NORMALIZED_TMP" "$SEEN_IDS_TMP"
+        return 1
+    fi
+
+    COUNT=$(jq '. | length' "$INPUT_FILE")
+    if [ "$COUNT" -gt 0 ]; then
+        for i in $(seq 0 $((COUNT - 1))); do
+            JOB=$(jq -c ".[$i]" "$INPUT_FILE")
+            JOB_ID=$(echo "$JOB" | jq -r '.id // ""')
+
+            if ! printf '%s' "$JOB_ID" | grep -Eq '^job_[A-Za-z0-9_-]+$' || grep -Fxq "$JOB_ID" "$SEEN_IDS_TMP"; then
+                while true; do
+                    JOB_ID=$(generate_job_id)
+                    if ! grep -Fxq "$JOB_ID" "$SEEN_IDS_TMP"; then
+                        break
+                    fi
+                done
+            fi
+
+            printf '%s\n' "$JOB_ID" >> "$SEEN_IDS_TMP"
+            UPDATED_TMP=$(mktemp)
+            jq --argjson job "$(echo "$JOB" | jq --arg id "$JOB_ID" '. + {id: $id}')" '. + [$job]' "$NORMALIZED_TMP" > "$UPDATED_TMP"
+            mv "$UPDATED_TMP" "$NORMALIZED_TMP"
+        done
+    fi
+
+    jq . "$NORMALIZED_TMP" > "$OUTPUT_FILE"
+    STATUS=$?
+    rm -f "$NORMALIZED_TMP" "$SEEN_IDS_TMP"
+    return "$STATUS"
+}
+
+ensure_jobs_file() {
+    local NORMALIZED_TMP
+
+    mkdir -p "$DATA_DIR"
+
+    if [ ! -f "$JOBS_FILE" ]; then
+        echo '[]' > "$JOBS_FILE"
+        chmod 666 "$JOBS_FILE"
+        return 0
+    fi
+
+    NORMALIZED_TMP=$(mktemp)
+    if normalize_jobs_file "$JOBS_FILE" "$NORMALIZED_TMP"; then
+        cat "$NORMALIZED_TMP" > "$JOBS_FILE"
+        chmod 666 "$JOBS_FILE"
+        rm -f "$NORMALIZED_TMP"
+        return 0
+    fi
+
+    rm -f "$NORMALIZED_TMP"
+    return 1
+}
+
 send_notification() {
     JOB_NAME="$1"; STATUS="$2"; LOG_CONTENT="$3"; FORCE_SEND="$4"
     if [ ! -f "$CONFIG_FILE" ]; then
@@ -94,16 +171,60 @@ send_notification() {
 }
 
 run_job() {
-    INDEX="$1"; MODE="$2"; LOG_TEMP="/tmp/rsync.log"
-    JOB=$(jq -c ".[$INDEX]" "$JOBS_FILE")
+    local JOB_ID="$1"
+    local MODE="$2"
+    local LOG_TEMP="/tmp/rsync.log"
+    local JOB
+    local NAME
+    local SRC_MNT
+    local DST_MNT
+    local SRC_STATUS
+    local DST_STATUS
+    local STATUS
+    local OPTS
+    local MNT
+
+    ensure_jobs_file || {
+        echo "[RUN] Fichier jobs invalide: $JOBS_FILE" > /proc/1/fd/1
+        return 1
+    }
+
+    JOB=$(jq -c --arg id "$JOB_ID" '.[] | select(.id == $id)' "$JOBS_FILE")
+
+    if [ -z "$JOB" ]; then
+        echo "[RUN] Job introuvable: id=$JOB_ID" > /proc/1/fd/1
+        return 1
+    fi
+
     NAME=$(echo "$JOB" | jq -r '.name')
 
-    echo "--- DÉMARRAGE : $NAME (Mode $MODE) ---" > /proc/1/fd/1
+    echo "--- DÉMARRAGE : $NAME (id $JOB_ID, Mode $MODE) ---" > /proc/1/fd/1
 
     prepare_path() {
-        SIDE_NAME="$1"
-        SIDE="$2"
-        RESULT_VAR="$3"
+        local SIDE_NAME="$1"
+        local SIDE="$2"
+        local RESULT_VAR="$3"
+        local HOST
+        local SHARE
+        local SUBPATH
+        local OLD_PATH
+        local USER
+        local PASS
+        local DOMAIN
+        local VERS
+        local SEC
+        local EXTRA_OPTIONS
+        local SHARE_PATH
+        local EXTRA_PATH
+        local UNC
+        local REST
+        local REMOTE
+        local MNT
+        local CREDS
+        local OPTS
+        local MOUNT_LOG
+        local MOUNT_STATUS
+
         if [ "$(echo "$SIDE" | jq -r '.type')" = "cifs" ]; then
             HOST=$(echo "$SIDE" | jq -r '.host // ""')
             SHARE=$(echo "$SIDE" | jq -r '.share // ""')
@@ -156,7 +277,7 @@ run_job() {
                 return 1
             fi
 
-            MNT="/mnt/rsync_${INDEX}_${SIDE_NAME}_$(date +%s)"
+            MNT="/mnt/rsync_${JOB_ID}_${SIDE_NAME}_$(date +%s)"
             CREDS=$(mktemp)
             chmod 600 "$CREDS"
             {
@@ -213,7 +334,7 @@ run_job() {
     cat "$LOG_TEMP" > /proc/1/fd/1
     [ "$MODE" = "run" ] && send_notification "$NAME" "$STATUS" "$(cat $LOG_TEMP)"
 
-    for MNT in /mnt/rsync_${INDEX}_source_* /mnt/rsync_${INDEX}_destination_*; do
+    for MNT in /mnt/rsync_${JOB_ID}_source_* /mnt/rsync_${JOB_ID}_destination_*; do
         [ -d "$MNT" ] || continue
         umount "$MNT" 2>/dev/null || true
         rmdir "$MNT" 2>/dev/null || true
@@ -221,8 +342,9 @@ run_job() {
 }
 
 case "$1" in
-    list) cat "$JOBS_FILE" ;;
-    save) cat > "$JOBS_FILE" ;;
+    list) ensure_jobs_file && cat "$JOBS_FILE" || echo '[]' ;;
+    normalize_jobs) normalize_jobs_file "$2" "${3:-/dev/stdout}" ;;
+    save) cat > "$JOBS_FILE"; ensure_jobs_file ;;
     test_email) send_notification "TEST" "OK" "Vérification configuration SMTP." "force" ;;
     run|dry) run_job "$2" "$1" ;;
 esac

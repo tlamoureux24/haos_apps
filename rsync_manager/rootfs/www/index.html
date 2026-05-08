@@ -150,9 +150,28 @@ function readJsonFile(file) {
     });
 }
 
+function generateJobId() {
+    const random = Math.random().toString(36).slice(2, 10);
+    return `job_${Date.now()}_${random}`;
+}
+
+function ensureJobIds() {
+    const seen = new Set();
+
+    jobs = jobs.map(job => {
+        let id = typeof job.id === 'string' && /^job_[A-Za-z0-9_-]+$/.test(job.id) ? job.id : '';
+        if (!id || seen.has(id)) {
+            id = generateJobId();
+        }
+        seen.add(id);
+        return {...job, id};
+    });
+}
+
 async function load() {
     try {
         jobs = await apiFetch('list_jobs');
+        ensureJobIds();
         const conf = await apiFetch('get_config');
         for (let k in conf) {
             let el = document.getElementById(k);
@@ -285,6 +304,7 @@ function sideFields(job, index, sideName) {
 }
 
 function render() {
+    ensureJobIds();
     jobs = jobs.map(job => ({
         ...job,
         source: normalizeSide(job.source),
@@ -297,8 +317,8 @@ function render() {
                 <div class="col-md-4"><input class="form-control fw-bold" value="${escapeAttr(j.name)}" onchange="jobs[${i}].name=this.value"></div>
                 <div class="col-md-3"><input class="form-control text-muted" value="${escapeAttr(j.cron)}" onchange="jobs[${i}].cron=this.value"></div>
                 <div class="col-md-5 text-end">
-                    <button class="btn btn-sm btn-outline-secondary" onclick="runJob(${i}, 'dry')">Simuler</button>
-                    <button class="btn btn-sm btn-primary" onclick="runJob(${i}, 'run')">Lancer</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="runJob('${escapeAttr(j.id)}', 'dry')">Simuler</button>
+                    <button class="btn btn-sm btn-primary" onclick="runJob('${escapeAttr(j.id)}', 'run')">Lancer</button>
                     <button class="btn btn-sm btn-danger" onclick="jobs.splice(${i},1);render()">X</button>
                 </div>
             </div>
@@ -323,9 +343,10 @@ function render() {
         </div>`).join('');
 }
 
-function addJob() { jobs.push({name:"Backup", cron:"0 3 * * *", source:normalizeSide(), target:normalizeSide()}); render(); }
+function addJob() { jobs.push({id: generateJobId(), name:"Backup", cron:"0 3 * * *", source:normalizeSide(), target:normalizeSide()}); render(); }
 async function saveJobs() {
     try {
+        ensureJobIds();
         const data = await apiFetch('save_jobs', {
             method:'POST',
             headers: {'Content-Type': 'application/json'},
@@ -432,11 +453,12 @@ async function testEmail() {
 }
 async function runJob(i, m) {
     try {
-        const res = await fetch(`${API}?action=${m}&index=${i}`, {cache: 'no-store'});
+        const res = await fetch(`${API}?action=${m}&id=${encodeURIComponent(i)}`, {cache: 'no-store'});
         const data = await res.json();
         if (data.status !== 'started') throw new Error(data.error || 'Action refusée');
         const action = m === 'dry' ? 'Dry-run' : 'Run manuel';
-        const name = jobs[i]?.name ? ` pour ${jobs[i].name}` : '';
+        const job = jobs.find(j => j.id === i);
+        const name = job?.name ? ` pour ${job.name}` : '';
         setStatus(`${action}${name} lancé. Les logs détaillés sont disponibles dans le journal de l'addon.`, 'success', 'jobs-status');
     } catch (e) {
         setStatus(e.message, 'danger', 'jobs-status');

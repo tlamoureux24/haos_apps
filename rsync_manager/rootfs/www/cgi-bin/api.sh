@@ -7,7 +7,7 @@ CONFIG_FILE="$DATA_DIR/config.json"
 JOBS_FILE="$DATA_DIR/jobs.json"
 
 ACTION=$(echo "$QUERY_STRING" | grep -oE "action=[a-z_]+" | cut -d= -f2)
-INDEX=$(echo "$QUERY_STRING" | grep -oE "index=[0-9]+" | cut -d= -f2)
+JOB_ID=$(echo "$QUERY_STRING" | grep -oE "id=job_[A-Za-z0-9_-]+" | cut -d= -f2)
 
 log_api() {
     echo "[API] $*" > /proc/1/fd/1
@@ -96,7 +96,7 @@ save_jobs() {
         return 1
     fi
 
-    if jq . "$BODY_TMP" > "$FORMATTED_TMP"; then
+    if /usr/local/bin/rsync_manager.sh normalize_jobs "$BODY_TMP" "$FORMATTED_TMP"; then
         cat "$FORMATTED_TMP" > "$JOBS_FILE"
         chmod 666 "$JOBS_FILE"
         log_api "save_jobs sauvegardé dans $JOBS_FILE"
@@ -137,15 +137,15 @@ queue_job() {
     QUEUE_DIR="/tmp/rsync_manager_queue"
     mkdir -p "$QUEUE_DIR"
 
-    if ! printf '%s' "$INDEX" | grep -Eq '^[0-9]+$'; then
-        echo '{"status":"error","error":"Index job invalide"}'
+    if ! printf '%s' "$JOB_ID" | grep -Eq '^job_[A-Za-z0-9_-]+$'; then
+        echo '{"status":"error","error":"Id job invalide"}'
         return 1
     fi
 
     JOB_TMP=$(mktemp "$QUEUE_DIR/.job.XXXXXX")
-    printf '%s %s\n' "$ACTION" "$INDEX" > "$JOB_TMP"
-    mv "$JOB_TMP" "$QUEUE_DIR/$(date +%s%N)_${ACTION}_${INDEX}.job"
-    log_api "job mis en file: action=$ACTION index=$INDEX"
+    printf '%s %s\n' "$ACTION" "$JOB_ID" > "$JOB_TMP"
+    mv "$JOB_TMP" "$QUEUE_DIR/$(date +%s%N)_${ACTION}_${JOB_ID}.job"
+    log_api "job mis en file: action=$ACTION id=$JOB_ID"
     echo '{"status":"started"}'
 }
 

@@ -25,6 +25,18 @@ if [ ! -f "$JOBS_FILE" ] || ! jq -e 'type == "array"' "$JOBS_FILE" >/dev/null 2>
     exit 0
 fi
 
+NORMALIZED_TMP=$(mktemp)
+if /usr/local/bin/rsync_manager.sh normalize_jobs "$JOBS_FILE" "$NORMALIZED_TMP"; then
+    cat "$NORMALIZED_TMP" > "$JOBS_FILE"
+    chmod 666 "$JOBS_FILE"
+else
+    log_cron "Impossible de normaliser les ids des jobs, crontab vidée."
+    rm -f "$NORMALIZED_TMP"
+    chmod 600 "$CRONTAB_FILE"
+    exit 0
+fi
+rm -f "$NORMALIZED_TMP"
+
 COUNT=$(jq '. | length' "$JOBS_FILE")
 ADDED=0
 
@@ -33,23 +45,29 @@ if [ "$COUNT" -gt 0 ]; then
 fi
 
 for i in $(seq 0 $((COUNT - 1))); do
+    JOB_ID=$(jq -r ".[$i].id // \"\"" "$JOBS_FILE")
     CRON=$(jq -r ".[$i].cron // \"\"" "$JOBS_FILE")
     NAME=$(jq -r ".[$i].name // \"Job $i\"" "$JOBS_FILE")
 
+    if ! printf '%s' "$JOB_ID" | grep -Eq '^job_[A-Za-z0-9_-]+$'; then
+        log_cron "Job $i ($NAME) ignoré: id invalide."
+        continue
+    fi
+
     if [ -z "$CRON" ]; then
-        log_cron "Job $i ignoré: cron vide."
+        log_cron "Job $JOB_ID ($NAME) ignoré: cron vide."
         continue
     fi
 
     FIELD_COUNT=$(printf '%s\n' "$CRON" | awk '{print NF}')
     if [ "$FIELD_COUNT" -ne 5 ]; then
-        log_cron "Job $i ($NAME) ignoré: expression cron invalide '$CRON'."
+        log_cron "Job $JOB_ID ($NAME) ignoré: expression cron invalide '$CRON'."
         continue
     fi
 
     {
-        echo "# Job $i: $NAME"
-        echo "$CRON /usr/local/bin/rsync_manager.sh run $i > /proc/1/fd/1 2>&1"
+        echo "# Job $JOB_ID: $NAME"
+        echo "$CRON /usr/local/bin/rsync_manager.sh run $JOB_ID > /proc/1/fd/1 2>&1"
     } >> "$CRONTAB_FILE"
     ADDED=$((ADDED + 1))
 done

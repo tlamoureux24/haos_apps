@@ -15,7 +15,7 @@ while true; do
             continue
         fi
 
-        read -r ACTION INDEX < "$PROCESSING_FILE" || true
+        read -r ACTION JOB_ID < "$PROCESSING_FILE" || true
         rm -f "$PROCESSING_FILE"
 
         case "$ACTION" in
@@ -26,13 +26,13 @@ while true; do
                 ;;
         esac
 
-        if ! printf '%s' "$INDEX" | grep -Eq '^[0-9]+$'; then
-            echo "[RUNNER] Index ignoré: $INDEX" > /proc/1/fd/1
+        if ! printf '%s' "$JOB_ID" | grep -Eq '^job_[A-Za-z0-9_-]+$'; then
+            echo "[RUNNER] Id ignoré: $JOB_ID" > /proc/1/fd/1
             continue
         fi
 
-        echo "[RUNNER] Exécution demandée: $ACTION job $INDEX" > /proc/1/fd/1
-        /usr/local/bin/rsync_manager.sh "$ACTION" "$INDEX" > /proc/1/fd/1 2>&1 || true
+        echo "[RUNNER] Exécution demandée: $ACTION job $JOB_ID" > /proc/1/fd/1
+        /usr/local/bin/rsync_manager.sh "$ACTION" "$JOB_ID" > /proc/1/fd/1 2>&1 || true
     done
 
     sleep 1

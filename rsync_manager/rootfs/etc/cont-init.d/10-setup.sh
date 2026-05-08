@@ -48,6 +48,22 @@ if [ ! -f /data/jobs.json ]; then
     bashio::log.info "Initialisation de la liste des jobs (/data/jobs.json)..."
     echo '[]' > /data/jobs.json
     chmod 666 /data/jobs.json
+elif jq -e 'type == "array"' /data/jobs.json >/dev/null 2>&1; then
+    bashio::log.info "Vérification des ids de jobs (/data/jobs.json)..."
+    NORMALIZED_JOBS=$(mktemp)
+    if /usr/local/bin/rsync_manager.sh normalize_jobs /data/jobs.json "$NORMALIZED_JOBS"; then
+        cat "$NORMALIZED_JOBS" > /data/jobs.json
+        chmod 666 /data/jobs.json
+    else
+        bashio::log.warning "Impossible de normaliser les jobs, remplacement par une liste vide."
+        echo '[]' > /data/jobs.json
+        chmod 666 /data/jobs.json
+    fi
+    rm -f "$NORMALIZED_JOBS"
+else
+    bashio::log.warning "Liste de jobs invalide, remplacement par une liste vide."
+    echo '[]' > /data/jobs.json
+    chmod 666 /data/jobs.json
 fi
 
 # 3. Reconstruction du crontab système au démarrage
