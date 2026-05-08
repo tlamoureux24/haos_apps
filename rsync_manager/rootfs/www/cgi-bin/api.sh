@@ -185,6 +185,6 @@ case "$ACTION" in
     get_status)  get_status ;;
     get_log)     get_log ;;
     test_email)  ensure_config; test_email ;;
-    run|dry)     queue_job ;;
+    run|dry|mount_test) queue_job ;;
     *)           echo '{"status":"error","error":"Action inconnue"}' ;;
 esac

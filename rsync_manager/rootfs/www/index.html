@@ -9,6 +9,7 @@
         body { background: #f4f7f6; padding: 20px; }
         .tab-content { background: white; padding: 25px; border-radius: 0 0 10px 10px; border: 1px solid #dee2e6; border-top: none; }
         .job-card { border: 1px solid #eee; padding: 15px; margin-bottom: 15px; border-radius: 8px; }
+        .job-card-disabled { opacity: 0.72; }
         .job-status-line { font-size: 0.82rem; }
         .job-log-view { max-height: 65vh; overflow: auto; white-space: pre-wrap; font-size: 0.8rem; }
     </style>
@@ -182,7 +183,12 @@ function ensureJobIds() {
             id = generateJobId();
         }
         seen.add(id);
-        return {...job, id};
+        return {
+            ...job,
+            id,
+            enabled: job.enabled !== false,
+            excludes: Array.isArray(job.excludes) ? job.excludes : []
+        };
     });
 }
 
@@ -238,6 +244,7 @@ function statusBadgeClass(status) {
 }
 
 function modeLabel(mode) {
+    if (mode === 'mount_test') return 'test montages';
     return mode === 'dry' ? 'dry-run' : 'run';
 }
 
@@ -246,7 +253,19 @@ function triggerLabel(trigger) {
 }
 
 function jobStatusBlock(job) {
+    const disabledBadge = job.enabled === false
+        ? '<span class="badge text-bg-secondary">Désactivé</span>'
+        : '';
     const status = jobStatuses[job.id];
+
+    if (!status && job.enabled === false) {
+        return `
+            <div class="job-status-line mt-2 d-flex flex-wrap align-items-center gap-2">
+                ${disabledBadge}
+                <span class="text-secondary">La planification cron ignore ce job. Les actions manuelles restent possibles.</span>
+            </div>`;
+    }
+
     if (!status) {
         return `
             <div class="job-status-line mt-2 d-flex flex-wrap align-items-center gap-2">
@@ -269,11 +288,23 @@ function jobStatusBlock(job) {
 
     return `
         <div class="job-status-line mt-2 d-flex flex-wrap align-items-center gap-2">
+            ${disabledBadge}
             <span class="badge ${statusBadgeClass(status.status)}">${escapeHtml(status.label || 'Statut inconnu')}</span>
             <span class="text-secondary">${escapeHtml(summaryParts.join(' · '))}</span>
             ${rsyncParts.length ? `<span class="text-secondary">(${escapeHtml(rsyncParts.join(' · '))})</span>` : ''}
             <button class="btn btn-sm btn-outline-dark ms-auto" type="button" onclick="showJobLog('${escapeAttr(job.id)}')">Voir dernier log</button>
         </div>`;
+}
+
+function excludesText(job) {
+    return (Array.isArray(job.excludes) ? job.excludes : []).join('\n');
+}
+
+function setJobExcludes(index, value) {
+    jobs[index].excludes = value
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
 }
 
 function normalizeSide(side = {}) {
@@ -397,11 +428,18 @@ function render() {
     }));
 
     document.getElementById('jobsList').innerHTML = jobs.map((j, i) => `
-        <div class="job-card bg-light p-3 mb-3 border rounded">
+        <div class="job-card bg-light p-3 mb-3 border rounded ${j.enabled === false ? 'job-card-disabled' : ''}">
             <div class="row g-2 align-items-center">
-                <div class="col-md-4"><input class="form-control fw-bold" value="${escapeAttr(j.name)}" onchange="jobs[${i}].name=this.value"></div>
+                <div class="col-md-3"><input class="form-control fw-bold" value="${escapeAttr(j.name)}" onchange="jobs[${i}].name=this.value"></div>
                 <div class="col-md-3"><input class="form-control text-muted" value="${escapeAttr(j.cron)}" onchange="jobs[${i}].cron=this.value"></div>
-                <div class="col-md-5 text-end">
+                <div class="col-md-2">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" ${j.enabled !== false ? 'checked' : ''} onchange="jobs[${i}].enabled=this.checked;render()">
+                        <label class="form-check-label small fw-bold">${j.enabled !== false ? 'Actif' : 'Désactivé'}</label>
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-sm btn-outline-info" onclick="runJob('${escapeAttr(j.id)}', 'mount_test')">Tester montages</button>
                     <button class="btn btn-sm btn-outline-secondary" onclick="runJob('${escapeAttr(j.id)}', 'dry')">Simuler</button>
                     <button class="btn btn-sm btn-primary" onclick="runJob('${escapeAttr(j.id)}', 'run')">Lancer</button>
                     <button class="btn btn-sm btn-danger" onclick="jobs.splice(${i},1);render()">X</button>
@@ -426,10 +464,16 @@ function render() {
                     ${sideFields(j, i, 'target')}
                 </div>
             </div>
+            <div class="row g-2 mt-2">
+                <div class="col-md-12">
+                    <small class="fw-bold text-secondary text-uppercase" style="font-size:0.7rem">Exclusions rsync</small>
+                    <textarea class="form-control form-control-sm" rows="3" oninput="setJobExcludes(${i}, this.value)" placeholder="cache/&#10;*.tmp&#10;@eaDir/">${escapeHtml(excludesText(j))}</textarea>
+                </div>
+            </div>
         </div>`).join('');
 }
 
-function addJob() { jobs.push({id: generateJobId(), name:"Backup", cron:"0 3 * * *", source:normalizeSide(), target:normalizeSide()}); render(); }
+function addJob() { jobs.push({id: generateJobId(), enabled: true, excludes: [], name:"Backup", cron:"0 3 * * *", source:normalizeSide(), target:normalizeSide()}); render(); }
 async function saveJobs() {
     try {
         ensureJobIds();
@@ -559,7 +603,7 @@ async function runJob(i, m) {
         const res = await fetch(`${API}?action=${m}&id=${encodeURIComponent(i)}`, {cache: 'no-store'});
         const data = await res.json();
         if (data.status !== 'started') throw new Error(data.error || 'Action refusée');
-        const action = m === 'dry' ? 'Dry-run' : 'Run manuel';
+        const action = m === 'dry' ? 'Dry-run' : (m === 'mount_test' ? 'Test montages' : 'Run manuel');
         const job = jobs.find(j => j.id === i);
         const name = job?.name ? ` pour ${job.name}` : '';
         setStatus(`${action}${name} lancé. Les logs détaillés sont disponibles dans le journal de l'addon.`, 'success', 'jobs-status');

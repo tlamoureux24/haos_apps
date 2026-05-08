@@ -20,7 +20,7 @@ while true; do
         TRIGGER="${TRIGGER:-manual}"
 
         case "$ACTION" in
-            run|dry) ;;
+            run|dry|mount_test) ;;
             *)
                 echo "[RUNNER] Action ignorée: $ACTION" > /proc/1/fd/1
                 continue

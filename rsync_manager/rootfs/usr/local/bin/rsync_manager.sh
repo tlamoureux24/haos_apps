@@ -49,7 +49,11 @@ normalize_jobs_file() {
 
             printf '%s\n' "$JOB_ID" >> "$SEEN_IDS_TMP"
             UPDATED_TMP=$(mktemp)
-            jq --argjson job "$(echo "$JOB" | jq --arg id "$JOB_ID" '. + {id: $id}')" '. + [$job]' "$NORMALIZED_TMP" > "$UPDATED_TMP"
+            jq --argjson job "$(echo "$JOB" | jq --arg id "$JOB_ID" '. + {
+                id: $id,
+                enabled: (.enabled // true),
+                excludes: (if (.excludes | type) == "array" then .excludes else [] end)
+            }')" '. + [$job]' "$NORMALIZED_TMP" > "$UPDATED_TMP"
             mv "$UPDATED_TMP" "$NORMALIZED_TMP"
         done
     fi
@@ -162,6 +166,45 @@ update_job_status() {
     fi
 
     rm -f "$STATUS_TMP"
+}
+
+finish_job_log() {
+    local JOB_ID="$1"
+    local STATUS_KEY="$2"
+    local LABEL="$3"
+    local MODE="$4"
+    local TRIGGER="$5"
+    local STARTED_AT="$6"
+    local START_EPOCH="$7"
+    local EXIT_CODE="$8"
+    local MESSAGE="$9"
+    local LOG_TEMP="${10}"
+    local EXEC_LOG_TEMP="${11}"
+    local JOB_LOG_FILE="$LOG_DIR/${JOB_ID}.log"
+    local END_EPOCH
+    local FINISHED_AT
+    local DURATION_SECONDS
+    local RSYNC_SENT_LINE
+    local RSYNC_TOTAL_LINE
+    local EXCLUDES_FILE
+    local EXCLUDES_COUNT
+
+    END_EPOCH=$(date +%s)
+    FINISHED_AT=$(date -Iseconds)
+    DURATION_SECONDS=$((END_EPOCH - START_EPOCH))
+    {
+        echo "Fin : $FINISHED_AT"
+        echo "Durée : ${DURATION_SECONDS}s"
+        echo "Statut : $LABEL"
+    } | tee -a "$LOG_TEMP" >> "$EXEC_LOG_TEMP"
+
+    cat "$EXEC_LOG_TEMP" > /proc/1/fd/1
+    cp "$LOG_TEMP" "$JOB_LOG_FILE"
+    chmod 666 "$JOB_LOG_FILE"
+
+    RSYNC_SENT_LINE=$(grep -E '^sent .* bytes .* received .* bytes' "$LOG_TEMP" | tail -n 1 || true)
+    RSYNC_TOTAL_LINE=$(grep -E '^total size is .* speedup is ' "$LOG_TEMP" | tail -n 1 || true)
+    update_job_status "$JOB_ID" "$STATUS_KEY" "$LABEL" "$MODE" "$TRIGGER" "$STARTED_AT" "$FINISHED_AT" "$DURATION_SECONDS" "$EXIT_CODE" "$MESSAGE" "$JOB_LOG_FILE" "$RSYNC_SENT_LINE" "$RSYNC_TOTAL_LINE"
 }
 
 send_notification() {
@@ -299,6 +342,7 @@ run_job() {
     START_EPOCH=$(date +%s)
     STARTED_AT=$(date -Iseconds)
     EXEC_LOG_TEMP=$(mktemp)
+    EXCLUDES_FILE=$(mktemp)
     : > "$LOG_TEMP"
     {
         echo "--- DÉMARRAGE : $NAME (id $JOB_ID, Mode $MODE, Déclenchement $TRIGGER) ---"
@@ -437,6 +481,12 @@ run_job() {
         echo "$MESSAGE" | tee -a "$LOG_TEMP" > "$EXEC_LOG_TEMP"
     else
         OPTS="-avh --delete"; [ "$MODE" = "dry" ] && OPTS="$OPTS --dry-run"
+        jq -r '.excludes // [] | .[]' <<< "$JOB" | sed '/^[[:space:]]*$/d' > "$EXCLUDES_FILE"
+        EXCLUDES_COUNT=$(wc -l < "$EXCLUDES_FILE")
+        if [ "$EXCLUDES_COUNT" -gt 0 ]; then
+            echo "[RSYNC] Exclusions actives: $EXCLUDES_COUNT règle(s)." | tee -a "$LOG_TEMP" > /proc/1/fd/1
+            OPTS="$OPTS --exclude-from=$EXCLUDES_FILE"
+        fi
         rsync $OPTS "$SRC_MNT/" "$DST_MNT/" > "$EXEC_LOG_TEMP" 2>&1
         EXIT_CODE=$?
         cat "$EXEC_LOG_TEMP" >> "$LOG_TEMP"
@@ -453,25 +503,200 @@ run_job() {
         fi
     fi
 
-    END_EPOCH=$(date +%s)
-    FINISHED_AT=$(date -Iseconds)
-    DURATION_SECONDS=$((END_EPOCH - START_EPOCH))
-    {
-        echo "Fin : $FINISHED_AT"
-        echo "Durée : ${DURATION_SECONDS}s"
-        echo "Statut : $LABEL"
-    } | tee -a "$LOG_TEMP" >> "$EXEC_LOG_TEMP"
-
-    cat "$EXEC_LOG_TEMP" > /proc/1/fd/1
-    cp "$LOG_TEMP" "$JOB_LOG_FILE"
-    chmod 666 "$JOB_LOG_FILE"
-    rm -f "$EXEC_LOG_TEMP"
-
-    RSYNC_SENT_LINE=$(grep -E '^sent .* bytes .* received .* bytes' "$LOG_TEMP" | tail -n 1 || true)
-    RSYNC_TOTAL_LINE=$(grep -E '^total size is .* speedup is ' "$LOG_TEMP" | tail -n 1 || true)
-    update_job_status "$JOB_ID" "$STATUS_KEY" "$LABEL" "$MODE" "$TRIGGER" "$STARTED_AT" "$FINISHED_AT" "$DURATION_SECONDS" "$EXIT_CODE" "$MESSAGE" "$JOB_LOG_FILE" "$RSYNC_SENT_LINE" "$RSYNC_TOTAL_LINE"
+    finish_job_log "$JOB_ID" "$STATUS_KEY" "$LABEL" "$MODE" "$TRIGGER" "$STARTED_AT" "$START_EPOCH" "$EXIT_CODE" "$MESSAGE" "$LOG_TEMP" "$EXEC_LOG_TEMP"
+    rm -f "$EXEC_LOG_TEMP" "$EXCLUDES_FILE"
 
     [ "$MODE" = "run" ] && send_notification "$NAME" "$STATUS" "$(cat $LOG_TEMP)"
+
+    for MNT in /mnt/rsync_${JOB_ID}_source_* /mnt/rsync_${JOB_ID}_destination_*; do
+        [ -d "$MNT" ] || continue
+        umount "$MNT" 2>/dev/null || true
+        rmdir "$MNT" 2>/dev/null || true
+    done
+}
+
+mount_test() {
+    local JOB_ID="$1"
+    local TRIGGER="${2:-manual}"
+    local MODE="mount_test"
+    local LOG_TEMP="/tmp/rsync_mount_test.log"
+    local EXEC_LOG_TEMP
+    local JOB
+    local NAME
+    local SRC_MNT
+    local DST_MNT
+    local SRC_STATUS
+    local DST_STATUS
+    local START_EPOCH
+    local STARTED_AT
+    local EXIT_CODE=0
+    local STATUS_KEY="success"
+    local LABEL="Montages OK"
+    local MESSAGE="Montages vérifiés avec succès."
+    local MNT
+    local TEST_FILE
+
+    ensure_jobs_file || {
+        echo "[TEST] Fichier jobs invalide: $JOBS_FILE" > /proc/1/fd/1
+        return 1
+    }
+    ensure_status_storage
+
+    JOB=$(jq -c --arg id "$JOB_ID" '.[] | select(.id == $id)' "$JOBS_FILE")
+    if [ -z "$JOB" ]; then
+        echo "[TEST] Job introuvable: id=$JOB_ID" > /proc/1/fd/1
+        return 1
+    fi
+
+    NAME=$(echo "$JOB" | jq -r '.name')
+    START_EPOCH=$(date +%s)
+    STARTED_AT=$(date -Iseconds)
+    EXEC_LOG_TEMP=$(mktemp)
+    : > "$LOG_TEMP"
+    {
+        echo "--- TEST MONTAGES : $NAME (id $JOB_ID, Déclenchement $TRIGGER) ---"
+        echo "Début : $STARTED_AT"
+    } | tee -a "$LOG_TEMP" > /proc/1/fd/1
+
+    prepare_test_path() {
+        local SIDE_NAME="$1"
+        local SIDE="$2"
+        local RESULT_VAR="$3"
+        local HOST
+        local SHARE
+        local SUBPATH
+        local OLD_PATH
+        local USER
+        local PASS
+        local DOMAIN
+        local VERS
+        local SEC
+        local EXTRA_OPTIONS
+        local UNC
+        local REST
+        local REMOTE
+        local MNT
+        local CREDS
+        local OPTS
+        local MOUNT_LOG
+        local MOUNT_STATUS
+
+        if [ "$(echo "$SIDE" | jq -r '.type')" = "cifs" ]; then
+            HOST=$(echo "$SIDE" | jq -r '.host // ""')
+            SHARE=$(echo "$SIDE" | jq -r '.share // ""')
+            SUBPATH=$(echo "$SIDE" | jq -r '.subpath // ""')
+            OLD_PATH=$(echo "$SIDE" | jq -r '.path // ""')
+            USER=$(echo "$SIDE" | jq -r '.user // ""')
+            PASS=$(echo "$SIDE" | jq -r '.pass // ""')
+            DOMAIN=$(echo "$SIDE" | jq -r '.domain // ""')
+            VERS=$(echo "$SIDE" | jq -r '.vers // "3.0"')
+            SEC=$(echo "$SIDE" | jq -r '.sec // "ntlmssp"')
+            EXTRA_OPTIONS=$(echo "$SIDE" | jq -r '.options // "noserverino,nounix"')
+
+            USER="${USER%$'\r'}"
+            PASS="${PASS%$'\r'}"
+            DOMAIN="${DOMAIN%$'\r'}"
+            VERS="${VERS%$'\r'}"
+            SEC="${SEC%$'\r'}"
+            EXTRA_OPTIONS="${EXTRA_OPTIONS%$'\r'}"
+
+            if [ -n "$HOST" ] && [ -n "$SHARE" ]; then
+                HOST="${HOST#//}"
+                HOST="${HOST#\\\\}"
+                HOST="${HOST%%/*}"
+                SHARE="${SHARE#/}"
+                SHARE="${SHARE#\\}"
+                SHARE="${SHARE%/}"
+                SHARE="${SHARE%\\}"
+                REMOTE="//$HOST/$SHARE"
+            else
+                UNC="${OLD_PATH#//}"
+                HOST="${UNC%%/*}"
+                REST="${UNC#*/}"
+                SHARE="${REST%%/*}"
+                SUBPATH="${SUBPATH:-${REST#*/}}"
+                [ "$SUBPATH" = "$REST" ] && SUBPATH=""
+                REMOTE="//$HOST/$SHARE"
+            fi
+
+            if [ -z "$REMOTE" ] || [ -z "$USER" ]; then
+                echo "[CIFS] Configuration $SIDE_NAME incomplète: adresse/partage et login sont obligatoires." | tee -a "$LOG_TEMP" > /proc/1/fd/1
+                return 1
+            fi
+
+            MNT="/mnt/rsync_${JOB_ID}_${SIDE_NAME}_$(date +%s)"
+            CREDS=$(mktemp)
+            chmod 600 "$CREDS"
+            {
+                printf 'username=%s\n' "$USER"
+                printf 'password=%s\n' "$PASS"
+                [ -n "$DOMAIN" ] && printf 'domain=%s\n' "$DOMAIN"
+            } > "$CREDS"
+
+            mkdir -p "$MNT"
+            OPTS="credentials=$CREDS,iocharset=utf8,vers=$VERS,noperm"
+            [ -n "$SEC" ] && OPTS="$OPTS,sec=$SEC"
+            [ -n "$EXTRA_OPTIONS" ] && OPTS="$OPTS,$EXTRA_OPTIONS"
+            echo "[CIFS] Montage test $SIDE_NAME: $REMOTE -> $MNT" | tee -a "$LOG_TEMP" > /proc/1/fd/1
+            MOUNT_LOG=$(mktemp)
+            mount -v -t cifs "$REMOTE" "$MNT" -o "$OPTS" > "$MOUNT_LOG" 2>&1
+            MOUNT_STATUS=$?
+            if [ "$MOUNT_STATUS" -ne 0 ]; then
+                cat "$MOUNT_LOG" | tee -a "$LOG_TEMP" > /proc/1/fd/1
+                echo "[CIFS] Échec montage test $SIDE_NAME." | tee -a "$LOG_TEMP" > /proc/1/fd/1
+                rm -f "$CREDS" "$MOUNT_LOG"
+                rmdir "$MNT" 2>/dev/null
+                return 1
+            fi
+            rm -f "$CREDS" "$MOUNT_LOG"
+
+            SUBPATH="${SUBPATH#/}"
+            SUBPATH="${SUBPATH%/}"
+            if [ -n "$SUBPATH" ]; then
+                printf -v "$RESULT_VAR" '%s' "$MNT/$SUBPATH"
+            else
+                printf -v "$RESULT_VAR" '%s' "$MNT"
+            fi
+        else
+            printf -v "$RESULT_VAR" '%s' "$(echo "$SIDE" | jq -r '.path // ""')"
+        fi
+    }
+
+    prepare_test_path "source" "$(echo "$JOB" | jq -c '.source')" SRC_MNT
+    SRC_STATUS=$?
+    prepare_test_path "destination" "$(echo "$JOB" | jq -c '.target')" DST_MNT
+    DST_STATUS=$?
+
+    if [ "$SRC_STATUS" -ne 0 ] || [ "$DST_STATUS" -ne 0 ]; then
+        STATUS_KEY="mount_error"
+        LABEL="Erreur montage"
+        MESSAGE="Échec montage réseau."
+        EXIT_CODE=1
+    elif [ ! -d "$SRC_MNT" ] || [ ! -r "$SRC_MNT" ]; then
+        STATUS_KEY="mount_error"
+        LABEL="Erreur montage"
+        MESSAGE="Source inaccessible: $SRC_MNT"
+        EXIT_CODE=1
+    elif [ ! -d "$DST_MNT" ]; then
+        STATUS_KEY="mount_error"
+        LABEL="Erreur montage"
+        MESSAGE="Destination inaccessible: $DST_MNT"
+        EXIT_CODE=1
+    else
+        TEST_FILE="$DST_MNT/.rsync_manager_write_test_$(date +%s)"
+        if ! touch "$TEST_FILE" 2>/dev/null; then
+            STATUS_KEY="mount_error"
+            LABEL="Erreur montage"
+            MESSAGE="Destination non inscriptible: $DST_MNT"
+            EXIT_CODE=1
+        else
+            rm -f "$TEST_FILE"
+        fi
+    fi
+
+    echo "$MESSAGE" | tee -a "$LOG_TEMP" > "$EXEC_LOG_TEMP"
+    finish_job_log "$JOB_ID" "$STATUS_KEY" "$LABEL" "$MODE" "$TRIGGER" "$STARTED_AT" "$START_EPOCH" "$EXIT_CODE" "$MESSAGE" "$LOG_TEMP" "$EXEC_LOG_TEMP"
+    rm -f "$EXEC_LOG_TEMP"
 
     for MNT in /mnt/rsync_${JOB_ID}_source_* /mnt/rsync_${JOB_ID}_destination_*; do
         [ -d "$MNT" ] || continue
@@ -485,5 +710,6 @@ case "$1" in
     normalize_jobs) normalize_jobs_file "$2" "${3:-/dev/stdout}" ;;
     save) cat > "$JOBS_FILE"; ensure_jobs_file ;;
     test_email) send_notification "TEST" "OK" "Vérification configuration SMTP." "force" ;;
+    mount_test) mount_test "$2" "$3" ;;
     run|dry) run_job "$2" "$1" "$3" ;;
 esac
