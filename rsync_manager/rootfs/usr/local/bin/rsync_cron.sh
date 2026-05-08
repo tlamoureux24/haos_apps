@@ -67,7 +67,7 @@ for i in $(seq 0 $((COUNT - 1))); do
 
     {
         echo "# Job $JOB_ID: $NAME"
-        echo "$CRON /usr/local/bin/rsync_manager.sh run $JOB_ID > /proc/1/fd/1 2>&1"
+        echo "$CRON /usr/local/bin/rsync_manager.sh run $JOB_ID cron > /proc/1/fd/1 2>&1"
     } >> "$CRONTAB_FILE"
     ADDED=$((ADDED + 1))
 done

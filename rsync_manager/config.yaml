@@ -1,6 +1,6 @@
 name: "Rsync Manager"
 slug: "rsync_manager"
-version: "1.0.32"
+version: "1.0.33"
 description: "Gestion de jobs rsync via UI Ingress"
 codenotary: "thibaut.lamoureux@gmail.com"
 arch:

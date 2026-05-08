@@ -15,8 +15,9 @@ while true; do
             continue
         fi
 
-        read -r ACTION JOB_ID < "$PROCESSING_FILE" || true
+        read -r ACTION JOB_ID TRIGGER < "$PROCESSING_FILE" || true
         rm -f "$PROCESSING_FILE"
+        TRIGGER="${TRIGGER:-manual}"
 
         case "$ACTION" in
             run|dry) ;;
@@ -32,7 +33,7 @@ while true; do
         fi
 
         echo "[RUNNER] Exécution demandée: $ACTION job $JOB_ID" > /proc/1/fd/1
-        /usr/local/bin/rsync_manager.sh "$ACTION" "$JOB_ID" > /proc/1/fd/1 2>&1 || true
+        /usr/local/bin/rsync_manager.sh "$ACTION" "$JOB_ID" "$TRIGGER" > /proc/1/fd/1 2>&1 || true
     done
 
     sleep 1

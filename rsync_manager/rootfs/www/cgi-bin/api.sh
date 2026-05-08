@@ -5,6 +5,8 @@ echo ""
 DATA_DIR="${DATA_DIR:-/data}"
 CONFIG_FILE="$DATA_DIR/config.json"
 JOBS_FILE="$DATA_DIR/jobs.json"
+STATUS_FILE="$DATA_DIR/status.json"
+LOG_DIR="$DATA_DIR/logs"
 
 ACTION=$(echo "$QUERY_STRING" | grep -oE "action=[a-z_]+" | cut -d= -f2)
 JOB_ID=$(echo "$QUERY_STRING" | grep -oE "id=job_[A-Za-z0-9_-]+" | cut -d= -f2)
@@ -143,10 +145,34 @@ queue_job() {
     fi
 
     JOB_TMP=$(mktemp "$QUEUE_DIR/.job.XXXXXX")
-    printf '%s %s\n' "$ACTION" "$JOB_ID" > "$JOB_TMP"
+    printf '%s %s manual\n' "$ACTION" "$JOB_ID" > "$JOB_TMP"
     mv "$JOB_TMP" "$QUEUE_DIR/$(date +%s%N)_${ACTION}_${JOB_ID}.job"
     log_api "job mis en file: action=$ACTION id=$JOB_ID"
     echo '{"status":"started"}'
+}
+
+get_status() {
+    if [ ! -f "$STATUS_FILE" ] || ! jq -e 'type == "object"' "$STATUS_FILE" >/dev/null 2>&1; then
+        echo '{}'
+        return
+    fi
+
+    cat "$STATUS_FILE"
+}
+
+get_log() {
+    if ! printf '%s' "$JOB_ID" | grep -Eq '^job_[A-Za-z0-9_-]+$'; then
+        echo '{"status":"error","error":"Id job invalide"}'
+        return 1
+    fi
+
+    LOG_FILE="$LOG_DIR/${JOB_ID}.log"
+    if [ ! -f "$LOG_FILE" ]; then
+        echo '{"status":"error","error":"Aucun log disponible pour ce job"}'
+        return 1
+    fi
+
+    jq -n --rawfile log "$LOG_FILE" '{"status":"ok","log":$log}'
 }
 
 # Redirection directe vers le journal de l'addon (fd/1)
@@ -156,6 +182,8 @@ case "$ACTION" in
     save_jobs)   save_jobs ;;
     get_config)  ensure_config; cat "$CONFIG_FILE" ;;
     save_config) save_config ;;
+    get_status)  get_status ;;
+    get_log)     get_log ;;
     test_email)  ensure_config; test_email ;;
     run|dry)     queue_job ;;
     *)           echo '{"status":"error","error":"Action inconnue"}' ;;

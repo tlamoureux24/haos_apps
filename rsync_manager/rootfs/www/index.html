@@ -9,6 +9,8 @@
         body { background: #f4f7f6; padding: 20px; }
         .tab-content { background: white; padding: 25px; border-radius: 0 0 10px 10px; border: 1px solid #dee2e6; border-top: none; }
         .job-card { border: 1px solid #eee; padding: 15px; margin-bottom: 15px; border-radius: 8px; }
+        .job-status-line { font-size: 0.82rem; }
+        .job-log-view { max-height: 65vh; overflow: auto; white-space: pre-wrap; font-size: 0.8rem; }
     </style>
 </head>
 <body>
@@ -27,6 +29,7 @@
             <hr>
             <button class="btn btn-primary" id="add-job-btn" type="button">+ Nouveau Job</button>
             <button class="btn btn-success" id="save-jobs-btn" type="button">Sauvegarder les Jobs</button>
+            <button class="btn btn-outline-secondary" id="refresh-jobs-btn" type="button">Actualiser</button>
             <div id="jobs-status" class="alert mt-3 d-none" role="alert"></div>
         </div>
 
@@ -83,8 +86,23 @@
     </div>
 </div>
 
+<div class="modal fade" id="jobLogModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="jobLogModalTitle">Dernier log</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+            </div>
+            <div class="modal-body">
+                <pre class="bg-dark text-light p-3 rounded job-log-view" id="jobLogContent"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 let jobs = [];
+let jobStatuses = {};
 const API = 'cgi-bin/api.sh';
 const statusTimers = {};
 
@@ -172,6 +190,7 @@ async function load() {
     try {
         jobs = await apiFetch('list_jobs');
         ensureJobIds();
+        jobStatuses = await apiFetch('get_status');
         const conf = await apiFetch('get_config');
         for (let k in conf) {
             let el = document.getElementById(k);
@@ -189,6 +208,72 @@ function escapeAttr(value) {
         .replace(/"/g, '&quot;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+}
+
+function escapeHtml(value) {
+    return escapeAttr(value).replace(/'/g, '&#039;');
+}
+
+function formatDate(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('fr-FR');
+}
+
+function formatDuration(seconds) {
+    seconds = Number(seconds || 0);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const rest = seconds % 60;
+    if (minutes < 60) return `${minutes}min ${rest}s`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ${minutes % 60}min ${rest}s`;
+}
+
+function statusBadgeClass(status) {
+    if (status === 'success') return 'text-bg-success';
+    if (status === 'failed' || status === 'mount_error') return 'text-bg-danger';
+    return 'text-bg-secondary';
+}
+
+function modeLabel(mode) {
+    return mode === 'dry' ? 'dry-run' : 'run';
+}
+
+function triggerLabel(trigger) {
+    return trigger === 'cron' ? 'cron' : 'manuel';
+}
+
+function jobStatusBlock(job) {
+    const status = jobStatuses[job.id];
+    if (!status) {
+        return `
+            <div class="job-status-line mt-2 d-flex flex-wrap align-items-center gap-2">
+                <span class="badge text-bg-secondary">Jamais exécuté</span>
+            </div>`;
+    }
+
+    const summaryParts = [
+        status.finished_at ? `Dernière exécution : ${formatDate(status.finished_at)}` : '',
+        status.trigger ? triggerLabel(status.trigger) : '',
+        status.mode ? modeLabel(status.mode) : '',
+        Number.isFinite(Number(status.duration_seconds)) ? formatDuration(status.duration_seconds) : ''
+    ].filter(Boolean);
+
+    const rsyncParts = [
+        status.bytes_sent ? `envoyé ${status.bytes_sent}` : '',
+        status.bytes_received ? `reçu ${status.bytes_received}` : '',
+        status.total_size ? `total ${status.total_size}` : ''
+    ].filter(Boolean);
+
+    return `
+        <div class="job-status-line mt-2 d-flex flex-wrap align-items-center gap-2">
+            <span class="badge ${statusBadgeClass(status.status)}">${escapeHtml(status.label || 'Statut inconnu')}</span>
+            <span class="text-secondary">${escapeHtml(summaryParts.join(' · '))}</span>
+            ${rsyncParts.length ? `<span class="text-secondary">(${escapeHtml(rsyncParts.join(' · '))})</span>` : ''}
+            <button class="btn btn-sm btn-outline-dark ms-auto" type="button" onclick="showJobLog('${escapeAttr(job.id)}')">Voir dernier log</button>
+        </div>`;
 }
 
 function normalizeSide(side = {}) {
@@ -322,6 +407,7 @@ function render() {
                     <button class="btn btn-sm btn-danger" onclick="jobs.splice(${i},1);render()">X</button>
                 </div>
             </div>
+            ${jobStatusBlock(j)}
             <div class="row g-3 mt-1">
                 <div class="col-md-6 text-start">
                     <small class="fw-bold text-secondary text-uppercase" style="font-size:0.7rem">Source</small>
@@ -451,6 +537,23 @@ async function testEmail() {
         setStatus(e.message, 'danger', 'email-status');
     }
 }
+
+async function showJobLog(jobId) {
+    const job = jobs.find(j => j.id === jobId);
+    document.getElementById('jobLogModalTitle').textContent = job?.name ? `Dernier log : ${job.name}` : 'Dernier log';
+    document.getElementById('jobLogContent').textContent = 'Chargement...';
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('jobLogModal'));
+    modal.show();
+
+    try {
+        const data = await apiFetch(`get_log&id=${encodeURIComponent(jobId)}`);
+        if (data.status !== 'ok') throw new Error(data.error || 'Log indisponible');
+        document.getElementById('jobLogContent').textContent = data.log || '';
+    } catch (e) {
+        document.getElementById('jobLogContent').textContent = e.message;
+    }
+}
+
 async function runJob(i, m) {
     try {
         const res = await fetch(`${API}?action=${m}&id=${encodeURIComponent(i)}`, {cache: 'no-store'});
@@ -460,6 +563,7 @@ async function runJob(i, m) {
         const job = jobs.find(j => j.id === i);
         const name = job?.name ? ` pour ${job.name}` : '';
         setStatus(`${action}${name} lancé. Les logs détaillés sont disponibles dans le journal de l'addon.`, 'success', 'jobs-status');
+        setTimeout(load, 2000);
     } catch (e) {
         setStatus(e.message, 'danger', 'jobs-status');
     }
@@ -467,6 +571,7 @@ async function runJob(i, m) {
 
 document.getElementById('add-job-btn').addEventListener('click', addJob);
 document.getElementById('save-jobs-btn').addEventListener('click', saveJobs);
+document.getElementById('refresh-jobs-btn').addEventListener('click', load);
 document.getElementById('save-config-btn').addEventListener('click', () => saveConfig(true));
 document.getElementById('test-email-btn').addEventListener('click', testEmail);
 document.getElementById('export-email-config-btn').addEventListener('click', exportEmailConfig);

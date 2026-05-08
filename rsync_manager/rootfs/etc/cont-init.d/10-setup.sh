@@ -4,6 +4,7 @@ set -e
 # Dossiers de base
 mkdir -p /data
 mkdir -p /mnt
+mkdir -p /data/logs
 chmod 755 /mnt
 
 # 1. Initialisation du fichier de Configuration (JSON)
@@ -64,6 +65,12 @@ else
     bashio::log.warning "Liste de jobs invalide, remplacement par une liste vide."
     echo '[]' > /data/jobs.json
     chmod 666 /data/jobs.json
+fi
+
+if [ ! -f /data/status.json ] || ! jq -e 'type == "object"' /data/status.json >/dev/null 2>&1; then
+    bashio::log.info "Initialisation des statuts de jobs (/data/status.json)..."
+    echo '{}' > /data/status.json
+    chmod 666 /data/status.json
 fi
 
 # 3. Reconstruction du crontab système au démarrage

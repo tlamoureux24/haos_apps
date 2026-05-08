@@ -3,6 +3,8 @@
 DATA_DIR="${DATA_DIR:-/data}"
 JOBS_FILE="$DATA_DIR/jobs.json"
 CONFIG_FILE="$DATA_DIR/config.json"
+STATUS_FILE="$DATA_DIR/status.json"
+LOG_DIR="$DATA_DIR/logs"
 
 generate_job_id() {
     printf 'job_%s_%s' "$(date +%s%N)" "$RANDOM"
@@ -79,6 +81,87 @@ ensure_jobs_file() {
 
     rm -f "$NORMALIZED_TMP"
     return 1
+}
+
+ensure_status_storage() {
+    mkdir -p "$DATA_DIR" "$LOG_DIR"
+
+    if [ ! -f "$STATUS_FILE" ] || ! jq -e 'type == "object"' "$STATUS_FILE" >/dev/null 2>&1; then
+        echo '{}' > "$STATUS_FILE"
+        chmod 666 "$STATUS_FILE"
+    fi
+}
+
+update_job_status() {
+    local JOB_ID="$1"
+    local STATUS_KEY="$2"
+    local LABEL="$3"
+    local MODE="$4"
+    local TRIGGER="$5"
+    local STARTED_AT="$6"
+    local FINISHED_AT="$7"
+    local DURATION_SECONDS="$8"
+    local EXIT_CODE="$9"
+    local MESSAGE="${10}"
+    local LOG_FILE="${11}"
+    local RSYNC_SENT_LINE="${12}"
+    local RSYNC_TOTAL_LINE="${13}"
+    local BYTES_SENT=""
+    local BYTES_RECEIVED=""
+    local TOTAL_SIZE=""
+    local SPEEDUP=""
+    local STATUS_TMP
+
+    ensure_status_storage
+
+    if [ -n "$RSYNC_SENT_LINE" ]; then
+        BYTES_SENT=$(printf '%s\n' "$RSYNC_SENT_LINE" | awk '{print $2 " " $3}')
+        BYTES_RECEIVED=$(printf '%s\n' "$RSYNC_SENT_LINE" | awk '{print $5 " " $6}')
+    fi
+
+    if [ -n "$RSYNC_TOTAL_LINE" ]; then
+        TOTAL_SIZE=$(printf '%s\n' "$RSYNC_TOTAL_LINE" | awk '{print $4}')
+        SPEEDUP=$(printf '%s\n' "$RSYNC_TOTAL_LINE" | awk '{print $7}')
+    fi
+
+    STATUS_TMP=$(mktemp)
+    if jq \
+        --arg id "$JOB_ID" \
+        --arg status "$STATUS_KEY" \
+        --arg label "$LABEL" \
+        --arg mode "$MODE" \
+        --arg trigger "$TRIGGER" \
+        --arg started_at "$STARTED_AT" \
+        --arg finished_at "$FINISHED_AT" \
+        --arg message "$MESSAGE" \
+        --arg log_file "$LOG_FILE" \
+        --arg bytes_sent "$BYTES_SENT" \
+        --arg bytes_received "$BYTES_RECEIVED" \
+        --arg total_size "$TOTAL_SIZE" \
+        --arg speedup "$SPEEDUP" \
+        --argjson duration_seconds "$DURATION_SECONDS" \
+        --argjson exit_code "$EXIT_CODE" \
+        '.[$id] = {
+            status: $status,
+            label: $label,
+            mode: $mode,
+            trigger: $trigger,
+            started_at: $started_at,
+            finished_at: $finished_at,
+            duration_seconds: $duration_seconds,
+            exit_code: $exit_code,
+            message: $message,
+            bytes_sent: $bytes_sent,
+            bytes_received: $bytes_received,
+            total_size: $total_size,
+            speedup: $speedup,
+            log_file: $log_file
+        }' "$STATUS_FILE" > "$STATUS_TMP"; then
+        cat "$STATUS_TMP" > "$STATUS_FILE"
+        chmod 666 "$STATUS_FILE"
+    fi
+
+    rm -f "$STATUS_TMP"
 }
 
 send_notification() {
@@ -173,7 +256,10 @@ send_notification() {
 run_job() {
     local JOB_ID="$1"
     local MODE="$2"
+    local TRIGGER="${3:-manual}"
     local LOG_TEMP="/tmp/rsync.log"
+    local EXEC_LOG_TEMP
+    local JOB_LOG_FILE="$LOG_DIR/${JOB_ID}.log"
     local JOB
     local NAME
     local SRC_MNT
@@ -183,11 +269,23 @@ run_job() {
     local STATUS
     local OPTS
     local MNT
+    local START_EPOCH
+    local END_EPOCH
+    local STARTED_AT
+    local FINISHED_AT
+    local DURATION_SECONDS
+    local EXIT_CODE
+    local STATUS_KEY
+    local LABEL
+    local MESSAGE
+    local RSYNC_SENT_LINE
+    local RSYNC_TOTAL_LINE
 
     ensure_jobs_file || {
         echo "[RUN] Fichier jobs invalide: $JOBS_FILE" > /proc/1/fd/1
         return 1
     }
+    ensure_status_storage
 
     JOB=$(jq -c --arg id "$JOB_ID" '.[] | select(.id == $id)' "$JOBS_FILE")
 
@@ -198,7 +296,14 @@ run_job() {
 
     NAME=$(echo "$JOB" | jq -r '.name')
 
-    echo "--- DÉMARRAGE : $NAME (id $JOB_ID, Mode $MODE) ---" > /proc/1/fd/1
+    START_EPOCH=$(date +%s)
+    STARTED_AT=$(date -Iseconds)
+    EXEC_LOG_TEMP=$(mktemp)
+    : > "$LOG_TEMP"
+    {
+        echo "--- DÉMARRAGE : $NAME (id $JOB_ID, Mode $MODE, Déclenchement $TRIGGER) ---"
+        echo "Début : $STARTED_AT"
+    } | tee -a "$LOG_TEMP" > /proc/1/fd/1
 
     prepare_path() {
         local SIDE_NAME="$1"
@@ -290,13 +395,13 @@ run_job() {
             OPTS="credentials=$CREDS,iocharset=utf8,vers=$VERS,noperm"
             [ -n "$SEC" ] && OPTS="$OPTS,sec=$SEC"
             [ -n "$EXTRA_OPTIONS" ] && OPTS="$OPTS,$EXTRA_OPTIONS"
-            echo "[CIFS] Montage $SIDE_NAME: $REMOTE -> $MNT (vers=$VERS${SEC:+, sec=$SEC}${DOMAIN:+, domain=$DOMAIN}, noperm${EXTRA_OPTIONS:+, options=$EXTRA_OPTIONS})" > /proc/1/fd/1
+            echo "[CIFS] Montage $SIDE_NAME: $REMOTE -> $MNT (vers=$VERS${SEC:+, sec=$SEC}${DOMAIN:+, domain=$DOMAIN}, noperm${EXTRA_OPTIONS:+, options=$EXTRA_OPTIONS})" | tee -a "$LOG_TEMP" > /proc/1/fd/1
             MOUNT_LOG=$(mktemp)
             mount -v -t cifs "$REMOTE" "$MNT" -o "$OPTS" > "$MOUNT_LOG" 2>&1
             MOUNT_STATUS=$?
             if [ "$MOUNT_STATUS" -ne 0 ]; then
-                cat "$MOUNT_LOG" > /proc/1/fd/1
-                echo "[CIFS] Échec montage $SIDE_NAME." > /proc/1/fd/1
+                cat "$MOUNT_LOG" | tee -a "$LOG_TEMP" > /proc/1/fd/1
+                echo "[CIFS] Échec montage $SIDE_NAME." | tee -a "$LOG_TEMP" > /proc/1/fd/1
                 rm -f "$CREDS"
                 rm -f "$MOUNT_LOG"
                 rmdir "$MNT" 2>/dev/null
@@ -324,14 +429,48 @@ run_job() {
     DST_STATUS=$?
 
     if [ "$SRC_STATUS" -ne 0 ] || [ "$DST_STATUS" -ne 0 ] || [ -z "$SRC_MNT" ] || [ -z "$DST_MNT" ]; then
-        STATUS="ERREUR"; echo "Échec montage réseau." > "$LOG_TEMP"
+        STATUS="ERREUR"
+        STATUS_KEY="mount_error"
+        LABEL="Erreur montage"
+        MESSAGE="Échec montage réseau."
+        EXIT_CODE=1
+        echo "$MESSAGE" | tee -a "$LOG_TEMP" > "$EXEC_LOG_TEMP"
     else
         OPTS="-avh --delete"; [ "$MODE" = "dry" ] && OPTS="$OPTS --dry-run"
-        rsync $OPTS "$SRC_MNT/" "$DST_MNT/" > "$LOG_TEMP" 2>&1
-        [ $? -eq 0 ] && STATUS="SUCCÈS" || STATUS="ÉCHEC"
+        rsync $OPTS "$SRC_MNT/" "$DST_MNT/" > "$EXEC_LOG_TEMP" 2>&1
+        EXIT_CODE=$?
+        cat "$EXEC_LOG_TEMP" >> "$LOG_TEMP"
+        if [ "$EXIT_CODE" -eq 0 ]; then
+            STATUS="SUCCÈS"
+            STATUS_KEY="success"
+            LABEL="Succès"
+            MESSAGE="Synchronisation terminée."
+        else
+            STATUS="ÉCHEC"
+            STATUS_KEY="failed"
+            LABEL="Échec"
+            MESSAGE="Rsync a terminé avec une erreur."
+        fi
     fi
 
-    cat "$LOG_TEMP" > /proc/1/fd/1
+    END_EPOCH=$(date +%s)
+    FINISHED_AT=$(date -Iseconds)
+    DURATION_SECONDS=$((END_EPOCH - START_EPOCH))
+    {
+        echo "Fin : $FINISHED_AT"
+        echo "Durée : ${DURATION_SECONDS}s"
+        echo "Statut : $LABEL"
+    } | tee -a "$LOG_TEMP" >> "$EXEC_LOG_TEMP"
+
+    cat "$EXEC_LOG_TEMP" > /proc/1/fd/1
+    cp "$LOG_TEMP" "$JOB_LOG_FILE"
+    chmod 666 "$JOB_LOG_FILE"
+    rm -f "$EXEC_LOG_TEMP"
+
+    RSYNC_SENT_LINE=$(grep -E '^sent .* bytes .* received .* bytes' "$LOG_TEMP" | tail -n 1 || true)
+    RSYNC_TOTAL_LINE=$(grep -E '^total size is .* speedup is ' "$LOG_TEMP" | tail -n 1 || true)
+    update_job_status "$JOB_ID" "$STATUS_KEY" "$LABEL" "$MODE" "$TRIGGER" "$STARTED_AT" "$FINISHED_AT" "$DURATION_SECONDS" "$EXIT_CODE" "$MESSAGE" "$JOB_LOG_FILE" "$RSYNC_SENT_LINE" "$RSYNC_TOTAL_LINE"
+
     [ "$MODE" = "run" ] && send_notification "$NAME" "$STATUS" "$(cat $LOG_TEMP)"
 
     for MNT in /mnt/rsync_${JOB_ID}_source_* /mnt/rsync_${JOB_ID}_destination_*; do
@@ -346,5 +485,5 @@ case "$1" in
     normalize_jobs) normalize_jobs_file "$2" "${3:-/dev/stdout}" ;;
     save) cat > "$JOBS_FILE"; ensure_jobs_file ;;
     test_email) send_notification "TEST" "OK" "Vérification configuration SMTP." "force" ;;
-    run|dry) run_job "$2" "$1" ;;
+    run|dry) run_job "$2" "$1" "$3" ;;
 esac
