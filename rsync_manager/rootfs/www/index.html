@@ -18,6 +18,7 @@
     <ul class="nav nav-tabs" id="mainTab">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#jobsPane">JOBS</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#configPane">SMTP</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#managementPane">GESTION</button></li>
     </ul>
 
     <div class="tab-content">
@@ -55,6 +56,29 @@
             <button class="btn btn-success" id="save-config-btn" type="button">Sauvegarder Config</button>
             <button class="btn btn-outline-info" id="test-email-btn" type="button">Envoyer un Test</button>
             <div id="email-status" class="alert mt-3 d-none" role="alert"></div>
+        </div>
+
+        <div class="tab-pane fade" id="managementPane">
+            <div class="alert alert-warning" role="alert">
+                Les exports contiennent les mots de passe SMTP et SMB/CIFS en clair. Conservez ces fichiers dans un emplacement sûr.
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <button class="btn btn-outline-primary w-100" id="export-email-config-btn" type="button">Export config email</button>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-outline-primary w-100" id="export-jobs-config-btn" type="button">Export config jobs</button>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-outline-success w-100" id="import-email-config-btn" type="button">Import config email</button>
+                    <input class="d-none" id="import-email-config-file" type="file" accept="application/json,.json">
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-outline-success w-100" id="import-jobs-config-btn" type="button">Import config jobs</button>
+                    <input class="d-none" id="import-jobs-config-file" type="file" accept="application/json,.json">
+                </div>
+            </div>
+            <div id="management-status" class="alert mt-3 d-none" role="alert"></div>
         </div>
     </div>
 </div>
@@ -97,6 +121,33 @@ async function apiFetch(action, options = {}) {
     } catch (e) {
         throw new Error(`Réponse API non JSON pour ${action}: ${text.slice(0, 300)}`);
     }
+}
+
+function downloadJson(data, filename) {
+    const blob = new Blob([JSON.stringify(data, null, 2) + '\n'], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+}
+
+function readJsonFile(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                resolve(JSON.parse(reader.result));
+            } catch (e) {
+                reject(new Error('Fichier JSON invalide.'));
+            }
+        };
+        reader.onerror = () => reject(new Error('Impossible de lire le fichier.'));
+        reader.readAsText(file);
+    });
 }
 
 async function load() {
@@ -286,6 +337,69 @@ async function saveJobs() {
         setStatus(e.message, 'danger', 'jobs-status');
     }
 }
+
+async function exportEmailConfig() {
+    try {
+        const conf = await apiFetch('get_config');
+        downloadJson(conf, 'rsync-manager-email-config.json');
+        setStatus("Export de la configuration email prêt.", 'success', 'management-status');
+    } catch (e) {
+        setStatus(e.message, 'danger', 'management-status');
+    }
+}
+
+async function exportJobsConfig() {
+    try {
+        const exportedJobs = await apiFetch('list_jobs');
+        downloadJson(exportedJobs, 'rsync-manager-jobs-config.json');
+        setStatus("Export de la configuration jobs prêt.", 'success', 'management-status');
+    } catch (e) {
+        setStatus(e.message, 'danger', 'management-status');
+    }
+}
+
+async function importEmailConfig(file) {
+    try {
+        const conf = await readJsonFile(file);
+        if (!conf || Array.isArray(conf) || typeof conf !== 'object') {
+            throw new Error('La configuration email doit être un objet JSON.');
+        }
+
+        const data = await apiFetch('save_config', {
+            method:'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:JSON.stringify(conf)
+        });
+        if (data.status !== 'ok') throw new Error(data.error || 'Import email refusé');
+
+        await load();
+        setStatus("Configuration email importée et prise en compte.", 'success', 'management-status');
+    } catch (e) {
+        setStatus(e.message, 'danger', 'management-status');
+    }
+}
+
+async function importJobsConfig(file) {
+    try {
+        const importedJobs = await readJsonFile(file);
+        if (!Array.isArray(importedJobs)) {
+            throw new Error('La configuration jobs doit être un tableau JSON.');
+        }
+
+        const data = await apiFetch('save_jobs', {
+            method:'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:JSON.stringify(importedJobs)
+        });
+        if (data.status !== 'ok') throw new Error(data.error || 'Import jobs refusé');
+
+        await load();
+        setStatus("Configuration jobs importée, cron régénéré.", 'success', 'management-status');
+    } catch (e) {
+        setStatus(e.message, 'danger', 'management-status');
+    }
+}
+
 async function saveConfig(showAlert = true) {
     try {
         const c = {}; document.querySelectorAll('#configPane input, #configPane select').forEach(el => { c[el.id] = el.type==='checkbox'?el.checked:el.value; });
@@ -333,6 +447,20 @@ document.getElementById('add-job-btn').addEventListener('click', addJob);
 document.getElementById('save-jobs-btn').addEventListener('click', saveJobs);
 document.getElementById('save-config-btn').addEventListener('click', () => saveConfig(true));
 document.getElementById('test-email-btn').addEventListener('click', testEmail);
+document.getElementById('export-email-config-btn').addEventListener('click', exportEmailConfig);
+document.getElementById('export-jobs-config-btn').addEventListener('click', exportJobsConfig);
+document.getElementById('import-email-config-btn').addEventListener('click', () => document.getElementById('import-email-config-file').click());
+document.getElementById('import-jobs-config-btn').addEventListener('click', () => document.getElementById('import-jobs-config-file').click());
+document.getElementById('import-email-config-file').addEventListener('change', e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) importEmailConfig(file);
+});
+document.getElementById('import-jobs-config-file').addEventListener('change', e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) importJobsConfig(file);
+});
 
 load();
 </script>
