@@ -1,6 +1,6 @@
 # Rsync Manager
 
-Rsync Manager est un addon Home Assistant qui permet de configurer et lancer des synchronisations `rsync` depuis une interface web Ingress.
+Rsync Manager est un addon Home Assistant qui permet de configurer, planifier, tester et lancer des synchronisations `rsync` depuis une interface web Ingress.
 
 Il sert principalement a copier ou synchroniser des dossiers entre:
 
@@ -9,7 +9,7 @@ Il sert principalement a copier ou synchroniser des dossiers entre:
 - des partages reseau SMB/CIFS en destination;
 - un melange local -> CIFS, CIFS -> local, local -> local ou CIFS -> CIFS.
 
-L'addon permet aussi de programmer les jobs avec une expression cron, de lancer un dry-run manuel, de lancer un run manuel, et d'envoyer un rapport par email apres execution.
+L'addon permet aussi de programmer les jobs avec une expression cron, de lancer un dry-run manuel, de lancer une execution reelle, de tester les montages, d'exclure des fichiers/dossiers, d'envoyer un rapport email et de consulter le dernier statut/log de chaque job.
 
 ## Fonctionnement General
 
@@ -25,7 +25,11 @@ L'addon utilise:
 Les fichiers persistants sont stockes dans `/data`:
 
 - `/data/jobs.json`: liste des jobs rsync;
-- `/data/config.json`: configuration SMTP/email.
+- `/data/config.json`: configuration SMTP/email;
+- `/data/status.json`: dernier statut connu de chaque job;
+- `/data/logs/<job_id>.log`: dernier log complet de chaque job.
+
+Chaque job possede un identifiant stable de type `job_...`. Cet identifiant est utilise par l'interface, le runner, le cron, les statuts et les logs. Cela evite de confondre les jobs quand un job est supprime ou quand l'ordre de la liste change.
 
 Quand les jobs sont sauvegardes depuis l'interface, l'addon regenere automatiquement le fichier cron:
 
@@ -35,7 +39,7 @@ Quand les jobs sont sauvegardes depuis l'interface, l'addon regenere automatique
 
 Puis il arrete `crond`. Comme `crond` est gere par s6, il est relance automatiquement. Cela permet a Alpine/BusyBox de reprendre proprement les nouvelles planifications.
 
-Les executions manuelles depuis l'interface (`Simuler` et `Lancer`) passent par un service interne appele runner. L'interface web depose une demande d'execution dans une file temporaire, puis le runner execute le job. Cela evite de lancer les montages CIFS directement depuis le processus CGI de l'interface web.
+Les executions manuelles depuis l'interface (`Tester montages`, `Simuler` et `Lancer`) passent par un service interne appele runner. L'interface web depose une demande d'execution dans une file temporaire, puis le runner execute le job. Cela evite de lancer les montages CIFS directement depuis le processus CGI de l'interface web.
 
 ## Installation
 
@@ -74,7 +78,7 @@ Dans le conteneur, ces dossiers sont accessibles via:
 /ssl
 ```
 
-### Synchronisation avec AppArmor
+### Synchronisation Avec AppArmor
 
 Quand AppArmor est active, les dossiers exposes a l'addon doivent etre declares a deux endroits:
 
@@ -101,16 +105,6 @@ Regle pratique:
 
 Quand vous ajoutez, retirez ou changez un dossier dans `map`, mettez aussi a jour la section correspondante dans `apparmor.txt`.
 
-Exemples de chemins locaux:
-
-```text
-/share/mosquitto
-/share/copymosquitto
-/media/photos
-/backup
-/config
-```
-
 Pour utiliser SMB/CIFS, l'addon a besoin de privileges permettant les montages reseau:
 
 ```yaml
@@ -121,25 +115,81 @@ privileged:
 
 ## Onglet JOBS
 
-L'onglet `JOBS` permet de creer, modifier, sauvegarder et executer les synchronisations.
+L'onglet `JOBS` permet de creer, modifier, sauvegarder, tester et executer les synchronisations.
 
 Chaque job contient:
 
+- un identifiant stable `id` genere automatiquement;
 - un nom;
+- un switch `Actif` / `Desactive`;
 - une expression cron;
 - une source;
 - une destination;
-- des boutons `Simuler`, `Lancer` et supprimer.
+- une liste d'exclusions rsync;
+- un dernier statut;
+- un bouton `Voir dernier log`;
+- des boutons `Tester montages`, `Simuler`, `Lancer` et supprimer.
+
+### Activer Ou Desactiver Un Job
+
+Le switch `Actif` controle uniquement la planification cron.
+
+- `Actif`: le job est ajoute au crontab genere.
+- `Desactive`: le job reste dans la configuration, mais il est ignore par le cron.
+
+Les actions manuelles restent disponibles meme si le job est desactive. Vous pouvez donc tester les montages, simuler ou lancer ponctuellement un job desactive.
 
 ### Boutons
 
 `Sauvegarder les Jobs` enregistre `/data/jobs.json` et regenere la planification cron.
 
+`Actualiser` recharge les jobs et les statuts depuis l'addon.
+
+`Tester montages` monte la source et la destination si elles sont en SMB/CIFS, verifie que les chemins sont accessibles, teste l'ecriture sur la destination, puis demonte les partages. Cette action ne lance pas `rsync`.
+
 `Simuler` lance un dry-run rsync. Aucune modification n'est appliquee. C'est utile pour verifier ce qui serait copie ou supprime.
 
 `Lancer` execute reellement le job.
 
-## Modes Source et Destination
+## Statuts Et Derniers Logs
+
+Chaque execution met a jour le dernier statut du job dans `/data/status.json` et le dernier log complet dans `/data/logs/<job_id>.log`.
+
+Les statuts visibles dans l'interface sont:
+
+- `Jamais execute`: aucun statut disponible pour ce job;
+- `Succes`: execution ou dry-run termine sans erreur;
+- `Montages OK`: test de montage reussi;
+- `Echec`: `rsync` a retourne une erreur;
+- `Erreur montage`: montage, acces source ou ecriture destination impossible;
+- `Desactive`: le cron ignore ce job.
+
+Le statut affiche aussi, quand disponible:
+
+- date/heure de derniere execution;
+- declenchement (`manuel` ou `cron`);
+- mode (`run`, `dry-run` ou `test montages`);
+- duree;
+- resume rsync (`envoye`, `recu`, `total`).
+
+Le bouton `Voir dernier log` affiche le dernier log persistant du job dans une fenetre de l'interface.
+
+## Exclusions Rsync
+
+Chaque job peut definir des exclusions, une regle par ligne.
+
+Exemples:
+
+```text
+cache/
+*.tmp
+@eaDir/
+#recycle/
+```
+
+Ces exclusions sont appliquees aux actions `Simuler` et `Lancer` via `--exclude-from`. Elles ne sont pas utilisees par `Tester montages`, car ce test ne lance pas `rsync`.
+
+## Modes Source Et Destination
 
 La source et la destination sont independantes. Chacune peut etre en mode `Local` ou `SMB/CIFS`.
 
@@ -163,16 +213,6 @@ Exemples:
 /backup/archives
 ```
 
-Exemple local -> local:
-
-```text
-Source:
-/share/mosquitto
-
-Destination:
-/share/copymosquitto
-```
-
 Le chemin doit exister dans le conteneur et etre autorise par `map` dans `config.yaml`.
 
 ## Mode SMB/CIFS
@@ -183,10 +223,10 @@ En mode `SMB/CIFS`, chaque cote possede ses propres champs:
 - `Partage reseau`: nom du partage;
 - `Sous-dossier dans le partage`: chemin interne optionnel dans le partage;
 - `Login`: utilisateur SMB;
-- `Mot de passe`: mot de passe SMB.
+- `Mot de passe`: mot de passe SMB;
 - `Domaine/Workgroup`: optionnel, utile si le serveur SMB impose un domaine ou un workgroup;
 - `Version SMB`: version du protocole a utiliser;
-- `Securite`: mode d'authentification CIFS.
+- `Securite`: mode d'authentification CIFS;
 - `Options CIFS avancees`: options supplementaires passees a `mount.cifs`.
 
 Par defaut, l'addon ajoute:
@@ -227,62 +267,6 @@ Puis utilisera comme chemin rsync:
 ```text
 /mnt/.../Archives/2026
 ```
-
-Exemple CIFS -> local:
-
-```text
-Source SMB/CIFS:
-Adresse IP ou nom: 192.168.1.20
-Partage reseau: Documents
-Sous-dossier dans le partage: Archives/2026
-Login: backup
-Mot de passe: ********
-Domaine/Workgroup: WORKGROUP
-Version SMB: SMB 3.0
-Securite: sec=ntlmssp
-Options CIFS avancees: noserverino,nounix
-
-Destination Local:
-/share/backup_documents
-```
-
-Exemple local -> CIFS:
-
-```text
-Source Local:
-/media/photos
-
-Destination SMB/CIFS:
-Adresse IP ou nom: nas.local
-Partage reseau: PhotosBackup
-Sous-dossier dans le partage: Import
-Login: backup
-Mot de passe: ********
-Domaine/Workgroup: WORKGROUP
-Version SMB: SMB 3.0
-Securite: sec=ntlmssp
-Options CIFS avancees: noserverino,nounix
-```
-
-Exemple CIFS -> CIFS:
-
-```text
-Source SMB/CIFS:
-Adresse IP ou nom: 192.168.1.10
-Partage reseau: SourceData
-Sous-dossier dans le partage: NAS/import
-Login: user_source
-Mot de passe: ********
-
-Destination SMB/CIFS:
-Adresse IP ou nom: 192.168.1.30
-Partage reseau: DestinationBackup
-Sous-dossier dans le partage: NAS_BACKUP/import
-Login: user_destination
-Mot de passe: ********
-```
-
-Les identifiants source et destination peuvent etre differents.
 
 ## Planification Cron
 
@@ -333,9 +317,11 @@ Le 1er jour de chaque mois a 04:00.
 Apres chaque sauvegarde des jobs, l'addon:
 
 1. ecrit `/data/jobs.json`;
-2. regenere `/var/spool/cron/crontabs/root`;
-3. arrete `crond`;
-4. laisse s6 relancer `crond`.
+2. normalise les jobs (`id`, `enabled`, `excludes`);
+3. regenere `/var/spool/cron/crontabs/root`;
+4. ignore les jobs desactives;
+5. arrete `crond`;
+6. laisse s6 relancer `crond`.
 
 Dans les logs, vous devriez voir:
 
@@ -345,7 +331,7 @@ Dans les logs, vous devriez voir:
 [CRON] crond arrete apres regeneration, s6 va le relancer.
 ```
 
-## Email et SMTP
+## Onglet SMTP
 
 L'onglet `SMTP` permet de configurer l'envoi des rapports email.
 
@@ -382,17 +368,38 @@ Destinataire: votre.adresse@gmail.com
 
 Pour Gmail, utilisez un mot de passe d'application Google. Le mot de passe normal du compte ne fonctionne generalement pas.
 
-### Quand les emails sont envoyes
+### Quand Les Emails Sont Envoyes
 
 Les emails sont envoyes apres les executions reelles (`run`), avec le resultat du job.
 
-Les dry-runs manuels affichent les logs dans le journal de l'addon, mais ne servent pas a modifier les fichiers.
+Les dry-runs manuels et les tests de montage ecrivent un statut/log, mais n'envoient pas de rapport email.
+
+## Onglet GESTION
+
+L'onglet `GESTION` permet d'importer et d'exporter les configurations depuis le navigateur.
+
+Boutons disponibles:
+
+- `Export config email`: telecharge la configuration SMTP/email;
+- `Export config jobs`: telecharge les jobs;
+- `Import config email`: importe une configuration SMTP/email JSON;
+- `Import config jobs`: importe une liste de jobs JSON.
+
+Les exports contiennent les mots de passe SMTP et SMB/CIFS en clair, car ces valeurs sont necessaires au fonctionnement de l'addon. Conservez ces fichiers dans un emplacement sur.
+
+Lors de l'import des jobs, l'addon normalise automatiquement les champs manquants:
+
+- `id`: genere si absent ou duplique;
+- `enabled`: `true` par defaut;
+- `excludes`: liste vide par defaut.
+
+Apres import des jobs, la planification cron est regeneree immediatement.
 
 ## Logs
 
-Les logs utiles sont visibles dans le journal de l'addon Home Assistant.
+Les logs utiles sont visibles dans le journal de l'addon Home Assistant et, pour chaque job, dans l'interface via `Voir dernier log`.
 
-Prefixes importants:
+Prefixes importants dans le journal de l'addon:
 
 ```text
 [API]
@@ -427,7 +434,7 @@ Envoi des emails via SMTP.
 Exemple d'execution:
 
 ```text
---- DEMARRAGE : Backup (Mode run) ---
+--- DEMARRAGE : Backup (id job_..., Mode run, Declenchement manual) ---
 sending incremental file list
 ...
 [EMAIL] Message envoye avec succes.
@@ -447,6 +454,18 @@ Afficher la configuration SMTP:
 cat /data/config.json
 ```
 
+Afficher les statuts:
+
+```sh
+cat /data/status.json
+```
+
+Afficher le dernier log d'un job:
+
+```sh
+cat /data/logs/job_xxx.log
+```
+
 Afficher le crontab genere:
 
 ```sh
@@ -462,8 +481,9 @@ pidof crond
 Lancer un job manuellement depuis le conteneur:
 
 ```sh
-/usr/local/bin/rsync_manager.sh dry 0
-/usr/local/bin/rsync_manager.sh run 0
+/usr/local/bin/rsync_manager.sh mount_test job_xxx manual
+/usr/local/bin/rsync_manager.sh dry job_xxx manual
+/usr/local/bin/rsync_manager.sh run job_xxx manual
 ```
 
 Regenerer manuellement le cron:
@@ -474,25 +494,41 @@ Regenerer manuellement le cron:
 
 ## Depannage
 
-### Le job ne s'execute pas automatiquement
+### Le Job Ne S'execute Pas Automatiquement
 
 Verifiez:
 
 - que le job a ete sauvegarde;
+- que le job est actif;
 - que l'expression cron contient bien 5 champs;
 - que `/var/spool/cron/crontabs/root` contient la ligne du job;
 - que les logs contiennent `[CRON] crond arrete apres regeneration, s6 va le relancer.`;
 - que `crond` tourne avec `pidof crond`.
 
-### Le dry-run fonctionne mais pas le cron
+### Le Dry-Run Fonctionne Mais Pas Le Cron
 
 Le job lui-meme est probablement correct. Regardez plutot:
 
+- le switch `Actif`;
 - le contenu de `/var/spool/cron/crontabs/root`;
 - les logs `[CRON]`;
 - l'expression cron.
 
-### Le montage CIFS echoue
+### Le Test Montages Echoue
+
+Verifiez:
+
+- adresse IP ou nom du serveur;
+- nom du partage sans `//serveur/`;
+- sous-dossier separe du nom du partage;
+- login et mot de passe;
+- domaine/workgroup si le serveur en demande un;
+- droits du compte SMB;
+- droits d'ecriture sur la destination;
+- acces reseau depuis Home Assistant;
+- version SMB supportee par le serveur.
+
+### Le Montage CIFS Echoue
 
 Verifiez:
 
@@ -523,7 +559,16 @@ Si vous obtenez `Permission denied` alors que le compte est correct, essayez d'a
 - utiliser les options CIFS avancees `noserverino,nounix`;
 - verifier que le nom du partage est exactement celui expose par le serveur SMB.
 
-### Gmail refuse l'envoi
+### Les Exclusions Ne S'appliquent Pas
+
+Verifiez:
+
+- une exclusion par ligne;
+- pas de guillemets autour des motifs;
+- que le motif correspond au chemin relatif vu par `rsync`;
+- le dernier log du job, qui indique si des exclusions sont actives.
+
+### Gmail Refuse L'envoi
 
 Verifiez:
 
@@ -533,11 +578,11 @@ Verifiez:
 - mot de passe d'application Google;
 - expediteur coherent avec le compte Gmail.
 
-### Les logs cron affichent beaucoup de bruit
+### Les Logs Cron Affichent Beaucoup De Bruit
 
 L'addon lance `crond` avec un niveau de log reduit pour eviter les traces internes BusyBox.
 
-Les logs utiles de l'addon restent visibles via les prefixes `[API]`, `[CRON]`, `[CIFS]` et `[EMAIL]`.
+Les logs utiles de l'addon restent visibles via les prefixes `[API]`, `[CRON]`, `[CIFS]`, `[RUNNER]` et `[EMAIL]`.
 
 ## Notes Sur Rsync
 
@@ -551,6 +596,12 @@ En dry-run, il ajoute:
 
 ```sh
 --dry-run
+```
+
+Quand des exclusions sont definies, il ajoute:
+
+```sh
+--exclude-from=<fichier temporaire>
 ```
 
 Attention: `--delete` supprime dans la destination les fichiers qui n'existent plus dans la source. Utilisez `Simuler` avant un nouveau job ou apres une modification importante.
