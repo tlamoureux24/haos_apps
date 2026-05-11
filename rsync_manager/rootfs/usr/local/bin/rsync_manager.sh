@@ -52,7 +52,8 @@ normalize_jobs_file() {
             jq --argjson job "$(echo "$JOB" | jq --arg id "$JOB_ID" '. + {
                 id: $id,
                 enabled: (.enabled // true),
-                excludes: (if (.excludes | type) == "array" then .excludes else [] end)
+                excludes: (if (.excludes | type) == "array" then .excludes else [] end),
+                rsync_inplace: (if has("rsync_inplace") then .rsync_inplace else ((.target.type // "local") == "cifs") end)
             }')" '. + [$job]' "$NORMALIZED_TMP" > "$UPDATED_TMP"
             mv "$UPDATED_TMP" "$NORMALIZED_TMP"
         done
@@ -310,7 +311,8 @@ run_job() {
     local SRC_STATUS
     local DST_STATUS
     local STATUS
-    local OPTS
+    local RSYNC_INPLACE
+    local -a RSYNC_OPTS
     local MNT
     local START_EPOCH
     local END_EPOCH
@@ -480,14 +482,22 @@ run_job() {
         EXIT_CODE=1
         echo "$MESSAGE" | tee -a "$LOG_TEMP" > "$EXEC_LOG_TEMP"
     else
-        OPTS="-avh --delete"; [ "$MODE" = "dry" ] && OPTS="$OPTS --dry-run"
+        RSYNC_OPTS=(-a -v -h --delete)
+        [ "$MODE" = "dry" ] && RSYNC_OPTS+=(--dry-run)
+
+        RSYNC_INPLACE=$(echo "$JOB" | jq -r 'if has("rsync_inplace") then .rsync_inplace else ((.target.type // "local") == "cifs") end')
+        if [ "$RSYNC_INPLACE" = "true" ]; then
+            echo "[RSYNC] Écriture directe active (--inplace)." | tee -a "$LOG_TEMP" > /proc/1/fd/1
+            RSYNC_OPTS+=(--inplace)
+        fi
+
         jq -r '.excludes // [] | .[]' <<< "$JOB" | sed '/^[[:space:]]*$/d' > "$EXCLUDES_FILE"
         EXCLUDES_COUNT=$(wc -l < "$EXCLUDES_FILE")
         if [ "$EXCLUDES_COUNT" -gt 0 ]; then
             echo "[RSYNC] Exclusions actives: $EXCLUDES_COUNT règle(s)." | tee -a "$LOG_TEMP" > /proc/1/fd/1
-            OPTS="$OPTS --exclude-from=$EXCLUDES_FILE"
+            RSYNC_OPTS+=(--exclude-from="$EXCLUDES_FILE")
         fi
-        rsync $OPTS "$SRC_MNT/" "$DST_MNT/" > "$EXEC_LOG_TEMP" 2>&1
+        rsync "${RSYNC_OPTS[@]}" "$SRC_MNT/" "$DST_MNT/" > "$EXEC_LOG_TEMP" 2>&1
         EXIT_CODE=$?
         cat "$EXEC_LOG_TEMP" >> "$LOG_TEMP"
         if [ "$EXIT_CODE" -eq 0 ]; then

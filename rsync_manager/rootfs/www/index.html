@@ -307,6 +307,15 @@ function setJobExcludes(index, value) {
         .filter(Boolean);
 }
 
+function jobRsyncInplace(job) {
+    if (typeof job.rsync_inplace === 'boolean') return job.rsync_inplace;
+    return normalizeSide(job.target).type === 'cifs';
+}
+
+function setJobRsyncInplace(index, value) {
+    jobs[index].rsync_inplace = value;
+}
+
 function normalizeSide(side = {}) {
     if (typeof side === 'string') {
         return {
@@ -465,6 +474,12 @@ function render() {
                 </div>
             </div>
             <div class="row g-2 mt-2">
+                <div class="col-md-12">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" ${jobRsyncInplace(j) ? 'checked' : ''} onchange="setJobRsyncInplace(${i}, this.checked)">
+                        <label class="form-check-label small fw-bold">Écriture directe rsync (--inplace)</label>
+                    </div>
+                </div>
                 <div class="col-md-12">
                     <small class="fw-bold text-secondary text-uppercase" style="font-size:0.7rem">Exclusions rsync</small>
                     <textarea class="form-control form-control-sm" rows="3" oninput="setJobExcludes(${i}, this.value)" placeholder="cache/&#10;*.tmp&#10;@eaDir/">${escapeHtml(excludesText(j))}</textarea>

@@ -392,6 +392,7 @@ Lors de l'import des jobs, l'addon normalise automatiquement les champs manquant
 - `id`: genere si absent ou duplique;
 - `enabled`: `true` par defaut;
 - `excludes`: liste vide par defaut.
+- `rsync_inplace`: active par defaut pour une cible SMB/CIFS.
 
 Apres import des jobs, la planification cron est regeneree immediatement.
 
@@ -603,5 +604,13 @@ Quand des exclusions sont definies, il ajoute:
 ```sh
 --exclude-from=<fichier temporaire>
 ```
+
+Quand la destination est SMB/CIFS, l'addon active aussi par defaut:
+
+```sh
+--inplace
+```
+
+Cette option evite les fichiers temporaires caches crees par rsync dans la destination, de la forme `.nom-du-fichier.XXXXXX`. Ces noms sont normaux: ils ne doivent pas exister dans la source. Sur certains partages SMB/CIFS, leur creation peut echouer avec `mkstemp ... No such file or directory`.
 
 Attention: `--delete` supprime dans la destination les fichiers qui n'existent plus dans la source. Utilisez `Simuler` avant un nouveau job ou apres une modification importante.
