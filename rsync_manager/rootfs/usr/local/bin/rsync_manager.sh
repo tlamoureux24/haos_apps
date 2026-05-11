@@ -53,7 +53,8 @@ normalize_jobs_file() {
                 id: $id,
                 enabled: (.enabled // true),
                 excludes: (if (.excludes | type) == "array" then .excludes else [] end),
-                rsync_inplace: (if has("rsync_inplace") then .rsync_inplace else ((.target.type // "local") == "cifs") end)
+                rsync_inplace: (if has("rsync_inplace") then .rsync_inplace else ((.target.type // "local") == "cifs") end),
+                rsync_smb_permissions: (if has("rsync_smb_permissions") then .rsync_smb_permissions else ((.target.type // "local") == "cifs") end)
             }')" '. + [$job]' "$NORMALIZED_TMP" > "$UPDATED_TMP"
             mv "$UPDATED_TMP" "$NORMALIZED_TMP"
         done
@@ -312,6 +313,7 @@ run_job() {
     local DST_STATUS
     local STATUS
     local RSYNC_INPLACE
+    local RSYNC_SMB_PERMISSIONS
     local -a RSYNC_OPTS
     local MNT
     local START_EPOCH
@@ -489,6 +491,12 @@ run_job() {
         if [ "$RSYNC_INPLACE" = "true" ]; then
             echo "[RSYNC] Écriture directe active (--inplace)." | tee -a "$LOG_TEMP" > /proc/1/fd/1
             RSYNC_OPTS+=(--inplace)
+        fi
+
+        RSYNC_SMB_PERMISSIONS=$(echo "$JOB" | jq -r 'if has("rsync_smb_permissions") then .rsync_smb_permissions else ((.target.type // "local") == "cifs") end')
+        if [ "$RSYNC_SMB_PERMISSIONS" = "true" ]; then
+            echo "[RSYNC] Compatibilité permissions SMB active (--no-perms --no-owner --no-group --chmod=ugo=rwX)." | tee -a "$LOG_TEMP" > /proc/1/fd/1
+            RSYNC_OPTS+=(--no-perms --no-owner --no-group --chmod=ugo=rwX)
         fi
 
         jq -r '.excludes // [] | .[]' <<< "$JOB" | sed '/^[[:space:]]*$/d' > "$EXCLUDES_FILE"

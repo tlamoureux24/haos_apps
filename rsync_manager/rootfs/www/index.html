@@ -316,6 +316,15 @@ function setJobRsyncInplace(index, value) {
     jobs[index].rsync_inplace = value;
 }
 
+function jobRsyncSmbPermissions(job) {
+    if (typeof job.rsync_smb_permissions === 'boolean') return job.rsync_smb_permissions;
+    return normalizeSide(job.target).type === 'cifs';
+}
+
+function setJobRsyncSmbPermissions(index, value) {
+    jobs[index].rsync_smb_permissions = value;
+}
+
 function normalizeSide(side = {}) {
     if (typeof side === 'string') {
         return {
@@ -478,6 +487,10 @@ function render() {
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" ${jobRsyncInplace(j) ? 'checked' : ''} onchange="setJobRsyncInplace(${i}, this.checked)">
                         <label class="form-check-label small fw-bold">Écriture directe rsync (--inplace)</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" ${jobRsyncSmbPermissions(j) ? 'checked' : ''} onchange="setJobRsyncSmbPermissions(${i}, this.checked)">
+                        <label class="form-check-label small fw-bold">Permissions compatibles SMB</label>
                     </div>
                 </div>
                 <div class="col-md-12">
