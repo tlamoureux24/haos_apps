@@ -54,7 +54,8 @@ normalize_jobs_file() {
                 enabled: (.enabled // true),
                 excludes: (if (.excludes | type) == "array" then .excludes else [] end),
                 rsync_inplace: (if has("rsync_inplace") then .rsync_inplace else ((.target.type // "local") == "cifs") end),
-                rsync_smb_permissions: (if has("rsync_smb_permissions") then .rsync_smb_permissions else ((.target.type // "local") == "cifs") end)
+                rsync_smb_permissions: (if has("rsync_smb_permissions") then .rsync_smb_permissions else ((.target.type // "local") == "cifs") end),
+                rsync_repair_blocked: (.rsync_repair_blocked // false)
             }')" '. + [$job]' "$NORMALIZED_TMP" > "$UPDATED_TMP"
             mv "$UPDATED_TMP" "$NORMALIZED_TMP"
         done
@@ -314,6 +315,11 @@ run_job() {
     local STATUS
     local RSYNC_INPLACE
     local RSYNC_SMB_PERMISSIONS
+    local RSYNC_REPAIR_BLOCKED
+    local REPAIR_LIST
+    local REPAIR_COUNT
+    local RETRY_LOG_TEMP
+    local BLOCKED_FILE
     local -a RSYNC_OPTS
     local MNT
     local START_EPOCH
@@ -499,6 +505,11 @@ run_job() {
             RSYNC_OPTS+=(--no-perms --no-owner --no-group --chmod=ugo=rwX)
         fi
 
+        RSYNC_REPAIR_BLOCKED=$(echo "$JOB" | jq -r '.rsync_repair_blocked // false')
+        if [ "$RSYNC_REPAIR_BLOCKED" = "true" ]; then
+            echo "[RSYNC] Réparation des fichiers destination bloqués active." | tee -a "$LOG_TEMP" > /proc/1/fd/1
+        fi
+
         jq -r '.excludes // [] | .[]' <<< "$JOB" | sed '/^[[:space:]]*$/d' > "$EXCLUDES_FILE"
         EXCLUDES_COUNT=$(wc -l < "$EXCLUDES_FILE")
         if [ "$EXCLUDES_COUNT" -gt 0 ]; then
@@ -508,6 +519,46 @@ run_job() {
         rsync "${RSYNC_OPTS[@]}" "$SRC_MNT/" "$DST_MNT/" > "$EXEC_LOG_TEMP" 2>&1
         EXIT_CODE=$?
         cat "$EXEC_LOG_TEMP" >> "$LOG_TEMP"
+
+        if [ "$EXIT_CODE" -ne 0 ] && [ "$MODE" = "run" ] && [ "$RSYNC_REPAIR_BLOCKED" = "true" ]; then
+            REPAIR_LIST=$(mktemp)
+            sed -n 's/^rsync: \[receiver\] open "\(.*\)" failed: Permission denied (13)$/\1/p' "$EXEC_LOG_TEMP" > "$REPAIR_LIST"
+            REPAIR_COUNT=0
+
+            while IFS= read -r BLOCKED_FILE; do
+                [ -n "$BLOCKED_FILE" ] || continue
+                case "$BLOCKED_FILE" in
+                    "$DST_MNT"/*)
+                        if rm -f -- "$BLOCKED_FILE" 2>/dev/null; then
+                            REPAIR_COUNT=$((REPAIR_COUNT + 1))
+                            echo "[RSYNC] Fichier destination bloqué supprimé: ${BLOCKED_FILE#"$DST_MNT/"}" | tee -a "$LOG_TEMP" > /proc/1/fd/1
+                        else
+                            echo "[RSYNC] Impossible de supprimer le fichier bloqué: ${BLOCKED_FILE#"$DST_MNT/"}" | tee -a "$LOG_TEMP" > /proc/1/fd/1
+                        fi
+                        ;;
+                    *)
+                        echo "[RSYNC] Chemin bloqué ignoré hors destination: $BLOCKED_FILE" | tee -a "$LOG_TEMP" > /proc/1/fd/1
+                        ;;
+                esac
+            done < "$REPAIR_LIST"
+            rm -f "$REPAIR_LIST"
+
+            if [ "$REPAIR_COUNT" -gt 0 ]; then
+                RETRY_LOG_TEMP=$(mktemp)
+                echo "[RSYNC] $REPAIR_COUNT fichier(s) supprimé(s), nouvelle tentative rsync." | tee -a "$LOG_TEMP" > /proc/1/fd/1
+                rsync "${RSYNC_OPTS[@]}" "$SRC_MNT/" "$DST_MNT/" > "$RETRY_LOG_TEMP" 2>&1
+                EXIT_CODE=$?
+                {
+                    echo "--- NOUVELLE TENTATIVE APRÈS RÉPARATION ---"
+                    cat "$RETRY_LOG_TEMP"
+                } >> "$EXEC_LOG_TEMP"
+                cat "$RETRY_LOG_TEMP" >> "$LOG_TEMP"
+                rm -f "$RETRY_LOG_TEMP"
+            else
+                echo "[RSYNC] Aucun fichier bloqué supprimable trouvé dans la destination." | tee -a "$LOG_TEMP" > /proc/1/fd/1
+            fi
+        fi
+
         if [ "$EXIT_CODE" -eq 0 ]; then
             STATUS="SUCCÈS"
             STATUS_KEY="success"

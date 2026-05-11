@@ -325,6 +325,14 @@ function setJobRsyncSmbPermissions(index, value) {
     jobs[index].rsync_smb_permissions = value;
 }
 
+function jobRsyncRepairBlocked(job) {
+    return job.rsync_repair_blocked === true;
+}
+
+function setJobRsyncRepairBlocked(index, value) {
+    jobs[index].rsync_repair_blocked = value;
+}
+
 function normalizeSide(side = {}) {
     if (typeof side === 'string') {
         return {
@@ -491,6 +499,10 @@ function render() {
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" ${jobRsyncSmbPermissions(j) ? 'checked' : ''} onchange="setJobRsyncSmbPermissions(${i}, this.checked)">
                         <label class="form-check-label small fw-bold">Permissions compatibles SMB</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" ${jobRsyncRepairBlocked(j) ? 'checked' : ''} onchange="setJobRsyncRepairBlocked(${i}, this.checked)">
+                        <label class="form-check-label small fw-bold">Supprimer fichiers destination bloqués puis réessayer</label>
                     </div>
                 </div>
                 <div class="col-md-12">

@@ -394,6 +394,7 @@ Lors de l'import des jobs, l'addon normalise automatiquement les champs manquant
 - `excludes`: liste vide par defaut.
 - `rsync_inplace`: active par defaut pour une cible SMB/CIFS.
 - `rsync_smb_permissions`: active par defaut pour une cible SMB/CIFS.
+- `rsync_repair_blocked`: `false` par defaut.
 
 Apres import des jobs, la planification cron est regeneree immediatement.
 
@@ -616,5 +617,7 @@ Quand la destination est SMB/CIFS, l'addon active aussi par defaut:
 Cette option evite les fichiers temporaires caches crees par rsync dans la destination, de la forme `.nom-du-fichier.XXXXXX`. Ces noms sont normaux: ils ne doivent pas exister dans la source. Sur certains partages SMB/CIFS, leur creation peut echouer avec `mkstemp ... No such file or directory`.
 
 Les options de permissions SMB evitent qu'un fichier source en lecture seule rende la copie destination non reinscriptible lors du prochain passage avec `--inplace`.
+
+L'option `Supprimer fichiers destination bloques puis reessayer` parse les erreurs `Permission denied (13)` retournees par rsync, supprime uniquement les fichiers concernes sous le dossier destination monte, puis relance rsync une seule fois. Cette option est utile pour reparer une destination deja polluee par des fichiers non reinscriptibles.
 
 Attention: `--delete` supprime dans la destination les fichiers qui n'existent plus dans la source. Utilisez `Simuler` avant un nouveau job ou apres une modification importante.
