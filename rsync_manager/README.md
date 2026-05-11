@@ -224,12 +224,9 @@ En mode `SMB/CIFS`, chaque cote possede ses propres champs:
 - `Sous-dossier dans le partage`: chemin interne optionnel dans le partage;
 - `Login`: utilisateur SMB;
 - `Mot de passe`: mot de passe SMB;
-- `Domaine/Workgroup`: optionnel, utile si le serveur SMB impose un domaine ou un workgroup;
-- `Version SMB`: version du protocole a utiliser;
-- `Securite`: mode d'authentification CIFS;
-- `Options CIFS avancees`: options supplementaires passees a `mount.cifs`.
+- `Domaine/Workgroup`: optionnel, utile si le serveur SMB impose un domaine ou un workgroup.
 
-Par defaut, l'addon ajoute:
+L'addon utilise un profil SMB/CIFS integre pour eviter d'exposer des options techniques dans l'interface. Le montage utilise SMB 3.0, `sec=ntlmssp` et les options:
 
 ```text
 noperm,noserverino,nounix
@@ -392,9 +389,6 @@ Lors de l'import des jobs, l'addon normalise automatiquement les champs manquant
 - `id`: genere si absent ou duplique;
 - `enabled`: `true` par defaut;
 - `excludes`: liste vide par defaut.
-- `rsync_inplace`: active par defaut pour une cible SMB/CIFS.
-- `rsync_smb_permissions`: active par defaut pour une cible SMB/CIFS.
-- `rsync_repair_blocked`: `false` par defaut.
 
 Apres import des jobs, la planification cron est regeneree immediatement.
 
@@ -528,8 +522,7 @@ Verifiez:
 - domaine/workgroup si le serveur en demande un;
 - droits du compte SMB;
 - droits d'ecriture sur la destination;
-- acces reseau depuis Home Assistant;
-- version SMB supportee par le serveur.
+- acces reseau depuis Home Assistant.
 
 ### Le Montage CIFS Echoue
 
@@ -541,25 +534,12 @@ Verifiez:
 - login et mot de passe;
 - domaine/workgroup si le serveur en demande un;
 - droits du compte SMB;
-- acces reseau depuis Home Assistant;
-- version SMB supportee par le serveur.
-
-L'addon permet de choisir la version SMB:
-
-```text
-SMB 3.1.1
-SMB 3.0
-SMB 2.1
-SMB 2.0
-SMB 1.0
-```
+- acces reseau depuis Home Assistant.
 
 Si vous obtenez `Permission denied` alors que le compte est correct, essayez d'abord:
 
-- `SMB 3.0` avec `sec=ntlmssp`;
-- `SMB 2.1` avec `sec=ntlmssp`;
 - renseigner `WORKGROUP` ou le domaine reel du serveur;
-- utiliser les options CIFS avancees `noserverino,nounix`;
+- verifier les droits d'ecriture du compte SMB sur le partage destination;
 - verifier que le nom du partage est exactement celui expose par le serveur SMB.
 
 ### Les Exclusions Ne S'appliquent Pas
@@ -617,7 +597,5 @@ Quand la destination est SMB/CIFS, l'addon active aussi par defaut:
 Cette option evite les fichiers temporaires caches crees par rsync dans la destination, de la forme `.nom-du-fichier.XXXXXX`. Ces noms sont normaux: ils ne doivent pas exister dans la source. Sur certains partages SMB/CIFS, leur creation peut echouer avec `mkstemp ... No such file or directory`.
 
 Les options de permissions SMB evitent qu'un fichier source en lecture seule rende la copie destination non reinscriptible lors du prochain passage avec `--inplace`.
-
-L'option `Supprimer fichiers destination bloques puis reessayer` parse les erreurs `Permission denied (13)` retournees par rsync, supprime uniquement les fichiers concernes sous le dossier destination monte, puis relance rsync une seule fois. Cette option est utile pour reparer une destination deja polluee par des fichiers non reinscriptibles.
 
 Attention: `--delete` supprime dans la destination les fichiers qui n'existent plus dans la source. Utilisez `Simuler` avant un nouveau job ou apres une modification importante.

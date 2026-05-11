@@ -49,13 +49,20 @@ normalize_jobs_file() {
 
             printf '%s\n' "$JOB_ID" >> "$SEEN_IDS_TMP"
             UPDATED_TMP=$(mktemp)
-            jq --argjson job "$(echo "$JOB" | jq --arg id "$JOB_ID" '. + {
+            jq --argjson job "$(echo "$JOB" | jq --arg id "$JOB_ID" 'del(
+                .rsync_inplace,
+                .rsync_smb_permissions,
+                .rsync_repair_blocked,
+                .source.vers,
+                .source.sec,
+                .source.options,
+                .target.vers,
+                .target.sec,
+                .target.options
+            ) + {
                 id: $id,
                 enabled: (.enabled // true),
-                excludes: (if (.excludes | type) == "array" then .excludes else [] end),
-                rsync_inplace: (if has("rsync_inplace") then .rsync_inplace else ((.target.type // "local") == "cifs") end),
-                rsync_smb_permissions: (if has("rsync_smb_permissions") then .rsync_smb_permissions else ((.target.type // "local") == "cifs") end),
-                rsync_repair_blocked: (.rsync_repair_blocked // false)
+                excludes: (if (.excludes | type) == "array" then .excludes else [] end)
             }')" '. + [$job]' "$NORMALIZED_TMP" > "$UPDATED_TMP"
             mv "$UPDATED_TMP" "$NORMALIZED_TMP"
         done
@@ -97,6 +104,26 @@ ensure_status_storage() {
         echo '{}' > "$STATUS_FILE"
         chmod 666 "$STATUS_FILE"
     fi
+}
+
+log_line() {
+    local MESSAGE="$1"
+    local TARGET_LOG="${2:-}"
+
+    if [ -n "$TARGET_LOG" ]; then
+        echo "$MESSAGE" | tee -a "$TARGET_LOG" > /proc/1/fd/1
+    else
+        echo "$MESSAGE" > /proc/1/fd/1
+    fi
+}
+
+safe_cifs_options_for_log() {
+    local OPTIONS="$1"
+    printf '%s' "$OPTIONS" | sed -E 's#credentials=[^,]*#credentials=<masque>#g'
+}
+
+join_shell_args_for_log() {
+    printf '%q ' "$@"
 }
 
 update_job_status() {
@@ -313,13 +340,7 @@ run_job() {
     local SRC_STATUS
     local DST_STATUS
     local STATUS
-    local RSYNC_INPLACE
-    local RSYNC_SMB_PERMISSIONS
-    local RSYNC_REPAIR_BLOCKED
-    local REPAIR_LIST
-    local REPAIR_COUNT
-    local RETRY_LOG_TEMP
-    local BLOCKED_FILE
+    local TARGET_TYPE
     local -a RSYNC_OPTS
     local MNT
     local START_EPOCH
@@ -381,6 +402,7 @@ run_job() {
         local MNT
         local CREDS
         local OPTS
+        local SAFE_OPTS
         local MOUNT_LOG
         local MOUNT_STATUS
 
@@ -392,9 +414,9 @@ run_job() {
             USER=$(echo "$SIDE" | jq -r '.user // ""')
             PASS=$(echo "$SIDE" | jq -r '.pass // ""')
             DOMAIN=$(echo "$SIDE" | jq -r '.domain // ""')
-            VERS=$(echo "$SIDE" | jq -r '.vers // "3.0"')
-            SEC=$(echo "$SIDE" | jq -r '.sec // "ntlmssp"')
-            EXTRA_OPTIONS=$(echo "$SIDE" | jq -r '.options // "noserverino,nounix"')
+            VERS="3.0"
+            SEC="ntlmssp"
+            EXTRA_OPTIONS="noserverino,nounix"
 
             USER="${USER%$'\r'}"
             PASS="${PASS%$'\r'}"
@@ -449,7 +471,9 @@ run_job() {
             OPTS="credentials=$CREDS,iocharset=utf8,vers=$VERS,noperm"
             [ -n "$SEC" ] && OPTS="$OPTS,sec=$SEC"
             [ -n "$EXTRA_OPTIONS" ] && OPTS="$OPTS,$EXTRA_OPTIONS"
-            echo "[CIFS] Montage $SIDE_NAME: $REMOTE -> $MNT (vers=$VERS${SEC:+, sec=$SEC}${DOMAIN:+, domain=$DOMAIN}, noperm${EXTRA_OPTIONS:+, options=$EXTRA_OPTIONS})" | tee -a "$LOG_TEMP" > /proc/1/fd/1
+            SAFE_OPTS=$(safe_cifs_options_for_log "$OPTS")
+            log_line "[CIFS] Montage $SIDE_NAME: $REMOTE -> $MNT" "$LOG_TEMP"
+            log_line "[CIFS] Options montage $SIDE_NAME: $SAFE_OPTS${DOMAIN:+, domain=$DOMAIN}" "$LOG_TEMP"
             MOUNT_LOG=$(mktemp)
             mount -v -t cifs "$REMOTE" "$MNT" -o "$OPTS" > "$MOUNT_LOG" 2>&1
             MOUNT_STATUS=$?
@@ -493,21 +517,9 @@ run_job() {
         RSYNC_OPTS=(-a -v -h --delete)
         [ "$MODE" = "dry" ] && RSYNC_OPTS+=(--dry-run)
 
-        RSYNC_INPLACE=$(echo "$JOB" | jq -r 'if has("rsync_inplace") then .rsync_inplace else ((.target.type // "local") == "cifs") end')
-        if [ "$RSYNC_INPLACE" = "true" ]; then
-            echo "[RSYNC] Écriture directe active (--inplace)." | tee -a "$LOG_TEMP" > /proc/1/fd/1
-            RSYNC_OPTS+=(--inplace)
-        fi
-
-        RSYNC_SMB_PERMISSIONS=$(echo "$JOB" | jq -r 'if has("rsync_smb_permissions") then .rsync_smb_permissions else ((.target.type // "local") == "cifs") end')
-        if [ "$RSYNC_SMB_PERMISSIONS" = "true" ]; then
-            echo "[RSYNC] Compatibilité permissions SMB active (--no-perms --no-owner --no-group --chmod=ugo=rwX)." | tee -a "$LOG_TEMP" > /proc/1/fd/1
-            RSYNC_OPTS+=(--no-perms --no-owner --no-group --chmod=ugo=rwX)
-        fi
-
-        RSYNC_REPAIR_BLOCKED=$(echo "$JOB" | jq -r '.rsync_repair_blocked // false')
-        if [ "$RSYNC_REPAIR_BLOCKED" = "true" ]; then
-            echo "[RSYNC] Réparation des fichiers destination bloqués active." | tee -a "$LOG_TEMP" > /proc/1/fd/1
+        TARGET_TYPE=$(echo "$JOB" | jq -r '.target.type // "local"')
+        if [ "$TARGET_TYPE" = "cifs" ]; then
+            RSYNC_OPTS+=(--inplace --no-perms --no-owner --no-group --chmod=ugo=rwX)
         fi
 
         jq -r '.excludes // [] | .[]' <<< "$JOB" | sed '/^[[:space:]]*$/d' > "$EXCLUDES_FILE"
@@ -516,48 +528,13 @@ run_job() {
             echo "[RSYNC] Exclusions actives: $EXCLUDES_COUNT règle(s)." | tee -a "$LOG_TEMP" > /proc/1/fd/1
             RSYNC_OPTS+=(--exclude-from="$EXCLUDES_FILE")
         fi
+        if [ "$TARGET_TYPE" = "cifs" ]; then
+            log_line "[RSYNC] Profil SMB/CIFS actif." "$LOG_TEMP"
+        fi
+        log_line "[RSYNC] Options appliquées: $(join_shell_args_for_log "${RSYNC_OPTS[@]}")" "$LOG_TEMP"
         rsync "${RSYNC_OPTS[@]}" "$SRC_MNT/" "$DST_MNT/" > "$EXEC_LOG_TEMP" 2>&1
         EXIT_CODE=$?
         cat "$EXEC_LOG_TEMP" >> "$LOG_TEMP"
-
-        if [ "$EXIT_CODE" -ne 0 ] && [ "$MODE" = "run" ] && [ "$RSYNC_REPAIR_BLOCKED" = "true" ]; then
-            REPAIR_LIST=$(mktemp)
-            sed -n 's/^rsync: \[receiver\] open "\(.*\)" failed: Permission denied (13)$/\1/p' "$EXEC_LOG_TEMP" > "$REPAIR_LIST"
-            REPAIR_COUNT=0
-
-            while IFS= read -r BLOCKED_FILE; do
-                [ -n "$BLOCKED_FILE" ] || continue
-                case "$BLOCKED_FILE" in
-                    "$DST_MNT"/*)
-                        if rm -f -- "$BLOCKED_FILE" 2>/dev/null; then
-                            REPAIR_COUNT=$((REPAIR_COUNT + 1))
-                            echo "[RSYNC] Fichier destination bloqué supprimé: ${BLOCKED_FILE#"$DST_MNT/"}" | tee -a "$LOG_TEMP" > /proc/1/fd/1
-                        else
-                            echo "[RSYNC] Impossible de supprimer le fichier bloqué: ${BLOCKED_FILE#"$DST_MNT/"}" | tee -a "$LOG_TEMP" > /proc/1/fd/1
-                        fi
-                        ;;
-                    *)
-                        echo "[RSYNC] Chemin bloqué ignoré hors destination: $BLOCKED_FILE" | tee -a "$LOG_TEMP" > /proc/1/fd/1
-                        ;;
-                esac
-            done < "$REPAIR_LIST"
-            rm -f "$REPAIR_LIST"
-
-            if [ "$REPAIR_COUNT" -gt 0 ]; then
-                RETRY_LOG_TEMP=$(mktemp)
-                echo "[RSYNC] $REPAIR_COUNT fichier(s) supprimé(s), nouvelle tentative rsync." | tee -a "$LOG_TEMP" > /proc/1/fd/1
-                rsync "${RSYNC_OPTS[@]}" "$SRC_MNT/" "$DST_MNT/" > "$RETRY_LOG_TEMP" 2>&1
-                EXIT_CODE=$?
-                {
-                    echo "--- NOUVELLE TENTATIVE APRÈS RÉPARATION ---"
-                    cat "$RETRY_LOG_TEMP"
-                } >> "$EXEC_LOG_TEMP"
-                cat "$RETRY_LOG_TEMP" >> "$LOG_TEMP"
-                rm -f "$RETRY_LOG_TEMP"
-            else
-                echo "[RSYNC] Aucun fichier bloqué supprimable trouvé dans la destination." | tee -a "$LOG_TEMP" > /proc/1/fd/1
-            fi
-        fi
 
         if [ "$EXIT_CODE" -eq 0 ]; then
             STATUS="SUCCÈS"
@@ -647,6 +624,7 @@ mount_test() {
         local MNT
         local CREDS
         local OPTS
+        local SAFE_OPTS
         local MOUNT_LOG
         local MOUNT_STATUS
 
@@ -658,9 +636,9 @@ mount_test() {
             USER=$(echo "$SIDE" | jq -r '.user // ""')
             PASS=$(echo "$SIDE" | jq -r '.pass // ""')
             DOMAIN=$(echo "$SIDE" | jq -r '.domain // ""')
-            VERS=$(echo "$SIDE" | jq -r '.vers // "3.0"')
-            SEC=$(echo "$SIDE" | jq -r '.sec // "ntlmssp"')
-            EXTRA_OPTIONS=$(echo "$SIDE" | jq -r '.options // "noserverino,nounix"')
+            VERS="3.0"
+            SEC="ntlmssp"
+            EXTRA_OPTIONS="noserverino,nounix"
 
             USER="${USER%$'\r'}"
             PASS="${PASS%$'\r'}"
@@ -706,7 +684,9 @@ mount_test() {
             OPTS="credentials=$CREDS,iocharset=utf8,vers=$VERS,noperm"
             [ -n "$SEC" ] && OPTS="$OPTS,sec=$SEC"
             [ -n "$EXTRA_OPTIONS" ] && OPTS="$OPTS,$EXTRA_OPTIONS"
-            echo "[CIFS] Montage test $SIDE_NAME: $REMOTE -> $MNT" | tee -a "$LOG_TEMP" > /proc/1/fd/1
+            SAFE_OPTS=$(safe_cifs_options_for_log "$OPTS")
+            log_line "[CIFS] Montage test $SIDE_NAME: $REMOTE -> $MNT" "$LOG_TEMP"
+            log_line "[CIFS] Options montage test $SIDE_NAME: $SAFE_OPTS${DOMAIN:+, domain=$DOMAIN}" "$LOG_TEMP"
             MOUNT_LOG=$(mktemp)
             mount -v -t cifs "$REMOTE" "$MNT" -o "$OPTS" > "$MOUNT_LOG" 2>&1
             MOUNT_STATUS=$?
