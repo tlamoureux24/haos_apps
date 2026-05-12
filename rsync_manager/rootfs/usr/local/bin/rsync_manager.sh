@@ -61,7 +61,7 @@ normalize_jobs_file() {
                 .target.options
             ) + {
                 id: $id,
-                enabled: (.enabled // true),
+                enabled: (if has("enabled") then .enabled else true end),
                 excludes: (if (.excludes | type) == "array" then .excludes else [] end)
             }')" '. + [$job]' "$NORMALIZED_TMP" > "$UPDATED_TMP"
             mv "$UPDATED_TMP" "$NORMALIZED_TMP"
