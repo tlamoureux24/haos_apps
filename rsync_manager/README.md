@@ -67,12 +67,20 @@ Un clic sur un job existant ouvre la meme fenetre en mode edition.
 
 Champs disponibles:
 
-- nom du job;
-- expression cron;
+- nom du job, obligatoire;
+- expression cron, obligatoire;
 - coche `Actif`;
 - source;
 - cible;
-- exclusions rsync.
+- exclusions rsync, optionnelles.
+
+Champs obligatoires selon le type de source/cible:
+
+- `Local`: chemin local obligatoire;
+- `SMB/CIFS`: adresse IP ou nom et partage reseau obligatoires;
+- `SMB/CIFS`: login, mot de passe, sous-dossier et domaine/workgroup optionnels.
+
+L'enregistrement est bloque si un champ obligatoire est vide. Les champs concernes sont alors marques en rouge dans la fenetre.
 
 Actions disponibles dans la fenetre:
 
@@ -92,6 +100,8 @@ La coche `Actif` controle la planification automatique.
 - `Desactive`: le job reste configure, mais le cron l'ignore.
 
 Les actions manuelles restent disponibles meme si le job est desactive. Cela permet de tester ou lancer ponctuellement un job sans le remettre dans la planification.
+
+Pour creer un job utilisable uniquement en manuel, renseignez le cron normalement puis decochez `Actif`. Le job ne sera pas ajoute a la planification, mais restera disponible pour `Simuler`, `Lancer` et `Tester montages`.
 
 ### Actualiser
 

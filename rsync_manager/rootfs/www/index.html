@@ -213,11 +213,11 @@
                 <div class="row g-3">
                     <div class="col-md-7">
                         <label class="form-label fw-bold" for="job_name">Nom</label>
-                        <input class="form-control" id="job_name" type="text" placeholder="Backup">
+                        <input class="form-control" id="job_name" type="text" placeholder="Nom du job (obligatoire)">
                     </div>
                     <div class="col-md-3">
                         <label class="form-label fw-bold" for="job_cron">Cron</label>
-                        <input class="form-control" id="job_cron" type="text" placeholder="0 3 * * *">
+                        <input class="form-control" id="job_cron" type="text" placeholder="0 3 * * * (obligatoire)">
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
                         <div class="form-check form-switch mb-2">
@@ -235,14 +235,14 @@
                             <option value="cifs">SMB/CIFS</option>
                         </select>
                         <div id="job_source_local">
-                            <input class="form-control form-control-sm" id="job_source_path" placeholder="Chemin local">
+                            <input class="form-control form-control-sm" id="job_source_path" placeholder="Chemin local (obligatoire)">
                         </div>
                         <div class="row g-2 d-none" id="job_source_cifs">
-                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_source_host" placeholder="Adresse IP ou nom"></div>
-                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_source_share" placeholder="Partage réseau"></div>
+                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_source_host" placeholder="Adresse IP ou nom (obligatoire)"></div>
+                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_source_share" placeholder="Partage réseau (obligatoire)"></div>
                             <div class="col-md-12"><input class="form-control form-control-sm" id="job_source_subpath" placeholder="Sous-dossier dans le partage (optionnel)"></div>
-                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_source_user" placeholder="Login"></div>
-                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_source_pass" type="password" placeholder="Mot de passe"></div>
+                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_source_user" placeholder="Login (optionnel)"></div>
+                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_source_pass" type="password" placeholder="Mot de passe (optionnel)"></div>
                             <div class="col-md-12"><input class="form-control form-control-sm" id="job_source_domain" placeholder="Domaine/Workgroup (optionnel)"></div>
                         </div>
                     </div>
@@ -253,14 +253,14 @@
                             <option value="cifs">SMB/CIFS</option>
                         </select>
                         <div id="job_target_local">
-                            <input class="form-control form-control-sm" id="job_target_path" placeholder="Chemin local">
+                            <input class="form-control form-control-sm" id="job_target_path" placeholder="Chemin local (obligatoire)">
                         </div>
                         <div class="row g-2 d-none" id="job_target_cifs">
-                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_target_host" placeholder="Adresse IP ou nom"></div>
-                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_target_share" placeholder="Partage réseau"></div>
+                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_target_host" placeholder="Adresse IP ou nom (obligatoire)"></div>
+                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_target_share" placeholder="Partage réseau (obligatoire)"></div>
                             <div class="col-md-12"><input class="form-control form-control-sm" id="job_target_subpath" placeholder="Sous-dossier dans le partage (optionnel)"></div>
-                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_target_user" placeholder="Login"></div>
-                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_target_pass" type="password" placeholder="Mot de passe"></div>
+                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_target_user" placeholder="Login (optionnel)"></div>
+                            <div class="col-md-6"><input class="form-control form-control-sm" id="job_target_pass" type="password" placeholder="Mot de passe (optionnel)"></div>
                             <div class="col-md-12"><input class="form-control form-control-sm" id="job_target_domain" placeholder="Domaine/Workgroup (optionnel)"></div>
                         </div>
                     </div>
@@ -269,9 +269,10 @@
                 <div class="row g-2 mt-2">
                     <div class="col-md-12">
                         <small class="fw-bold text-secondary text-uppercase" style="font-size:0.7rem">Exclusions rsync</small>
-                        <textarea class="form-control form-control-sm" id="job_excludes" rows="3" placeholder="cache/&#10;*.tmp&#10;@eaDir/"></textarea>
+                        <textarea class="form-control form-control-sm" id="job_excludes" rows="3" placeholder="Exclusions optionnelles, une règle par ligne&#10;cache/&#10;*.tmp&#10;@eaDir/"></textarea>
                     </div>
                 </div>
+                <div id="job-validation-message" class="alert alert-danger mt-3 d-none" role="alert"></div>
             </div>
             <div class="modal-footer justify-content-between">
                 <button class="btn btn-outline-danger" id="delete-job-btn" type="button">Supprimer</button>
@@ -624,6 +625,61 @@ function updateModalSideVisibility() {
     document.getElementById('modal-mount-test-btn').classList.toggle('d-none', !hasCifs);
 }
 
+function clearJobValidation() {
+    document.querySelectorAll('#jobEditModal .is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    const message = document.getElementById('job-validation-message');
+    message.classList.add('d-none');
+    message.textContent = '';
+}
+
+function markJobFieldInvalid(id, label, errors) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('is-invalid');
+    errors.push(label);
+}
+
+function validateJobModal() {
+    const errors = [];
+    clearJobValidation();
+
+    if (!document.getElementById('job_name').value.trim()) {
+        markJobFieldInvalid('job_name', 'Nom', errors);
+    }
+
+    if (!document.getElementById('job_cron').value.trim()) {
+        markJobFieldInvalid('job_cron', 'Cron', errors);
+    }
+
+    ['source', 'target'].forEach(sideName => {
+        const label = sideName === 'source' ? 'Source' : 'Cible';
+        const type = document.getElementById(`job_${sideName}_type`).value;
+
+        if (type === 'local') {
+            if (!document.getElementById(`job_${sideName}_path`).value.trim()) {
+                markJobFieldInvalid(`job_${sideName}_path`, `${label}: chemin local`, errors);
+            }
+            return;
+        }
+
+        if (!document.getElementById(`job_${sideName}_host`).value.trim()) {
+            markJobFieldInvalid(`job_${sideName}_host`, `${label}: adresse IP ou nom`, errors);
+        }
+        if (!document.getElementById(`job_${sideName}_share`).value.trim()) {
+            markJobFieldInvalid(`job_${sideName}_share`, `${label}: partage réseau`, errors);
+        }
+    });
+
+    if (errors.length) {
+        const message = document.getElementById('job-validation-message');
+        message.textContent = `Champs obligatoires manquants : ${errors.join(', ')}.`;
+        message.classList.remove('d-none');
+        document.querySelector('#jobEditModal .is-invalid')?.scrollIntoView({block: 'nearest'});
+        return false;
+    }
+
+    return true;
+}
+
 function modalJobFromFields() {
     return {
         id: editingJobId || generateJobId(),
@@ -632,8 +688,8 @@ function modalJobFromFields() {
             .split('\n')
             .map(line => line.trim())
             .filter(Boolean),
-        name: document.getElementById('job_name').value.trim() || 'Backup',
-        cron: document.getElementById('job_cron').value.trim() || '0 3 * * *',
+        name: document.getElementById('job_name').value.trim(),
+        cron: document.getElementById('job_cron').value.trim(),
         source: getModalSide('source'),
         target: getModalSide('target')
     };
@@ -649,6 +705,7 @@ function fillJobModal(job, isNew) {
     setModalSide('source', job.source);
     setModalSide('target', job.target);
     document.getElementById('delete-job-btn').classList.toggle('d-none', isNew);
+    clearJobValidation();
     updateModalSideVisibility();
 }
 
@@ -693,6 +750,7 @@ function render() {
 
 async function saveCurrentJob(closeModal = true) {
     try {
+        if (!validateJobModal()) return null;
         const job = modalJobFromFields();
         const index = findJobIndex(job.id);
         if (index >= 0) {
@@ -880,6 +938,16 @@ document.getElementById('modal-dry-run-btn').addEventListener('click', () => sav
 document.getElementById('modal-run-btn').addEventListener('click', () => saveCurrentJobAndRun('run'));
 document.getElementById('job_source_type').addEventListener('change', updateModalSideVisibility);
 document.getElementById('job_target_type').addEventListener('change', updateModalSideVisibility);
+document.querySelectorAll('#jobEditModal input, #jobEditModal textarea, #jobEditModal select').forEach(el => {
+    el.addEventListener('input', () => {
+        el.classList.remove('is-invalid');
+        document.getElementById('job-validation-message').classList.add('d-none');
+    });
+    el.addEventListener('change', () => {
+        el.classList.remove('is-invalid');
+        document.getElementById('job-validation-message').classList.add('d-none');
+    });
+});
 document.getElementById('save-config-btn').addEventListener('click', () => saveConfig(true));
 document.getElementById('test-email-btn').addEventListener('click', testEmail);
 document.getElementById('export-email-config-btn').addEventListener('click', exportEmailConfig);
