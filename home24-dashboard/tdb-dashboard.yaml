@@ -1,0 +1,71 @@
+views:
+  - title: Accueil
+    path: accueil
+    icon: mdi:home-variant
+    type: panel
+    badges: []
+    cards:
+      - type: custom:home24-card
+        weather_entity: auto
+        background_camera: camera.duo2_fluent
+        entities:
+          outdoor_temperature: sensor.wh2650a_outdoor_temperature
+          humidity: sensor.wh2650a_humidity
+          wind: sensor.wh2650a_wind_speed
+          solar_power: sensor.pv_power_total
+          solar_today: sensor.pv_production_totale_j
+          solar_peak: sensor.pv_power_max
+          house_power: sensor.multiplus_2_conso_totale
+          grid_power: sensor.multiplus_2_reseau_puissance
+          battery_soc: sensor.cerbo_gx_battery_soc
+          battery_voltage: sensor.multiplus_2_dc_voltage
+          battery_power: sensor.multiplus_2_dc_power
+          battery_capacity: sensor.cerbo_gx_battery_remaining_capacity
+        backgrounds:
+          day: /local/home24/home24-day.webp
+          cloudy: /local/home24/home24-cloudy.webp
+          rain: /local/home24/home24-rain.webp
+          sunset: /local/home24/home24-sunset.webp
+          night: /local/home24/home24-night.webp
+
+  - title: Énergie
+    path: energie
+    icon: mdi:lightning-bolt
+    type: sections
+    sections: &placeholder
+      - cards:
+          - type: heading
+            heading: Page en préparation
+            icon: mdi:tools
+          - type: markdown
+            content: Cette page sera construite dans le style HOME24.
+  - title: Batterie
+    path: batterie
+    icon: mdi:battery-heart
+    type: sections
+    sections: *placeholder
+  - title: Climat
+    path: climat
+    icon: mdi:thermometer
+    type: sections
+    sections: *placeholder
+  - title: Sécurité
+    path: securite
+    icon: mdi:shield-home
+    type: sections
+    sections: *placeholder
+  - title: Automatisations
+    path: automatisations
+    icon: mdi:robot
+    type: sections
+    sections: *placeholder
+  - title: Éclairage
+    path: eclairage
+    icon: mdi:lightbulb-group
+    type: sections
+    sections: *placeholder
+  - title: Système
+    path: systeme
+    icon: mdi:cog
+    type: sections
+    sections: *placeholder
