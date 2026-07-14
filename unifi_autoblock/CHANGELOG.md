@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.12
+
+- Fix AppArmor profile so the Home Assistant base image S6 init can start.
+
 ## 0.3.11
 
 - Use empty strings instead of null defaults for optional auto-detected fields so Supervisor accepts saved configuration.

@@ -9,7 +9,21 @@ profile unifi_autoblock flags=(attach_disconnected,mediate_deleted) {
   network inet stream,
   network inet6 stream,
 
+  # S6-overlay startup and add-on command execution.
+  /init ix,
   /run.sh rix,
+  /bin/** ix,
+  /sbin/** ix,
+  /usr/bin/** ix,
+  /usr/sbin/** ix,
+  /usr/local/bin/** ix,
+  /run/{s6,s6-rc*,service}/** ix,
+  /package/** ix,
+  /command/** ix,
+  /etc/services.d/** rwix,
+  /etc/cont-init.d/** rwix,
+  /etc/cont-finish.d/** rwix,
+
   /usr/bin/bash ix,
   /usr/bin/python3 ix,
   /usr/lib/python3*/** r,
@@ -17,6 +31,7 @@ profile unifi_autoblock flags=(attach_disconnected,mediate_deleted) {
 
   /data/ rw,
   /data/** rwk,
+  /run/{,**} rwk,
   /tmp/ rw,
   /tmp/** rwk,
 
@@ -28,6 +43,12 @@ profile unifi_autoblock flags=(attach_disconnected,mediate_deleted) {
   /dev/null rw,
   /dev/urandom r,
   /dev/random r,
+
+  # Logging through the container init stdout/stderr descriptors.
+  /proc/1/fd/1 rw,
+  /proc/1/fd/2 rw,
+  /proc/[0-9]*/fd/** rw,
+  /proc/** r,
 
   deny /bin/su x,
   deny /usr/bin/su x,
