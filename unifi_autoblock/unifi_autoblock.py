@@ -23,6 +23,7 @@ STATE_PATH = "/data/state.json"
 LIST_TYPE = "IPV4_ADDRESSES"
 ITEM_TYPE = "IP_ADDRESS"
 MANAGED_VERSION = 1
+WEBHOOK_PORT = 37989
 
 
 LOGGER = logging.getLogger("unifi_autoblock")
@@ -76,7 +77,6 @@ class Config:
         self.traffic_matching_list_name = str(raw.get("traffic_matching_list_name") or "").strip()
         self.unifi_api_key = str(raw["unifi_api_key"])
         self.webhook_token = str(raw.get("webhook_token") or "").strip()
-        self.webhook_base_url = str(raw.get("webhook_base_url") or "").rstrip("/")
         self.verify_ssl = bool(raw.get("verify_ssl", False))
         self.dry_run = bool(raw.get("dry_run", True))
         self.allowed_destinations = set(str(v) for v in raw.get("allowed_destinations", []))
@@ -283,10 +283,7 @@ def webhook_path(config: Config) -> str:
 
 
 def display_webhook_url(config: Config) -> str:
-    path = webhook_path(config)
-    if config.webhook_base_url:
-        return f"{config.webhook_base_url}{path}"
-    return path
+    return f"http://<IP_HOME_ASSISTANT>:{WEBHOOK_PORT}{webhook_path(config)}"
 
 
 def load_state() -> dict[str, Any]:
@@ -593,14 +590,17 @@ def main() -> None:
     LOGGER.info("UniFi API key: %s", redact(config.unifi_api_key))
     LOGGER.info("Dry run: %s", config.dry_run)
     ensure_webhook_token(config)
-    LOGGER.info("Webhook URL to configure in UniFi Alarm Manager: %s", display_webhook_url(config))
+    LOGGER.info("============================================================")
+    LOGGER.info("URL webhook pour UniFi Alarm Manager : %s", display_webhook_url(config))
+    LOGGER.info("Remplace <IP_HOME_ASSISTANT> par l IP locale de Home Assistant si besoin")
+    LOGGER.info("============================================================")
 
     client = UniFiClient(config)
     resolve_unifi_targets(config, client)
     LOGGER.info("Resolved UniFi site ID: %s", config.unifi_site_id)
     LOGGER.info("Resolved traffic matching list ID: %s", config.traffic_matching_list_id)
 
-    server = AutoblockServer(("0.0.0.0", 37989), config, client)
+    server = AutoblockServer(("0.0.0.0", WEBHOOK_PORT), config, client)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

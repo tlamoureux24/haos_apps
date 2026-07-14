@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+- Remove `webhook_base_url` to keep setup simpler.
+- Print a prominent UniFi Alarm Manager webhook URL with the generated token in the logs.
+
 ## 0.3.1
 
 - Change default webhook port from 8080 to high port 37989 to reduce add-on port collisions.
