@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3
+
+- Remove `webhook_token` from app configuration.
+- Always generate and persist the webhook token internally.
+- Print the webhook URL on every start, using the configured host port when available.
+
 ## 0.3.2
 
 - Remove `webhook_base_url` to keep setup simpler.

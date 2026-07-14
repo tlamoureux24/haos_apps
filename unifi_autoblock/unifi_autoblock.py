@@ -76,7 +76,7 @@ class Config:
         self.traffic_matching_list_id = str(raw.get("traffic_matching_list_id") or "").strip()
         self.traffic_matching_list_name = str(raw.get("traffic_matching_list_name") or "").strip()
         self.unifi_api_key = str(raw["unifi_api_key"])
-        self.webhook_token = str(raw.get("webhook_token") or "").strip()
+        self.webhook_token = ""
         self.verify_ssl = bool(raw.get("verify_ssl", False))
         self.dry_run = bool(raw.get("dry_run", True))
         self.allowed_destinations = set(str(v) for v in raw.get("allowed_destinations", []))
@@ -108,10 +108,7 @@ class Config:
         missing = [key for key in required if not raw.get(key)]
         if missing:
             raise RuntimeError(f"Missing required options: {', '.join(missing)}")
-        config = cls(raw)
-        if config.webhook_token and config.webhook_token == config.unifi_api_key:
-            raise RuntimeError("webhook_token must be different from unifi_api_key")
-        return config
+        return cls(raw)
 
     def integration_url(self, path: str) -> str:
         return f"{self.unifi_base_url}/proxy/network/integration/v1{path}"
@@ -261,11 +258,6 @@ class UniFiClient:
 
 def ensure_webhook_token(config: Config) -> str:
     state = load_state()
-    if config.webhook_token:
-        state["webhook_token"] = config.webhook_token
-        save_json_file(STATE_PATH, state)
-        return config.webhook_token
-
     token = str(state.get("webhook_token") or "").strip()
     if not token:
         token = secrets.token_urlsafe(32)
@@ -282,8 +274,19 @@ def webhook_path(config: Config) -> str:
     return f"/webhook/{config.webhook_token}"
 
 
+def webhook_display_port() -> int:
+    raw_port = os.environ.get("WEBHOOK_DISPLAY_PORT", str(WEBHOOK_PORT))
+    try:
+        port = int(raw_port)
+    except ValueError:
+        return WEBHOOK_PORT
+    if 1 <= port <= 65535:
+        return port
+    return WEBHOOK_PORT
+
+
 def display_webhook_url(config: Config) -> str:
-    return f"http://<IP_HOME_ASSISTANT>:{WEBHOOK_PORT}{webhook_path(config)}"
+    return f"http://<IP_HOME_ASSISTANT>:{webhook_display_port()}{webhook_path(config)}"
 
 
 def load_state() -> dict[str, Any]:

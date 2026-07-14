@@ -14,10 +14,6 @@ configuration:
   unifi_api_key:
     name: Cle API UniFi
     description: Cle API UniFi dediee pour lire et mettre a jour la liste configuree.
-  webhook_token:
-    name: Token webhook
-    description: Long token aleatoire optionnel utilise dans l'URL locale du webhook. Laisser vide pour generation automatique.
-    name: Verifier le certificat TLS UniFi
     description: Active la verification du certificat TLS du controleur UniFi.
   dry_run:
     name: Mode simulation

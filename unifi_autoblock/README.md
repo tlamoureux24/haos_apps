@@ -62,7 +62,7 @@ Create an alarm with webhook action:
 POST http://HOME_ASSISTANT_IP:37989/webhook/TOKEN_PRINTED_IN_THE_APP_LOGS
 ```
 
-Use the default UniFi webhook content. If `webhook_token` is left empty, the app generates a persistent token on first start and prints a copy/paste webhook URL in the logs. Replace `<IP_HOME_ASSISTANT>` with the local Home Assistant IP if needed. If you change the host port in the app network settings, use that host port in UniFi Alarm Manager.
+Use the default UniFi webhook content. The app generates a persistent token on first start and prints a copy/paste webhook URL in the logs. Replace `<IP_HOME_ASSISTANT>` with the local Home Assistant IP if needed. If you change the host port in the app network settings, restart the app and copy the updated URL from the logs.
 
 ## Options
 
@@ -73,7 +73,6 @@ Use the default UniFi webhook content. If `webhook_token` is left empty, the app
 | `traffic_matching_list_id` | Optional existing traffic matching list UUID. Leave empty to auto-detect by `traffic_matching_list_name`. |
 | `traffic_matching_list_name` | Optional existing traffic matching list name. Leave empty to auto-detect when exactly one IPv4 list exists. |
 | `unifi_api_key` | Dedicated UniFi API key. |
-| `webhook_token` | Optional long random token used in the webhook URL path. Leave empty to auto-generate and persist one. |
 | `verify_ssl` | Enable TLS certificate verification for the UniFi controller. |
 | `dry_run` | Log what would happen without writing to UniFi. |
 | `allowed_destinations` | Optional list of destination IPs to accept. Empty means any destination. |
