@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.6
+
+- Add a dedicated AppArmor profile.
+- Add app URL metadata, experimental stage, and Supervisor watchdog health check.
+
 ## 0.3.5
 
 - Remove rate limiting and arbitrary list-size limiting.

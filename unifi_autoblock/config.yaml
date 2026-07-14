@@ -1,7 +1,10 @@
 name: "UniFi Autoblock"
 slug: "unifi_autoblock"
-version: "0.3.5"
+version: "0.3.6"
 description: "Block IDS/IPS attacker IPs by updating a UniFi traffic matching list"
+url: "https://github.com/tlamoureux24/haos_apps/tree/main/unifi_autoblock"
+stage: experimental
+watchdog: "http://[HOST]:[PORT:37989]/health"
 arch:
   - aarch64
   - amd64
