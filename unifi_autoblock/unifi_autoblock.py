@@ -600,7 +600,7 @@ def main() -> None:
     LOGGER.info("Resolved UniFi site ID: %s", config.unifi_site_id)
     LOGGER.info("Resolved traffic matching list ID: %s", config.traffic_matching_list_id)
 
-    server = AutoblockServer(("0.0.0.0", 8080), config, client)
+    server = AutoblockServer(("0.0.0.0", 37989), config, client)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

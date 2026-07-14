@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Change default webhook port from 8080 to high port 37989 to reduce add-on port collisions.
+- Document that the host port can be changed in the app network settings.
+
 ## 0.3.0
 
 - Auto-detect the IPv4 traffic matching list when exactly one exists and no name or ID is configured.

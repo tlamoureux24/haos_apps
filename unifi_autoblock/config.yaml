@@ -1,6 +1,6 @@
 name: "UniFi Autoblock"
 slug: "unifi_autoblock"
-version: "0.3.0"
+version: "0.3.1"
 description: "Block IDS/IPS attacker IPs by updating a UniFi traffic matching list"
 arch:
   - aarch64
@@ -12,9 +12,9 @@ apparmor: true
 tmpfs: true
 
 ports:
-  8080/tcp: 8080
+  37989/tcp: 37989
 ports_description:
-  8080/tcp: "Local UniFi Alarm Manager webhook endpoint"
+  37989/tcp: "Local UniFi Alarm Manager webhook endpoint"
 
 options:
   unifi_base_url: null

@@ -19,7 +19,7 @@ configuration:
     description: Optional long random token used in the local webhook URL path. Leave empty to auto-generate one.
   webhook_base_url:
     name: Webhook base URL
-    description: Optional base URL used only to print the full UniFi Alarm Manager webhook URL in logs.
+    description: Optional base URL used only to print the full UniFi Alarm Manager webhook URL in logs. Include the host port configured in the app network settings.
   verify_ssl:
     name: Verify UniFi TLS certificate
     description: Enable TLS certificate verification for the UniFi controller.
