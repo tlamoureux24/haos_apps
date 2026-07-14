@@ -30,13 +30,6 @@ configuration:
   ban_ttl_days:
     name: Duree du bannissement
     description: Nombre de jours avant expiration des entrees gerees par l'app.
-  max_new_blocks_per_hour:
-    name: Ajouts max par heure
-    description: Limite horaire des nouvelles IP ajoutees.
-  max_list_size:
-    name: Taille max de la liste
-    description: Limite de securite pour la taille de la liste UniFi.
-  allowed_webhook_sources:
     name: Sources webhook autorisees
     description: CIDR optionnels autorises a appeler le webhook.
   allowlist_cidrs:

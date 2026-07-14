@@ -30,13 +30,6 @@ configuration:
   ban_ttl_days:
     name: Ban TTL days
     description: Number of days before app-managed entries expire.
-  max_new_blocks_per_hour:
-    name: Max new blocks per hour
-    description: Rate limit for newly added IP addresses.
-  max_list_size:
-    name: Max list size
-    description: Safety limit for the UniFi traffic matching list size.
-  allowed_webhook_sources:
     name: Allowed webhook sources
     description: Optional CIDRs allowed to call the webhook.
   allowlist_cidrs:

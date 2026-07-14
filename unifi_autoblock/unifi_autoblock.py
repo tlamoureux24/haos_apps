@@ -20,6 +20,7 @@ from typing import Any
 
 OPTIONS_PATH = "/data/options.json"
 STATE_PATH = "/data/state.json"
+LAST_BACKUP_PATH = "/data/last_traffic_matching_list_backup.json"
 LIST_TYPE = "IPV4_ADDRESSES"
 ITEM_TYPE = "IP_ADDRESS"
 MANAGED_VERSION = 1
@@ -86,8 +87,6 @@ class Config:
         self.allowed_destination_ports = set(int(v) for v in destination_ports)
         self.min_severity = int(raw.get("min_severity", 0))
         self.ban_ttl_days = int(raw.get("ban_ttl_days", 30))
-        self.max_new_blocks_per_hour = int(raw.get("max_new_blocks_per_hour", 20))
-        self.max_list_size = int(raw.get("max_list_size", 1000))
         self.allowed_webhook_sources = [
             ipaddress.ip_network(str(v), strict=False)
             for v in raw.get("allowed_webhook_sources", [])
@@ -297,24 +296,15 @@ def load_state() -> dict[str, Any]:
         state = {
             "version": MANAGED_VERSION,
             "managed_ips": {},
-            "new_block_timestamps": [],
         }
     state.setdefault("version", MANAGED_VERSION)
     state.setdefault("managed_ips", {})
-    state.setdefault("new_block_timestamps", [])
     return state
 
 
-def cleanup_rate_window(state: dict[str, Any], now: dt.datetime) -> None:
-    cutoff = now - dt.timedelta(hours=1)
-    timestamps = []
-    for value in state.get("new_block_timestamps", []):
-        try:
-            if parse_iso(value) >= cutoff:
-                timestamps.append(value)
-        except ValueError:
-            continue
-    state["new_block_timestamps"] = timestamps
+def backup_traffic_list(data: dict[str, Any]) -> None:
+    save_json_file(LAST_BACKUP_PATH, data)
+    LOGGER.info("Saved UniFi traffic matching list backup before PUT: %s", LAST_BACKUP_PATH)
 
 
 def is_allowed_source(remote_ip: str, config: Config) -> bool:
@@ -452,14 +442,10 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
 
     with UPDATE_LOCK:
         state = load_state()
-        cleanup_rate_window(state, now)
 
         if config.dry_run:
             LOGGER.info("DRY RUN: would add %s to %s", source_ip, config.traffic_matching_list_name)
             return {"status": "dry_run", "ip": source_ip, "details": details}
-
-        if len(state["new_block_timestamps"]) >= config.max_new_blocks_per_hour:
-            raise RuntimeError("hourly new block limit reached")
 
         traffic_list = client.get_traffic_list()
         items = validate_traffic_list(traffic_list, config)
@@ -480,13 +466,11 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
                     "name": config.traffic_matching_list_name,
                     "items": items,
                 }
+                backup_traffic_list(traffic_list)
                 client.update_traffic_list(payload)
             save_json_file(STATE_PATH, state)
             LOGGER.info("IP %s is already present in UniFi blocklist", source_ip)
             return {"status": "already_present", "ip": source_ip, "expired_removed": expired}
-
-        if len(items) >= config.max_list_size:
-            raise RuntimeError("traffic matching list size limit reached")
 
         items.append({"type": ITEM_TYPE, "value": source_ip})
         payload = {
@@ -494,6 +478,7 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
             "name": config.traffic_matching_list_name,
             "items": items,
         }
+        backup_traffic_list(traffic_list)
         client.update_traffic_list(payload)
         verify = client.get_traffic_list()
         verified_items = validate_traffic_list(verify, config)
@@ -507,7 +492,6 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
             "hit_count": 1,
             "last_details": details,
         }
-        state["new_block_timestamps"].append(isoformat(now))
         save_json_file(STATE_PATH, state)
 
     LOGGER.info("Added %s to %s", source_ip, config.traffic_matching_list_name)

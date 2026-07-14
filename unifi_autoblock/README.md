@@ -11,8 +11,9 @@ It is intended for local-only use with UniFi Network API keys.
 3. The app extracts `parameters.src`.
 4. Only public global IPv4 source addresses are accepted.
 5. The app reads the configured UniFi traffic matching list.
-6. The source IP is appended if absent.
-7. Entries added by the app expire after the configured TTL.
+6. If the source IP is absent, the current UniFi list JSON is backed up locally and the source IP is appended.
+7. If the source IP is already present, it is not added again.
+8. Entries added by the app expire after the configured TTL.
 
 Existing manual entries are preserved. If an attacker IP is already present in the UniFi list before the app sees it, the app leaves it alone and does not apply TTL cleanup to that entry.
 
@@ -79,8 +80,6 @@ Use the default UniFi webhook content. The app generates a persistent token on f
 | `allowed_destination_ports` | UniFi event destination ports to accept, default `443`. This is the attacked service port from `parameters.dpt`, not the app webhook port. |
 | `min_severity` | Minimum UniFi event severity. |
 | `ban_ttl_days` | TTL for entries managed by this app, default `30`. |
-| `max_new_blocks_per_hour` | Rate limit for new blocks. |
-| `max_list_size` | Safety limit for the UniFi list. |
 | `allowed_webhook_sources` | Optional source CIDRs allowed to call the webhook. |
 | `allowlist_cidrs` | Optional CIDRs that must never be blocked. |
 | `log_level` | `debug`, `info`, `warning`, or `error`. |

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5
+
+- Remove rate limiting and arbitrary list-size limiting.
+- Save a single overwritten JSON backup of the UniFi traffic matching list before every PUT.
+- Document that already-present IPs are not added again.
+
 ## 0.3.4
 
 - Require `unifi_base_url` to use HTTPS to protect the UniFi API key in transit.
