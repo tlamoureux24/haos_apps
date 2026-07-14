@@ -8,6 +8,7 @@ import ipaddress
 import json
 import logging
 import os
+import secrets
 import ssl
 import threading
 import time
@@ -72,9 +73,10 @@ class Config:
         self.unifi_base_url = str(raw["unifi_base_url"]).rstrip("/")
         self.unifi_site_id = str(raw.get("unifi_site_id") or "").strip()
         self.traffic_matching_list_id = str(raw.get("traffic_matching_list_id") or "").strip()
-        self.traffic_matching_list_name = str(raw["traffic_matching_list_name"])
+        self.traffic_matching_list_name = str(raw.get("traffic_matching_list_name") or "").strip()
         self.unifi_api_key = str(raw["unifi_api_key"])
-        self.webhook_token = str(raw["webhook_token"])
+        self.webhook_token = str(raw.get("webhook_token") or "").strip()
+        self.webhook_base_url = str(raw.get("webhook_base_url") or "").rstrip("/")
         self.verify_ssl = bool(raw.get("verify_ssl", False))
         self.dry_run = bool(raw.get("dry_run", True))
         self.allowed_destinations = set(str(v) for v in raw.get("allowed_destinations", []))
@@ -101,15 +103,13 @@ class Config:
         raw = load_json_file(OPTIONS_PATH, {})
         required = [
             "unifi_base_url",
-            "traffic_matching_list_name",
             "unifi_api_key",
-            "webhook_token",
         ]
         missing = [key for key in required if not raw.get(key)]
         if missing:
             raise RuntimeError(f"Missing required options: {', '.join(missing)}")
         config = cls(raw)
-        if config.webhook_token == config.unifi_api_key:
+        if config.webhook_token and config.webhook_token == config.unifi_api_key:
             raise RuntimeError("webhook_token must be different from unifi_api_key")
         return config
 
@@ -167,11 +167,22 @@ def resolve_unifi_targets(config: Config, client: UniFiClient) -> None:
     if not config.traffic_matching_list_id:
         lists = client.list_traffic_matching_lists()
         ipv4_lists = [item for item in lists if item.get("type") == LIST_TYPE]
-        matches = [item for item in ipv4_lists if item.get("name") == config.traffic_matching_list_name]
+        if config.traffic_matching_list_name:
+            matches = [
+                item for item in ipv4_lists
+                if item.get("name") == config.traffic_matching_list_name
+            ]
+            error_hint = "set traffic_matching_list_id explicitly"
+        else:
+            matches = ipv4_lists
+            error_hint = "set traffic_matching_list_name or traffic_matching_list_id explicitly"
+
         if len(matches) == 1:
-            config.traffic_matching_list_id = str(matches[0].get("id", ""))
-            if not config.traffic_matching_list_id:
-                raise RuntimeError("The matching UniFi traffic matching list has no id")
+            selected = matches[0]
+            config.traffic_matching_list_id = str(selected.get("id", ""))
+            config.traffic_matching_list_name = str(selected.get("name", ""))
+            if not config.traffic_matching_list_id or not config.traffic_matching_list_name:
+                raise RuntimeError("The matching UniFi traffic matching list has no id or name")
             LOGGER.info(
                 "Auto-detected traffic matching list %r: %s",
                 config.traffic_matching_list_name,
@@ -185,8 +196,7 @@ def resolve_unifi_targets(config: Config, client: UniFiClient) -> None:
             )
         else:
             raise RuntimeError(
-                f"Multiple IPV4_ADDRESSES traffic matching lists named "
-                f"{config.traffic_matching_list_name!r} found; set traffic_matching_list_id explicitly:\n"
+                f"Multiple IPV4_ADDRESSES traffic matching lists found; {error_hint}:\n"
                 + describe_items(matches)
             )
     else:
@@ -247,6 +257,36 @@ class UniFiClient:
 
     def update_traffic_list(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.request("PUT", self.config.traffic_list_url, payload)
+
+
+def ensure_webhook_token(config: Config) -> str:
+    state = load_state()
+    if config.webhook_token:
+        state["webhook_token"] = config.webhook_token
+        save_json_file(STATE_PATH, state)
+        return config.webhook_token
+
+    token = str(state.get("webhook_token") or "").strip()
+    if not token:
+        token = secrets.token_urlsafe(32)
+        state["webhook_token"] = token
+        save_json_file(STATE_PATH, state)
+        LOGGER.info("Generated a persistent webhook token")
+    config.webhook_token = token
+    return token
+
+
+def webhook_path(config: Config) -> str:
+    if not config.webhook_token:
+        raise RuntimeError("webhook token has not been initialized")
+    return f"/webhook/{config.webhook_token}"
+
+
+def display_webhook_url(config: Config) -> str:
+    path = webhook_path(config)
+    if config.webhook_base_url:
+        return f"{config.webhook_base_url}{path}"
+    return path
 
 
 def load_state() -> dict[str, Any]:
@@ -350,11 +390,17 @@ def validate_traffic_list(data: dict[str, Any], config: Config) -> list[dict[str
         raise RuntimeError(f"Traffic matching list type is {data.get('type')!r}, expected {LIST_TYPE}")
     if data.get("id") != config.traffic_matching_list_id:
         raise RuntimeError("Traffic matching list id mismatch")
-    if data.get("name") != config.traffic_matching_list_name:
+
+    list_name = str(data.get("name") or "").strip()
+    if config.traffic_matching_list_name and list_name != config.traffic_matching_list_name:
         raise RuntimeError(
-            f"Traffic matching list name is {data.get('name')!r}, "
+            f"Traffic matching list name is {list_name!r}, "
             f"expected {config.traffic_matching_list_name!r}"
         )
+    if not config.traffic_matching_list_name:
+        if not list_name:
+            raise RuntimeError("Traffic matching list name is missing")
+        config.traffic_matching_list_name = list_name
     items = data.get("items")
     if not isinstance(items, list):
         raise RuntimeError("Traffic matching list items are missing")
@@ -467,7 +513,7 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "UniFiAutoblock/0.1"
+    server_version = "UniFiAutoblock/0.3"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         LOGGER.debug("HTTP %s - %s", self.address_string(), fmt % args)
@@ -488,7 +534,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         config: Config = self.server.config
-        expected_path = f"/webhook/{config.webhook_token}"
+        expected_path = webhook_path(config)
         if self.path != expected_path:
             self.send_json(404, {"error": "not_found"})
             return
@@ -543,9 +589,11 @@ def main() -> None:
     configure_logging(config.log_level)
     LOGGER.info("Starting UniFi Autoblock")
     LOGGER.info("UniFi base URL: %s", config.unifi_base_url)
-    LOGGER.info("Traffic matching list name: %s", config.traffic_matching_list_name)
+    LOGGER.info("Traffic matching list name: %s", config.traffic_matching_list_name or "<auto-detect>")
     LOGGER.info("UniFi API key: %s", redact(config.unifi_api_key))
     LOGGER.info("Dry run: %s", config.dry_run)
+    ensure_webhook_token(config)
+    LOGGER.info("Webhook URL to configure in UniFi Alarm Manager: %s", display_webhook_url(config))
 
     client = UniFiClient(config)
     resolve_unifi_targets(config, client)

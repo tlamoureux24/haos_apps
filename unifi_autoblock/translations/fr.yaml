@@ -7,16 +7,19 @@ configuration:
     description: UUID optionnel du site. Laisser vide pour detection automatique si le controleur n'a qu'un seul site.
   traffic_matching_list_id:
     name: ID de la liste UniFi
-    description: UUID optionnel de la liste UniFi IPv4 existante. Laisser vide pour detection automatique par nom.
+    description: UUID optionnel de la liste UniFi IPv4 existante. Laisser vide pour detection par nom ou par liste IPv4 unique.
   traffic_matching_list_name:
     name: Nom de la liste UniFi
-    description: Nom de la liste UniFi existante.
+    description: Nom optionnel de la liste UniFi existante. Laisser vide si une seule liste IPv4 existe.
   unifi_api_key:
     name: Cle API UniFi
     description: Cle API UniFi dediee pour lire et mettre a jour la liste configuree.
   webhook_token:
     name: Token webhook
-    description: Long token aleatoire utilise dans l'URL locale du webhook.
+    description: Long token aleatoire optionnel utilise dans l'URL locale du webhook. Laisser vide pour generation automatique.
+  webhook_base_url:
+    name: URL de base webhook
+    description: URL de base optionnelle utilisee seulement pour afficher l URL complete UniFi Alarm Manager dans les logs.
   verify_ssl:
     name: Verifier le certificat TLS UniFi
     description: Active la verification du certificat TLS du controleur UniFi.

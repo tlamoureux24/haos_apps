@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Auto-detect the IPv4 traffic matching list when exactly one exists and no name or ID is configured.
+- Generate and persist a webhook token when `webhook_token` is left empty.
+- Add optional `webhook_base_url` to print a full Alarm Manager URL in the logs.
+
 ## 0.2.0
 
 - Add automatic UniFi site discovery when `unifi_site_id` is empty.
