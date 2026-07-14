@@ -26,9 +26,9 @@ configuration:
   allowed_destinations:
     name: Destinations autorisees
     description: Liste optionnelle d'IP de destination. Vide accepte toute destination.
-  allowed_ports:
-    name: Ports autorises
-    description: Ports de destination acceptes depuis les evenements IDS/IPS.
+  allowed_destination_ports:
+    name: Ports de destination autorises
+    description: Ports de destination des evenements IDS/IPS UniFi. Il s agit du port du service attaque, pas du port webhook de l app.
   min_severity:
     name: Severite minimale
     description: Ignore les evenements sous cette severite UniFi.

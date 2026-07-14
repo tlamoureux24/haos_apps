@@ -1,6 +1,6 @@
 name: "UniFi Autoblock"
 slug: "unifi_autoblock"
-version: "0.1.0"
+version: "0.1.1"
 description: "Block IDS/IPS attacker IPs by updating a UniFi traffic matching list"
 arch:
   - aarch64
@@ -26,7 +26,7 @@ options:
   verify_ssl: false
   dry_run: true
   allowed_destinations: []
-  allowed_ports:
+  allowed_destination_ports:
     - 443
   min_severity: 0
   ban_ttl_days: 30
@@ -47,7 +47,7 @@ schema:
   dry_run: bool
   allowed_destinations:
     - str
-  allowed_ports:
+  allowed_destination_ports:
     - "int(1,65535)"
   min_severity: "int(0,10)"
   ban_ttl_days: "int(1,3650)"

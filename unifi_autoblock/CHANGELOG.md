@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Rename `allowed_ports` to `allowed_destination_ports` for clearer app configuration.
+- Document that only public global IPv4 source addresses are blocked.
+- Clarify that IPv6 and internal IDS/IPS alerts are ignored.
+
 ## 0.1.0
 
 - Initial release.

@@ -78,7 +78,8 @@ class Config:
         self.verify_ssl = bool(raw.get("verify_ssl", False))
         self.dry_run = bool(raw.get("dry_run", True))
         self.allowed_destinations = set(str(v) for v in raw.get("allowed_destinations", []))
-        self.allowed_ports = set(int(v) for v in raw.get("allowed_ports", [443]))
+        destination_ports = raw.get("allowed_destination_ports", [443])
+        self.allowed_destination_ports = set(int(v) for v in destination_ports)
         self.min_severity = int(raw.get("min_severity", 0))
         self.ban_ttl_days = int(raw.get("ban_ttl_days", 30))
         self.max_new_blocks_per_hour = int(raw.get("max_new_blocks_per_hour", 20))
@@ -237,7 +238,7 @@ def validate_event(event: dict[str, Any], config: Config) -> tuple[str, dict[str
         dpt = int(parameters.get("dpt"))
     except (TypeError, ValueError) as err:
         raise ValueError("destination port is missing or invalid") from err
-    if config.allowed_ports and dpt not in config.allowed_ports:
+    if config.allowed_destination_ports and dpt not in config.allowed_destination_ports:
         raise ValueError(f"destination port {dpt} is not configured")
 
     source_ip = public_ipv4(str(parameters.get("src", "")))

@@ -57,7 +57,7 @@ Fonctionnalites principales:
 - ajout d'IPv4 publiques uniquement;
 - mise a jour d'une liste UniFi `IPV4_ADDRESSES` existante;
 - TTL configurable, 30 jours par defaut;
-- limites de securite: ports/destinations autorises, taille max de liste, ajout max par heure;
+- limites de securite: ports de destination IDS/IPS et destinations autorises, taille max de liste, ajout max par heure;
 - cle API saisie dans la configuration de l'app, jamais stockee dans le projet.
 
 Documentation detaillee:

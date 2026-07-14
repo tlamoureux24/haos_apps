@@ -9,12 +9,14 @@ It is intended for local-only use with UniFi Network API keys.
 1. UniFi Alarm Manager sends `Threat Detected and Blocked` events to the app webhook.
 2. The app validates the event fields strictly.
 3. The app extracts `parameters.src`.
-4. Only public global IPv4 addresses are accepted.
+4. Only public global IPv4 source addresses are accepted.
 5. The app reads the configured UniFi traffic matching list.
 6. The source IP is appended if absent.
 7. Entries added by the app expire after the configured TTL.
 
 Existing manual entries are preserved. If an attacker IP is already present in the UniFi list before the app sees it, the app leaves it alone and does not apply TTL cleanup to that entry.
+
+IPv6, private, loopback, link-local, multicast, reserved, and other non-public source addresses are ignored. This prevents internal IDS/IPS alerts from adding local devices to the blocklist.
 
 The app never creates firewall policies. Create a UniFi firewall policy manually that uses your existing traffic matching list as its source.
 
@@ -73,14 +75,14 @@ Use the default UniFi webhook content.
 | `verify_ssl` | Enable TLS certificate verification for the UniFi controller. |
 | `dry_run` | Log what would happen without writing to UniFi. |
 | `allowed_destinations` | Optional list of destination IPs to accept. Empty means any destination. |
-| `allowed_ports` | Destination ports to accept, default `443`. |
+| `allowed_destination_ports` | UniFi event destination ports to accept, default `443`. This is the attacked service port from `parameters.dpt`, not the app webhook port. |
 | `min_severity` | Minimum UniFi event severity. |
 | `ban_ttl_days` | TTL for entries managed by this app, default `30`. |
 | `max_new_blocks_per_hour` | Rate limit for new blocks. |
 | `max_list_size` | Safety limit for the UniFi list. |
 | `allowed_webhook_sources` | Optional source CIDRs allowed to call the webhook. |
 | `allowlist_cidrs` | Optional CIDRs that must never be blocked. |
-| `log_level` | `trace`, `debug`, `info`, `warning`, or `error`. |
+| `log_level` | `debug`, `info`, `warning`, or `error`. |
 
 ## First Run
 

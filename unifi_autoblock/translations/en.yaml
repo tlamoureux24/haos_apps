@@ -26,9 +26,9 @@ configuration:
   allowed_destinations:
     name: Allowed destinations
     description: Optional destination IP list. Empty accepts any destination.
-  allowed_ports:
-    name: Allowed ports
-    description: Destination ports accepted from IDS/IPS events.
+  allowed_destination_ports:
+    name: Allowed destination ports
+    description: UniFi event destination ports accepted from IDS/IPS events. This is the attacked service port, not the app webhook port.
   min_severity:
     name: Minimum severity
     description: Ignore events below this UniFi severity.
