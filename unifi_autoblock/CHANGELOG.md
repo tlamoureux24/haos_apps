@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.11
+
+- Use empty strings instead of null defaults for optional auto-detected fields so Supervisor accepts saved configuration.
+
 ## 0.3.10
 
 - Improve French configuration translations with accents.
