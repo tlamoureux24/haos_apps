@@ -1,6 +1,6 @@
 name: "UniFi Autoblock"
 slug: "unifi_autoblock"
-version: "0.1.1"
+version: "0.2.0"
 description: "Block IDS/IPS attacker IPs by updating a UniFi traffic matching list"
 arch:
   - aarch64
@@ -38,8 +38,8 @@ options:
 
 schema:
   unifi_base_url: url
-  unifi_site_id: str
-  traffic_matching_list_id: str
+  unifi_site_id: str?
+  traffic_matching_list_id: str?
   traffic_matching_list_name: str
   unifi_api_key: password
   webhook_token: password

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Add automatic UniFi site discovery when `unifi_site_id` is empty.
+- Add automatic traffic matching list discovery by `traffic_matching_list_name` when `traffic_matching_list_id` is empty.
+- Fail safely with actionable logs when multiple sites or duplicate list names are found.
+
 ## 0.1.1
 
 - Rename `allowed_ports` to `allowed_destination_ports` for clearer app configuration.

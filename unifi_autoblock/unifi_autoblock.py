@@ -70,8 +70,8 @@ def redact(value: str | None) -> str:
 class Config:
     def __init__(self, raw: dict[str, Any]) -> None:
         self.unifi_base_url = str(raw["unifi_base_url"]).rstrip("/")
-        self.unifi_site_id = str(raw["unifi_site_id"])
-        self.traffic_matching_list_id = str(raw["traffic_matching_list_id"])
+        self.unifi_site_id = str(raw.get("unifi_site_id") or "").strip()
+        self.traffic_matching_list_id = str(raw.get("traffic_matching_list_id") or "").strip()
         self.traffic_matching_list_name = str(raw["traffic_matching_list_name"])
         self.unifi_api_key = str(raw["unifi_api_key"])
         self.webhook_token = str(raw["webhook_token"])
@@ -101,8 +101,6 @@ class Config:
         raw = load_json_file(OPTIONS_PATH, {})
         required = [
             "unifi_base_url",
-            "unifi_site_id",
-            "traffic_matching_list_id",
             "traffic_matching_list_name",
             "unifi_api_key",
             "webhook_token",
@@ -115,13 +113,87 @@ class Config:
             raise RuntimeError("webhook_token must be different from unifi_api_key")
         return config
 
+    def integration_url(self, path: str) -> str:
+        return f"{self.unifi_base_url}/proxy/network/integration/v1{path}"
+
     @property
     def traffic_list_url(self) -> str:
-        return (
-            f"{self.unifi_base_url}/proxy/network/integration/v1/sites/"
-            f"{self.unifi_site_id}/traffic-matching-lists/"
-            f"{self.traffic_matching_list_id}"
+        if not self.unifi_site_id or not self.traffic_matching_list_id:
+            raise RuntimeError("UniFi site and traffic matching list must be resolved before use")
+        return self.integration_url(
+            f"/sites/{self.unifi_site_id}/traffic-matching-lists/{self.traffic_matching_list_id}"
         )
+
+
+def extract_collection(response: Any, label: str) -> list[dict[str, Any]]:
+    if isinstance(response, dict) and isinstance(response.get("data"), list):
+        return [item for item in response["data"] if isinstance(item, dict)]
+    if isinstance(response, list):
+        return [item for item in response if isinstance(item, dict)]
+    raise RuntimeError(f"Unexpected UniFi API response while listing {label}")
+
+
+def describe_items(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return "<none>"
+    lines = []
+    for item in items:
+        name = item.get("name") or item.get("desc") or item.get("id") or "<unnamed>"
+        item_id = item.get("id", "<no id>")
+        item_type = item.get("type")
+        suffix = f" type={item_type}" if item_type else ""
+        lines.append(f"- {name}: {item_id}{suffix}")
+    return "\n".join(lines)
+
+
+def resolve_unifi_targets(config: Config, client: UniFiClient) -> None:
+    if not config.unifi_site_id:
+        sites = client.list_sites()
+        if len(sites) == 1:
+            config.unifi_site_id = str(sites[0].get("id", ""))
+            if not config.unifi_site_id:
+                raise RuntimeError("The only UniFi site returned by the API has no id")
+            LOGGER.info("Auto-detected UniFi site: %s", config.unifi_site_id)
+        elif not sites:
+            raise RuntimeError("No UniFi sites returned by the API")
+        else:
+            raise RuntimeError(
+                "Multiple UniFi sites found; set unifi_site_id explicitly:\n"
+                + describe_items(sites)
+            )
+    else:
+        LOGGER.info("Using configured UniFi site: %s", config.unifi_site_id)
+
+    if not config.traffic_matching_list_id:
+        lists = client.list_traffic_matching_lists()
+        ipv4_lists = [item for item in lists if item.get("type") == LIST_TYPE]
+        matches = [item for item in ipv4_lists if item.get("name") == config.traffic_matching_list_name]
+        if len(matches) == 1:
+            config.traffic_matching_list_id = str(matches[0].get("id", ""))
+            if not config.traffic_matching_list_id:
+                raise RuntimeError("The matching UniFi traffic matching list has no id")
+            LOGGER.info(
+                "Auto-detected traffic matching list %r: %s",
+                config.traffic_matching_list_name,
+                config.traffic_matching_list_id,
+            )
+        elif not matches:
+            raise RuntimeError(
+                f"No IPV4_ADDRESSES traffic matching list named "
+                f"{config.traffic_matching_list_name!r} found. Available IPv4 lists:\n"
+                + describe_items(ipv4_lists)
+            )
+        else:
+            raise RuntimeError(
+                f"Multiple IPV4_ADDRESSES traffic matching lists named "
+                f"{config.traffic_matching_list_name!r} found; set traffic_matching_list_id explicitly:\n"
+                + describe_items(matches)
+            )
+    else:
+        LOGGER.info("Using configured traffic matching list: %s", config.traffic_matching_list_id)
+
+    traffic_list = client.get_traffic_list()
+    validate_traffic_list(traffic_list, config)
 
 
 class UniFiClient:
@@ -154,6 +226,21 @@ class UniFiClient:
             raise RuntimeError(f"UniFi API {method} {url} failed: HTTP {err.code}: {body}") from err
         except urllib.error.URLError as err:
             raise RuntimeError(f"UniFi API {method} {url} failed: {err}") from err
+
+    def list_sites(self) -> list[dict[str, Any]]:
+        response = self.request("GET", self.config.integration_url("/sites?limit=200"))
+        return extract_collection(response, "sites")
+
+    def list_traffic_matching_lists(self) -> list[dict[str, Any]]:
+        if not self.config.unifi_site_id:
+            raise RuntimeError("UniFi site must be resolved before listing traffic matching lists")
+        response = self.request(
+            "GET",
+            self.config.integration_url(
+                f"/sites/{self.config.unifi_site_id}/traffic-matching-lists?limit=200"
+            ),
+        )
+        return extract_collection(response, "traffic matching lists")
 
     def get_traffic_list(self) -> dict[str, Any]:
         return self.request("GET", self.config.traffic_list_url)
@@ -437,10 +524,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class AutoblockServer(ThreadingHTTPServer):
-    def __init__(self, address: tuple[str, int], config: Config) -> None:
+    def __init__(self, address: tuple[str, int], config: Config, client: UniFiClient) -> None:
         super().__init__(address, Handler)
         self.config = config
-        self.unifi_client = UniFiClient(config)
+        self.unifi_client = client
 
 
 def configure_logging(level: str) -> None:
@@ -456,12 +543,16 @@ def main() -> None:
     configure_logging(config.log_level)
     LOGGER.info("Starting UniFi Autoblock")
     LOGGER.info("UniFi base URL: %s", config.unifi_base_url)
-    LOGGER.info("UniFi site ID: %s", config.unifi_site_id)
-    LOGGER.info("Traffic matching list: %s", config.traffic_matching_list_name)
+    LOGGER.info("Traffic matching list name: %s", config.traffic_matching_list_name)
     LOGGER.info("UniFi API key: %s", redact(config.unifi_api_key))
     LOGGER.info("Dry run: %s", config.dry_run)
 
-    server = AutoblockServer(("0.0.0.0", 8080), config)
+    client = UniFiClient(config)
+    resolve_unifi_targets(config, client)
+    LOGGER.info("Resolved UniFi site ID: %s", config.unifi_site_id)
+    LOGGER.info("Resolved traffic matching list ID: %s", config.traffic_matching_list_id)
+
+    server = AutoblockServer(("0.0.0.0", 8080), config, client)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

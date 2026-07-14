@@ -4,10 +4,10 @@ configuration:
     description: Local UniFi controller URL, for example https://192.168.1.1.
   unifi_site_id:
     name: UniFi site ID
-    description: Site UUID used by the UniFi Network integration API.
+    description: Optional site UUID. Leave empty for auto-detection when the controller has exactly one site.
   traffic_matching_list_id:
     name: Traffic matching list ID
-    description: Existing UniFi IPv4 address traffic matching list UUID.
+    description: Optional existing UniFi IPv4 address traffic matching list UUID. Leave empty to auto-detect by name.
   traffic_matching_list_name:
     name: Traffic matching list name
     description: Existing UniFi traffic matching list name.

@@ -4,10 +4,10 @@ configuration:
     description: URL locale du controleur UniFi, par exemple https://192.168.1.1.
   unifi_site_id:
     name: ID du site UniFi
-    description: UUID du site utilise par l'API d'integration UniFi Network.
+    description: UUID optionnel du site. Laisser vide pour detection automatique si le controleur n'a qu'un seul site.
   traffic_matching_list_id:
     name: ID de la liste UniFi
-    description: UUID de la liste UniFi existante d'adresses IPv4.
+    description: UUID optionnel de la liste UniFi IPv4 existante. Laisser vide pour detection automatique par nom.
   traffic_matching_list_name:
     name: Nom de la liste UniFi
     description: Nom de la liste UniFi existante.

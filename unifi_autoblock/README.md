@@ -52,6 +52,8 @@ Create or reuse an IPv4 address traffic matching list in UniFi. Example API resp
 
 Then create a firewall rule that blocks traffic from this list toward the protected reverse proxy or exposed service.
 
+If your controller has exactly one site, `unifi_site_id` can be left empty. If the configured `traffic_matching_list_name` matches exactly one IPv4 address list, `traffic_matching_list_id` can also be left empty. If several sites or duplicate list names are found, the app stops and prints the available IDs in the logs.
+
 ## UniFi Alarm Manager
 
 Create an alarm with webhook action:
@@ -67,8 +69,8 @@ Use the default UniFi webhook content.
 | Option | Description |
 | --- | --- |
 | `unifi_base_url` | Local UniFi controller URL, for example `https://192.168.1.1`. |
-| `unifi_site_id` | UniFi site UUID used by the integration API. |
-| `traffic_matching_list_id` | Existing traffic matching list UUID. |
+| `unifi_site_id` | Optional UniFi site UUID. Leave empty for auto-detection when the controller has exactly one site. |
+| `traffic_matching_list_id` | Optional existing traffic matching list UUID. Leave empty to auto-detect by `traffic_matching_list_name`. |
 | `traffic_matching_list_name` | Existing traffic matching list name. |
 | `unifi_api_key` | Dedicated UniFi API key. |
 | `webhook_token` | Long random token used in the webhook URL path. |
