@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4
+
+- Require `unifi_base_url` to use HTTPS to protect the UniFi API key in transit.
+- Keep `verify_ssl: false` supported for self-signed UniFi certificates.
+
 ## 0.3.3
 
 - Remove `webhook_token` from app configuration.

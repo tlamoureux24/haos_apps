@@ -68,12 +68,12 @@ Use the default UniFi webhook content. The app generates a persistent token on f
 
 | Option | Description |
 | --- | --- |
-| `unifi_base_url` | Local UniFi controller URL, for example `https://192.168.1.1`. |
+| `unifi_base_url` | Local UniFi controller URL. Must use HTTPS, for example `https://192.168.1.1`. Plain HTTP is rejected because it would expose the UniFi API key. |
 | `unifi_site_id` | Optional UniFi site UUID. Leave empty for auto-detection when the controller has exactly one site. |
 | `traffic_matching_list_id` | Optional existing traffic matching list UUID. Leave empty to auto-detect by `traffic_matching_list_name`. |
 | `traffic_matching_list_name` | Optional existing traffic matching list name. Leave empty to auto-detect when exactly one IPv4 list exists. |
 | `unifi_api_key` | Dedicated UniFi API key. |
-| `verify_ssl` | Enable TLS certificate verification for the UniFi controller. |
+| `verify_ssl` | Enable TLS certificate verification for the UniFi controller. Keep `false` for self-signed UniFi certificates, but the connection still uses HTTPS encryption. |
 | `dry_run` | Log what would happen without writing to UniFi. |
 | `allowed_destinations` | Optional list of destination IPs to accept. Empty means any destination. |
 | `allowed_destination_ports` | UniFi event destination ports to accept, default `443`. This is the attacked service port from `parameters.dpt`, not the app webhook port. |

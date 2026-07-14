@@ -1,6 +1,6 @@
 name: "UniFi Autoblock"
 slug: "unifi_autoblock"
-version: "0.3.3"
+version: "0.3.4"
 description: "Block IDS/IPS attacker IPs by updating a UniFi traffic matching list"
 arch:
   - aarch64

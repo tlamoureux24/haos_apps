@@ -1,7 +1,7 @@
 configuration:
   unifi_base_url:
     name: UniFi base URL
-    description: Local UniFi controller URL, for example https://192.168.1.1.
+    description: Local UniFi controller URL. HTTPS is required, for example https://192.168.1.1.
   unifi_site_id:
     name: UniFi site ID
     description: Optional site UUID. Leave empty for auto-detection when the controller has exactly one site.
@@ -14,7 +14,7 @@ configuration:
   unifi_api_key:
     name: UniFi API key
     description: Dedicated UniFi API key used to read and update the configured list.
-    description: Enable TLS certificate verification for the UniFi controller.
+    description: Enable TLS certificate verification for the UniFi controller. Keep false for self-signed UniFi certificates.
   dry_run:
     name: Dry run
     description: Validate and log events without writing changes to UniFi.

@@ -72,6 +72,8 @@ def redact(value: str | None) -> str:
 class Config:
     def __init__(self, raw: dict[str, Any]) -> None:
         self.unifi_base_url = str(raw["unifi_base_url"]).rstrip("/")
+        if not self.unifi_base_url.startswith("https://"):
+            raise RuntimeError("unifi_base_url must use https://. Plain HTTP would expose the UniFi API key.")
         self.unifi_site_id = str(raw.get("unifi_site_id") or "").strip()
         self.traffic_matching_list_id = str(raw.get("traffic_matching_list_id") or "").strip()
         self.traffic_matching_list_name = str(raw.get("traffic_matching_list_name") or "").strip()
