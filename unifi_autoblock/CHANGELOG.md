@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.10
+
+- Improve French configuration translations with accents.
+- Clarify that local and non-public IP ranges are ignored automatically without `allowlist_cidrs`.
+
 ## 0.3.9
 
 - Fix configuration translation mapping for `verify_ssl` and `allowed_webhook_sources`.

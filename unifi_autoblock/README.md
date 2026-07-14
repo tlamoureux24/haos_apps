@@ -81,7 +81,7 @@ Use the default UniFi webhook content. The app generates a persistent token on f
 | `min_severity` | Minimum UniFi event severity. |
 | `ban_ttl_days` | TTL for entries managed by this app, default `30`. |
 | `allowed_webhook_sources` | Optional source CIDRs allowed to call the webhook. |
-| `allowlist_cidrs` | Optional CIDRs that must never be blocked. |
+| `allowlist_cidrs` | Optional public CIDRs that must never be blocked. Local, private, loopback, link-local, multicast, and reserved IPs are already ignored automatically. |
 | `log_level` | `debug`, `info`, `warning`, or `error`. |
 
 ## First Run

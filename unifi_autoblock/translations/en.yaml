@@ -37,7 +37,7 @@ configuration:
     description: Optional CIDRs allowed to call the webhook, for example 192.168.1.1/32. Empty accepts any network source that knows the URL.
   allowlist_cidrs:
     name: Allowlist CIDRs
-    description: Optional CIDRs that must never be blocked.
+    description: Optional public CIDRs that must never be blocked. Local, private, loopback, link-local, multicast, and reserved IPs are already ignored automatically.
   log_level:
     name: Log level
     description: App log verbosity.
