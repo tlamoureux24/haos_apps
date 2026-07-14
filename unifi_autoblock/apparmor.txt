@@ -2,16 +2,19 @@
 
 profile unifi_autoblock flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
+  #include <abstractions/bash>
   #include <abstractions/nameservice>
   #include <abstractions/openssl>
   #include <abstractions/python>
 
-  network inet stream,
-  network inet6 stream,
+  # Conservative functional profile for the Home Assistant base image.
+  capability,
+  file,
+  network,
+  signal,
 
-  # S6-overlay startup and add-on command execution.
+  # S6-overlay startup and services.
   /init ix,
-  /run.sh rix,
   /bin/** ix,
   /sbin/** ix,
   /usr/bin/** ix,
@@ -23,39 +26,32 @@ profile unifi_autoblock flags=(attach_disconnected,mediate_deleted) {
   /etc/services.d/** rwix,
   /etc/cont-init.d/** rwix,
   /etc/cont-finish.d/** rwix,
-
-  /usr/bin/bash ix,
-  /usr/bin/python3 ix,
-  /usr/lib/python3*/** r,
-  /app/** r,
-
-  /data/ rw,
-  /data/** rwk,
   /run/{,**} rwk,
-  /tmp/ rw,
+  /dev/tty rw,
+
+  # App code and Python runtime.
+  /run.sh rix,
+  /app/** r,
+  /usr/lib/python3*/** r,
+
+  # Persistent state and temporary files.
+  /data/** rwk,
   /tmp/** rwk,
 
+  # TLS certificates and timezone data.
   /etc/ssl/** r,
   /etc/ca-certificates/** r,
   /usr/share/ca-certificates/** r,
   /usr/share/zoneinfo/** r,
 
+  # Devices needed by Python/TLS/runtime.
   /dev/null rw,
   /dev/urandom r,
   /dev/random r,
 
-  # Logging through the container init stdout/stderr descriptors.
+  # Logging and process discovery used by the container runtime.
   /proc/1/fd/1 rw,
   /proc/1/fd/2 rw,
   /proc/[0-9]*/fd/** rw,
   /proc/** r,
-
-  deny /bin/su x,
-  deny /usr/bin/su x,
-  deny /bin/sh x,
-  deny /usr/bin/sh x,
-  deny /bin/ash x,
-  deny /usr/bin/ash x,
-  deny /bin/busybox x,
-  deny /usr/bin/busybox x,
 }

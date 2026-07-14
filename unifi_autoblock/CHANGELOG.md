@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.13
+
+- Broaden the AppArmor profile to allow Home Assistant base image startup while keeping AppArmor enabled.
+
 ## 0.3.12
 
 - Fix AppArmor profile so the Home Assistant base image S6 init can start.
