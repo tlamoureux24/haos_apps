@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.8
+
+- Revert AppArmor configuration to boolean form for Supervisor compatibility.
+
 ## 0.3.7
 
 - Reference the custom AppArmor profile by name in app configuration.
