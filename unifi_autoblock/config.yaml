@@ -1,6 +1,6 @@
 name: "UniFi Autoblock"
 slug: "unifi_autoblock"
-version: "0.3.6"
+version: "0.3.7"
 description: "Block IDS/IPS attacker IPs by updating a UniFi traffic matching list"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/unifi_autoblock"
 stage: experimental
@@ -11,7 +11,7 @@ arch:
 startup: application
 boot: auto
 init: false
-apparmor: true
+apparmor: unifi_autoblock
 tmpfs: true
 
 ports:

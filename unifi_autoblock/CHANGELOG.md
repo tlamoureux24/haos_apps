@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.7
+
+- Reference the custom AppArmor profile by name in app configuration.
+
 ## 0.3.6
 
 - Add a dedicated AppArmor profile.
