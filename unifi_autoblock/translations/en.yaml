@@ -14,6 +14,8 @@ configuration:
   unifi_api_key:
     name: UniFi API key
     description: Dedicated UniFi API key used to read and update the configured list.
+  verify_ssl:
+    name: Verify UniFi TLS certificate
     description: Enable TLS certificate verification for the UniFi controller. Keep false for self-signed UniFi certificates.
   dry_run:
     name: Dry run
@@ -26,12 +28,13 @@ configuration:
     description: UniFi event destination ports accepted from IDS/IPS events. This is the attacked service port, not the app webhook port.
   min_severity:
     name: Minimum severity
-    description: Ignore events below this UniFi severity.
+    description: Ignore UniFi events below this severity. Keep 0 to accept all severities.
   ban_ttl_days:
     name: Ban TTL days
     description: Number of days before app-managed entries expire.
+  allowed_webhook_sources:
     name: Allowed webhook sources
-    description: Optional CIDRs allowed to call the webhook.
+    description: Optional CIDRs allowed to call the webhook, for example 192.168.1.1/32. Empty accepts any network source that knows the URL.
   allowlist_cidrs:
     name: Allowlist CIDRs
     description: Optional CIDRs that must never be blocked.

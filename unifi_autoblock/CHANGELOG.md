@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.9
+
+- Fix configuration translation mapping for `verify_ssl` and `allowed_webhook_sources`.
+- Clarify `min_severity` and webhook source CIDR descriptions.
+
 ## 0.3.8
 
 - Revert AppArmor configuration to boolean form for Supervisor compatibility.
