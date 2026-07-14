@@ -45,6 +45,25 @@ Documentation detaillee:
 
 [rsync_manager/README.md](rsync_manager/README.md)
 
+### UniFi Autoblock
+
+App Home Assistant locale qui recoit les webhooks UniFi Alarm Manager `Threat Detected and Blocked`, valide les evenements IDS/IPS et ajoute l'IP source publique dans une liste UniFi existante.
+
+Fonctionnalites principales:
+
+- endpoint webhook local;
+- mode simulation `dry_run` active par defaut;
+- validation stricte des evenements UniFi IDS/IPS entrants;
+- ajout d'IPv4 publiques uniquement;
+- mise a jour d'une liste UniFi `IPV4_ADDRESSES` existante;
+- TTL configurable, 30 jours par defaut;
+- limites de securite: ports/destinations autorises, taille max de liste, ajout max par heure;
+- cle API saisie dans la configuration de l'app, jamais stockee dans le projet.
+
+Documentation detaillee:
+
+[unifi_autoblock/README.md](unifi_autoblock/README.md)
+
 ## Prerequis
 
 Ce repository est destine aux installations Home Assistant avec Supervisor, par exemple:
@@ -71,3 +90,7 @@ Pour comprendre le fonctionnement de chaque addon, consultez d'abord son README 
 Pour Rsync Manager:
 
 [rsync_manager/README.md](rsync_manager/README.md)
+
+Pour UniFi Autoblock:
+
+[unifi_autoblock/README.md](unifi_autoblock/README.md)
