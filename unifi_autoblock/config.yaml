@@ -1,6 +1,6 @@
 name: "UniFi Autoblock"
 slug: "unifi_autoblock"
-version: "0.3.13"
+version: "0.3.14"
 description: "Block IDS/IPS attacker IPs by updating a UniFi traffic matching list"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/unifi_autoblock"
 stage: experimental
@@ -32,7 +32,6 @@ options:
     - 443
   min_severity: 0
   ban_ttl_days: 30
-  allowed_webhook_sources: []
   allowlist_cidrs: []
   log_level: "info"
 
@@ -50,8 +49,6 @@ schema:
     - "int(1,65535)"
   min_severity: "int(0,10)"
   ban_ttl_days: "int(1,3650)"
-  allowed_webhook_sources:
-    - str
   allowlist_cidrs:
     - str
   log_level: "list(debug|info|warning|error)"

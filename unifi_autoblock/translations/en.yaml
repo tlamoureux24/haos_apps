@@ -21,20 +21,17 @@ configuration:
     name: Dry run
     description: Validate and log events without writing changes to UniFi.
   allowed_destinations:
-    name: Allowed destinations
-    description: Optional destination IP list. Empty accepts any destination.
+    name: Protected service IPs
+    description: Internal IPs of exposed services to protect, for example the reverse proxy. Empty accepts any destination IP.
   allowed_destination_ports:
-    name: Allowed destination ports
-    description: UniFi event destination ports accepted from IDS/IPS events. This is the attacked service port, not the app webhook port.
+    name: Protected service ports
+    description: Exposed service ports to protect in UniFi IDS/IPS events. This is the attacked service port, not the app webhook port.
   min_severity:
     name: Minimum severity
     description: Ignore UniFi events below this severity. Keep 0 to accept all severities.
   ban_ttl_days:
     name: Ban TTL days
     description: Number of days before app-managed entries expire.
-  allowed_webhook_sources:
-    name: Allowed webhook sources
-    description: Optional CIDRs allowed to call the webhook, for example 192.168.1.1/32. Empty accepts any network source that knows the URL.
   allowlist_cidrs:
     name: Allowlist CIDRs
     description: Optional public CIDRs that must never be blocked. Local, private, loopback, link-local, multicast, and reserved IPs are already ignored automatically.

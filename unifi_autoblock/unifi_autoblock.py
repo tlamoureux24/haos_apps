@@ -9,10 +9,12 @@ import json
 import logging
 import os
 import secrets
+import socket
 import ssl
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -70,6 +72,35 @@ def redact(value: str | None) -> str:
     return "<redacted>"
 
 
+def resolve_controller_source_networks(unifi_base_url: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    parsed = urllib.parse.urlparse(unifi_base_url)
+    host = parsed.hostname
+    if not host:
+        raise RuntimeError("unifi_base_url must include a hostname or IP address")
+
+    try:
+        address = ipaddress.ip_address(host)
+        return [ipaddress.ip_network(address)]
+    except ValueError:
+        pass
+
+    networks = []
+    try:
+        for family, _, _, _, sockaddr in socket.getaddrinfo(host, None):
+            if family not in (socket.AF_INET, socket.AF_INET6):
+                continue
+            address = ipaddress.ip_address(sockaddr[0])
+            network = ipaddress.ip_network(address)
+            if network not in networks:
+                networks.append(network)
+    except socket.gaierror as err:
+        raise RuntimeError(f"Could not resolve UniFi controller host {host!r}: {err}") from err
+
+    if not networks:
+        raise RuntimeError(f"Could not resolve UniFi controller host {host!r}")
+    return networks
+
+
 class Config:
     def __init__(self, raw: dict[str, Any]) -> None:
         self.unifi_base_url = str(raw["unifi_base_url"]).rstrip("/")
@@ -80,6 +111,7 @@ class Config:
         self.traffic_matching_list_name = str(raw.get("traffic_matching_list_name") or "").strip()
         self.unifi_api_key = str(raw["unifi_api_key"])
         self.webhook_token = ""
+        self.webhook_auth_token = ""
         self.verify_ssl = bool(raw.get("verify_ssl", False))
         self.dry_run = bool(raw.get("dry_run", True))
         self.allowed_destinations = set(str(v) for v in raw.get("allowed_destinations", []))
@@ -87,11 +119,7 @@ class Config:
         self.allowed_destination_ports = set(int(v) for v in destination_ports)
         self.min_severity = int(raw.get("min_severity", 0))
         self.ban_ttl_days = int(raw.get("ban_ttl_days", 30))
-        self.allowed_webhook_sources = [
-            ipaddress.ip_network(str(v), strict=False)
-            for v in raw.get("allowed_webhook_sources", [])
-            if str(v).strip()
-        ]
+        self.webhook_source_networks = resolve_controller_source_networks(self.unifi_base_url)
         self.allowlist_cidrs = [
             ipaddress.ip_network(str(v), strict=False)
             for v in raw.get("allowlist_cidrs", [])
@@ -257,16 +285,26 @@ class UniFiClient:
         return self.request("PUT", self.config.traffic_list_url, payload)
 
 
-def ensure_webhook_token(config: Config) -> str:
+def ensure_webhook_secrets(config: Config) -> tuple[str, str]:
     state = load_state()
-    token = str(state.get("webhook_token") or "").strip()
-    if not token:
-        token = secrets.token_urlsafe(32)
-        state["webhook_token"] = token
+    path_token = str(state.get("webhook_token") or "").strip()
+    auth_token = str(state.get("webhook_auth_token") or "").strip()
+    changed = False
+    if not path_token:
+        path_token = secrets.token_urlsafe(32)
+        state["webhook_token"] = path_token
+        changed = True
+        LOGGER.info("Generated a persistent webhook URL token")
+    if not auth_token:
+        auth_token = secrets.token_urlsafe(32)
+        state["webhook_auth_token"] = auth_token
+        changed = True
+        LOGGER.info("Generated a persistent webhook Bearer token")
+    if changed:
         save_json_file(STATE_PATH, state)
-        LOGGER.info("Generated a persistent webhook token")
-    config.webhook_token = token
-    return token
+    config.webhook_token = path_token
+    config.webhook_auth_token = auth_token
+    return path_token, auth_token
 
 
 def webhook_path(config: Config) -> str:
@@ -290,6 +328,10 @@ def display_webhook_url(config: Config) -> str:
     return f"http://<IP_HOME_ASSISTANT>:{webhook_display_port()}{webhook_path(config)}"
 
 
+def display_webhook_sources(config: Config) -> str:
+    return ", ".join(str(network) for network in config.webhook_source_networks)
+
+
 def load_state() -> dict[str, Any]:
     state = load_json_file(STATE_PATH, {})
     if not state:
@@ -308,13 +350,17 @@ def backup_traffic_list(data: dict[str, Any]) -> None:
 
 
 def is_allowed_source(remote_ip: str, config: Config) -> bool:
-    if not config.allowed_webhook_sources:
-        return True
     try:
         parsed = ipaddress.ip_address(remote_ip)
     except ValueError:
         return False
-    return any(parsed in network for network in config.allowed_webhook_sources)
+    return any(parsed in network for network in config.webhook_source_networks)
+
+
+def is_authorized_webhook(headers: Any, config: Config) -> bool:
+    expected = f"Bearer {config.webhook_auth_token}"
+    received = str(headers.get("Authorization") or "")
+    return secrets.compare_digest(received, expected)
 
 
 def public_ipv4(value: str) -> ipaddress.IPv4Address:
@@ -531,6 +577,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(403, {"error": "forbidden"})
             return
 
+        if not is_authorized_webhook(self.headers, config):
+            LOGGER.warning("Rejected webhook from %s with invalid Bearer authentication", remote_ip)
+            self.send_json(401, {"error": "unauthorized"})
+            return
+
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -578,9 +629,11 @@ def main() -> None:
     LOGGER.info("Traffic matching list name: %s", config.traffic_matching_list_name or "<auto-detect>")
     LOGGER.info("UniFi API key: %s", redact(config.unifi_api_key))
     LOGGER.info("Dry run: %s", config.dry_run)
-    ensure_webhook_token(config)
+    ensure_webhook_secrets(config)
     LOGGER.info("============================================================")
     LOGGER.info("URL webhook pour UniFi Alarm Manager : %s", display_webhook_url(config))
+    LOGGER.info("Authentification UniFi Alarm Manager : Bearer %s", config.webhook_auth_token)
+    LOGGER.info("Source webhook acceptee automatiquement : %s", display_webhook_sources(config))
     LOGGER.info("Remplace <IP_HOME_ASSISTANT> par l IP locale de Home Assistant si besoin")
     LOGGER.info("============================================================")
 

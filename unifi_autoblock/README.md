@@ -30,6 +30,8 @@ The app never creates firewall policies. Create a UniFi firewall policy manually
 - No host networking is requested.
 - No privileged mode is requested.
 - Only `/data` is used for app state.
+- Webhook calls are accepted only from the UniFi controller host configured in `unifi_base_url`.
+- UniFi Alarm Manager webhook calls must use the generated Bearer token printed in the app logs.
 
 Home Assistant stores app options on the host. Treat Home Assistant backups as sensitive if they include this app's configuration.
 
@@ -61,9 +63,10 @@ Create an alarm with webhook action:
 
 ```text
 POST http://HOME_ASSISTANT_IP:37989/webhook/TOKEN_PRINTED_IN_THE_APP_LOGS
+Authorization: Bearer BEARER_TOKEN_PRINTED_IN_THE_APP_LOGS
 ```
 
-Use the default UniFi webhook content. The app generates a persistent token on first start and prints a copy/paste webhook URL in the logs. Replace `<IP_HOME_ASSISTANT>` with the local Home Assistant IP if needed. If you change the host port in the app network settings, restart the app and copy the updated URL from the logs.
+Use the default UniFi webhook content. Set UniFi Alarm Manager authentication to `Bearer` and paste the Bearer token printed in the app logs. The app generates persistent URL and Bearer tokens on first start and prints the setup values in the logs. Replace `<IP_HOME_ASSISTANT>` with the local Home Assistant IP if needed. If you change the host port in the app network settings, restart the app and copy the updated URL from the logs.
 
 ## Options
 
@@ -76,11 +79,10 @@ Use the default UniFi webhook content. The app generates a persistent token on f
 | `unifi_api_key` | Dedicated UniFi API key. |
 | `verify_ssl` | Enable TLS certificate verification for the UniFi controller. Keep `false` for self-signed UniFi certificates, but the connection still uses HTTPS encryption. |
 | `dry_run` | Log what would happen without writing to UniFi. |
-| `allowed_destinations` | Optional list of destination IPs to accept. Empty means any destination. |
-| `allowed_destination_ports` | UniFi event destination ports to accept, default `443`. This is the attacked service port from `parameters.dpt`, not the app webhook port. |
+| `allowed_destinations` | Optional list of protected internal service IPs, for example the reverse proxy IP. Empty means any destination. |
+| `allowed_destination_ports` | Protected service ports to accept, default `443`. This is the attacked service port from `parameters.dpt`, not the app webhook port. |
 | `min_severity` | Minimum UniFi event severity. |
 | `ban_ttl_days` | TTL for entries managed by this app, default `30`. |
-| `allowed_webhook_sources` | Optional source CIDRs allowed to call the webhook. |
 | `allowlist_cidrs` | Optional public CIDRs that must never be blocked. Local, private, loopback, link-local, multicast, and reserved IPs are already ignored automatically. |
 | `log_level` | `debug`, `info`, `warning`, or `error`. |
 

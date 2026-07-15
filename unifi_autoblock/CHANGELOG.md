@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.14
+
+- Rename destination configuration labels to protected service IPs and ports.
+- Remove manual webhook source configuration from the app UI.
+- Accept webhook calls only from the UniFi controller host configured in `unifi_base_url`.
+- Generate and require a persistent UniFi Alarm Manager Bearer token for webhook calls.
+
 ## 0.3.13
 
 - Broaden the AppArmor profile to allow Home Assistant base image startup while keeping AppArmor enabled.

@@ -21,20 +21,17 @@ configuration:
     name: Mode simulation
     description: Valide et journalise les événements sans modifier UniFi.
   allowed_destinations:
-    name: Destinations autorisées
-    description: Liste optionnelle d'IP de destination. Vide accepte toute destination.
+    name: IP des services protégés
+    description: IP internes des services exposés à protéger, par exemple le reverse proxy. Vide accepte toute IP de destination.
   allowed_destination_ports:
-    name: Ports de destination autorisés
-    description: Ports de destination des événements IDS/IPS UniFi. Il s'agit du port du service attaqué, pas du port webhook de l'app.
+    name: Ports des services protégés
+    description: Ports des services exposés à protéger dans les événements IDS/IPS UniFi. Il s'agit du port attaqué, pas du port webhook de l'app.
   min_severity:
     name: Sévérité minimale
     description: Ignore les événements UniFi dont la sévérité est inférieure à cette valeur. Laisser 0 pour tout accepter.
   ban_ttl_days:
     name: Durée du bannissement
     description: Nombre de jours avant expiration des entrées gérées par l'app.
-  allowed_webhook_sources:
-    name: Sources webhook autorisées
-    description: CIDR optionnels autorisés à appeler le webhook, par exemple 192.168.1.1/32. Vide accepte toute source réseau qui connaît l'URL.
   allowlist_cidrs:
     name: CIDR en allowlist
     description: CIDR publics optionnels à ne jamais bloquer. Les IP locales, privées, loopback, link-local, multicast et réservées sont déjà ignorées automatiquement.
