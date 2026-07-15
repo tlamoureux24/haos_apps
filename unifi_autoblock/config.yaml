@@ -1,6 +1,6 @@
 name: "UniFi Autoblock"
 slug: "unifi_autoblock"
-version: "0.4.2"
+version: "0.4.3"
 description: "Block IDS/IPS attacker IPs by updating a UniFi traffic matching list"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/unifi_autoblock"
 stage: experimental
@@ -37,11 +37,11 @@ options:
   log_level: "info"
 
 schema:
-  unifi_base_url: "match(^$|https://.+)"
+  unifi_base_url: str?
   unifi_site_id: str?
   traffic_matching_list_id: str?
   traffic_matching_list_name: str?
-  unifi_api_key: password
+  unifi_api_key: password?
   verify_ssl: bool
   dry_run: bool
   allowed_destinations:

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.3
+
+- Make first-setup fields optional at the Supervisor schema level so Home Assistant can save a blank default configuration.
+
 ## 0.4.2
 
 - Fix UniFi API key clearing so the option is kept with an empty value instead of being deleted.

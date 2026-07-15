@@ -97,8 +97,8 @@ If you change the mapped host port in the Home Assistant app network settings, r
 
 | Option | Required | Default | Description |
 | --- | --- | --- | --- |
-| `unifi_base_url` | Yes | empty | Local UniFi controller URL. Must use HTTPS, for example `https://192.168.1.1`. The same host is also used as the only accepted webhook source. |
-| `unifi_api_key` | Yes | empty | Dedicated UniFi API key used to read and update the traffic matching list. Enter it on first setup or after restoring from backup. The app encrypts it locally and clears this field automatically. |
+| `unifi_base_url` | Yes, to start | empty | Local UniFi controller URL. Must use HTTPS, for example `https://192.168.1.1`. The same host is also used as the only accepted webhook source. The field may be blank only for first setup or reset-to-defaults. |
+| `unifi_api_key` | Yes, to start | empty | Dedicated UniFi API key used to read and update the traffic matching list. Enter it on first setup or after restoring from backup. The app encrypts it locally and clears this field automatically. |
 | `verify_ssl` | Yes | `false` | Enable TLS certificate verification for the UniFi controller. Keep `false` for self-signed UniFi certificates. |
 | `dry_run` | Yes | `true` | Validate events and log what would happen without writing to UniFi. |
 | `unifi_site_id` | No | empty | Optional UniFi site UUID. Leave empty for auto-detection when the controller has exactly one site. |
