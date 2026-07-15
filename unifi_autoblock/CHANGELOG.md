@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.7
+
+- Remove experimental stage now that the validated production workflow is stable.
+
 ## 0.4.6
 
 - Add complete French documentation in `README.fr.md`.
