@@ -29,7 +29,6 @@ STATE_PATH = "/data/state.json"
 LAST_BACKUP_PATH = "/data/last_traffic_matching_list_backup.json"
 ENCRYPTED_API_KEY_PATH = "/data/unifi_api_key.enc"
 API_KEY_KEY_PATH = "/data/unifi_api_key.key"
-CLEAR_API_KEY_OPTION_MARKER = "/tmp/unifi_autoblock_clear_api_key_option"
 LIST_TYPE = "IPV4_ADDRESSES"
 ITEM_TYPE = "IP_ADDRESS"
 MANAGED_VERSION = 1
@@ -142,9 +141,33 @@ def decrypt_unifi_api_key() -> str:
     return decrypted.decode("utf-8")
 
 
-def mark_unifi_api_key_option_for_clear() -> None:
-    with open(CLEAR_API_KEY_OPTION_MARKER, "w", encoding="utf-8") as handle:
-        handle.write("1\n")
+def clear_supervisor_unifi_api_key_value(raw_options: dict[str, Any]) -> None:
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        raise RuntimeError("SUPERVISOR_TOKEN is unavailable; cannot clear the UniFi API key value")
+
+    sanitized = dict(raw_options)
+    sanitized["unifi_api_key"] = ""
+    payload = json.dumps({"options": sanitized}).encode("utf-8")
+    request = urllib.request.Request(
+        "http://supervisor/addons/self/options",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            response.read()
+    except urllib.error.HTTPError as err:
+        body = err.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Could not clear UniFi API key value: HTTP {err.code}: {body}") from err
+    except urllib.error.URLError as err:
+        raise RuntimeError(f"Could not clear UniFi API key value: {err}") from err
+    LOGGER.info("Cleared UniFi API key value from app configuration")
 
 
 def resolve_unifi_api_key(raw_options: dict[str, Any]) -> str:
@@ -153,7 +176,7 @@ def resolve_unifi_api_key(raw_options: dict[str, Any]) -> str:
         if os.environ.get("UNIFI_AUTOBLOCK_SECRETS_PREPARED") == "1":
             return decrypt_unifi_api_key()
         encrypt_unifi_api_key(configured)
-        mark_unifi_api_key_option_for_clear()
+        clear_supervisor_unifi_api_key_value(raw_options)
         raw_options["unifi_api_key"] = ""
         return configured
     return decrypt_unifi_api_key()
@@ -166,7 +189,7 @@ def prepare_secrets() -> None:
     if not configured:
         return
     encrypt_unifi_api_key(configured)
-    mark_unifi_api_key_option_for_clear()
+    clear_supervisor_unifi_api_key_value(raw_options)
 
 
 def resolve_controller_source_networks(unifi_base_url: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:

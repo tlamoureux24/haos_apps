@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2
+
+- Fix UniFi API key clearing so the option is kept with an empty value instead of being deleted.
+
 ## 0.4.1
 
 - Keep the UniFi API key field visible but empty after local encryption so the key can be re-entered or rotated.
