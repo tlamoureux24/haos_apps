@@ -54,8 +54,6 @@ Content: Default Content
 | `allowlist_cidrs` | Optional public CIDRs that must never be blocked. Local and non-public ranges are ignored automatically. |
 | `log_level` | `debug`, `info`, `warning`, or `error`. |
 
-The following are not configurable anymore: webhook token, webhook base URL, webhook source CIDRs, rate limit, and maximum list size. They are either generated automatically or intentionally removed.
-
 ## Validation Rules
 
 The app only processes events where:

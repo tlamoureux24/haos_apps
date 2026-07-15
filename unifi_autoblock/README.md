@@ -110,8 +110,6 @@ If you change the mapped host port in the Home Assistant app network settings, r
 | `allowlist_cidrs` | No | empty | Optional public CIDRs that must never be blocked. Local and non-public ranges are already ignored automatically. |
 | `log_level` | Yes | `info` | App log verbosity: `debug`, `info`, `warning`, or `error`. |
 
-Removed options such as `webhook_token`, `webhook_base_url`, `allowed_webhook_sources`, rate limiting, and maximum list size are no longer configurable. Webhook secrets and source filtering are handled automatically.
-
 ## Event Validation
 
 An incoming webhook is processed only when all of these conditions match:
