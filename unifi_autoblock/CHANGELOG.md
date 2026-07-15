@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.16
+
+- Fix the Documentation tab link by using an absolute GitHub README URL.
+
 ## 0.3.15
 
 - Switch startup setup logs to English for consistency.
