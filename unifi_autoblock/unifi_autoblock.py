@@ -325,7 +325,7 @@ def webhook_display_port() -> int:
 
 
 def display_webhook_url(config: Config) -> str:
-    return f"http://<IP_HOME_ASSISTANT>:{webhook_display_port()}{webhook_path(config)}"
+    return f"http://<HOME_ASSISTANT_IP>:{webhook_display_port()}{webhook_path(config)}"
 
 
 def display_webhook_sources(config: Config) -> str:
@@ -631,10 +631,10 @@ def main() -> None:
     LOGGER.info("Dry run: %s", config.dry_run)
     ensure_webhook_secrets(config)
     LOGGER.info("============================================================")
-    LOGGER.info("URL webhook pour UniFi Alarm Manager : %s", display_webhook_url(config))
-    LOGGER.info("Authentification UniFi Alarm Manager : Bearer %s", config.webhook_auth_token)
-    LOGGER.info("Source webhook acceptee automatiquement : %s", display_webhook_sources(config))
-    LOGGER.info("Remplace <IP_HOME_ASSISTANT> par l IP locale de Home Assistant si besoin")
+    LOGGER.info("UniFi Alarm Manager webhook URL: %s", display_webhook_url(config))
+    LOGGER.info("Replace <HOME_ASSISTANT_IP> with the local Home Assistant IP address")
+    LOGGER.info("UniFi Alarm Manager authentication: Bearer %s", config.webhook_auth_token)
+    LOGGER.info("Automatically accepted webhook source: %s", display_webhook_sources(config))
     LOGGER.info("============================================================")
 
     client = UniFiClient(config)

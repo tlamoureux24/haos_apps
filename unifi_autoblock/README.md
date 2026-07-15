@@ -66,7 +66,7 @@ POST http://HOME_ASSISTANT_IP:37989/webhook/TOKEN_PRINTED_IN_THE_APP_LOGS
 Authorization: Bearer BEARER_TOKEN_PRINTED_IN_THE_APP_LOGS
 ```
 
-Use the default UniFi webhook content. Set UniFi Alarm Manager authentication to `Bearer` and paste the Bearer token printed in the app logs. The app generates persistent URL and Bearer tokens on first start and prints the setup values in the logs. Replace `<IP_HOME_ASSISTANT>` with the local Home Assistant IP if needed. If you change the host port in the app network settings, restart the app and copy the updated URL from the logs.
+Use the default UniFi webhook content. Set UniFi Alarm Manager authentication to `Bearer` and paste the Bearer token printed in the app logs. The app generates persistent URL and Bearer tokens on first start and prints the setup values in the logs. Replace `<HOME_ASSISTANT_IP>` with the local Home Assistant IP address; the placeholder URL will not work as-is. If you change the host port in the app network settings, restart the app and copy the updated URL from the logs.
 
 ## Options
 

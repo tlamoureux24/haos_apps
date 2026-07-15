@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.15
+
+- Switch startup setup logs to English for consistency.
+- Move the Home Assistant IP replacement instruction directly below the webhook URL.
+- Clarify that `<HOME_ASSISTANT_IP>` must be replaced before using the webhook URL.
+
 ## 0.3.14
 
 - Rename destination configuration labels to protected service IPs and ports.
