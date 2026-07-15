@@ -1,5 +1,7 @@
 # UniFi Autoblock
 
+Documentation: [English](README.md) | [Français](README.fr.md)
+
 UniFi Autoblock is a Home Assistant app that receives local UniFi Alarm Manager webhook events and updates an existing UniFi `IPV4_ADDRESSES` traffic matching list with attacker source IPs.
 
 The app is designed for local-only deployments with UniFi Network API keys. It does not create firewall rules by itself; it updates the IP list that your existing UniFi firewall policy already uses.

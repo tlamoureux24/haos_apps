@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.6
+
+- Add complete French documentation in `README.fr.md`.
+- Make the Home Assistant Documentation tab bilingual.
+
 ## 0.4.5
 
 - Fire a Home Assistant event named `unifi_autoblock_ip_banned` after a source IP is successfully added to the UniFi blocklist.
