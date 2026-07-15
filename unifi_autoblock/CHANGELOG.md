@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.5
+
+- Fire a Home Assistant event named `unifi_autoblock_ip_banned` after a source IP is successfully added to the UniFi blocklist.
+- Document Home Assistant Core API access used for local event publishing.
+
 ## 0.4.4
 
 - Enable Home Assistant Core API access for badge and rating testing; no runtime notification feature is implemented yet.

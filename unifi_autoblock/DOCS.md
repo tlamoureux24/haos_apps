@@ -12,8 +12,9 @@ The app does not create firewall rules. Create a UniFi firewall policy manually 
 - The local decryption key is excluded from Home Assistant backups.
 - The webhook URL token and Bearer token are generated automatically.
 - Webhook calls are accepted only from the UniFi controller host configured in `unifi_base_url`.
-- No Home Assistant API, host network, privileged mode, or Docker access is requested.
+- Home Assistant Core API access is used only to fire a local `unifi_autoblock_ip_banned` event after a confirmed ban.
 - Supervisor API access is used only to clear the UniFi API key field after encryption.
+- No host network, privileged mode, Docker access, or authentication API access is requested.
 
 After restoring a Home Assistant backup or reinstalling the app without its local decryption key, enter the UniFi API key again in the app configuration.
 
@@ -70,6 +71,30 @@ The app only processes events where:
 - the source is a public global IPv4 address
 
 IPv6, private, local, loopback, link-local, multicast, reserved, and allowlisted source addresses are ignored.
+
+## Home Assistant Event
+
+After a source IP is successfully added to UniFi, the app fires the local Home Assistant event `unifi_autoblock_ip_banned`.
+
+Useful event fields include:
+
+- `ip`
+- `list_name`
+- `expires_at`
+- `destination`
+- `destination_port`
+- `severity`
+- `signature`
+
+Example automation trigger:
+
+```yaml
+trigger:
+  - platform: event
+    event_type: unifi_autoblock_ip_banned
+```
+
+Use `trigger.event.data.ip` in your notification message to include the banned IP.
 
 ## Full README
 

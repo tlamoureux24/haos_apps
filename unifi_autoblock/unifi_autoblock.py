@@ -33,6 +33,7 @@ LIST_TYPE = "IPV4_ADDRESSES"
 ITEM_TYPE = "IP_ADDRESS"
 MANAGED_VERSION = 1
 WEBHOOK_PORT = 37989
+HA_EVENT_TYPE = "unifi_autoblock_ip_banned"
 
 
 LOGGER = logging.getLogger("unifi_autoblock")
@@ -469,6 +470,34 @@ def backup_traffic_list(data: dict[str, Any]) -> None:
     LOGGER.info("Saved UniFi traffic matching list backup before PUT: %s", LAST_BACKUP_PATH)
 
 
+def fire_homeassistant_event(event_type: str, payload: dict[str, Any]) -> None:
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        LOGGER.warning("SUPERVISOR_TOKEN is unavailable; cannot fire Home Assistant event %s", event_type)
+        return
+
+    event_url = f"http://supervisor/core/api/events/{urllib.parse.quote(event_type)}"
+    request = urllib.request.Request(
+        event_url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            response.read()
+        LOGGER.info("Fired Home Assistant event %s", event_type)
+    except urllib.error.HTTPError as err:
+        body = err.read().decode("utf-8", errors="replace")
+        LOGGER.warning("Could not fire Home Assistant event %s: HTTP %s: %s", event_type, err.code, body)
+    except urllib.error.URLError as err:
+        LOGGER.warning("Could not fire Home Assistant event %s: %s", event_type, err)
+
+
 def is_allowed_source(remote_ip: str, config: Config) -> bool:
     try:
         parsed = ipaddress.ip_address(remote_ip)
@@ -651,16 +680,37 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
         if source_ip not in {item["value"] for item in verified_items}:
             raise RuntimeError("UniFi update verification failed")
 
+        expires_at = isoformat(now + dt.timedelta(days=config.ban_ttl_days))
         state["managed_ips"][source_ip] = {
             "first_seen": isoformat(now),
             "last_seen": isoformat(now),
-            "expires_at": isoformat(now + dt.timedelta(days=config.ban_ttl_days)),
+            "expires_at": expires_at,
             "hit_count": 1,
             "last_details": details,
         }
         save_json_file(STATE_PATH, state)
 
     LOGGER.info("Added %s to %s", source_ip, config.traffic_matching_list_name)
+    fire_homeassistant_event(
+        HA_EVENT_TYPE,
+        {
+            "ip": source_ip,
+            "list_name": config.traffic_matching_list_name,
+            "list_id": config.traffic_matching_list_id,
+            "site_id": config.unifi_site_id,
+            "expires_at": expires_at,
+            "ttl_days": config.ban_ttl_days,
+            "destination": details.get("destination"),
+            "destination_port": details.get("destination_port"),
+            "severity": details.get("severity"),
+            "protocol": details.get("protocol"),
+            "signature": details.get("signature"),
+            "region": details.get("region"),
+            "event_time": details.get("event_time"),
+            "alarm_id": details.get("alarm_id"),
+            "expired_removed": expired,
+        },
+    )
     return {"status": "blocked", "ip": source_ip, "expired_removed": expired}
 
 

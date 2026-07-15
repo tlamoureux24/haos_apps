@@ -30,7 +30,7 @@ IPv6, private, loopback, link-local, multicast, reserved, and other non-public s
 - The webhook URL token is generated automatically and stored in `/data/state.json`.
 - The UniFi Alarm Manager Bearer token is generated automatically and stored in `/data/state.json`.
 - Webhook calls are accepted only from the host resolved from `unifi_base_url`, for example `https://192.168.1.1` becomes `192.168.1.1/32`.
-- No Home Assistant API access is requested.
+- Home Assistant Core API access is used only to fire a local `unifi_autoblock_ip_banned` event after a confirmed ban.
 - Supervisor API access is used only to clear the UniFi API key field after it has been encrypted.
 - No host networking is requested.
 - No privileged mode is requested.
@@ -127,6 +127,29 @@ An incoming webhook is processed only when all of these conditions match:
 
 Ignored events return HTTP `202` and are logged with the reason.
 
+## Home Assistant Event
+
+After a source IP is successfully added to UniFi, the app fires this local Home Assistant event:
+
+```text
+unifi_autoblock_ip_banned
+```
+
+The event data includes `ip`, `list_name`, `list_id`, `site_id`, `expires_at`, `ttl_days`, `destination`, `destination_port`, `severity`, `protocol`, `signature`, `region`, `event_time`, `alarm_id`, and `expired_removed`.
+
+Example automation trigger:
+
+```yaml
+trigger:
+  - platform: event
+    event_type: unifi_autoblock_ip_banned
+action:
+  - service: notify.mobile_app_your_phone
+    data:
+      title: "UniFi Autoblock"
+      message: "IP banned: {{ trigger.event.data.ip }}"
+```
+
 ## Expected Logs
 
 Dry run mode:
@@ -140,6 +163,7 @@ Successful write:
 ```text
 Saved UniFi traffic matching list backup before PUT: /data/last_traffic_matching_list_backup.json
 Added 160.119.76.64 to IP BAN
+Fired Home Assistant event unifi_autoblock_ip_banned
 ```
 
 Already present:
