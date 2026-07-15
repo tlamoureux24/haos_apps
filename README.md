@@ -28,7 +28,7 @@ https://github.com/tlamoureux24/haos_apps
 
 Addon Home Assistant avec interface Ingress pour configurer, planifier, tester et lancer des synchronisations `rsync`.
 
-Fonctionnalites principales:
+Fonctionnalités principales:
 
 - jobs rsync planifies par cron;
 - sources et destinations locales ou SMB/CIFS;
@@ -41,28 +41,36 @@ Fonctionnalites principales:
 - rapports email SMTP;
 - import/export des configurations email et jobs.
 
-Documentation detaillee:
+Documentation détaillée:
 
 [rsync_manager/README.md](rsync_manager/README.md)
 
 ### UniFi Autoblock
 
-App Home Assistant locale qui recoit les webhooks UniFi Alarm Manager `Threat Detected and Blocked`, valide les evenements IDS/IPS et ajoute l'IP source publique dans une liste UniFi existante.
+App Home Assistant locale qui reçoit les webhooks UniFi Alarm Manager `Threat Detected and Blocked`, valide les événements IDS/IPS et ajoute l'IP source publique de l'attaquant dans une liste UniFi `IPV4_ADDRESSES` existante.
 
-Fonctionnalites principales:
+L'application ne crée pas de règle firewall elle-même. Elle met à jour la liste d'IP utilisée par votre règle firewall UniFi existante, par exemple une liste `IP BAN` appliquée au reverse proxy ou à un service exposé.
 
-- endpoint webhook local;
-- mode simulation `dry_run` active par defaut;
-- validation stricte des evenements UniFi IDS/IPS entrants;
-- ajout d'IPv4 publiques uniquement;
-- mise a jour d'une liste UniFi `IPV4_ADDRESSES` existante;
-- TTL configurable, 30 jours par defaut;
-- limites de securite: ports de destination IDS/IPS et destinations autorises, taille max de liste, ajout max par heure;
-- cle API saisie dans la configuration de l'app, jamais stockee dans le projet.
+Fonctionnalités principales:
 
-Documentation detaillee:
+- endpoint webhook local pour UniFi Alarm Manager;
+- authentification webhook par token d'URL et Bearer token générés automatiquement;
+- source webhook acceptée automatiquement depuis l'hôte configuré dans `unifi_base_url`;
+- mode simulation `dry_run` activé par défaut;
+- validation stricte des événements UniFi IDS/IPS entrants;
+- ajout d'IPv4 publiques uniquement, avec exclusion automatique des IP locales, privées, réservées et IPv6;
+- détection automatique du site UniFi et de la liste IPv4 quand l'installation est simple;
+- mise à jour d'une liste UniFi `IPV4_ADDRESSES` existante;
+- sauvegarde JSON de la liste avant chaque écriture dans `/data/last_traffic_matching_list_backup.json`;
+- TTL configurable, 30 jours par défaut, appliqué seulement aux IP gérées par l'application;
+- clé API UniFi saisie comme mot de passe, chiffrée dans `/data`, puis retirée de la configuration;
+- clé locale de déchiffrement exclue des sauvegardes Home Assistant;
+- événement Home Assistant `unifi_autoblock_ip_banned` après bannissement confirmé, utilisable dans les automatisations.
 
-[unifi_autoblock/README.md](unifi_autoblock/README.md)
+Documentation détaillée:
+
+- [Documentation française](unifi_autoblock/README.fr.md)
+- [English documentation](unifi_autoblock/README.md)
 
 ## Prerequis
 
@@ -75,7 +83,7 @@ Il n'est pas destine a une installation Home Assistant Core seule sans Superviso
 
 ## Mise A Jour
 
-Home Assistant surveille les repositories d'addons ajoutes a la boutique. Si une nouvelle version d'un addon est publiee, elle apparaitra comme mise a jour disponible dans l'interface Home Assistant.
+Home Assistant surveille les repositories d'addons ajoutes a la boutique. Si une nouvelle version d'un addon est publiee, elle apparaitra comme mise à jour disponible dans l'interface Home Assistant.
 
 Si la nouvelle version n'apparait pas:
 
