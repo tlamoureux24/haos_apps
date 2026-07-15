@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.4
+
+- Enable Home Assistant Core API access for badge and rating testing; no runtime notification feature is implemented yet.
+
 ## 0.4.3
 
 - Make first-setup fields optional at the Supervisor schema level so Home Assistant can save a blank default configuration.
