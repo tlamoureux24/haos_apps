@@ -13,7 +13,7 @@ configuration:
     description: Optional existing UniFi traffic matching list name. Leave empty when exactly one IPv4 list exists.
   unifi_api_key:
     name: UniFi API key
-    description: Dedicated UniFi API key used to read and update the configured list.
+    description: Enter or rotate the UniFi API key. It will be encrypted locally and removed from the app configuration.
   verify_ssl:
     name: Verify UniFi TLS certificate
     description: Enable TLS certificate verification for the UniFi controller. Keep false for self-signed UniFi certificates.

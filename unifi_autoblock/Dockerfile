@@ -10,6 +10,7 @@ LABEL \
 
 RUN apk add --no-cache \
   ca-certificates \
+  py3-cryptography \
   python3
 
 COPY run.sh /

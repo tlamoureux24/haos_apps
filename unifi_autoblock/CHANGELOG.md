@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- Encrypt the UniFi API key into local app data and clear it from app configuration after setup.
+- Exclude the local UniFi API key decryption key from Home Assistant backups.
+- Add Supervisor API access only to clear the stored UniFi API key option after encryption.
+- Document that the UniFi API key must be re-entered after restoring without the local decryption key.
+
 ## 0.3.19
 
 - Move the webhook port description from static app configuration to translated network strings.

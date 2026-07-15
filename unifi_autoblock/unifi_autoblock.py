@@ -11,6 +11,8 @@ import os
 import secrets
 import socket
 import ssl
+import stat
+import sys
 import threading
 import time
 import urllib.error
@@ -19,10 +21,15 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
+from cryptography.fernet import Fernet, InvalidToken
+
 
 OPTIONS_PATH = "/data/options.json"
 STATE_PATH = "/data/state.json"
 LAST_BACKUP_PATH = "/data/last_traffic_matching_list_backup.json"
+ENCRYPTED_API_KEY_PATH = "/data/unifi_api_key.enc"
+API_KEY_KEY_PATH = "/data/unifi_api_key.key"
+CLEAR_API_KEY_OPTION_MARKER = "/tmp/unifi_autoblock_clear_api_key_option"
 LIST_TYPE = "IPV4_ADDRESSES"
 ITEM_TYPE = "IP_ADDRESS"
 MANAGED_VERSION = 1
@@ -66,10 +73,100 @@ def save_json_file(path: str, data: Any) -> None:
     os.replace(tmp_path, path)
 
 
+def save_private_bytes(path: str, data: bytes) -> None:
+    tmp_path = f"{path}.tmp"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    with os.fdopen(os.open(tmp_path, flags, 0o600), "wb") as handle:
+        handle.write(data)
+    os.replace(tmp_path, path)
+    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
+
 def redact(value: str | None) -> str:
     if not value:
         return "<empty>"
     return "<redacted>"
+
+
+def load_or_create_api_key_encryption_key() -> bytes:
+    try:
+        with open(API_KEY_KEY_PATH, "rb") as handle:
+            key = handle.read().strip()
+    except FileNotFoundError:
+        key = Fernet.generate_key()
+        save_private_bytes(API_KEY_KEY_PATH, key + b"\n")
+        LOGGER.info("Generated local UniFi API key encryption key")
+    try:
+        Fernet(key)
+    except ValueError as err:
+        raise RuntimeError(f"Invalid UniFi API key encryption key in {API_KEY_KEY_PATH}") from err
+    return key
+
+
+def encrypt_unifi_api_key(api_key: str) -> None:
+    key = load_or_create_api_key_encryption_key()
+    encrypted = Fernet(key).encrypt(api_key.encode("utf-8"))
+    payload = {
+        "version": 1,
+        "algorithm": "fernet",
+        "token": encrypted.decode("ascii"),
+    }
+    save_json_file(ENCRYPTED_API_KEY_PATH, payload)
+    os.chmod(ENCRYPTED_API_KEY_PATH, stat.S_IRUSR | stat.S_IWUSR)
+    LOGGER.info("Encrypted UniFi API key in local app data")
+
+
+def decrypt_unifi_api_key() -> str:
+    payload = load_json_file(ENCRYPTED_API_KEY_PATH, {})
+    if not payload:
+        raise RuntimeError("Missing UniFi API key. Enter the UniFi API key in the app configuration.")
+    if payload.get("algorithm") != "fernet" or not payload.get("token"):
+        raise RuntimeError(f"Invalid encrypted UniFi API key file: {ENCRYPTED_API_KEY_PATH}")
+
+    try:
+        with open(API_KEY_KEY_PATH, "rb") as handle:
+            key = handle.read().strip()
+    except FileNotFoundError as err:
+        raise RuntimeError(
+            "The encrypted UniFi API key cannot be decrypted because the local encryption key is missing. "
+            "Enter the UniFi API key again in the app configuration."
+        ) from err
+
+    try:
+        decrypted = Fernet(key).decrypt(str(payload["token"]).encode("ascii"))
+    except (InvalidToken, ValueError) as err:
+        raise RuntimeError(
+            "The encrypted UniFi API key could not be decrypted. "
+            "Enter the UniFi API key again in the app configuration."
+        ) from err
+    return decrypted.decode("utf-8")
+
+
+def mark_unifi_api_key_option_for_clear() -> None:
+    with open(CLEAR_API_KEY_OPTION_MARKER, "w", encoding="utf-8") as handle:
+        handle.write("1\n")
+
+
+def resolve_unifi_api_key(raw_options: dict[str, Any]) -> str:
+    configured = str(raw_options.get("unifi_api_key") or "").strip()
+    if configured:
+        if os.environ.get("UNIFI_AUTOBLOCK_SECRETS_PREPARED") == "1":
+            return decrypt_unifi_api_key()
+        encrypt_unifi_api_key(configured)
+        mark_unifi_api_key_option_for_clear()
+        raw_options["unifi_api_key"] = ""
+        return configured
+    return decrypt_unifi_api_key()
+
+
+def prepare_secrets() -> None:
+    raw_options = load_json_file(OPTIONS_PATH, {})
+    configure_logging(str(raw_options.get("log_level", "info")).upper())
+    configured = str(raw_options.get("unifi_api_key") or "").strip()
+    if not configured:
+        return
+    encrypt_unifi_api_key(configured)
+    mark_unifi_api_key_option_for_clear()
 
 
 def resolve_controller_source_networks(unifi_base_url: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
@@ -102,14 +199,14 @@ def resolve_controller_source_networks(unifi_base_url: str) -> list[ipaddress.IP
 
 
 class Config:
-    def __init__(self, raw: dict[str, Any]) -> None:
+    def __init__(self, raw: dict[str, Any], unifi_api_key: str) -> None:
         self.unifi_base_url = str(raw["unifi_base_url"]).rstrip("/")
         if not self.unifi_base_url.startswith("https://"):
             raise RuntimeError("unifi_base_url must use https://. Plain HTTP would expose the UniFi API key.")
         self.unifi_site_id = str(raw.get("unifi_site_id") or "").strip()
         self.traffic_matching_list_id = str(raw.get("traffic_matching_list_id") or "").strip()
         self.traffic_matching_list_name = str(raw.get("traffic_matching_list_name") or "").strip()
-        self.unifi_api_key = str(raw["unifi_api_key"])
+        self.unifi_api_key = unifi_api_key
         self.webhook_token = ""
         self.webhook_auth_token = ""
         self.verify_ssl = bool(raw.get("verify_ssl", False))
@@ -132,12 +229,12 @@ class Config:
         raw = load_json_file(OPTIONS_PATH, {})
         required = [
             "unifi_base_url",
-            "unifi_api_key",
         ]
         missing = [key for key in required if not raw.get(key)]
         if missing:
             raise RuntimeError(f"Missing required options: {', '.join(missing)}")
-        return cls(raw)
+        unifi_api_key = resolve_unifi_api_key(raw)
+        return cls(raw, unifi_api_key)
 
     def integration_url(self, path: str) -> str:
         return f"{self.unifi_base_url}/proxy/network/integration/v1{path}"
@@ -622,8 +719,9 @@ def configure_logging(level: str) -> None:
 
 
 def main() -> None:
+    raw_options = load_json_file(OPTIONS_PATH, {})
+    configure_logging(str(raw_options.get("log_level", "info")).upper())
     config = Config.load()
-    configure_logging(config.log_level)
     LOGGER.info("Starting UniFi Autoblock")
     LOGGER.info("UniFi base URL: %s", config.unifi_base_url)
     LOGGER.info("Traffic matching list name: %s", config.traffic_matching_list_name or "<auto-detect>")
@@ -652,4 +750,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--prepare-secrets":
+        prepare_secrets()
+        raise SystemExit(0)
     main()

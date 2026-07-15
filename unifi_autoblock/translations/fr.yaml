@@ -13,7 +13,7 @@ configuration:
     description: Nom optionnel de la liste UniFi existante. Laisser vide si une seule liste IPv4 existe.
   unifi_api_key:
     name: Clé API UniFi
-    description: Clé API UniFi dédiée pour lire et mettre à jour la liste configurée.
+    description: Saisir ou renouveler la clé API UniFi. Elle sera chiffrée localement puis retirée de la configuration.
   verify_ssl:
     name: Vérifier le certificat TLS UniFi
     description: Active la vérification du certificat TLS du contrôleur UniFi. Garder false pour les certificats UniFi auto-signés.

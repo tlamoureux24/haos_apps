@@ -8,10 +8,14 @@ The app does not create firewall rules. Create a UniFi firewall policy manually 
 
 - `dry_run` is enabled by default.
 - The UniFi API URL must use HTTPS.
-- The UniFi API key is stored as a password option and is not logged.
+- The UniFi API key is accepted as a password option, encrypted locally, and removed from the app configuration.
+- The local decryption key is excluded from Home Assistant backups.
 - The webhook URL token and Bearer token are generated automatically.
 - Webhook calls are accepted only from the UniFi controller host configured in `unifi_base_url`.
-- No Home Assistant API, Supervisor API, host network, privileged mode, or Docker access is requested.
+- No Home Assistant API, host network, privileged mode, or Docker access is requested.
+- Supervisor API access is used only to clear the UniFi API key from the app configuration after encryption.
+
+After restoring a Home Assistant backup or reinstalling the app without its local decryption key, enter the UniFi API key again in the app configuration.
 
 ## UniFi Alarm Manager
 
@@ -41,7 +45,7 @@ Content: Default Content
 | Option | Description |
 | --- | --- |
 | `unifi_base_url` | HTTPS URL of the local UniFi controller, for example `https://192.168.1.1`. The host is also used as the only accepted webhook source. |
-| `unifi_api_key` | Dedicated UniFi API key. |
+| `unifi_api_key` | Dedicated UniFi API key. Enter it on first setup or after restoring from backup. The app encrypts it locally and clears this field automatically. |
 | `verify_ssl` | Enable UniFi TLS certificate verification. Keep `false` for self-signed UniFi certificates. |
 | `dry_run` | Validate events without writing to UniFi. |
 | `unifi_site_id` | Optional site UUID. Leave empty for auto-detection when there is exactly one site. |
