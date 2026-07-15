@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.17
+
+- Rewrite README and Home Assistant Documentation tab content to match the current app behavior.
+- Document generated webhook secrets, automatic UniFi source filtering, removed options, validation rules, and current configuration fields.
+
 ## 0.3.16
 
 - Fix the Documentation tab link by using an absolute GitHub README URL.
