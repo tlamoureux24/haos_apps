@@ -11,8 +11,8 @@ rm -f /tmp/unifi_autoblock_clear_api_key_option
 python3 /app/unifi_autoblock.py --prepare-secrets
 
 if [[ -f /tmp/unifi_autoblock_clear_api_key_option ]]; then
-  bashio::log.info "Clearing UniFi API key from app configuration after local encryption"
-  bashio::addon.option "unifi_api_key"
+  bashio::log.info "Clearing UniFi API key value from app configuration after local encryption"
+  bashio::addon.option "unifi_api_key" ""
 fi
 
 export UNIFI_AUTOBLOCK_SECRETS_PREPARED="1"

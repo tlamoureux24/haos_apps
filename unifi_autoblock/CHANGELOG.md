@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- Keep the UniFi API key field visible but empty after local encryption so the key can be re-entered or rotated.
+- Make default configuration values blank but valid for Supervisor so resetting to defaults can return the app to a first-setup state.
+
 ## 0.4.0
 
 - Encrypt the UniFi API key into local app data and clear it from app configuration after setup.

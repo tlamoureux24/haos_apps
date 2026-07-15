@@ -25,13 +25,13 @@ IPv6, private, loopback, link-local, multicast, reserved, and other non-public s
 - `dry_run` is enabled by default.
 - `unifi_base_url` must use `https://`; plain HTTP is rejected to protect the UniFi API key in transit.
 - `verify_ssl: false` is supported for self-signed UniFi controller certificates, but the connection still uses HTTPS encryption.
-- The UniFi API key is accepted as a password option, encrypted into `/data/unifi_api_key.enc`, and then removed from the app configuration.
+- The UniFi API key is accepted as a password option, encrypted into `/data/unifi_api_key.enc`, and then the configuration field is cleared.
 - The local decryption key is stored in `/data/unifi_api_key.key` and excluded from Home Assistant backups.
 - The webhook URL token is generated automatically and stored in `/data/state.json`.
 - The UniFi Alarm Manager Bearer token is generated automatically and stored in `/data/state.json`.
 - Webhook calls are accepted only from the host resolved from `unifi_base_url`, for example `https://192.168.1.1` becomes `192.168.1.1/32`.
 - No Home Assistant API access is requested.
-- Supervisor API access is used only to clear the UniFi API key from the app configuration after it has been encrypted.
+- Supervisor API access is used only to clear the UniFi API key field after it has been encrypted.
 - No host networking is requested.
 - No privileged mode is requested.
 - Only `/data` is used for app state.
@@ -97,8 +97,8 @@ If you change the mapped host port in the Home Assistant app network settings, r
 
 | Option | Required | Default | Description |
 | --- | --- | --- | --- |
-| `unifi_base_url` | Yes | none | Local UniFi controller URL. Must use HTTPS, for example `https://192.168.1.1`. The same host is also used as the only accepted webhook source. |
-| `unifi_api_key` | No | empty | Dedicated UniFi API key used to read and update the traffic matching list. Enter it on first setup or after restoring from backup. The app encrypts it locally and clears this field automatically. |
+| `unifi_base_url` | Yes | empty | Local UniFi controller URL. Must use HTTPS, for example `https://192.168.1.1`. The same host is also used as the only accepted webhook source. |
+| `unifi_api_key` | Yes | empty | Dedicated UniFi API key used to read and update the traffic matching list. Enter it on first setup or after restoring from backup. The app encrypts it locally and clears this field automatically. |
 | `verify_ssl` | Yes | `false` | Enable TLS certificate verification for the UniFi controller. Keep `false` for self-signed UniFi certificates. |
 | `dry_run` | Yes | `true` | Validate events and log what would happen without writing to UniFi. |
 | `unifi_site_id` | No | empty | Optional UniFi site UUID. Leave empty for auto-detection when the controller has exactly one site. |
