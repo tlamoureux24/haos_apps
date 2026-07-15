@@ -1,6 +1,6 @@
 name: "UniFi Autoblock"
 slug: "unifi_autoblock"
-version: "0.3.18"
+version: "0.3.19"
 description: "Block IDS/IPS attacker IPs by updating a UniFi traffic matching list"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/unifi_autoblock"
 stage: experimental
@@ -16,8 +16,6 @@ tmpfs: true
 
 ports:
   37989/tcp: 37989
-ports_description:
-  37989/tcp: "Local UniFi Alarm Manager webhook endpoint"
 
 options:
   unifi_base_url: null

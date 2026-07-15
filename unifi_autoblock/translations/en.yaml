@@ -38,3 +38,5 @@ configuration:
   log_level:
     name: Log level
     description: App log verbosity.
+network:
+  37989/tcp: Local port used to receive UniFi Alarm Manager webhooks.

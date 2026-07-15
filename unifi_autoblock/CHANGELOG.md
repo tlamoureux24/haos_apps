@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.19
+
+- Move the webhook port description from static app configuration to translated network strings.
+
 ## 0.3.18
 
 - Remove obsolete configuration references from user-facing documentation.
