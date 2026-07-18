@@ -69,8 +69,15 @@ jobs:
         run: |
           set -euo pipefail
           image="ha-rsync-manager-smoke:${APP_VERSION}"
-          installed="$(docker run --rm --entrypoint /sbin/apk "${image}" info -v \
-            | grep -E '^rsync-[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+$')"
+          installed="$(docker run --rm --entrypoint /bin/cat "${image}" \
+            /lib/apk/db/installed | awk 'BEGIN { RS=""; FS="\n" } {
+              package = ""; version = ""
+              for (i = 1; i <= NF; i++) {
+                if ($i == "P:rsync") package = "rsync"
+                if ($i ~ /^V:/) version = substr($i, 3)
+              }
+              if (package != "" && version != "") print package "-" version
+            }')"
           test "${installed}" = "rsync-${EXPECTED_RSYNC_PACKAGE}"
 
           cleanup() {
