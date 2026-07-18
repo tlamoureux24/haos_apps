@@ -95,6 +95,7 @@ jobs:
 
           cleanup() {
             docker logs ha-gatus-smoke 2>&1 || true
+            docker logs ha-gatus-supervisor 2>&1 || true
             docker rm --force ha-gatus-smoke >/dev/null 2>&1 || true
             docker rm --force ha-gatus-supervisor >/dev/null 2>&1 || true
             docker network rm ha-gatus-smoke >/dev/null 2>&1 || true
@@ -111,9 +112,16 @@ jobs:
             "ha-gatus-smoke:${APP_VERSION}" \
             httpd -f -p 80 -h /www
 
+          test "$(docker inspect --format '{{.State.Running}}' ha-gatus-supervisor)" = "true"
+          supervisor_ip="$(docker inspect --format \
+            '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' \
+            ha-gatus-supervisor)"
+          test -n "${supervisor_ip}"
+
           docker run --detach \
             --name ha-gatus-smoke \
             --network ha-gatus-smoke \
+            --add-host "supervisor:${supervisor_ip}" \
             --env SUPERVISOR_TOKEN=test \
             --publish 127.0.0.1:18080:8080 \
             --volume "${smoke_root}/config:/config" \
