@@ -161,6 +161,15 @@ jobs:
             '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' \
             ha-gatus-supervisor)"
           test -n "${supervisor_ip}"
+          for attempt in {1..20}; do
+            if docker exec ha-gatus-supervisor python -c \
+              'import socket; socket.create_connection(("127.0.0.1", 80), timeout=1).close()'; then
+              break
+            fi
+            sleep 0.25
+          done
+          docker exec ha-gatus-supervisor python -c \
+            'import socket; socket.create_connection(("127.0.0.1", 80), timeout=1).close()'
 
           docker run --detach \
             --name ha-gatus-smoke \
