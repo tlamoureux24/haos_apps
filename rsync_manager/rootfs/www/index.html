@@ -6,8 +6,8 @@
     <script>
         document.documentElement.dataset.theme = localStorage.getItem('rsync-manager-theme') || 'light';
     </script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
     <style>
         :root {
             --app-bg: #f4f7f6;
@@ -195,7 +195,7 @@
         </button>
     </div>
     <div class="footer-title">Rsync Manager</div>
-    <a class="github-link" href="https://github.com/tlamoureux24/haos_apps/tree/main/rsync_manager" target="_blank" rel="noopener noreferrer" title="Voir l'addon sur GitHub" aria-label="Voir l'addon sur GitHub">
+    <a class="github-link" href="https://github.com/tlamoureux24/haos_apps/tree/main/rsync_manager" target="_blank" rel="noopener noreferrer" title="Voir l'App sur GitHub" aria-label="Voir l'App sur GitHub">
         <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 .5A11.5 11.5 0 0 0 8.36 22.91c.57.1.78-.25.78-.55v-2.02c-3.18.69-3.85-1.36-3.85-1.36-.52-1.31-1.27-1.66-1.27-1.66-1.04-.71.08-.7.08-.7 1.15.08 1.75 1.18 1.75 1.18 1.02 1.74 2.67 1.24 3.32.95.1-.74.4-1.24.72-1.52-2.54-.29-5.21-1.27-5.21-5.65 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.03 0 0 .96-.31 3.16 1.17A10.9 10.9 0 0 1 12 5.77c.98 0 1.96.13 2.88.38 2.19-1.48 3.15-1.17 3.15-1.17.63 1.57.24 2.74.12 3.03.74.8 1.18 1.82 1.18 3.07 0 4.39-2.68 5.35-5.23 5.64.41.35.77 1.04.77 2.1v3.12c0 .3.21.66.79.55A11.5 11.5 0 0 0 12 .5Z"></path>
         </svg>
@@ -922,7 +922,7 @@ async function runJob(i, m) {
         const action = m === 'dry' ? 'Dry-run' : (m === 'mount_test' ? 'Test montages' : 'Run manuel');
         const job = jobs.find(j => j.id === i);
         const name = job?.name ? ` pour ${job.name}` : '';
-        setStatus(`${action}${name} lancé. Les logs détaillés sont disponibles dans le journal de l'addon.`, 'success', 'jobs-status');
+        setStatus(`${action}${name} lancé. Les logs détaillés sont disponibles dans le journal de l'App.`, 'success', 'jobs-status');
         setTimeout(load, 2000);
     } catch (e) {
         setStatus(e.message, 'danger', 'jobs-status');

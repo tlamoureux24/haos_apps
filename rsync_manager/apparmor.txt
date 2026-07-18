@@ -5,19 +5,15 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/bash>
   #include <abstractions/nameservice>
 
-  # Base container/service permissions
-  capability,
-  file,
-  network,
-  mount,
-  umount,
-
+  # Base container and service permissions
+  capability sys_admin,
   capability setgid,
   capability setuid,
-  capability sys_admin,
-  capability dac_read_search,
-
+  file,
+  network,
   signal,
+  mount,
+  umount,
 
   # S6-overlay startup and services
   /init ix,
@@ -39,7 +35,7 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted) {
   /usr/lib/bashio/** ix,
   /tmp/** rwk,
 
-  # Add-on persistent data and generated crontab
+  # App persistent data and generated crontab
   /data/** rw,
   /var/spool/cron/crontabs/** rwk,
 
@@ -47,13 +43,10 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted) {
   /www/** rix,
   /etc/lighttpd/** r,
 
-  # Home Assistant mapped folders from config.yaml
-  /config/** rw,
+  # Home Assistant folders mapped by config.yaml
   /share/** rw,
   /media/** rw,
   /backup/** rw,
-  /addons/** rw,
-  /ssl/** rw,
 
   # Rsync Manager network mounts
   /mnt/** rwk,

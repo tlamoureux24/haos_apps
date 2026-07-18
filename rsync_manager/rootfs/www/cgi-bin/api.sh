@@ -37,7 +37,7 @@ ensure_config() {
 
     if [ ! -s "$CONFIG_FILE" ] || ! jq -e . "$CONFIG_FILE" >/dev/null 2>&1; then
         default_config > "$CONFIG_FILE"
-        chmod 666 "$CONFIG_FILE"
+        chmod 600 "$CONFIG_FILE"
         return
     fi
 
@@ -47,7 +47,7 @@ ensure_config() {
 
     if jq -s '.[0] * .[1]' "$DEFAULT_TMP" "$CONFIG_FILE" > "$MERGED_TMP"; then
         cat "$MERGED_TMP" > "$CONFIG_FILE"
-        chmod 666 "$CONFIG_FILE"
+        chmod 600 "$CONFIG_FILE"
     fi
 
     rm -f "$DEFAULT_TMP" "$MERGED_TMP"
@@ -71,7 +71,7 @@ save_config() {
 
     if jq -s '.[0] * .[1]' "$DEFAULT_TMP" "$BODY_TMP" > "$MERGED_TMP"; then
         cat "$MERGED_TMP" > "$CONFIG_FILE"
-        chmod 666 "$CONFIG_FILE"
+        chmod 600 "$CONFIG_FILE"
         log_api "save_config sauvegardé dans $CONFIG_FILE avec les clés: $(jq -r 'keys | join(",")' "$CONFIG_FILE")"
         echo '{"status":"ok"}'
     else
@@ -100,7 +100,7 @@ save_jobs() {
 
     if /usr/local/bin/rsync_manager.sh normalize_jobs "$BODY_TMP" "$FORMATTED_TMP"; then
         cat "$FORMATTED_TMP" > "$JOBS_FILE"
-        chmod 666 "$JOBS_FILE"
+        chmod 600 "$JOBS_FILE"
         log_api "save_jobs sauvegardé dans $JOBS_FILE"
         if /usr/local/bin/rsync_cron.sh; then
             log_api "crontab régénéré après sauvegarde des jobs"
@@ -175,7 +175,7 @@ get_log() {
     jq -n --rawfile log "$LOG_FILE" '{"status":"ok","log":$log}'
 }
 
-# Redirection directe vers le journal de l'addon (fd/1)
+# Redirection directe vers le journal de l'App (fd/1)
 log_api "action=$ACTION method=${REQUEST_METHOD:-GET} query=$QUERY_STRING"
 case "$ACTION" in
     list_jobs)   /usr/local/bin/rsync_manager.sh list ;;

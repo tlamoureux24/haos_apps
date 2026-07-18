@@ -28,18 +28,18 @@ EOF
 if [ ! -f /data/config.json ]; then
     bashio::log.info "Création de la configuration par défaut (/data/config.json)..."
     cat "$DEFAULT_CONFIG" > /data/config.json
-    chmod 666 /data/config.json
+    chmod 600 /data/config.json
 elif jq -e . /data/config.json >/dev/null 2>&1; then
     bashio::log.info "Vérification des clés de configuration (/data/config.json)..."
     MERGED_CONFIG=$(mktemp)
     jq -s '.[0] * .[1]' "$DEFAULT_CONFIG" /data/config.json > "$MERGED_CONFIG"
     cat "$MERGED_CONFIG" > /data/config.json
-    chmod 666 /data/config.json
+    chmod 600 /data/config.json
     rm -f "$MERGED_CONFIG"
 else
     bashio::log.warning "Configuration invalide, remplacement par la configuration par défaut."
     cat "$DEFAULT_CONFIG" > /data/config.json
-    chmod 666 /data/config.json
+    chmod 600 /data/config.json
 fi
 rm -f "$DEFAULT_CONFIG"
 
@@ -48,29 +48,29 @@ rm -f "$DEFAULT_CONFIG"
 if [ ! -f /data/jobs.json ]; then
     bashio::log.info "Initialisation de la liste des jobs (/data/jobs.json)..."
     echo '[]' > /data/jobs.json
-    chmod 666 /data/jobs.json
+    chmod 600 /data/jobs.json
 elif jq -e 'type == "array"' /data/jobs.json >/dev/null 2>&1; then
     bashio::log.info "Vérification des ids de jobs (/data/jobs.json)..."
     NORMALIZED_JOBS=$(mktemp)
     if /usr/local/bin/rsync_manager.sh normalize_jobs /data/jobs.json "$NORMALIZED_JOBS"; then
         cat "$NORMALIZED_JOBS" > /data/jobs.json
-        chmod 666 /data/jobs.json
+        chmod 600 /data/jobs.json
     else
         bashio::log.warning "Impossible de normaliser les jobs, remplacement par une liste vide."
         echo '[]' > /data/jobs.json
-        chmod 666 /data/jobs.json
+        chmod 600 /data/jobs.json
     fi
     rm -f "$NORMALIZED_JOBS"
 else
     bashio::log.warning "Liste de jobs invalide, remplacement par une liste vide."
     echo '[]' > /data/jobs.json
-    chmod 666 /data/jobs.json
+    chmod 600 /data/jobs.json
 fi
 
 if [ ! -f /data/status.json ] || ! jq -e 'type == "object"' /data/status.json >/dev/null 2>&1; then
     bashio::log.info "Initialisation des statuts de jobs (/data/status.json)..."
     echo '{}' > /data/status.json
-    chmod 666 /data/status.json
+    chmod 600 /data/status.json
 fi
 
 # 3. Reconstruction du crontab système au démarrage

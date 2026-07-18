@@ -81,14 +81,14 @@ ensure_jobs_file() {
 
     if [ ! -f "$JOBS_FILE" ]; then
         echo '[]' > "$JOBS_FILE"
-        chmod 666 "$JOBS_FILE"
+        chmod 600 "$JOBS_FILE"
         return 0
     fi
 
     NORMALIZED_TMP=$(mktemp)
     if normalize_jobs_file "$JOBS_FILE" "$NORMALIZED_TMP"; then
         cat "$NORMALIZED_TMP" > "$JOBS_FILE"
-        chmod 666 "$JOBS_FILE"
+        chmod 600 "$JOBS_FILE"
         rm -f "$NORMALIZED_TMP"
         return 0
     fi
@@ -102,7 +102,7 @@ ensure_status_storage() {
 
     if [ ! -f "$STATUS_FILE" ] || ! jq -e 'type == "object"' "$STATUS_FILE" >/dev/null 2>&1; then
         echo '{}' > "$STATUS_FILE"
-        chmod 666 "$STATUS_FILE"
+        chmod 600 "$STATUS_FILE"
     fi
 }
 
@@ -192,7 +192,7 @@ update_job_status() {
             log_file: $log_file
         }' "$STATUS_FILE" > "$STATUS_TMP"; then
         cat "$STATUS_TMP" > "$STATUS_FILE"
-        chmod 666 "$STATUS_FILE"
+        chmod 600 "$STATUS_FILE"
     fi
 
     rm -f "$STATUS_TMP"
@@ -230,7 +230,7 @@ finish_job_log() {
 
     cat "$EXEC_LOG_TEMP" > /proc/1/fd/1
     cp "$LOG_TEMP" "$JOB_LOG_FILE"
-    chmod 666 "$JOB_LOG_FILE"
+    chmod 600 "$JOB_LOG_FILE"
 
     RSYNC_SENT_LINE=$(grep -E '^sent .* bytes .* received .* bytes' "$LOG_TEMP" | tail -n 1 || true)
     RSYNC_TOTAL_LINE=$(grep -E '^total size is .* speedup is ' "$LOG_TEMP" | tail -n 1 || true)
@@ -289,7 +289,7 @@ send_notification() {
         --auth="$AUTH"
         --tls="$TLS"
         --tls-starttls="$STARTTLS"
-        --tls-certcheck=off
+        --tls-certcheck=on
         --from="$MAIL_FROM"
     )
 

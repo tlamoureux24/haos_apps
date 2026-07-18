@@ -1,6 +1,6 @@
 # Thibs's Home Assistant Apps
 
-Repository d'addons Home Assistant OS / Supervisor.
+Depot d'Apps pour Home Assistant OS / Supervisor.
 
 ## Installation Du Repository
 
@@ -20,13 +20,13 @@ https://github.com/tlamoureux24/haos_apps
 ```
 
 5. Cliquer sur `Ajouter`, puis recharger la boutique si necessaire.
-6. Installer l'addon voulu depuis la boutique.
+6. Installer l'App voulue depuis la boutique.
 
-## Addons Disponibles
+## Apps Disponibles
 
 ### Rsync Manager
 
-Addon Home Assistant avec interface Ingress pour configurer, planifier, tester et lancer des synchronisations `rsync`.
+App Home Assistant avec interface Ingress pour configurer, planifier, tester et lancer des synchronisations `rsync`.
 
 Fonctionnalités principales:
 
@@ -43,7 +43,8 @@ Fonctionnalités principales:
 
 Documentation détaillée:
 
-[rsync_manager/README.md](rsync_manager/README.md)
+- [Documentation française](rsync_manager/README.fr.md)
+- [English documentation](rsync_manager/README.md)
 
 ### UniFi Autoblock
 
@@ -122,11 +123,11 @@ Ce repository est destine aux installations Home Assistant avec Supervisor, par 
 - Home Assistant OS;
 - Home Assistant Supervised.
 
-Il n'est pas destine a une installation Home Assistant Core seule sans Supervisor, car les addons Home Assistant dependent du Supervisor.
+Il n'est pas destine a une installation Home Assistant Core seule sans Supervisor, car les Apps Home Assistant dependent du Supervisor.
 
 ## Mise A Jour
 
-Home Assistant surveille les repositories d'addons ajoutes a la boutique. Si une nouvelle version d'un addon est publiee, elle apparaitra comme mise à jour disponible dans l'interface Home Assistant.
+Home Assistant surveille les depots d'Apps ajoutes a la boutique. Si une nouvelle version d'une App est publiee, elle apparaitra comme mise à jour disponible dans l'interface Home Assistant.
 
 Si la nouvelle version n'apparait pas:
 
@@ -136,11 +137,11 @@ Si la nouvelle version n'apparait pas:
 
 ## Support
 
-Pour comprendre le fonctionnement de chaque addon, consultez d'abord son README dedie.
+Pour comprendre le fonctionnement de chaque App, consultez d'abord son README dedie.
 
 Pour Rsync Manager:
 
-[rsync_manager/README.md](rsync_manager/README.md)
+[rsync_manager/README.fr.md](rsync_manager/README.fr.md)
 
 Pour UniFi Autoblock:
 

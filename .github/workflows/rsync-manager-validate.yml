@@ -1,0 +1,105 @@
+name: Validate Rsync Manager App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "rsync_manager/**"
+      - ".github/workflows/rsync-manager-*.yml"
+  pull_request:
+    paths:
+      - "rsync_manager/**"
+      - ".github/workflows/rsync-manager-*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate metadata and scripts
+        run: |
+          set -euo pipefail
+          python3 rsync_manager/scripts/validate.py
+          python3 -m py_compile \
+            rsync_manager/scripts/update_rsync_version.py \
+            rsync_manager/scripts/validate.py
+          bash -n \
+            rsync_manager/rootfs/etc/cont-init.d/10-setup.sh \
+            rsync_manager/rootfs/etc/services.d/cron/run \
+            rsync_manager/rootfs/etc/services.d/runner/run \
+            rsync_manager/rootfs/etc/services.d/web/run \
+            rsync_manager/rootfs/usr/local/bin/rsync_cron.sh \
+            rsync_manager/rootfs/usr/local/bin/rsync_manager.sh \
+            rsync_manager/rootfs/usr/local/bin/rsync_runner.sh \
+            rsync_manager/rootfs/www/cgi-bin/api.sh
+
+      - name: Read package versions
+        id: versions
+        run: |
+          set -euo pipefail
+          app="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' rsync_manager/config.yaml)"
+          rsync_package="$(<rsync_manager/rsync_package_version)"
+          echo "app=${app}" >>"${GITHUB_OUTPUT}"
+          echo "rsync_package=${rsync_package}" >>"${GITHUB_OUTPUT}"
+
+      - name: Build App
+        env:
+          APP_VERSION: ${{ steps.versions.outputs.app }}
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --build-arg "BUILD_VERSION=${APP_VERSION}" \
+            --build-arg "BUILD_ARCH=amd64" \
+            --tag "ha-rsync-manager-smoke:${APP_VERSION}" \
+            rsync_manager
+
+      - name: Verify rsync package and smoke-test App
+        env:
+          APP_VERSION: ${{ steps.versions.outputs.app }}
+          EXPECTED_RSYNC_PACKAGE: ${{ steps.versions.outputs.rsync_package }}
+        run: |
+          set -euo pipefail
+          image="ha-rsync-manager-smoke:${APP_VERSION}"
+          installed="$(docker run --rm --entrypoint /sbin/apk "${image}" info -v rsync)"
+          test "${installed}" = "rsync-${EXPECTED_RSYNC_PACKAGE}"
+
+          cleanup() {
+            docker logs ha-rsync-manager-smoke 2>&1 || true
+            docker rm --force ha-rsync-manager-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name ha-rsync-manager-smoke \
+            --publish 127.0.0.1:18099:8099 \
+            "${image}"
+
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:18099/ >/dev/null 2>&1; then
+              jobs="$(curl --fail --silent --show-error \
+                'http://127.0.0.1:18099/cgi-bin/api.sh?action=list_jobs')"
+              test "$(jq -r 'type' <<<"${jobs}")" = "array"
+              test "$(docker exec ha-rsync-manager-smoke stat -c '%a' /data/config.json)" = "600"
+              test "$(docker exec ha-rsync-manager-smoke stat -c '%a' /data/jobs.json)" = "600"
+              echo "Rsync Manager started successfully with ${installed}"
+              exit 0
+            fi
+            if [[ "$(docker inspect --format '{{.State.Running}}' ha-rsync-manager-smoke)" != "true" ]]; then
+              echo "Rsync Manager stopped during startup" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "Rsync Manager did not become ready" >&2
+          exit 1

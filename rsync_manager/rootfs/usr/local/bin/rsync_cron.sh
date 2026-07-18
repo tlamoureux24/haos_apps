@@ -28,7 +28,7 @@ fi
 NORMALIZED_TMP=$(mktemp)
 if /usr/local/bin/rsync_manager.sh normalize_jobs "$JOBS_FILE" "$NORMALIZED_TMP"; then
     cat "$NORMALIZED_TMP" > "$JOBS_FILE"
-    chmod 666 "$JOBS_FILE"
+    chmod 600 "$JOBS_FILE"
 else
     log_cron "Impossible de normaliser les ids des jobs, crontab vidée."
     rm -f "$NORMALIZED_TMP"

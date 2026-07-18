@@ -1,26 +1,35 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/base:latest
-FROM $BUILD_FROM
+FROM ghcr.io/home-assistant/base:latest
 
-# Installation de rsync, cifs-utils (pour le montage) et des outils web
+ARG BUILD_VERSION="1.1.0"
+ARG BUILD_ARCH
+
+LABEL \
+    io.hass.version="${BUILD_VERSION}" \
+    io.hass.type="app" \
+    io.hass.arch="${BUILD_ARCH}" \
+    org.opencontainers.image.title="Rsync Manager Home Assistant App" \
+    org.opencontainers.image.description="Schedule and monitor local or SMB/CIFS rsync jobs" \
+    org.opencontainers.image.source="https://github.com/tlamoureux24/haos_apps" \
+    org.opencontainers.image.version="${BUILD_VERSION}" \
+    org.opencontainers.image.licenses="MIT"
+
 RUN apk add --no-cache \
-    rsync \
     bash \
-    lighttpd \
-    fcgi \
-    msmtp \
+    ca-certificates \
     cifs-utils \
-    jq
+    jq \
+    lighttpd \
+    msmtp \
+    rsync
 
-# Copie des scripts et fichiers
 COPY rootfs /
 
-# Permissions
-RUN chmod a+x /usr/local/bin/rsync_manager.sh && \
-    chmod a+x /usr/local/bin/rsync_cron.sh && \
-    chmod a+x /usr/local/bin/rsync_runner.sh && \
-    chmod a+x /etc/services.d/*/run && \
-    chmod a+x /etc/cont-init.d/*.sh &&\
-    chmod a+x /www/cgi-bin/*.sh
+RUN chmod 755 \
+    /usr/local/bin/rsync_manager.sh \
+    /usr/local/bin/rsync_cron.sh \
+    /usr/local/bin/rsync_runner.sh \
+    /etc/services.d/*/run \
+    /etc/cont-init.d/*.sh \
+    /www/cgi-bin/*.sh
 
-# Port pour l'interface web
 EXPOSE 8099

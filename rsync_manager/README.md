@@ -1,121 +1,55 @@
 # Rsync Manager
 
-Rsync Manager est un addon Home Assistant pour creer, planifier, tester et lancer des synchronisations `rsync` depuis une interface web Ingress.
+[Documentation française](README.fr.md)
 
-Il permet de synchroniser:
+Rsync Manager is a Home Assistant App for configuring, scheduling, testing and
+monitoring `rsync` synchronizations from an authenticated Ingress interface.
 
-- un chemin local vers un autre chemin local;
-- un chemin local vers un partage SMB/CIFS;
-- un partage SMB/CIFS vers un chemin local;
-- un partage SMB/CIFS vers un autre partage SMB/CIFS.
+It supports:
 
-L'interface sert aussi a tester les montages, lancer une simulation, executer un job, consulter le dernier statut, afficher le dernier log, configurer les emails SMTP et importer/exporter la configuration.
+- local folder to local folder;
+- local folder to SMB/CIFS share;
+- SMB/CIFS share to local folder;
+- SMB/CIFS share to another SMB/CIFS share.
 
 ## Installation
 
-L'installation se fait depuis le depot GitHub Home Assistant:
+Add this repository to the Home Assistant App Store:
 
 ```text
 https://github.com/tlamoureux24/haos_apps
 ```
 
-Dans Home Assistant:
-
-1. Ouvrir `Parametres` > `Modules complementaires` > `Boutique des modules complementaires`.
-2. Ouvrir le menu en haut a droite.
-3. Choisir `Depots`.
-4. Ajouter l'URL du depot:
-
-```text
-https://github.com/tlamoureux24/haos_apps
-```
-
-5. Rechercher puis installer `Rsync Manager`.
-6. Demarrer l'addon.
-7. Ouvrir l'interface depuis le panneau `Rsync Manager`.
-
-L'addon utilise Ingress, il s'ouvre donc directement dans Home Assistant.
+Install `Rsync Manager`, start it, then open its Ingress interface. No port is
+published on the LAN and Home Assistant handles authentication.
 
 ## Interface
 
-L'interface contient trois onglets:
+The interface contains three tabs:
 
-- `JOBS`: liste, creation, edition, execution et logs des jobs rsync;
-- `SMTP`: configuration de l'envoi des rapports email;
-- `GESTION`: import/export des configurations.
+- `JOBS`: create, edit, schedule, test and run synchronization jobs;
+- `SMTP`: configure optional email reports;
+- `MANAGEMENT`: import or export jobs and email settings.
 
-Un pied de page permet de basculer entre mode clair et mode sombre. Le choix du theme est conserve dans le navigateur. Le lien GitHub a droite pointe vers le dossier de l'addon dans le depot.
+Each job has a stable identifier and can be enabled or disabled independently.
+Disabling a job removes it from the generated cron schedule but does not block
+manual runs.
 
-## Onglet JOBS
+## Sources and destinations
 
-L'onglet `JOBS` affiche uniquement la liste des jobs existants. Si aucun job n'existe, la liste est vide.
+Each side of a job can use either a local path or an SMB/CIFS share.
 
-Chaque carte de job affiche:
+### Local paths
 
-- le nom du job;
-- la coche `Actif` / `Desactive`;
-- le dernier statut;
-- le bouton `Voir dernier log`.
+The App explicitly maps these Home Assistant folders as read/write:
 
-Le nom et le cron ne sont plus editables directement dans la liste. Pour modifier un job, cliquez sur sa carte.
+```text
+/share
+/media
+/backup
+```
 
-### Ajouter Ou Modifier Un Job
-
-Le bouton `+ Ajouter un job` ouvre une fenetre de creation.
-
-Un clic sur un job existant ouvre la meme fenetre en mode edition.
-
-Champs disponibles:
-
-- nom du job, obligatoire;
-- expression cron, obligatoire;
-- coche `Actif`;
-- source;
-- cible;
-- exclusions rsync, optionnelles.
-
-Champs obligatoires selon le type de source/cible:
-
-- `Local`: chemin local obligatoire;
-- `SMB/CIFS`: adresse IP ou nom et partage reseau obligatoires;
-- `SMB/CIFS`: login, mot de passe, sous-dossier et domaine/workgroup optionnels.
-
-L'enregistrement est bloque si un champ obligatoire est vide. Les champs concernes sont alors marques en rouge dans la fenetre.
-
-Actions disponibles dans la fenetre:
-
-- `Enregistrer`: sauvegarde le job et regenere la planification cron;
-- `Supprimer`: supprime le job apres confirmation;
-- `Simuler`: enregistre le job puis lance un dry-run rsync;
-- `Lancer`: enregistre le job puis lance l'execution reelle;
-- `Tester montages`: enregistre le job puis teste les montages et l'ecriture destination.
-
-Le bouton `Tester montages` apparait seulement si la source ou la cible utilise `SMB/CIFS`.
-
-### Actif Et Desactive
-
-La coche `Actif` controle la planification automatique.
-
-- `Actif`: le job est ajoute au crontab genere.
-- `Desactive`: le job reste configure, mais le cron l'ignore.
-
-Les actions manuelles restent disponibles meme si le job est desactive. Cela permet de tester ou lancer ponctuellement un job sans le remettre dans la planification.
-
-Pour creer un job utilisable uniquement en manuel, renseignez le cron normalement puis decochez `Actif`. Le job ne sera pas ajoute a la planification, mais restera disponible pour `Simuler`, `Lancer` et `Tester montages`.
-
-### Actualiser
-
-Le bouton `Actualiser` recharge les jobs et les statuts depuis l'addon. Il est utile si un job cron s'est execute pendant que l'interface etait ouverte.
-
-## Sources Et Cibles
-
-La source et la cible sont configurees separement. Chaque cote peut etre en mode `Local` ou `SMB/CIFS`.
-
-### Mode Local
-
-En mode `Local`, indiquez un chemin visible depuis le conteneur de l'addon.
-
-Exemples:
+Examples:
 
 ```text
 /share/photos
@@ -123,237 +57,93 @@ Exemples:
 /backup/archives
 ```
 
-Les chemins disponibles dependent des dossiers exposes par Home Assistant dans la configuration de l'addon.
+The Home Assistant configuration, SSL certificates and other Apps' private
+configuration folders are deliberately not exposed.
 
-### Mode SMB/CIFS
+### SMB/CIFS shares
 
-En mode `SMB/CIFS`, renseignez:
+For an SMB/CIFS endpoint, configure:
 
-- `Adresse IP ou nom`: adresse IP, nom DNS ou nom NetBIOS du serveur;
-- `Partage reseau`: nom du partage SMB, sans `//serveur/`;
-- `Sous-dossier dans le partage`: chemin interne optionnel;
-- `Login`: utilisateur SMB;
-- `Mot de passe`: mot de passe SMB;
-- `Domaine/Workgroup`: optionnel.
+- server address or hostname;
+- share name;
+- optional subfolder;
+- username and password;
+- optional domain or workgroup.
 
-Exemple:
+Rsync Manager uses SMB 3.0 with `ntlmssp`, `noserverino` and `nounix`. These
+safe defaults are intentionally fixed in the interface. Credentials are passed
+to `mount.cifs` through a temporary mode-`0600` file and are masked in logs.
 
-```text
-Adresse IP ou nom:
-192.168.1.20
+The App needs `SYS_ADMIN` solely to mount and unmount CIFS shares. It does not
+request `DAC_READ_SEARCH`, access to the Docker socket or either Home Assistant
+API.
 
-Partage reseau:
-Documents
+## Rsync behavior
 
-Sous-dossier dans le partage:
-Archives/2026
-```
-
-L'addon monte automatiquement:
+Real jobs use:
 
 ```text
-//192.168.1.20/Documents
+-a -v -h --delete
 ```
 
-Puis utilise le sous-dossier comme chemin rsync:
+An SMB/CIFS destination additionally uses:
 
 ```text
-/mnt/.../Archives/2026
-```
-
-## Options Integrees
-
-Les options techniques rsync et CIFS ne sont plus exposees dans l'interface. L'addon applique un profil integre pour reduire les erreurs de configuration.
-
-### Profil CIFS
-
-Pour les montages SMB/CIFS, l'addon utilise:
-
-```text
-iocharset=utf8
-vers=3.0
-sec=ntlmssp
-noperm
-noserverino
-nounix
-```
-
-Le fichier de credentials est cree temporairement pendant le montage puis supprime. Les options de montage apparaissent dans les logs avec le chemin du fichier credentials masque.
-
-### Profil Rsync
-
-Pour `Simuler` et `Lancer`, l'addon utilise:
-
-```sh
-rsync -a -v -h --delete
-```
-
-En simulation, il ajoute:
-
-```sh
---dry-run
-```
-
-Si la cible est en `SMB/CIFS`, il ajoute aussi:
-
-```sh
 --inplace --no-perms --no-owner --no-group --chmod=ugo=rwX
 ```
 
-Ces options evitent plusieurs soucis courants avec les destinations SMB/CIFS:
+This avoids common ownership and Unix permission errors on SMB destinations.
+The destination mirrors the source: files absent from the source are removed
+from the destination because `--delete` is enabled.
 
-- fichiers temporaires rsync difficiles a creer sur certains partages;
-- droits source non reutilisables tels quels cote destination;
-- fichiers devenant non reinscriptibles au passage suivant.
+Always use `Dry run` before the first real synchronization or after changing a
+path or exclusion.
 
-Les options effectivement appliquees sont ecrites dans le dernier log du job:
+## Exclusions
 
-```text
-[RSYNC] Options appliquees: ...
-```
-
-Attention: `--delete` supprime dans la destination les fichiers absents de la source. Utilisez `Simuler` avant un premier lancement ou apres une modification importante.
-
-## Exclusions Rsync
-
-Chaque job peut definir des exclusions, une regle par ligne.
-
-Exemples:
+Enter one rsync exclusion pattern per line. Examples:
 
 ```text
-cache/
 *.tmp
+cache/
 @eaDir/
-#recycle/
+lost+found/
 ```
 
-Les exclusions sont appliquees a `Simuler` et `Lancer` avec `--exclude-from`. Elles ne sont pas utilisees par `Tester montages`, car ce mode ne lance pas rsync.
+The generated job-specific exclusion file is passed with `--exclude-from`.
+Patterns are relative to the source root seen by rsync.
 
-Quand des exclusions sont presentes, le log indique le nombre de regles actives.
+## Scheduling
 
-## Planification Cron
-
-Chaque job utilise une expression cron a 5 champs:
+Schedules use the standard five-field cron format:
 
 ```text
-minute heure jour_du_mois mois jour_de_la_semaine
+minute hour day-of-month month day-of-week
 ```
 
-Exemples:
+Examples:
 
 ```cron
 0 3 * * *
-```
-
-Tous les jours a 03:00.
-
-```cron
 30 2 * * 1
-```
-
-Tous les lundis a 02:30.
-
-```cron
 0 4 1 * *
 ```
 
-Le premier jour de chaque mois a 04:00.
+They mean every day at 03:00, every Monday at 02:30, and the first day of every
+month at 04:00 respectively. Saving, deleting or importing jobs regenerates the
+container crontab.
 
-Apres chaque ajout, modification, suppression ou import de jobs, l'addon:
+## Tests, status and logs
 
-1. ecrit `/data/jobs.json`;
-2. normalise les jobs;
-3. regenere `/var/spool/cron/crontabs/root`;
-4. ignore les jobs desactives;
-5. redemarre la planification via le service `crond`.
+Available job actions are:
 
-## Statuts Et Logs
+- `Test mounts`: mounts both sides and verifies destination write access;
+- `Dry run`: executes rsync without changing the destination;
+- `Run`: executes the real synchronization;
+- `View last log`: opens the persistent log for that job.
 
-Chaque execution met a jour:
-
-- `/data/status.json`: dernier statut connu de chaque job;
-- `/data/logs/<job_id>.log`: dernier log complet du job.
-
-Statuts possibles dans l'interface:
-
-- `Jamais execute`: aucun statut disponible;
-- `Succes`: execution ou simulation terminee sans erreur;
-- `Montages OK`: test de montage reussi;
-- `Echec`: rsync a retourne une erreur;
-- `Erreur montage`: montage, acces source ou ecriture destination impossible;
-- `Desactive`: le cron ignore ce job.
-
-Le statut peut aussi afficher:
-
-- date et heure de derniere execution;
-- declenchement `manuel` ou `cron`;
-- mode `run`, `dry-run` ou `test montages`;
-- duree;
-- resume rsync: envoye, recu, total.
-
-Le bouton `Voir dernier log` ouvre le dernier log persistant du job dans l'interface.
-
-## Onglet SMTP
-
-L'onglet `SMTP` configure l'envoi des rapports email.
-
-Champs disponibles:
-
-- activer/desactiver les emails;
-- serveur SMTP;
-- port;
-- authentification;
-- utilisateur;
-- mot de passe;
-- TLS actif;
-- STARTTLS;
-- expediteur;
-- destinataire.
-
-Le bouton `Envoyer un Test` sauvegarde la configuration courante puis envoie un email de test.
-
-Les emails automatiques sont envoyes apres les executions reelles (`Lancer` ou cron). Les simulations et les tests de montage n'envoient pas de rapport email.
-
-### Exemple Gmail
-
-```text
-Serveur: smtp.gmail.com
-Port: 587
-Authentification: Oui
-Utilisateur: votre.adresse@gmail.com
-Mot de passe: mot de passe d'application Google
-TLS actif: Oui
-STARTTLS: Oui
-Expediteur: votre.adresse@gmail.com
-Destinataire: votre.adresse@gmail.com
-```
-
-Pour Gmail, utilisez un mot de passe d'application Google.
-
-## Onglet GESTION
-
-L'onglet `GESTION` permet d'importer et d'exporter les configurations depuis le navigateur.
-
-Boutons disponibles:
-
-- `Export config email`;
-- `Export config jobs`;
-- `Import config email`;
-- `Import config jobs`.
-
-Les exports contiennent les mots de passe SMTP et SMB/CIFS en clair. Conservez ces fichiers dans un emplacement sur.
-
-Lors d'un import de jobs, l'addon normalise automatiquement:
-
-- `id`: genere si absent, invalide ou duplique;
-- `enabled`: `true` par defaut si absent;
-- `excludes`: liste vide par defaut si absent.
-
-Les anciens champs d'options rsync/CIFS qui ne sont plus utilises sont retires lors de la normalisation.
-
-## Donnees Persistantes
-
-Les fichiers persistants sont stockes dans `/data`:
+The interface reports the last start time, duration, trigger, result and rsync
+transfer summary. Persistent state lives under `/data`:
 
 ```text
 /data/jobs.json
@@ -362,155 +152,68 @@ Les fichiers persistants sont stockes dans `/data`:
 /data/logs/<job_id>.log
 ```
 
-Les jobs possedent un identifiant stable de type `job_...`. Cet identifiant sert a relier l'interface, le cron, les statuts et les logs, meme si l'ordre des jobs change.
+These files are included in Home Assistant backups. The App uses cold backups
+so it is stopped while its persistent data is copied.
 
-## Permissions Et Chemins Locaux
+## Email reports
 
-Les chemins locaux utilisables par l'addon dependent des dossiers exposes par Home Assistant dans la configuration de l'addon.
+SMTP notifications are optional. Automatic reports are sent only after real
+manual or scheduled runs, not after dry runs or mount tests.
 
-Dans le conteneur, les chemins les plus courants sont:
+The interface supports SMTP authentication, TLS and STARTTLS. Server
+certificates are verified against the system CA store. A server using a
+self-signed or otherwise untrusted certificate is therefore rejected.
 
-```text
-/share
-/media
-/backup
-```
+For Gmail, use port `587`, TLS and STARTTLS, and a Google application password.
 
-Pour SMB/CIFS, l'addon a besoin de privileges de montage reseau:
+## Secrets and exports
 
-```yaml
-privileged:
-  - SYS_ADMIN
-  - DAC_READ_SEARCH
-```
+SMB and SMTP credentials are stored in the App's private `/data` volume with
+mode `0600`. They are not part of `config.yaml`, are not published in this
+repository and cannot be accessed through a Home Assistant mapped folder.
 
-Ces privileges sont declares dans la configuration de l'addon.
+Home Assistant backups and browser exports do contain these credentials. Store
+both securely. Imports and exports contain credentials in clear text by design.
 
-## Logs De L'Addon
+## Updates
 
-Les logs utiles sont visibles dans le journal de l'addon Home Assistant et, pour chaque job, dans `Voir dernier log`.
+The App installs `rsync` from the Alpine repository used by the current Home
+Assistant base image. A scheduled GitHub workflow builds that exact image and
+checks the installed Alpine package version. When it changes, the workflow:
 
-Prefixes importants:
+1. updates the recorded rsync package version;
+2. increments the Home Assistant App version;
+3. validates and builds the App;
+4. smoke-tests its web interface;
+5. commits the validated update.
 
-```text
-[API]
-[CRON]
-[CIFS]
-[RUNNER]
-[RSYNC]
-[EMAIL]
-```
+Home Assistant then offers the new App version normally. Installation remains
+manual unless the user explicitly enables automatic updates in Home Assistant.
 
-Exemple de lignes utiles:
+## Troubleshooting
 
-```text
-[CIFS] Options montage source: credentials=<masque>,iocharset=utf8,vers=3.0,noperm,sec=ntlmssp,noserverino,nounix
-[RSYNC] Profil SMB/CIFS actif.
-[RSYNC] Options appliquees: -a -v -h --delete --inplace --no-perms --no-owner --no-group --chmod=ugo=rwX
-```
+### A scheduled job does not run
 
-## Verifications Utiles
+Check that the job is enabled, its cron expression contains five fields and the
+App log contains `[CRON]` messages.
 
-Depuis le conteneur de l'addon:
+### A mount test fails
 
-Afficher les jobs:
+Check the server, share, account permissions, destination write access and
+network reachability from Home Assistant. The last job log contains the masked
+CIFS options and full mount error.
 
-```sh
-cat /data/jobs.json
-```
+### Rsync fails on an SMB destination
 
-Afficher la configuration SMTP:
+Inspect the last job log. Verify share permissions and the configured subfolder.
+The App already applies its SMB compatibility profile automatically.
 
-```sh
-cat /data/config.json
-```
+### Email delivery fails
 
-Afficher les statuts:
+Check the server, port, sender, recipient, authentication and TLS mode. The SMTP
+server must present a certificate trusted by the system CA store.
 
-```sh
-cat /data/status.json
-```
+## License
 
-Afficher le dernier log d'un job:
-
-```sh
-cat /data/logs/job_xxx.log
-```
-
-Afficher le crontab genere:
-
-```sh
-cat /var/spool/cron/crontabs/root
-```
-
-Regenerer manuellement le cron:
-
-```sh
-/usr/local/bin/rsync_cron.sh
-```
-
-Lancer un job manuellement depuis le conteneur:
-
-```sh
-/usr/local/bin/rsync_manager.sh mount_test job_xxx manual
-/usr/local/bin/rsync_manager.sh dry job_xxx manual
-/usr/local/bin/rsync_manager.sh run job_xxx manual
-```
-
-## Depannage
-
-### Le Job Ne S'execute Pas Automatiquement
-
-Verifiez:
-
-- que le job est actif;
-- que l'expression cron contient bien 5 champs;
-- que `/var/spool/cron/crontabs/root` contient la ligne du job;
-- que le journal contient des lignes `[CRON]`;
-- que `crond` tourne.
-
-### Le Job Est Desactive Mais Peut Encore Etre Lance
-
-C'est normal. Le mode `Desactive` empeche uniquement l'execution automatique par cron. Les actions manuelles restent disponibles.
-
-### Le Test Montages Echoue
-
-Verifiez:
-
-- l'adresse IP ou le nom du serveur;
-- le nom du partage, sans `//serveur/`;
-- le sous-dossier, separe du nom du partage;
-- le login et le mot de passe;
-- le domaine/workgroup si le serveur en demande un;
-- les droits du compte SMB;
-- les droits d'ecriture sur la destination;
-- l'acces reseau depuis Home Assistant.
-
-### Rsync Echoue Sur Une Destination SMB/CIFS
-
-Regardez le dernier log du job. Il contient:
-
-- les options de montage CIFS appliquees;
-- les options rsync appliquees;
-- la sortie complete de rsync.
-
-L'addon applique deja un profil SMB/CIFS integre. Si l'erreur persiste, verifiez surtout les droits du compte SMB, le chemin destination et les permissions du partage cote serveur.
-
-### Les Exclusions Ne S'appliquent Pas
-
-Verifiez:
-
-- une exclusion par ligne;
-- pas de guillemets autour des motifs;
-- un motif relatif au chemin vu par rsync;
-- la ligne `[RSYNC] Exclusions actives` dans le log.
-
-### Gmail Refuse L'envoi
-
-Verifiez:
-
-- `TLS actif = Oui`;
-- `STARTTLS = Oui`;
-- port `587`;
-- mot de passe d'application Google;
-- expediteur coherent avec le compte Gmail.
+This Home Assistant App is distributed under the repository's MIT license.
+Rsync and the other packaged components retain their respective licenses.

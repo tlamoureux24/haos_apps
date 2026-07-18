@@ -1,0 +1,146 @@
+name: Update Rsync Manager package
+
+on:
+  schedule:
+    - cron: "19 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rsync-manager-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Read current App version
+        id: current
+        run: |
+          set -euo pipefail
+          app="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' rsync_manager/config.yaml)"
+          echo "app=${app}" >>"${GITHUB_OUTPUT}"
+
+      - name: Build current Home Assistant base and inspect rsync
+        id: package
+        env:
+          APP_VERSION: ${{ steps.current.outputs.app }}
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --build-arg "BUILD_VERSION=${APP_VERSION}" \
+            --build-arg "BUILD_ARCH=amd64" \
+            --tag ha-rsync-manager-update-probe \
+            rsync_manager
+
+          installed="$(docker run --rm --entrypoint /sbin/apk \
+            ha-rsync-manager-update-probe info -v rsync)"
+          package="${installed#rsync-}"
+          if [[ ! "${package}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+$ ]]; then
+            echo "Unsupported installed rsync package: ${installed}" >&2
+            exit 1
+          fi
+
+          current="$(<rsync_manager/rsync_package_version)"
+          echo "version=${package}" >>"${GITHUB_OUTPUT}"
+          if [[ "${package}" == "${current}" ]]; then
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
+            echo "rsync package ${package} is already current"
+          else
+            echo "changed=true" >>"${GITHUB_OUTPUT}"
+            echo "rsync package update detected: ${current} -> ${package}"
+          fi
+
+      - name: Update package metadata
+        if: steps.package.outputs.changed == 'true'
+        env:
+          RSYNC_PACKAGE: ${{ steps.package.outputs.version }}
+        run: python3 rsync_manager/scripts/update_rsync_version.py "${RSYNC_PACKAGE}"
+
+      - name: Validate updated package
+        if: steps.package.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python3 rsync_manager/scripts/validate.py
+          python3 -m py_compile \
+            rsync_manager/scripts/update_rsync_version.py \
+            rsync_manager/scripts/validate.py
+          bash -n \
+            rsync_manager/rootfs/etc/cont-init.d/10-setup.sh \
+            rsync_manager/rootfs/etc/services.d/cron/run \
+            rsync_manager/rootfs/etc/services.d/runner/run \
+            rsync_manager/rootfs/etc/services.d/web/run \
+            rsync_manager/rootfs/usr/local/bin/rsync_cron.sh \
+            rsync_manager/rootfs/usr/local/bin/rsync_manager.sh \
+            rsync_manager/rootfs/usr/local/bin/rsync_runner.sh \
+            rsync_manager/rootfs/www/cgi-bin/api.sh
+
+      - name: Build and smoke-test updated App
+        if: steps.package.outputs.changed == 'true'
+        env:
+          EXPECTED_RSYNC_PACKAGE: ${{ steps.package.outputs.version }}
+        run: |
+          set -euo pipefail
+          app="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' rsync_manager/config.yaml)"
+          image="ha-rsync-manager-smoke:${app}"
+          docker build --pull \
+            --build-arg "BUILD_VERSION=${app}" \
+            --build-arg "BUILD_ARCH=amd64" \
+            --tag "${image}" \
+            rsync_manager
+
+          installed="$(docker run --rm --entrypoint /sbin/apk "${image}" info -v rsync)"
+          test "${installed}" = "rsync-${EXPECTED_RSYNC_PACKAGE}"
+
+          cleanup() {
+            docker logs ha-rsync-manager-smoke 2>&1 || true
+            docker rm --force ha-rsync-manager-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name ha-rsync-manager-smoke \
+            --publish 127.0.0.1:18099:8099 \
+            "${image}"
+
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:18099/ >/dev/null 2>&1; then
+              jobs="$(curl --fail --silent --show-error \
+                'http://127.0.0.1:18099/cgi-bin/api.sh?action=list_jobs')"
+              test "$(jq -r 'type' <<<"${jobs}")" = "array"
+              echo "Updated Rsync Manager is healthy with ${installed}"
+              exit 0
+            fi
+            if [[ "$(docker inspect --format '{{.State.Running}}' ha-rsync-manager-smoke)" != "true" ]]; then
+              echo "Rsync Manager stopped during startup" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "Rsync Manager did not become ready" >&2
+          exit 1
+
+      - name: Commit validated update
+        if: steps.package.outputs.changed == 'true'
+        env:
+          RSYNC_PACKAGE: ${{ steps.package.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            rsync_manager/CHANGELOG.md \
+            rsync_manager/Dockerfile \
+            rsync_manager/config.yaml \
+            rsync_manager/rsync_package_version
+          git commit -m "Update rsync package to ${RSYNC_PACKAGE}"
+          git push
