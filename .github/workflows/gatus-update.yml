@@ -153,9 +153,8 @@ jobs:
             --network ha-gatus-smoke \
             --network-alias supervisor \
             --volume "${smoke_root}/supervisor:/www:ro" \
-            --entrypoint /bin/busybox \
-            "ha-gatus-smoke:${GATUS_VERSION}" \
-            httpd -f -p 80 -h /www
+            python:3.14-alpine \
+            python -m http.server 80 --directory /www
 
           test "$(docker inspect --format '{{.State.Running}}' ha-gatus-supervisor)" = "true"
           supervisor_ip="$(docker inspect --format \
