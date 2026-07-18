@@ -157,21 +157,21 @@ action:
 Dry run mode:
 
 ```text
-DRY RUN: would add 160.119.76.64 to IP BAN
+DRY RUN: would add 160.119.76.64 to IP BAN after IDS/IPS alert for 192.168.1.15:80
 ```
 
 Successful write:
 
 ```text
 Saved UniFi traffic matching list backup before PUT: /data/last_traffic_matching_list_backup.json
-Added 160.119.76.64 to IP BAN
+Added 160.119.76.64 to IP BAN after IDS/IPS alert for 192.168.1.15:80
 Fired Home Assistant event unifi_autoblock_ip_banned
 ```
 
 Already present:
 
 ```text
-IP 160.119.76.64 is already present in UniFi blocklist
+IP 160.119.76.64 is already present in UniFi blocklist; IDS/IPS destination was 192.168.1.15:80
 ```
 
 Failures are logged as `Failed to process webhook` with the underlying exception, for example a UniFi API error or update verification failure.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.9
+
+- Include the IDS/IPS destination IP and port in dry-run, successful-ban, and already-blocked log messages.
+
 ## 0.4.8
 
 - Render protected destination ports correctly in the Home Assistant visual configuration editor.

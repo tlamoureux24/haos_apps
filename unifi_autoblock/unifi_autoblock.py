@@ -683,7 +683,13 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
         state = load_state()
 
         if config.dry_run:
-            LOGGER.info("DRY RUN: would add %s to %s", source_ip, config.traffic_matching_list_name)
+            LOGGER.info(
+                "DRY RUN: would add %s to %s after IDS/IPS alert for %s:%s",
+                source_ip,
+                config.traffic_matching_list_name,
+                details["destination"],
+                details["destination_port"],
+            )
             return {"status": "dry_run", "ip": source_ip, "details": details}
 
         traffic_list = client.get_traffic_list()
@@ -708,7 +714,12 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
                 backup_traffic_list(traffic_list)
                 client.update_traffic_list(payload)
             save_json_file(STATE_PATH, state)
-            LOGGER.info("IP %s is already present in UniFi blocklist", source_ip)
+            LOGGER.info(
+                "IP %s is already present in UniFi blocklist; IDS/IPS destination was %s:%s",
+                source_ip,
+                details["destination"],
+                details["destination_port"],
+            )
             return {"status": "already_present", "ip": source_ip, "expired_removed": expired}
 
         items.append({"type": ITEM_TYPE, "value": source_ip})
@@ -734,7 +745,13 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
         }
         save_json_file(STATE_PATH, state)
 
-    LOGGER.info("Added %s to %s", source_ip, config.traffic_matching_list_name)
+    LOGGER.info(
+        "Added %s to %s after IDS/IPS alert for %s:%s",
+        source_ip,
+        config.traffic_matching_list_name,
+        details["destination"],
+        details["destination_port"],
+    )
     fire_homeassistant_event(
         HA_EVENT_TYPE,
         {
