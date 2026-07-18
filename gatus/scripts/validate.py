@@ -131,6 +131,10 @@ def main() -> int:
 
     if "exec su-exec gatus:gatus /usr/local/bin/gatus" not in launcher:
         raise RuntimeError("Launcher must drop root before starting Gatus")
+    if "Created config.yaml in the App addon_config folder" not in launcher:
+        raise RuntimeError("Launcher must report the user-facing configuration location")
+    if "install -d" in launcher:
+        raise RuntimeError("Launcher must not reapply data directory permissions with install")
     if "required_options" in launcher or "Missing required app options" in launcher:
         raise RuntimeError("Alert provider options must remain optional")
     if "NET_RAW" in config or "NET_RAW" in launcher:

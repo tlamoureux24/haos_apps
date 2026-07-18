@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.36.0-5 - 2026-07-18
+
+- Report the user-facing addon_config location without exposing the internal container path.
+- Avoid reapplying permissions to an existing Gatus data directory.
+- Preserve ownership of the optional data directory for the unprivileged Gatus process.
+
 ## 5.36.0-4 - 2026-07-18
 
 - Keep the optional SMTP port as an empty string in Supervisor options.

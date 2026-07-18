@@ -6,7 +6,7 @@ readonly DEFAULT_CONFIG="/usr/share/gatus/config.example.yaml"
 
 if [[ ! -f "${CONFIG_PATH}" ]]; then
   install -m 0644 "${DEFAULT_CONFIG}" "${CONFIG_PATH}"
-  bashio::log.notice "Created initial Gatus configuration at ${CONFIG_PATH}"
+  bashio::log.notice "Created config.yaml in the App addon_config folder"
 fi
 
 if [[ ! -r "${CONFIG_PATH}" ]]; then
@@ -54,7 +54,10 @@ export GATUS_EMAIL_TO
 export GATUS_LOG_LEVEL
 export GATUS_CONFIG_PATH
 
-install -d -m 0750 -o gatus -g gatus /data/gatus
+if [[ ! -d /data/gatus ]]; then
+  mkdir -m 0750 /data/gatus
+fi
+chown gatus:gatus /data/gatus
 
 bashio::log.info "Starting Gatus as an unprivileged user"
 exec su-exec gatus:gatus /usr/local/bin/gatus

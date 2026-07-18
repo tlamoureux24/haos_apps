@@ -4,7 +4,7 @@ FROM ghcr.io/twin/gatus:v${GATUS_VERSION} AS upstream
 FROM ghcr.io/home-assistant/base:latest
 
 ARG GATUS_VERSION
-ARG BUILD_VERSION="5.36.0-4"
+ARG BUILD_VERSION="5.36.0-5"
 ARG BUILD_ARCH
 
 LABEL \
