@@ -107,7 +107,10 @@ jobs:
         run: |
           set -euo pipefail
           smoke_root="${RUNNER_TEMP}/gatus-smoke"
-          mkdir -p "${smoke_root}/config" "${smoke_root}/data"
+          mkdir -p \
+            "${smoke_root}/config" \
+            "${smoke_root}/data" \
+            "${smoke_root}/supervisor/addons/self/options"
 
           cat >"${smoke_root}/config/config.yaml" <<'YAML'
           web:
@@ -121,25 +124,42 @@ jobs:
           YAML
 
           jq --null-input '{
-            sms_user: "test",
-            sms_password: "test",
-            email_from: "test@example.com",
-            email_username: "test",
-            email_password: "test",
-            email_host: "127.0.0.1",
-            email_port: 2525,
-            email_to: "test@example.com",
-            log_level: "INFO"
-          }' >"${smoke_root}/data/options.json"
+            result: "ok",
+            data: {
+              sms_user: "test",
+              sms_password: "test",
+              email_from: "test@example.com",
+              email_username: "test",
+              email_password: "test",
+              email_host: "127.0.0.1",
+              email_port: 2525,
+              email_to: "test@example.com",
+              log_level: "INFO"
+            }
+          }' >"${smoke_root}/supervisor/addons/self/options/config"
 
           cleanup() {
             docker logs ha-gatus-smoke 2>&1 || true
             docker rm --force ha-gatus-smoke >/dev/null 2>&1 || true
+            docker rm --force ha-gatus-supervisor >/dev/null 2>&1 || true
+            docker network rm ha-gatus-smoke >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
+          docker network create ha-gatus-smoke >/dev/null
+          docker run --detach \
+            --name ha-gatus-supervisor \
+            --network ha-gatus-smoke \
+            --network-alias supervisor \
+            --volume "${smoke_root}/supervisor:/www:ro" \
+            --entrypoint /bin/busybox \
+            "ha-gatus-smoke:${GATUS_VERSION}" \
+            httpd -f -p 80 -h /www
+
           docker run --detach \
             --name ha-gatus-smoke \
+            --network ha-gatus-smoke \
+            --env SUPERVISOR_TOKEN=test \
             --publish 127.0.0.1:18080:8080 \
             --volume "${smoke_root}/config:/config" \
             --volume "${smoke_root}/data:/data" \
