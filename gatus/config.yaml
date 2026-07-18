@@ -1,0 +1,44 @@
+name: "Gatus"
+slug: "gatus"
+version: "5.36.0-1"
+description: "Official Gatus packaged as a Home Assistant app"
+url: "https://github.com/tlamoureux24/haos_apps/tree/main/gatus"
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+apparmor: true
+tmpfs: true
+backup: cold
+watchdog: "http://[HOST]:[PORT:8080]/"
+
+ports:
+  8080/tcp: 8080
+
+map:
+  - type: addon_config
+    read_only: false
+
+options:
+  sms_user: ""
+  sms_password: ""
+  email_from: ""
+  email_username: ""
+  email_password: ""
+  email_host: ""
+  email_port: null
+  email_to: ""
+  log_level: "INFO"
+
+schema:
+  sms_user: password?
+  sms_password: password?
+  email_from: str?
+  email_username: password?
+  email_password: password?
+  email_host: str?
+  email_port: port?
+  email_to: str?
+  log_level: "list(DEBUG|INFO|WARN|ERROR|FATAL)"

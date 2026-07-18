@@ -1,0 +1,186 @@
+name: Update Gatus
+
+on:
+  schedule:
+    - cron: "37 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gatus-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Read latest stable upstream release
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release="$(curl --fail --silent --show-error \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/TwiN/gatus/releases/latest)"
+          version="$(jq -r '.tag_name' <<<"${release}")"
+          draft="$(jq -r '.draft' <<<"${release}")"
+          prerelease="$(jq -r '.prerelease' <<<"${release}")"
+          version="${version#v}"
+
+          if [[ "${draft}" != "false" || "${prerelease}" != "false" ]]; then
+            echo "Latest release is not stable" >&2
+            exit 1
+          fi
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unsupported upstream version: ${version}" >&2
+            exit 1
+          fi
+
+          current="$(<gatus/upstream_version)"
+          echo "version=${version}" >>"${GITHUB_OUTPUT}"
+          if [[ "${version}" == "${current}" ]]; then
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
+            echo "Gatus ${version} is already current"
+          else
+            echo "changed=true" >>"${GITHUB_OUTPUT}"
+            echo "Gatus update detected: ${current} -> ${version}"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.upstream.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify official multi-architecture image
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          GATUS_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          manifest="$(docker buildx imagetools inspect \
+            "ghcr.io/twin/gatus:v${GATUS_VERSION}")"
+          grep -q 'linux/amd64' <<<"${manifest}"
+          grep -q 'linux/arm64' <<<"${manifest}"
+
+      - name: Update package version
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          GATUS_VERSION: ${{ steps.upstream.outputs.version }}
+        run: python3 gatus/scripts/update_gatus_version.py "${GATUS_VERSION}"
+
+      - name: Validate package metadata and scripts
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python3 gatus/scripts/validate.py
+          bash -n gatus/run.sh
+          python3 -m py_compile \
+            gatus/scripts/update_gatus_version.py \
+            gatus/scripts/validate.py
+
+      - name: Build wrapper
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          GATUS_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --build-arg "GATUS_VERSION=${GATUS_VERSION}" \
+            --build-arg "BUILD_VERSION=${GATUS_VERSION}-1" \
+            --build-arg "BUILD_ARCH=amd64" \
+            --tag "ha-gatus-smoke:${GATUS_VERSION}" \
+            gatus
+
+      - name: Smoke-test startup and unprivileged ICMP
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          GATUS_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          smoke_root="${RUNNER_TEMP}/gatus-smoke"
+          mkdir -p "${smoke_root}/config" "${smoke_root}/data"
+
+          cat >"${smoke_root}/config/config.yaml" <<'YAML'
+          web:
+            port: 8080
+          endpoints:
+            - name: loopback
+              url: "icmp://127.0.0.1"
+              interval: 1s
+              conditions:
+                - "[CONNECTED] == true"
+          YAML
+
+          jq --null-input '{
+            sms_user: "test",
+            sms_password: "test",
+            email_from: "test@example.com",
+            email_username: "test",
+            email_password: "test",
+            email_host: "127.0.0.1",
+            email_port: 2525,
+            email_to: "test@example.com",
+            log_level: "INFO"
+          }' >"${smoke_root}/data/options.json"
+
+          cleanup() {
+            docker logs ha-gatus-smoke 2>&1 || true
+            docker rm --force ha-gatus-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name ha-gatus-smoke \
+            --publish 127.0.0.1:18080:8080 \
+            --volume "${smoke_root}/config:/config" \
+            --volume "${smoke_root}/data:/data" \
+            "ha-gatus-smoke:${GATUS_VERSION}"
+
+          for attempt in {1..60}; do
+            if statuses="$(curl --fail --silent --show-error \
+              http://127.0.0.1:18080/api/v1/endpoints/statuses 2>/dev/null)"; then
+              if jq --exit-status \
+                '[.. | objects | .success? // empty] | any(. == true)' \
+                <<<"${statuses}" >/dev/null; then
+                docker exec ha-gatus-smoke ps -o user,comm \
+                  | grep -Eq '^gatus[[:space:]]+gatus$'
+                curl --fail --silent --show-error \
+                  http://127.0.0.1:18080/ >/dev/null
+                echo "Gatus is healthy and ICMP works as an unprivileged user"
+                exit 0
+              fi
+            fi
+            if [[ "$(docker inspect --format '{{.State.Running}}' ha-gatus-smoke)" != "true" ]]; then
+              echo "Gatus container stopped during startup" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "Gatus did not report a successful unprivileged ICMP check" >&2
+          exit 1
+
+      - name: Commit validated update
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          GATUS_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            gatus/CHANGELOG.md \
+            gatus/Dockerfile \
+            gatus/config.yaml \
+            gatus/upstream_version
+          git commit -m "Update Gatus to ${GATUS_VERSION}"
+          git push

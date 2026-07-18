@@ -1,0 +1,30 @@
+configuration:
+  sms_user:
+    name: "Free Mobile SMS user"
+    description: "Free Mobile SMS notification API user. The value is injected into Gatus without being written to config.yaml."
+  sms_password:
+    name: "Free Mobile SMS key"
+    description: "Free Mobile SMS API identification key. The value is masked and injected only at startup."
+  email_from:
+    name: "Email sender"
+    description: "Address used in the From field of Gatus alerts."
+  email_username:
+    name: "SMTP username"
+    description: "Username used to connect to the SMTP server. The value is masked in the interface."
+  email_password:
+    name: "SMTP password"
+    description: "Password or app password for the SMTP account."
+  email_host:
+    name: "SMTP server"
+    description: "SMTP server hostname."
+  email_port:
+    name: "SMTP port"
+    description: "SMTP server port, for example 465 or 587."
+  email_to:
+    name: "Email recipient"
+    description: "Address that will receive Gatus alerts."
+  log_level:
+    name: "Log level"
+    description: "Gatus log verbosity."
+network:
+  8080/tcp: "Local Gatus web interface."

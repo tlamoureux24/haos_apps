@@ -94,6 +94,27 @@ Documentation détaillée:
 - [Documentation française](nginx_proxy_manager/README.fr.md)
 - [English documentation](nginx_proxy_manager/README.md)
 
+### Gatus
+
+App Home Assistant basée sur le binaire officiel Gatus pour surveiller les
+équipements et services du réseau.
+
+Fonctionnalités principales:
+
+- version officielle Gatus épinglée et mise à jour automatiquement dans le dépôt ;
+- contrôles ICMP exécutés sans root et sans capacité NET_RAW ;
+- configuration éditable dans le dossier addon_config dédié ;
+- identifiants SMS Free Mobile et paramètres SMTP injectés depuis les options privées ;
+- aucun secret dans le fichier Gatus ou dans le dépôt GitHub ;
+- interface locale sur le port 8080, sans Ingress ;
+- profil AppArmor, watchdog interne et sauvegarde à froid ;
+- squelette initial vide de tout nom et de toute adresse réseau.
+
+Documentation détaillée:
+
+- [Documentation française](gatus/README.fr.md)
+- [English documentation](gatus/README.md)
+
 ## Prerequis
 
 Ce repository est destine aux installations Home Assistant avec Supervisor, par exemple:
@@ -128,3 +149,7 @@ Pour UniFi Autoblock:
 Pour Nginx Proxy Manager:
 
 [nginx_proxy_manager/README.fr.md](nginx_proxy_manager/README.fr.md)
+
+Pour Gatus:
+
+[gatus/README.fr.md](gatus/README.fr.md)

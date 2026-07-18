@@ -1,0 +1,30 @@
+configuration:
+  sms_user:
+    name: "Identifiant SMS Free Mobile"
+    description: "Identifiant de l'API de notifications SMS Free Mobile. La valeur est injectée dans Gatus sans être écrite dans config.yaml."
+  sms_password:
+    name: "Clé SMS Free Mobile"
+    description: "Clé d'identification de l'API SMS Free Mobile. La valeur est masquée et injectée uniquement au démarrage."
+  email_from:
+    name: "Expéditeur e-mail"
+    description: "Adresse utilisée dans le champ From des alertes Gatus."
+  email_username:
+    name: "Identifiant SMTP"
+    description: "Identifiant de connexion au serveur SMTP. La valeur est masquée dans l'interface."
+  email_password:
+    name: "Mot de passe SMTP"
+    description: "Mot de passe ou mot de passe d'application du compte SMTP."
+  email_host:
+    name: "Serveur SMTP"
+    description: "Nom d'hôte du serveur SMTP."
+  email_port:
+    name: "Port SMTP"
+    description: "Port du serveur SMTP, par exemple 465 ou 587."
+  email_to:
+    name: "Destinataire e-mail"
+    description: "Adresse qui recevra les alertes Gatus."
+  log_level:
+    name: "Niveau de journalisation"
+    description: "Verbosité des journaux Gatus."
+network:
+  8080/tcp: "Interface web locale Gatus."

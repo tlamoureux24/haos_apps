@@ -1,0 +1,15 @@
+#include <tunables/global>
+
+profile gatus flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/bash>
+  #include <abstractions/nameservice>
+  #include <abstractions/openssl>
+
+  capability chown,
+  capability setgid,
+  capability setuid,
+  file,
+  network,
+  signal,
+}

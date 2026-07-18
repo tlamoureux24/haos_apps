@@ -1,0 +1,125 @@
+name: Validate Gatus App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "gatus/**"
+      - ".github/workflows/gatus-*.yml"
+  pull_request:
+    paths:
+      - "gatus/**"
+      - ".github/workflows/gatus-*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate metadata and scripts
+        run: |
+          set -euo pipefail
+          python3 gatus/scripts/validate.py
+          bash -n gatus/run.sh
+          python3 -m py_compile \
+            gatus/scripts/update_gatus_version.py \
+            gatus/scripts/validate.py
+
+      - name: Read pinned versions
+        id: versions
+        run: |
+          set -euo pipefail
+          upstream="$(<gatus/upstream_version)"
+          package="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' gatus/config.yaml)"
+          echo "upstream=${upstream}" >>"${GITHUB_OUTPUT}"
+          echo "package=${package}" >>"${GITHUB_OUTPUT}"
+
+      - name: Build wrapper
+        env:
+          GATUS_VERSION: ${{ steps.versions.outputs.upstream }}
+          APP_VERSION: ${{ steps.versions.outputs.package }}
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --build-arg "GATUS_VERSION=${GATUS_VERSION}" \
+            --build-arg "BUILD_VERSION=${APP_VERSION}" \
+            --build-arg "BUILD_ARCH=amd64" \
+            --tag "ha-gatus-smoke:${APP_VERSION}" \
+            gatus
+
+      - name: Smoke-test startup and unprivileged ICMP
+        env:
+          APP_VERSION: ${{ steps.versions.outputs.package }}
+        run: |
+          set -euo pipefail
+          smoke_root="${RUNNER_TEMP}/gatus-smoke"
+          mkdir -p "${smoke_root}/config" "${smoke_root}/data"
+
+          cat >"${smoke_root}/config/config.yaml" <<'YAML'
+          web:
+            port: 8080
+          endpoints:
+            - name: loopback
+              url: "icmp://127.0.0.1"
+              interval: 1s
+              conditions:
+                - "[CONNECTED] == true"
+          YAML
+
+          jq --null-input '{
+            sms_user: "test",
+            sms_password: "test",
+            email_from: "test@example.com",
+            email_username: "test",
+            email_password: "test",
+            email_host: "127.0.0.1",
+            email_port: 2525,
+            email_to: "test@example.com",
+            log_level: "INFO"
+          }' >"${smoke_root}/data/options.json"
+
+          cleanup() {
+            docker logs ha-gatus-smoke 2>&1 || true
+            docker rm --force ha-gatus-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name ha-gatus-smoke \
+            --publish 127.0.0.1:18080:8080 \
+            --volume "${smoke_root}/config:/config" \
+            --volume "${smoke_root}/data:/data" \
+            "ha-gatus-smoke:${APP_VERSION}"
+
+          for attempt in {1..60}; do
+            if statuses="$(curl --fail --silent --show-error \
+              http://127.0.0.1:18080/api/v1/endpoints/statuses 2>/dev/null)"; then
+              if jq --exit-status \
+                '[.. | objects | .success? // empty] | any(. == true)' \
+                <<<"${statuses}" >/dev/null; then
+                docker exec ha-gatus-smoke ps -o user,comm \
+                  | grep -Eq '^gatus[[:space:]]+gatus$'
+                curl --fail --silent --show-error \
+                  http://127.0.0.1:18080/ >/dev/null
+                echo "Gatus is healthy and ICMP works as an unprivileged user"
+                exit 0
+              fi
+            fi
+            if [[ "$(docker inspect --format '{{.State.Running}}' ha-gatus-smoke)" != "true" ]]; then
+              echo "Gatus container stopped during startup" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "Gatus did not report a successful unprivileged ICMP check" >&2
+          exit 1
