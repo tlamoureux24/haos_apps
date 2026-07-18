@@ -55,9 +55,10 @@ Au premier démarrage, l'App crée automatiquement :
 
     /addon_configs/<identifiant_du_dépôt>_gatus/config.yaml
 
-Le fichier initial est un squelette valide avec `endpoints: []` et ne contient
-aucune adresse ni aucun nom provenant de votre réseau. Ajoutez vos contrôles
-depuis File editor, Studio Code Server, Samba ou SSH selon les outils installés.
+Gatus refusant de démarrer sans endpoint ni suite, le fichier initial contient
+uniquement un contrôle ICMP local sur `127.0.0.1`. Il ne contient aucune donnée
+provenant de votre réseau. Remplacez ce contrôle par les vôtres depuis File
+editor, Studio Code Server, Samba ou SSH selon les outils installés.
 
 Les changements de config.yaml sont rechargés automatiquement par Gatus. Une
 modification des options privées exige un redémarrage de l'App, car les
@@ -101,7 +102,7 @@ La configuration fournie :
 - remplace l'option obsolète disable-monitoring-lock par concurrency: 0 ;
 - laisse tous les fournisseurs d'alerte désactivés ;
 - fournit des exemples commentés pour l'e-mail et l'API SMS Free Mobile ;
-- ne fournit aucun endpoint réseau par défaut.
+- fournit uniquement un endpoint loopback local nécessaire au démarrage.
 
 Le modèle n'est copié que si config.yaml n'existe pas. Une mise à jour de l'App
 n'écrase donc jamais votre configuration.

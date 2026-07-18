@@ -55,9 +55,10 @@ On first start, the App automatically creates:
 
     /addon_configs/<repository_identifier>_gatus/config.yaml
 
-The initial file is a valid skeleton with `endpoints: []` and contains no
-address or name from your network. Add your checks through File editor, Studio
-Code Server, Samba or SSH, depending on the tools installed.
+Because Gatus refuses to start without an endpoint or suite, the initial file
+contains only a local ICMP check on `127.0.0.1`. It contains no data from your
+network. Replace that check with your own through File editor, Studio Code
+Server, Samba or SSH, depending on the tools installed.
 
 Changes to config.yaml are reloaded automatically by Gatus. Changes to private
 App options require an App restart because environment variables are injected
@@ -100,7 +101,7 @@ The supplied configuration:
 - replaces deprecated disable-monitoring-lock with concurrency: 0;
 - leaves every alert provider disabled;
 - includes commented examples for email and the Free Mobile SMS API;
-- provides no network endpoint by default.
+- provides only the local loopback endpoint required for startup.
 
 The template is copied only when config.yaml does not exist. App updates never
 overwrite the user's configuration.

@@ -108,7 +108,7 @@ Fonctionnalités principales:
 - aucun secret dans le fichier Gatus ou dans le dépôt GitHub ;
 - interface locale sur le port 8080, sans Ingress ;
 - profil AppArmor, watchdog interne et sauvegarde à froid ;
-- squelette initial vide de tout nom et de toute adresse réseau.
+- squelette initial limité à un contrôle loopback local, sans adresse externe.
 
 Documentation détaillée:
 

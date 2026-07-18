@@ -30,8 +30,9 @@ Au premier démarrage, le modèle est copié vers :
     /addon_configs/<identifiant_du_dépôt>_gatus/config.yaml
 
 Les modifications du fichier sont rechargées automatiquement. Une mise à jour
-de l'App ne l'écrase jamais. Le squelette initial contient `endpoints: []` :
-aucun nom d'équipement ni aucune adresse réseau ne sont fournis par l'App.
+de l'App ne l'écrase jamais. Gatus exigeant au moins un endpoint ou une suite,
+le squelette contient uniquement un contrôle loopback local sur `127.0.0.1` et
+aucune donnée provenant du réseau de l'utilisateur.
 
 ### Accès
 
@@ -76,8 +77,8 @@ On first start, the template is copied to:
     /addon_configs/<repository_identifier>_gatus/config.yaml
 
 File changes are reloaded automatically. App updates never overwrite it.
-The initial skeleton contains `endpoints: []`: the App ships no device name or
-network address.
+Because Gatus requires at least one endpoint or suite, the initial skeleton
+contains only a local loopback check on `127.0.0.1` and no user network data.
 
 ### Access
 

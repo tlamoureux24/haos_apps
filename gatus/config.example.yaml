@@ -38,9 +38,15 @@ ui:
 #       failure-threshold: 2
 #       success-threshold: 2
 
-endpoints: []
+endpoints:
+  # Required local startup check. Replace it with your own endpoints.
+  - name: Gatus local loopback
+    url: "icmp://127.0.0.1"
+    interval: 1m
+    conditions:
+      - "[CONNECTED] == true"
 
-# Example endpoints. Replace endpoints: [] above with the checks you need.
+# Additional endpoint examples:
 # endpoints:
 #   - name: Example ICMP
 #     url: "icmp://192.0.2.1"

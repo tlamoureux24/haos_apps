@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.36.0-6 - 2026-07-18
+
+- Add a neutral loopback endpoint because Gatus refuses an empty endpoint and suite list.
+- Test the exact configuration generated on first startup instead of injecting a CI-only configuration.
+- Keep all external network endpoints and alert providers disabled by default.
+
 ## 5.36.0-5 - 2026-07-18
 
 - Report the user-facing addon_config location without exposing the internal container path.

@@ -109,10 +109,11 @@ def main() -> int:
         r"^\s*storage:", sample, flags=re.MULTILINE
     ):
         raise RuntimeError("Initial configuration must not include a storage example")
-    if "endpoints: []" not in sample or re.search(
-        r'^\s+url:\s*"(?:icmp|https?)://', sample, flags=re.MULTILINE
-    ):
-        raise RuntimeError("Initial configuration must not disclose network endpoints")
+    active_urls = re.findall(
+        r'^\s+url:\s*"((?:icmp|https?)://[^"]+)"', sample, flags=re.MULTILINE
+    )
+    if active_urls != ["icmp://127.0.0.1"]:
+        raise RuntimeError("Initial configuration must contain only the local loopback endpoint")
     if re.search(r"^\s+custom:", sample, flags=re.MULTILINE):
         raise RuntimeError("Free Mobile custom alerting must remain commented")
     if re.search(r"^alerting:", sample, flags=re.MULTILINE):

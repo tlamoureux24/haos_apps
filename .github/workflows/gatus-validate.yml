@@ -67,17 +67,6 @@ jobs:
             "${smoke_root}/data" \
             "${smoke_root}/supervisor/addons/self/options"
 
-          cat >"${smoke_root}/config/config.yaml" <<'YAML'
-          web:
-            port: 8080
-          endpoints:
-            - name: loopback
-              url: "icmp://127.0.0.1"
-              interval: 1s
-              conditions:
-                - "[CONNECTED] == true"
-          YAML
-
           jq --null-input '{
             result: "ok",
             data: {
@@ -134,6 +123,8 @@ jobs:
               if jq --exit-status \
                 '[.. | objects | .success? // empty] | any(. == true)' \
                 <<<"${statuses}" >/dev/null; then
+                grep -q 'url: "icmp://127.0.0.1"' \
+                  "${smoke_root}/config/config.yaml"
                 docker exec ha-gatus-smoke ps -o user,comm \
                   | grep -Eq '^gatus[[:space:]]+gatus$'
                 curl --fail --silent --show-error \
