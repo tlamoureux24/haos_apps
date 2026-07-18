@@ -14,7 +14,7 @@ ui:
 # alerting:
 #   # Free Mobile SMS notifications.
 #   custom:
-#     url: "https://smsapi.free-mobile.fr/sendmsg?user=${GATUS_SMS_USER}&pass=${GATUS_SMS_PASSWORD}&msg=Gatus%20:%20[ALERT_TRIGGERED_OR_RESOLVED]"
+#     url: "https://smsapi.free-mobile.fr/sendmsg?user=${GATUS_SMS_USER}&pass=${GATUS_SMS_PASSWORD}&msg=[ENDPOINT_NAME] : [ALERT_TRIGGERED_OR_RESOLVED]"
 #     method: "GET"
 #     default-alert:
 #       send-on-resolved: true

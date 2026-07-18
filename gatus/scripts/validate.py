@@ -120,8 +120,9 @@ def main() -> int:
         raise RuntimeError("Initial configuration must not enable alert providers")
     if "#   - name: Example ICMP" not in sample or "#   - name: Example HTTPS" not in sample:
         raise RuntimeError("Initial configuration must include commented endpoint examples")
-    if "&msg=" not in sample:
-        raise RuntimeError("Free Mobile URL must include the msg query parameter")
+    sms_message = "&msg=[ENDPOINT_NAME] : [ALERT_TRIGGERED_OR_RESOLVED]"
+    if sms_message not in sample:
+        raise RuntimeError("Free Mobile URL must include the endpoint name and alert state")
 
     for variable in SECRET_VARIABLES:
         placeholder = "${" + variable + "}"

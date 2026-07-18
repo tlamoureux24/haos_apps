@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.36.0-7 - 2026-07-18
+
+- Include the endpoint name and resolved alert state in the Free Mobile SMS message.
+
 ## 5.36.0-6 - 2026-07-18
 
 - Add a neutral loopback endpoint because Gatus refuses an empty endpoint and suite list.
