@@ -1,0 +1,4 @@
+network:
+  80/tcp: Public HTTP and ACME HTTP-01 port.
+  81/tcp: Nginx Proxy Manager administration interface. Keep LAN/VPN only.
+  443/tcp: Public HTTPS port.

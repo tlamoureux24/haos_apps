@@ -1,0 +1,11 @@
+#include <tunables/global>
+
+profile nginx_proxy_manager flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+
+  capability,
+  file,
+  network,
+  signal,
+}

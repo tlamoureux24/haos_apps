@@ -72,6 +72,28 @@ Documentation détaillée:
 - [Documentation française](unifi_autoblock/README.fr.md)
 - [English documentation](unifi_autoblock/README.md)
 
+### Nginx Proxy Manager
+
+Enveloppe Home Assistant minimale autour de l'image Docker officielle Nginx
+Proxy Manager. L'App conserve toutes les fonctionnalités NPM sans fork ni
+modification et ajoute uniquement l'intégration nécessaire au Supervisor.
+
+Fonctionnalités principales:
+
+- image Nginx Proxy Manager officielle, épinglée sur une version stable ;
+- version de l'App alignée sur NPM au format `<version NPM>-<révision>` ;
+- ports standards 80, 81 et 443, sans Ingress Home Assistant ;
+- données NPM persistées dans `/data` ;
+- certificats et configuration Let's Encrypt persistés dans `/data/letsencrypt` ;
+- sauvegarde Home Assistant à froid pour garantir la cohérence de SQLite ;
+- détection, validation et préparation automatiques des nouvelles versions NPM ;
+- installation volontaire des mises à jour depuis Home Assistant.
+
+Documentation détaillée:
+
+- [Documentation française](nginx_proxy_manager/README.fr.md)
+- [English documentation](nginx_proxy_manager/README.md)
+
 ## Prerequis
 
 Ce repository est destine aux installations Home Assistant avec Supervisor, par exemple:
@@ -102,3 +124,7 @@ Pour Rsync Manager:
 Pour UniFi Autoblock:
 
 [unifi_autoblock/README.md](unifi_autoblock/README.md)
+
+Pour Nginx Proxy Manager:
+
+[nginx_proxy_manager/README.fr.md](nginx_proxy_manager/README.fr.md)

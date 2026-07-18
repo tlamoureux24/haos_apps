@@ -1,0 +1,148 @@
+name: Update Nginx Proxy Manager
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nginx-proxy-manager-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Read latest stable upstream release
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release="$(curl --fail --silent --show-error \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/NginxProxyManager/nginx-proxy-manager/releases/latest)"
+          version="$(jq -r '.tag_name' <<<"${release}")"
+          draft="$(jq -r '.draft' <<<"${release}")"
+          prerelease="$(jq -r '.prerelease' <<<"${release}")"
+          version="${version#v}"
+
+          if [[ "${draft}" != "false" || "${prerelease}" != "false" ]]; then
+            echo "Latest release is not stable" >&2
+            exit 1
+          fi
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unsupported upstream version: ${version}" >&2
+            exit 1
+          fi
+
+          current="$(<nginx_proxy_manager/upstream_version)"
+          echo "version=${version}" >>"${GITHUB_OUTPUT}"
+          if [[ "${version}" == "${current}" ]]; then
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
+            echo "NPM ${version} is already current"
+          else
+            echo "changed=true" >>"${GITHUB_OUTPUT}"
+            echo "NPM update detected: ${current} -> ${version}"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.upstream.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify official multi-architecture image
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          NPM_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          manifest="$(docker buildx imagetools inspect \
+            "docker.io/jc21/nginx-proxy-manager:${NPM_VERSION}")"
+          grep -q 'linux/amd64' <<<"${manifest}"
+          grep -q 'linux/arm64' <<<"${manifest}"
+
+      - name: Update package version
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          NPM_VERSION: ${{ steps.upstream.outputs.version }}
+        run: python3 nginx_proxy_manager/scripts/update_npm_version.py "${NPM_VERSION}"
+
+      - name: Validate package metadata and scripts
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python3 nginx_proxy_manager/scripts/validate.py
+          bash -n nginx_proxy_manager/entrypoint.sh
+          python3 -m py_compile \
+            nginx_proxy_manager/scripts/update_npm_version.py \
+            nginx_proxy_manager/scripts/validate.py
+
+      - name: Build wrapper
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          NPM_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --build-arg "NPM_VERSION=${NPM_VERSION}" \
+            --build-arg "BUILD_VERSION=${NPM_VERSION}-1" \
+            --build-arg "BUILD_ARCH=amd64" \
+            --tag ha-npm-smoke:${NPM_VERSION} \
+            nginx_proxy_manager
+
+      - name: Smoke-test NPM startup
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          NPM_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker logs ha-npm-smoke 2>&1 || true
+            docker rm --force ha-npm-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name ha-npm-smoke \
+            --publish 127.0.0.1:18081:81 \
+            "ha-npm-smoke:${NPM_VERSION}"
+
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error http://127.0.0.1:18081/ >/dev/null; then
+              echo "NPM administration UI is responding"
+              exit 0
+            fi
+            if [[ "$(docker inspect --format '{{.State.Running}}' ha-npm-smoke)" != "true" ]]; then
+              echo "NPM container stopped during startup" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "NPM administration UI did not become ready" >&2
+          exit 1
+
+      - name: Commit validated update
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          NPM_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add nginx_proxy_manager/CHANGELOG.md \
+            nginx_proxy_manager/Dockerfile \
+            nginx_proxy_manager/config.yaml \
+            nginx_proxy_manager/upstream_version
+          git commit -m "Update Nginx Proxy Manager to ${NPM_VERSION}"
+          git push

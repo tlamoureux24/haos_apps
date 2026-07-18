@@ -1,0 +1,88 @@
+name: Validate Nginx Proxy Manager App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "nginx_proxy_manager/**"
+      - ".github/workflows/nginx-proxy-manager-*.yml"
+  pull_request:
+    paths:
+      - "nginx_proxy_manager/**"
+      - ".github/workflows/nginx-proxy-manager-*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate metadata and scripts
+        run: |
+          set -euo pipefail
+          python3 nginx_proxy_manager/scripts/validate.py
+          bash -n nginx_proxy_manager/entrypoint.sh
+          python3 -m py_compile \
+            nginx_proxy_manager/scripts/update_npm_version.py \
+            nginx_proxy_manager/scripts/validate.py
+
+      - name: Read pinned versions
+        id: versions
+        run: |
+          set -euo pipefail
+          upstream="$(<nginx_proxy_manager/upstream_version)"
+          package="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' nginx_proxy_manager/config.yaml)"
+          echo "upstream=${upstream}" >>"${GITHUB_OUTPUT}"
+          echo "package=${package}" >>"${GITHUB_OUTPUT}"
+
+      - name: Build wrapper
+        env:
+          NPM_VERSION: ${{ steps.versions.outputs.upstream }}
+          APP_VERSION: ${{ steps.versions.outputs.package }}
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --build-arg "NPM_VERSION=${NPM_VERSION}" \
+            --build-arg "BUILD_VERSION=${APP_VERSION}" \
+            --build-arg "BUILD_ARCH=amd64" \
+            --tag ha-npm-smoke:${APP_VERSION} \
+            nginx_proxy_manager
+
+      - name: Smoke-test NPM startup
+        env:
+          APP_VERSION: ${{ steps.versions.outputs.package }}
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker logs ha-npm-smoke 2>&1 || true
+            docker rm --force ha-npm-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name ha-npm-smoke \
+            --publish 127.0.0.1:18081:81 \
+            "ha-npm-smoke:${APP_VERSION}"
+
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error http://127.0.0.1:18081/ >/dev/null; then
+              echo "NPM administration UI is responding"
+              exit 0
+            fi
+            if [[ "$(docker inspect --format '{{.State.Running}}' ha-npm-smoke)" != "true" ]]; then
+              echo "NPM container stopped during startup" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "NPM administration UI did not become ready" >&2
+          exit 1
