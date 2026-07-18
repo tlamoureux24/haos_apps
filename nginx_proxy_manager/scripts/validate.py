@@ -34,13 +34,13 @@ def main() -> int:
     docker_upstream = match_one(r'^ARG NPM_VERSION="([^"]+)"$', dockerfile, "Docker NPM version")
     docker_package = match_one(r'^ARG BUILD_VERSION="([^"]+)"$', dockerfile, "Docker app version")
     config_package = match_one(r'^version: "([^"]+)"$', config, "config app version")
-    expected_package = f"{upstream}-1"
+    package_pattern = re.compile(rf"^{re.escape(upstream)}-(\d+)$")
 
     if docker_upstream != upstream:
         raise RuntimeError(f"Docker NPM version {docker_upstream} != {upstream}")
-    if docker_package != expected_package or config_package != expected_package:
+    if docker_package != config_package or not package_pattern.fullmatch(config_package):
         raise RuntimeError(
-            f"Package versions must both be {expected_package}: "
+            f"Package versions must match {upstream}-REVISION: "
             f"Docker={docker_package}, config={config_package}"
         )
 
@@ -59,6 +59,9 @@ def main() -> int:
         if item not in config:
             raise RuntimeError(f"Missing config invariant: {item}")
 
+    if re.search(r"^webui:", config, flags=re.MULTILINE):
+        raise RuntimeError("webui must stay disabled to avoid generating an external admin URL")
+
     entrypoint = (ROOT / "entrypoint.sh").read_text(encoding="utf-8")
     if "/data/letsencrypt" not in entrypoint or "exec /init" not in entrypoint:
         raise RuntimeError("Entrypoint no longer guarantees persistent Let's Encrypt data")
@@ -68,7 +71,7 @@ def main() -> int:
         if actual != expected:
             raise RuntimeError(f"Unexpected {filename} checksum: {actual}")
 
-    print(f"Validated NPM {upstream}, Home Assistant app {expected_package}")
+    print(f"Validated NPM {upstream}, Home Assistant app {config_package}")
     return 0
 
 

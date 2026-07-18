@@ -51,6 +51,12 @@ your router and firewall:
 This app intentionally does not use Home Assistant Ingress because the official
 NPM frontend is not designed to run below an Ingress URL prefix.
 
+The Home Assistant **Open Web UI** shortcut is intentionally disabled. The
+Supervisor substitutes `[HOST]` with the Home Assistant URL currently in use,
+which can produce an unsafe or unusable external-domain link to port 81. Open
+NPM explicitly with its LAN address, for example `http://HOME_ASSISTANT_LAN_IP:81`,
+or connect through a trusted VPN.
+
 ## Persistent Data and Backups
 
 NPM normally uses two Docker volumes: `/data` and `/etc/letsencrypt`. Home

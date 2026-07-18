@@ -1,6 +1,6 @@
 name: "Nginx Proxy Manager"
 slug: "nginx_proxy_manager"
-version: "2.15.1-1"
+version: "2.15.1-2"
 description: "Official Nginx Proxy Manager packaged as a Home Assistant app"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/nginx_proxy_manager"
 arch:
@@ -11,7 +11,6 @@ boot: auto
 init: false
 apparmor: true
 backup: cold
-webui: "http://[HOST]:[PORT:81]/"
 watchdog: "http://[HOST]:[PORT:81]/"
 
 ports:

@@ -53,6 +53,13 @@ doit donc être appliquée par le routeur et le pare-feu :
 Cette App n'utilise volontairement pas l'Ingress Home Assistant : le frontend
 officiel NPM n'est pas conçu pour fonctionner sous un préfixe d'URL Ingress.
 
+Le raccourci Home Assistant **Ouvrir l'interface utilisateur web** est
+volontairement désactivé. Le Supervisor remplace `[HOST]` par l'URL Home
+Assistant actuellement utilisée, ce qui peut produire un lien dangereux ou
+inutilisable vers le domaine externe sur le port 81. Ouvrez explicitement NPM
+avec son adresse LAN, par exemple `http://IP_LAN_HOME_ASSISTANT:81`, ou passez
+par un VPN de confiance.
+
 ## Données persistantes et sauvegardes
 
 NPM utilise normalement deux volumes Docker : `/data` et `/etc/letsencrypt`.

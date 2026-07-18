@@ -15,6 +15,8 @@ Manager. Elle expose les ports 80, 81 et 443, conserve les données NPM dans
 - Ne redirigez depuis Internet que les ports 80 et 443.
 - Ne redirigez jamais le port d'administration 81 depuis Internet.
 - Limitez le port 81 au LAN et au VPN avec votre pare-feu.
+- Ouvrez directement `http://IP_LAN_HOME_ASSISTANT:81` : le raccourci web HA est
+  désactivé pour ne jamais construire de lien vers le domaine externe.
 - Activez la double authentification de l'administrateur NPM.
 - Choisissez **No Response (444)** comme site par défaut pour les hôtes inconnus.
 - Les sauvegardes contiennent la base NPM, les identifiants et les clés privées.
@@ -60,6 +62,8 @@ exposes ports 80, 81 and 443, persists NPM data in `/data`, and persists
 - Forward only ports 80 and 443 from the Internet.
 - Never forward administration port 81 from the Internet.
 - Restrict port 81 to LAN and VPN clients with your firewall.
+- Open `http://HOME_ASSISTANT_LAN_IP:81` directly: the HA web shortcut is
+  disabled so it can never generate an external-domain link.
 - Enable two-factor authentication for the NPM administrator.
 - Select **No Response (444)** as the default site for unknown hosts.
 - Backups contain the NPM database, credentials and certificate private keys.
