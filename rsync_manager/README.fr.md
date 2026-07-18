@@ -372,13 +372,23 @@ Ces donnees sont incluses dans les sauvegardes Home Assistant. L'App utilise une
 
 ## Permissions Et Chemins Locaux
 
-L'App expose explicitement en lecture et ecriture les dossiers suivants :
+L'interface graphique supporte les chemins locaux, mais leurs mappings Home Assistant sont volontairement desactives par defaut. Une installation utilisant uniquement SMB/CIFS n'expose donc aucun dossier local en ecriture.
 
-```text
-/share
-/media
-/backup
+Le proprietaire du depot peut decommenter uniquement les dossiers necessaires dans `config.yaml` :
+
+```yaml
+map:
+  - type: share
+    read_only: false
+  - type: media
+    read_only: false
+  - type: backup
+    read_only: false
 ```
+
+Apres la modification du manifeste, rechargez la boutique puis reconstruisez ou reinstallez l'App. Ces mappings ne peuvent pas etre actives dynamiquement depuis les options graphiques, car le Supervisor les cree avant le demarrage du conteneur.
+
+Ne décommentez que les dossiers réellement utilisés. La configuration Home Assistant, les certificats SSL et les données privées des autres Apps restent volontairement non exposées.
 
 Pour SMB/CIFS, l'App a besoin de privileges de montage reseau:
 

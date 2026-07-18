@@ -1,6 +1,6 @@
 name: "Rsync Manager"
 slug: "rsync_manager"
-version: "1.1.1"
+version: "1.1.2"
 description: "Configure, schedule and monitor local or SMB/CIFS rsync jobs"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/rsync_manager"
 arch:
@@ -19,13 +19,16 @@ ingress_port: 8099
 panel_icon: "mdi:folder-sync"
 panel_title: "Rsync Manager"
 
-map:
-  - type: share
-    read_only: false
-  - type: media
-    read_only: false
-  - type: backup
-    read_only: false
+# Local folders are intentionally disabled by default. Uncomment only the
+# folders used by local rsync jobs; SMB/CIFS jobs do not need these mappings.
+# Dossiers locaux desactives par defaut : decommenter uniquement ceux utilises.
+# map:
+#   - type: share
+#     read_only: false
+#   - type: media
+#     read_only: false
+#   - type: backup
+#     read_only: false
 
 privileged:
   - SYS_ADMIN

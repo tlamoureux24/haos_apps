@@ -6,12 +6,19 @@ Rsync Manager permet de créer, planifier, tester et surveiller des
 synchronisations locales ou SMB/CIFS depuis une interface Ingress protégée par
 Home Assistant.
 
-Chemins locaux disponibles :
+L'interface accepte les chemins locaux, mais aucun dossier Home Assistant n'est
+mappe par defaut. Pour utiliser des jobs locaux, le proprietaire du depot doit
+decommenter uniquement les mappings necessaires dans `config.yaml`, puis
+reconstruire ou reinstaller l'App :
 
-```text
-/share
-/media
-/backup
+```yaml
+map:
+  - type: share
+    read_only: false
+  - type: media
+    read_only: false
+  - type: backup
+    read_only: false
 ```
 
 Commencez toujours par `Tester montages`, puis `Simuler`, avant de lancer une
@@ -34,12 +41,18 @@ les partages CIFS.
 Rsync Manager creates, schedules, tests and monitors local or SMB/CIFS
 synchronizations from a Home Assistant-authenticated Ingress interface.
 
-Available local paths:
+The interface accepts local paths, but no Home Assistant folder is mapped by
+default. To use local jobs, the repository owner must uncomment only the
+required mappings in `config.yaml`, then rebuild or reinstall the App:
 
-```text
-/share
-/media
-/backup
+```yaml
+map:
+  - type: share
+    read_only: false
+  - type: media
+    read_only: false
+  - type: backup
+    read_only: false
 ```
 
 Always use `Test mounts` and then `Dry run` before the first real

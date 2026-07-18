@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2 - 2026-07-18
+
+- Disable Home Assistant local-folder mappings by default.
+- Keep `/share`, `/media` and `/backup` as documented manifest examples for users who need local rsync jobs.
+- Avoid exposing writable Home Assistant folders for SMB/CIFS-only installations.
+
 ## 1.1.1 - 2026-07-18
 
 - Update the Alpine rsync package from 3.4.3-r0 to 3.4.3-r1.

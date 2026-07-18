@@ -41,13 +41,26 @@ Each side of a job can use either a local path or an SMB/CIFS share.
 
 ### Local paths
 
-The App explicitly maps these Home Assistant folders as read/write:
+The web interface supports local paths, but Home Assistant folder mappings are
+intentionally disabled by default. SMB/CIFS-only installations therefore do
+not expose writable host folders unnecessarily.
 
-```text
-/share
-/media
-/backup
+Repository owners who need local jobs can uncomment only the required entries
+in `config.yaml`:
+
+```yaml
+map:
+  - type: share
+    read_only: false
+  - type: media
+    read_only: false
+  - type: backup
+    read_only: false
 ```
+
+After changing the manifest, reload the App Store and rebuild or reinstall the
+App. These mappings cannot be enabled dynamically from the App options because
+the Supervisor creates them before the container starts.
 
 Examples:
 
@@ -57,8 +70,9 @@ Examples:
 /backup/archives
 ```
 
-The Home Assistant configuration, SSL certificates and other Apps' private
-configuration folders are deliberately not exposed.
+Only uncomment folders that are actually used. The Home Assistant
+configuration, SSL certificates and other Apps' private configuration folders
+must remain unexposed.
 
 ### SMB/CIFS shares
 

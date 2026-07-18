@@ -73,9 +73,10 @@ def main() -> int:
             'watchdog: "http://[HOST]:[PORT:8099]/"',
             "ingress: true",
             "ingress_port: 8099",
-            "  - type: share\n    read_only: false",
-            "  - type: media\n    read_only: false",
-            "  - type: backup\n    read_only: false",
+            "# map:",
+            "#   - type: share\n#     read_only: false",
+            "#   - type: media\n#     read_only: false",
+            "#   - type: backup\n#     read_only: false",
             "privileged:\n  - SYS_ADMIN",
         ),
         "config invariant",
@@ -91,6 +92,8 @@ def main() -> int:
     ):
         if forbidden in config:
             raise RuntimeError(f"Forbidden config value: {forbidden}")
+    if re.search(r"^map:", config, flags=re.MULTILINE):
+        raise RuntimeError("Local Home Assistant folders must be disabled by default")
 
     require(
         dockerfile,
