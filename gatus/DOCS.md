@@ -19,6 +19,7 @@ Options facultatives, à renseigner uniquement pour les fournisseurs activés :
 
 L'App peut démarrer sans aucune de ces options lorsqu'aucun fournisseur
 d'alerte n'est activé dans config.yaml.
+Laissez email_port vide lorsque les alertes e-mail sont désactivées.
 
 Après une modification de ces options, redémarrez l'App.
 
@@ -64,6 +65,7 @@ Optional options, required only for enabled providers:
 
 The App can start without any of these options when no alert provider is
 enabled in config.yaml.
+Leave email_port empty while email alerts are disabled.
 
 Restart the App after changing these options.
 

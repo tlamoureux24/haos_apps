@@ -80,6 +80,8 @@ def main() -> int:
         "  8080/tcp: 8080",
         "  - type: addon_config",
         "    read_only: false",
+        '  email_port: ""',
+        "  email_port: str?",
     )
     for item in required_config:
         if item not in config:

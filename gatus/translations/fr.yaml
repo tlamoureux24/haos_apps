@@ -19,7 +19,7 @@ configuration:
     description: "Facultatif. Nom d'hôte du serveur SMTP."
   email_port:
     name: "Port SMTP"
-    description: "Facultatif. Port du serveur SMTP, par exemple 465 ou 587."
+    description: "Facultatif. Laissez vide sans alerte e-mail, sinon indiquez un port de 1 à 65535, par exemple 465 ou 587."
   email_to:
     name: "Destinataire e-mail"
     description: "Facultatif. Adresse qui recevra les alertes Gatus."

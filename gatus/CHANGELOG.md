@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.36.0-4 - 2026-07-18
+
+- Keep the optional SMTP port as an empty string in Supervisor options.
+- Prevent Supervisor from treating an unset SMTP port as a missing required option.
+- Continue validating configured SMTP ports before starting Gatus.
+
 ## 5.36.0-3 - 2026-07-18
 
 - Make every SMS and SMTP option genuinely optional.

@@ -49,6 +49,7 @@ enable in config.yaml:
 - email_to.
 
 With no alert provider enabled, the App starts without any of these values.
+In particular, leave email_port empty while the email provider is disabled.
 
 On first start, the App automatically creates:
 

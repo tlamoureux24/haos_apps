@@ -49,6 +49,7 @@ ou des fournisseurs que vous activez dans config.yaml :
 - email_to.
 
 Sans fournisseur d'alerte activé, l'App démarre sans aucune de ces valeurs.
+Laissez notamment email_port vide tant que le fournisseur e-mail est désactivé.
 
 Au premier démarrage, l'App crée automatiquement :
 
