@@ -134,9 +134,9 @@ is available, the workflow:
 Home Assistant then shows the new app version as an available update. Installing
 that update remains a voluntary action in Home Assistant.
 
-The repository must allow GitHub Actions to write repository contents under
-**Settings > Actions > General > Workflow permissions**. No external secret or
-personal access token is required; the workflow uses GitHub's short-lived token.
+The update workflow requests only `contents: write` for its short-lived GitHub
+token. No external secret, personal access token, or repository-wide permission
+change is normally required.
 
 ## Scope and Support
 

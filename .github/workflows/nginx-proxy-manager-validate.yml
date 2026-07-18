@@ -58,6 +58,7 @@ jobs:
 
       - name: Smoke-test NPM startup
         env:
+          NPM_VERSION: ${{ steps.versions.outputs.upstream }}
           APP_VERSION: ${{ steps.versions.outputs.package }}
         run: |
           set -euo pipefail
@@ -73,8 +74,13 @@ jobs:
             "ha-npm-smoke:${APP_VERSION}"
 
           for attempt in {1..60}; do
-            if curl --fail --silent --show-error http://127.0.0.1:18081/ >/dev/null; then
-              echo "NPM administration UI is responding"
+            if health="$(curl --fail --silent --show-error http://127.0.0.1:18081/api/ 2>/dev/null)"; then
+              jq --exit-status --arg version "${NPM_VERSION}" '
+                .status == "OK"
+                and .setup == false
+                and ([.version.major, .version.minor, .version.revision] | map(tostring) | join(".")) == $version
+              ' <<<"${health}" >/dev/null
+              echo "NPM ${NPM_VERSION} API is healthy and ready for initial setup"
               exit 0
             fi
             if [[ "$(docker inspect --format '{{.State.Running}}' ha-npm-smoke)" != "true" ]]; then

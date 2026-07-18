@@ -138,10 +138,9 @@ stable au format sémantique existe, le workflow :
 Home Assistant affiche ensuite la nouvelle version de l'App comme mise à jour
 disponible. Son installation reste une action volontaire dans Home Assistant.
 
-Le dépôt doit autoriser GitHub Actions à écrire son contenu dans
-**Settings > Actions > General > Workflow permissions**. Aucun secret externe ni
-token d'accès personnel n'est nécessaire : le workflow utilise le token
-temporaire fourni par GitHub.
+Le workflow de mise à jour demande uniquement le droit `contents: write` pour
+son token GitHub temporaire. Aucun secret externe, token d'accès personnel ou
+changement global des permissions du dépôt n'est normalement nécessaire.
 
 ## Périmètre et support
 

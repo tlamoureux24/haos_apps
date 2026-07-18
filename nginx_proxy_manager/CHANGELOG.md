@@ -8,3 +8,4 @@
 - Expose the standard NPM ports 80, 81 and 443 without Home Assistant Ingress.
 - Add bilingual English/French documentation and network labels.
 - Add automatic stable upstream release detection, validation and version updates.
+- Validate the exact NPM API version and fresh-install setup state during CI smoke tests.
