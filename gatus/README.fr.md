@@ -36,7 +36,8 @@ Installez ensuite Gatus.
 
 ## Premier démarrage
 
-Renseignez les huit options privées :
+Toutes les options d'alerte sont facultatives. Renseignez uniquement celles du
+ou des fournisseurs que vous activez dans config.yaml :
 
 - sms_user ;
 - sms_password ;
@@ -46,6 +47,8 @@ Renseignez les huit options privées :
 - email_host ;
 - email_port ;
 - email_to.
+
+Sans fournisseur d'alerte activé, l'App démarre sans aucune de ces valeurs.
 
 Au premier démarrage, l'App crée automatiquement :
 
@@ -95,10 +98,8 @@ publier derrière un reverse proxy correctement protégé.
 La configuration fournie :
 
 - remplace l'option obsolète disable-monitoring-lock par concurrency: 0 ;
-- envoie les alertes après deux échecs consécutifs ;
-- envoie une résolution après deux succès consécutifs ;
-- utilise le fournisseur e-mail natif de Gatus ;
-- utilise l'API SMS Free Mobile avec une requête GET et un paramètre msg ;
+- laisse tous les fournisseurs d'alerte désactivés ;
+- fournit des exemples commentés pour l'e-mail et l'API SMS Free Mobile ;
 - ne fournit aucun endpoint réseau par défaut.
 
 Le modèle n'est copié que si config.yaml n'existe pas. Une mise à jour de l'App

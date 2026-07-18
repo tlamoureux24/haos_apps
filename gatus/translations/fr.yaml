@@ -1,28 +1,28 @@
 configuration:
   sms_user:
     name: "Identifiant SMS Free Mobile"
-    description: "Identifiant de l'API de notifications SMS Free Mobile. La valeur est injectée dans Gatus sans être écrite dans config.yaml."
+    description: "Facultatif. Identifiant de l'API de notifications SMS Free Mobile, utilisé uniquement si le fournisseur custom est activé."
   sms_password:
     name: "Clé SMS Free Mobile"
-    description: "Clé d'identification de l'API SMS Free Mobile. La valeur est masquée et injectée uniquement au démarrage."
+    description: "Facultatif. Clé de l'API SMS Free Mobile, utilisée uniquement si le fournisseur custom est activé."
   email_from:
     name: "Expéditeur e-mail"
-    description: "Adresse utilisée dans le champ From des alertes Gatus."
+    description: "Facultatif. Adresse utilisée dans le champ From lorsque le fournisseur e-mail est activé."
   email_username:
     name: "Identifiant SMTP"
-    description: "Identifiant de connexion au serveur SMTP. La valeur est masquée dans l'interface."
+    description: "Facultatif. Identifiant SMTP utilisé lorsque le fournisseur e-mail est activé."
   email_password:
     name: "Mot de passe SMTP"
-    description: "Mot de passe ou mot de passe d'application du compte SMTP."
+    description: "Facultatif. Mot de passe ou mot de passe d'application du compte SMTP."
   email_host:
     name: "Serveur SMTP"
-    description: "Nom d'hôte du serveur SMTP."
+    description: "Facultatif. Nom d'hôte du serveur SMTP."
   email_port:
     name: "Port SMTP"
-    description: "Port du serveur SMTP, par exemple 465 ou 587."
+    description: "Facultatif. Port du serveur SMTP, par exemple 465 ou 587."
   email_to:
     name: "Destinataire e-mail"
-    description: "Adresse qui recevra les alertes Gatus."
+    description: "Facultatif. Adresse qui recevra les alertes Gatus."
   log_level:
     name: "Niveau de journalisation"
     description: "Verbosité des journaux Gatus."

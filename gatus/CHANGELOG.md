@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.36.0-3 - 2026-07-18
+
+- Make every SMS and SMTP option genuinely optional.
+- Disable all alert providers in the initial configuration.
+- Allow Gatus to start without any alert credentials.
+- Validate SMTP port only when it is configured.
+
 ## 5.36.0-2 - 2026-07-18
 
 - Simplify the initial Gatus configuration.

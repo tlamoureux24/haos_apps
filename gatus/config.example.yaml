@@ -10,31 +10,33 @@ ui:
   description: Monitoring network dashboard
   header: Network Status
 
-alerting:
-  # Free Mobile SMS notifications. Uncomment this entire custom block to use it.
-  # custom:
-  #   url: "https://smsapi.free-mobile.fr/sendmsg?user=${GATUS_SMS_USER}&pass=${GATUS_SMS_PASSWORD}&msg=Gatus%20:%20[ALERT_TRIGGERED_OR_RESOLVED]"
-  #   method: "GET"
-  #   default-alert:
-  #     send-on-resolved: true
-  #     failure-threshold: 2
-  #     success-threshold: 2
-  #   placeholders:
-  #     ALERT_TRIGGERED_OR_RESOLVED:
-  #       TRIGGERED: "hors ligne"
-  #       RESOLVED: "en ligne"
-
-  email:
-    from: "${GATUS_EMAIL_FROM}"
-    username: "${GATUS_EMAIL_USERNAME}"
-    password: "${GATUS_EMAIL_PASSWORD}"
-    host: "${GATUS_EMAIL_HOST}"
-    port: ${GATUS_EMAIL_PORT}
-    to: "${GATUS_EMAIL_TO}"
-    default-alert:
-      send-on-resolved: true
-      failure-threshold: 2
-      success-threshold: 2
+# Alert providers are optional. Uncomment alerting and only the providers you use.
+# alerting:
+#   # Free Mobile SMS notifications.
+#   custom:
+#     url: "https://smsapi.free-mobile.fr/sendmsg?user=${GATUS_SMS_USER}&pass=${GATUS_SMS_PASSWORD}&msg=Gatus%20:%20[ALERT_TRIGGERED_OR_RESOLVED]"
+#     method: "GET"
+#     default-alert:
+#       send-on-resolved: true
+#       failure-threshold: 2
+#       success-threshold: 2
+#     placeholders:
+#       ALERT_TRIGGERED_OR_RESOLVED:
+#         TRIGGERED: "hors ligne"
+#         RESOLVED: "en ligne"
+#
+#   # Email notifications.
+#   email:
+#     from: "${GATUS_EMAIL_FROM}"
+#     username: "${GATUS_EMAIL_USERNAME}"
+#     password: "${GATUS_EMAIL_PASSWORD}"
+#     host: "${GATUS_EMAIL_HOST}"
+#     port: ${GATUS_EMAIL_PORT}
+#     to: "${GATUS_EMAIL_TO}"
+#     default-alert:
+#       send-on-resolved: true
+#       failure-threshold: 2
+#       success-threshold: 2
 
 endpoints: []
 

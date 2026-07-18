@@ -36,7 +36,8 @@ Then install Gatus.
 
 ## First start
 
-Enter the eight private options:
+All alert options are optional. Enter only those used by the providers you
+enable in config.yaml:
 
 - sms_user;
 - sms_password;
@@ -46,6 +47,8 @@ Enter the eight private options:
 - email_host;
 - email_port;
 - email_to.
+
+With no alert provider enabled, the App starts without any of these values.
 
 On first start, the App automatically creates:
 
@@ -94,10 +97,8 @@ published behind a properly secured reverse proxy.
 The supplied configuration:
 
 - replaces deprecated disable-monitoring-lock with concurrency: 0;
-- alerts after two consecutive failures;
-- sends a resolution after two consecutive successes;
-- uses Gatus's native email provider;
-- uses the Free Mobile SMS API with a GET request and a msg parameter;
+- leaves every alert provider disabled;
+- includes commented examples for email and the Free Mobile SMS API;
 - provides no network endpoint by default.
 
 The template is copied only when config.yaml does not exist. App updates never

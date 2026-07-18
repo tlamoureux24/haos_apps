@@ -113,6 +113,8 @@ def main() -> int:
         raise RuntimeError("Initial configuration must not disclose network endpoints")
     if re.search(r"^\s+custom:", sample, flags=re.MULTILINE):
         raise RuntimeError("Free Mobile custom alerting must remain commented")
+    if re.search(r"^alerting:", sample, flags=re.MULTILINE):
+        raise RuntimeError("Initial configuration must not enable alert providers")
     if "#   - name: Example ICMP" not in sample or "#   - name: Example HTTPS" not in sample:
         raise RuntimeError("Initial configuration must include commented endpoint examples")
     if "&msg=" not in sample:
@@ -127,6 +129,8 @@ def main() -> int:
 
     if "exec su-exec gatus:gatus /usr/local/bin/gatus" not in launcher:
         raise RuntimeError("Launcher must drop root before starting Gatus")
+    if "required_options" in launcher or "Missing required app options" in launcher:
+        raise RuntimeError("Alert provider options must remain optional")
     if "NET_RAW" in config or "NET_RAW" in launcher:
         raise RuntimeError("Gatus must use unprivileged ICMP without NET_RAW")
     if re.search(r"bashio::log\.[a-z]+.*GATUS_(?:SMS|EMAIL)", launcher):

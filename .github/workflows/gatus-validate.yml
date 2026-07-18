@@ -81,14 +81,6 @@ jobs:
           jq --null-input '{
             result: "ok",
             data: {
-              sms_user: "test",
-              sms_password: "test",
-              email_from: "test@example.com",
-              email_username: "test",
-              email_password: "test",
-              email_host: "127.0.0.1",
-              email_port: 2525,
-              email_to: "test@example.com",
               log_level: "INFO"
             }
           }' >"${smoke_root}/supervisor/addons/self/options/config"

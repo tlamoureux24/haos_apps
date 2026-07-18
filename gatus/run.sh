@@ -14,34 +14,34 @@ if [[ ! -r "${CONFIG_PATH}" ]]; then
   exit 1
 fi
 
-required_options=(
-  sms_user
-  sms_password
-  email_from
-  email_username
-  email_password
-  email_host
-  email_port
-  email_to
-)
-
-missing_options=()
-for option in "${required_options[@]}"; do
-  if ! bashio::config.has_value "${option}"; then
-    missing_options+=("${option}")
+read_optional_option() {
+  local value
+  value="$(bashio::config "$1")"
+  if [[ "${value}" == "null" ]]; then
+    value=""
   fi
-done
+  printf '%s' "${value}"
+}
 
-if (( ${#missing_options[@]} > 0 )); then
-  bashio::log.fatal "Missing required app options: ${missing_options[*]}"
-  exit 1
-fi
-
-email_port="$(bashio::config 'email_port')"
-if [[ ! "${email_port}" =~ ^[0-9]+$ ]] || (( email_port < 1 || email_port > 65535 )); then
+email_port="$(read_optional_option 'email_port')"
+if [[ -n "${email_port}" ]] \
+  && { [[ ! "${email_port}" =~ ^[0-9]+$ ]] \
+    || (( email_port < 1 || email_port > 65535 )); }; then
   bashio::log.fatal "email_port must be between 1 and 65535"
   exit 1
 fi
+
+GATUS_SMS_USER="$(read_optional_option 'sms_user')"
+GATUS_SMS_PASSWORD="$(read_optional_option 'sms_password')"
+GATUS_EMAIL_FROM="$(read_optional_option 'email_from')"
+GATUS_EMAIL_USERNAME="$(read_optional_option 'email_username')"
+GATUS_EMAIL_PASSWORD="$(read_optional_option 'email_password')"
+GATUS_EMAIL_HOST="$(read_optional_option 'email_host')"
+GATUS_EMAIL_PORT="${email_port}"
+GATUS_EMAIL_TO="$(read_optional_option 'email_to')"
+GATUS_LOG_LEVEL="$(read_optional_option 'log_level')"
+GATUS_LOG_LEVEL="${GATUS_LOG_LEVEL:-INFO}"
+GATUS_CONFIG_PATH="${CONFIG_PATH}"
 
 export GATUS_SMS_USER
 export GATUS_SMS_PASSWORD
@@ -49,19 +49,10 @@ export GATUS_EMAIL_FROM
 export GATUS_EMAIL_USERNAME
 export GATUS_EMAIL_PASSWORD
 export GATUS_EMAIL_HOST
-export GATUS_EMAIL_PORT="${email_port}"
+export GATUS_EMAIL_PORT
 export GATUS_EMAIL_TO
 export GATUS_LOG_LEVEL
-export GATUS_CONFIG_PATH="${CONFIG_PATH}"
-
-GATUS_SMS_USER="$(bashio::config 'sms_user')"
-GATUS_SMS_PASSWORD="$(bashio::config 'sms_password')"
-GATUS_EMAIL_FROM="$(bashio::config 'email_from')"
-GATUS_EMAIL_USERNAME="$(bashio::config 'email_username')"
-GATUS_EMAIL_PASSWORD="$(bashio::config 'email_password')"
-GATUS_EMAIL_HOST="$(bashio::config 'email_host')"
-GATUS_EMAIL_TO="$(bashio::config 'email_to')"
-GATUS_LOG_LEVEL="$(bashio::config 'log_level')"
+export GATUS_CONFIG_PATH
 
 install -d -m 0750 -o gatus -g gatus /data/gatus
 

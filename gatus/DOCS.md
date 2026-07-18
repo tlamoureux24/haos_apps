@@ -11,11 +11,14 @@ Les identifiants SMS Free Mobile et les paramètres SMTP sont saisis dans
 l'onglet Configuration de l'App. Le lanceur les injecte comme variables
 d'environnement ; ils ne figurent jamais dans le fichier Gatus.
 
-Options requises :
+Options facultatives, à renseigner uniquement pour les fournisseurs activés :
 
 - sms_user et sms_password ;
 - email_from, email_username et email_password ;
 - email_host, email_port et email_to.
+
+L'App peut démarrer sans aucune de ces options lorsqu'aucun fournisseur
+d'alerte n'est activé dans config.yaml.
 
 Après une modification de ces options, redémarrez l'App.
 
@@ -53,11 +56,14 @@ Free Mobile SMS credentials and SMTP settings are entered in the App
 Configuration tab. The launcher injects them as environment variables; they
 never appear in the Gatus file.
 
-Required options:
+Optional options, required only for enabled providers:
 
 - sms_user and sms_password;
 - email_from, email_username and email_password;
 - email_host, email_port and email_to.
+
+The App can start without any of these options when no alert provider is
+enabled in config.yaml.
 
 Restart the App after changing these options.
 
