@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1 - 2026-07-18
+
+- Update the Alpine rsync package from 3.4.3-r0 to 3.4.3-r1.
+
 ## 1.1.0 - 2026-07-18
 
 - Rename and document the package consistently as a Home Assistant App.
