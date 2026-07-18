@@ -1,7 +1,4 @@
-# Optional persistent history:
-# storage:
-#   type: sqlite
-#   path: /data/gatus/gatus.db
+# Official configuration documentation: https://github.com/TwiN/gatus#configuration
 
 concurrency: 0
 
@@ -14,17 +11,18 @@ ui:
   header: Network Status
 
 alerting:
-  custom:
-    url: "https://smsapi.free-mobile.fr/sendmsg?user=${GATUS_SMS_USER}&pass=${GATUS_SMS_PASSWORD}&msg=Gatus%20:%20[ALERT_TRIGGERED_OR_RESOLVED]"
-    method: "GET"
-    default-alert:
-      send-on-resolved: true
-      failure-threshold: 2
-      success-threshold: 2
-    placeholders:
-      ALERT_TRIGGERED_OR_RESOLVED:
-        TRIGGERED: "hors ligne"
-        RESOLVED: "en ligne"
+  # Free Mobile SMS notifications. Uncomment this entire custom block to use it.
+  # custom:
+  #   url: "https://smsapi.free-mobile.fr/sendmsg?user=${GATUS_SMS_USER}&pass=${GATUS_SMS_PASSWORD}&msg=Gatus%20:%20[ALERT_TRIGGERED_OR_RESOLVED]"
+  #   method: "GET"
+  #   default-alert:
+  #     send-on-resolved: true
+  #     failure-threshold: 2
+  #     success-threshold: 2
+  #   placeholders:
+  #     ALERT_TRIGGERED_OR_RESOLVED:
+  #       TRIGGERED: "hors ligne"
+  #       RESOLVED: "en ligne"
 
   email:
     from: "${GATUS_EMAIL_FROM}"
@@ -38,5 +36,21 @@ alerting:
       failure-threshold: 2
       success-threshold: 2
 
-# Add your own checks here. No endpoint is bundled with the App.
 endpoints: []
+
+# Example endpoints. Replace endpoints: [] above with the checks you need.
+# endpoints:
+#   - name: Example ICMP
+#     url: "icmp://192.0.2.1"
+#     interval: 1m
+#     conditions:
+#       - "[CONNECTED] == true"
+#     alerts:
+#       - type: email
+#       - type: custom
+#
+#   - name: Example HTTPS
+#     url: "https://example.com"
+#     interval: 5m
+#     conditions:
+#       - "[STATUS] == 200"

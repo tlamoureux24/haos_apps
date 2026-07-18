@@ -99,8 +99,22 @@ def main() -> int:
 
     if "concurrency: 0" not in sample or "disable-monitoring-lock" in sample:
         raise RuntimeError("Initial configuration must use concurrency: 0")
-    if "endpoints: []" not in sample or 'url: "icmp://' in sample:
+    if not sample.startswith(
+        "# Official configuration documentation: https://github.com/TwiN/gatus#configuration\n"
+    ):
+        raise RuntimeError("Initial configuration must start with the official documentation link")
+    if "Optional persistent history" in sample or re.search(
+        r"^\s*storage:", sample, flags=re.MULTILINE
+    ):
+        raise RuntimeError("Initial configuration must not include a storage example")
+    if "endpoints: []" not in sample or re.search(
+        r'^\s+url:\s*"(?:icmp|https?)://', sample, flags=re.MULTILINE
+    ):
         raise RuntimeError("Initial configuration must not disclose network endpoints")
+    if re.search(r"^\s+custom:", sample, flags=re.MULTILINE):
+        raise RuntimeError("Free Mobile custom alerting must remain commented")
+    if "#   - name: Example ICMP" not in sample or "#   - name: Example HTTPS" not in sample:
+        raise RuntimeError("Initial configuration must include commented endpoint examples")
     if "&msg=" not in sample:
         raise RuntimeError("Free Mobile URL must include the msg query parameter")
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.36.0-2 - 2026-07-18
+
+- Simplify the initial Gatus configuration.
+- Link to the official configuration documentation on the first line.
+- Keep the Free Mobile SMS provider and sample endpoints fully commented.
+- Remove the optional SQLite storage example from the initial file.
+
 ## 5.36.0-1 - 2026-07-18
 
 - Package the official Gatus 5.36.0 binary as a Home Assistant app.
