@@ -1,6 +1,6 @@
 name: "UniFi Autoblock"
 slug: "unifi_autoblock"
-version: "0.4.7"
+version: "0.4.8"
 description: "Block IDS/IPS attacker IPs by updating a UniFi traffic matching list"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/unifi_autoblock"
 watchdog: "http://[HOST]:[PORT:37989]/health"
@@ -30,7 +30,7 @@ options:
   dry_run: true
   allowed_destinations: []
   allowed_destination_ports:
-    - 443
+    - "443"
   min_severity: 0
   ban_ttl_days: 30
   allowlist_cidrs: []
@@ -47,7 +47,7 @@ schema:
   allowed_destinations:
     - str
   allowed_destination_ports:
-    - "int(1,65535)"
+    - str
   min_severity: "int(0,10)"
   ban_ttl_days: "int(1,3650)"
   allowlist_cidrs:

@@ -107,7 +107,7 @@ If you change the mapped host port in the Home Assistant app network settings, r
 | `traffic_matching_list_id` | No | empty | Optional existing UniFi traffic matching list UUID. Leave empty for auto-detection. |
 | `traffic_matching_list_name` | No | empty | Optional existing UniFi traffic matching list name. Leave empty when exactly one IPv4 address list exists. |
 | `allowed_destinations` | No | empty | Internal IPs of protected services, for example the reverse proxy IP. Empty accepts any destination IP from valid UniFi IDS/IPS events. |
-| `allowed_destination_ports` | Yes | `443` | Protected service ports to accept from UniFi IDS/IPS events. This is `parameters.dpt`, the attacked service port, not the app webhook port. |
+| `allowed_destination_ports` | Yes | `443` | Protected service ports to accept from UniFi IDS/IPS events. This is `parameters.dpt`, the attacked service port, not the app webhook port. Multiple ports can be entered, for example `80` and `443`. |
 | `min_severity` | Yes | `0` | Ignore UniFi events below this severity. Keep `0` to accept all severities. |
 | `ban_ttl_days` | Yes | `30` | Number of days before app-managed entries expire. Manual UniFi list entries are not expired by the app. |
 | `allowlist_cidrs` | No | empty | Optional public CIDRs that must never be blocked. Local and non-public ranges are already ignored automatically. |

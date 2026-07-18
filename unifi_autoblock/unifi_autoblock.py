@@ -142,14 +142,30 @@ def decrypt_unifi_api_key() -> str:
     return decrypted.decode("utf-8")
 
 
-def clear_supervisor_unifi_api_key_value(raw_options: dict[str, Any]) -> None:
+def parse_destination_ports(values: Any) -> set[int]:
+    if not isinstance(values, list) or not values:
+        raise RuntimeError("allowed_destination_ports must contain at least one port")
+    try:
+        ports = set(int(value) for value in values)
+    except (TypeError, ValueError) as err:
+        raise RuntimeError(
+            "allowed_destination_ports must contain only integer port numbers"
+        ) from err
+    invalid_ports = sorted(port for port in ports if not 1 <= port <= 65535)
+    if invalid_ports:
+        raise RuntimeError(
+            "allowed_destination_ports contains invalid ports: "
+            + ", ".join(str(port) for port in invalid_ports)
+        )
+    return ports
+
+
+def save_supervisor_options(options: dict[str, Any], action: str) -> None:
     token = os.environ.get("SUPERVISOR_TOKEN")
     if not token:
-        raise RuntimeError("SUPERVISOR_TOKEN is unavailable; cannot clear the UniFi API key value")
+        raise RuntimeError(f"SUPERVISOR_TOKEN is unavailable; cannot {action}")
 
-    sanitized = dict(raw_options)
-    sanitized["unifi_api_key"] = ""
-    payload = json.dumps({"options": sanitized}).encode("utf-8")
+    payload = json.dumps({"options": options}).encode("utf-8")
     request = urllib.request.Request(
         "http://supervisor/addons/self/options",
         data=payload,
@@ -165,9 +181,21 @@ def clear_supervisor_unifi_api_key_value(raw_options: dict[str, Any]) -> None:
             response.read()
     except urllib.error.HTTPError as err:
         body = err.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Could not clear UniFi API key value: HTTP {err.code}: {body}") from err
+        raise RuntimeError(f"Could not {action}: HTTP {err.code}: {body}") from err
     except urllib.error.URLError as err:
-        raise RuntimeError(f"Could not clear UniFi API key value: {err}") from err
+        raise RuntimeError(f"Could not {action}: {err}") from err
+
+
+def clear_supervisor_unifi_api_key_value(raw_options: dict[str, Any]) -> None:
+    sanitized = dict(raw_options)
+    sanitized["unifi_api_key"] = ""
+    sanitized["allowed_destination_ports"] = [
+        str(port)
+        for port in sorted(
+            parse_destination_ports(raw_options.get("allowed_destination_ports", ["443"]))
+        )
+    ]
+    save_supervisor_options(sanitized, "clear the UniFi API key value")
     LOGGER.info("Cleared UniFi API key value from app configuration")
 
 
@@ -186,11 +214,26 @@ def resolve_unifi_api_key(raw_options: dict[str, Any]) -> str:
 def prepare_secrets() -> None:
     raw_options = load_json_file(OPTIONS_PATH, {})
     configure_logging(str(raw_options.get("log_level", "info")).upper())
+    normalized_ports = [
+        str(port)
+        for port in sorted(
+            parse_destination_ports(raw_options.get("allowed_destination_ports", ["443"]))
+        )
+    ]
     configured = str(raw_options.get("unifi_api_key") or "").strip()
-    if not configured:
+    ports_need_update = raw_options.get("allowed_destination_ports") != normalized_ports
+    if not configured and not ports_need_update:
         return
-    encrypt_unifi_api_key(configured)
-    clear_supervisor_unifi_api_key_value(raw_options)
+    updated_options = dict(raw_options)
+    updated_options["allowed_destination_ports"] = normalized_ports
+    if configured:
+        encrypt_unifi_api_key(configured)
+        updated_options["unifi_api_key"] = ""
+    save_supervisor_options(updated_options, "normalize app configuration")
+    if configured:
+        LOGGER.info("Cleared UniFi API key value from app configuration")
+    if ports_need_update:
+        LOGGER.info("Normalized protected destination ports for the visual configuration editor")
 
 
 def resolve_controller_source_networks(unifi_base_url: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
@@ -236,8 +279,9 @@ class Config:
         self.verify_ssl = bool(raw.get("verify_ssl", False))
         self.dry_run = bool(raw.get("dry_run", True))
         self.allowed_destinations = set(str(v) for v in raw.get("allowed_destinations", []))
-        destination_ports = raw.get("allowed_destination_ports", [443])
-        self.allowed_destination_ports = set(int(v) for v in destination_ports)
+        self.allowed_destination_ports = parse_destination_ports(
+            raw.get("allowed_destination_ports", ["443"])
+        )
         self.min_severity = int(raw.get("min_severity", 0))
         self.ban_ttl_days = int(raw.get("ban_ttl_days", 30))
         self.webhook_source_networks = resolve_controller_source_networks(self.unifi_base_url)

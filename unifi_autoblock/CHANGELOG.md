@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.8
+
+- Render protected destination ports correctly in the Home Assistant visual configuration editor.
+- Keep strict runtime validation for the full TCP/UDP port range (`1` to `65535`).
+- Preserve compatibility with existing numeric port lists.
+
 ## 0.4.7
 
 - Remove experimental stage now that the validated production workflow is stable.

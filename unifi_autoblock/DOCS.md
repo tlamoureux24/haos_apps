@@ -59,7 +59,7 @@ Content: Default Content
 | `traffic_matching_list_id` | UUID optionnel de la liste Traffic Matching UniFi. Laisser vide pour détection automatique. |
 | `traffic_matching_list_name` | Nom optionnel de la liste Traffic Matching UniFi. Laisser vide si une seule liste IPv4 existe. |
 | `allowed_destinations` | IP internes des services protégés. Vide accepte toute IP de destination dans les événements IDS/IPS valides. |
-| `allowed_destination_ports` | Ports des services protégés dans les événements IDS/IPS, défaut `443`. Ce n'est pas le port webhook de l'app. |
+| `allowed_destination_ports` | Ports des services protégés dans les événements IDS/IPS, défaut `443`. Plusieurs ports sont acceptés, par exemple `80` et `443`. Ce n'est pas le port webhook de l'app. |
 | `min_severity` | Ignore les événements UniFi sous cette sévérité. Garder `0` pour tout accepter. |
 | `ban_ttl_days` | Nombre de jours avant expiration des entrées gérées par l'app. Les entrées manuelles UniFi sont conservées. |
 | `allowlist_cidrs` | CIDR publics optionnels à ne jamais bloquer. Les plages locales et non publiques sont ignorées automatiquement. |
@@ -165,7 +165,7 @@ Content: Default Content
 | `traffic_matching_list_id` | Optional UniFi traffic matching list UUID. Leave empty for auto-detection. |
 | `traffic_matching_list_name` | Optional UniFi traffic matching list name. Leave empty when exactly one IPv4 list exists. |
 | `allowed_destinations` | Internal IPs of protected services. Empty accepts any destination IP from valid IDS/IPS events. |
-| `allowed_destination_ports` | Protected service ports from IDS/IPS events, default `443`. This is not the app webhook port. |
+| `allowed_destination_ports` | Protected service ports from IDS/IPS events, default `443`. Multiple ports are supported, for example `80` and `443`. This is not the app webhook port. |
 | `min_severity` | Ignore UniFi events below this severity. Keep `0` to accept all severities. |
 | `ban_ttl_days` | Days before app-managed entries expire. Manual UniFi list entries are preserved. |
 | `allowlist_cidrs` | Optional public CIDRs that must never be blocked. Local and non-public ranges are ignored automatically. |

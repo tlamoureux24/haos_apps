@@ -107,7 +107,7 @@ Si vous changez le port hôte mappé dans les paramètres réseau de l'app Home 
 | `traffic_matching_list_id` | Non | vide | UUID optionnel de la liste Traffic Matching UniFi existante. Laisser vide pour détection automatique. |
 | `traffic_matching_list_name` | Non | vide | Nom optionnel de la liste Traffic Matching UniFi existante. Laisser vide si une seule liste IPv4 existe. |
 | `allowed_destinations` | Non | vide | IP internes des services protégés, par exemple l'IP du reverse proxy. Vide accepte toute IP de destination depuis les événements IDS/IPS UniFi valides. |
-| `allowed_destination_ports` | Oui | `443` | Ports des services protégés à accepter dans les événements IDS/IPS UniFi. Il s'agit de `parameters.dpt`, le port attaqué, pas le port webhook de l'app. |
+| `allowed_destination_ports` | Oui | `443` | Ports des services protégés à accepter dans les événements IDS/IPS UniFi. Il s'agit de `parameters.dpt`, le port attaqué, pas le port webhook de l'app. Plusieurs ports peuvent être saisis, par exemple `80` et `443`. |
 | `min_severity` | Oui | `0` | Ignore les événements UniFi sous cette sévérité. Garder `0` pour tout accepter. |
 | `ban_ttl_days` | Oui | `30` | Nombre de jours avant expiration des entrées gérées par l'app. Les entrées manuelles UniFi ne sont pas expirées par l'app. |
 | `allowlist_cidrs` | Non | vide | CIDR publics optionnels à ne jamais bloquer. Les plages locales et non publiques sont déjà ignorées automatiquement. |
