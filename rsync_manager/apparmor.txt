@@ -6,6 +6,10 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/nameservice>
 
   # Base container and service permissions
+  # mount.cifs adjusts this exact capability set before mounting.
+  capability dac_override,
+  capability dac_read_search,
+  capability setpcap,
   capability sys_admin,
   capability setgid,
   capability setuid,

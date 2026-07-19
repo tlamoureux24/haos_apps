@@ -77,13 +77,12 @@ def main() -> int:
             "#   - type: share\n#     read_only: false",
             "#   - type: media\n#     read_only: false",
             "#   - type: backup\n#     read_only: false",
-            "privileged:\n  - SYS_ADMIN",
+            "privileged:\n  - SYS_ADMIN\n  - DAC_READ_SEARCH",
         ),
         "config invariant",
     )
     for forbidden in (
         "codenotary:",
-        "DAC_READ_SEARCH",
         "homeassistant_api:",
         "hassio_api:",
         "docker_api:",
@@ -118,6 +117,9 @@ def main() -> int:
         apparmor,
         (
             "capability sys_admin,",
+            "capability dac_override,",
+            "capability dac_read_search,",
+            "capability setpcap,",
             "/data/** rw,",
             "/share/** rw,",
             "/media/** rw,",
@@ -126,7 +128,7 @@ def main() -> int:
         ),
         "AppArmor invariant",
     )
-    for forbidden in ("capability dac_read_search", "/config/**", "/addons/**", "/ssl/**"):
+    for forbidden in ("/config/**", "/addons/**", "/ssl/**"):
         if forbidden in apparmor:
             raise RuntimeError(f"Overbroad AppArmor rule: {forbidden}")
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.3 - 2026-07-19
+
+- Restore `DAC_READ_SEARCH` in the Supervisor privilege set required by `mount.cifs`.
+- Allow the precise `DAC_OVERRIDE`, `DAC_READ_SEARCH`, `SETPCAP` and `SYS_ADMIN` capability set in AppArmor.
+- Fix CIFS jobs failing with `Unable to apply new capability set` after version 1.1.0.
+
 ## 1.1.2 - 2026-07-18
 
 - Disable Home Assistant local-folder mappings by default.

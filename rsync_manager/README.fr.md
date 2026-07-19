@@ -395,9 +395,10 @@ Pour SMB/CIFS, l'App a besoin de privileges de montage reseau:
 ```yaml
 privileged:
   - SYS_ADMIN
+  - DAC_READ_SEARCH
 ```
 
-Ce privilege sert uniquement a monter et demonter les partages CIFS. L'App n'expose pas la configuration Home Assistant, les certificats SSL, les configurations des autres Apps, le socket Docker ou les API Home Assistant.
+Ces privileges servent uniquement a `mount.cifs`. Avant le montage, cet utilitaire construit un jeu restreint comprenant `SYS_ADMIN`, `DAC_READ_SEARCH` et `DAC_OVERRIDE`. AppArmor autorise precisement ce jeu ainsi que `SETPCAP`, utilise par l'utilitaire pour ajuster ses capacites. L'App n'expose pas la configuration Home Assistant, les certificats SSL, les configurations des autres Apps, le socket Docker ou les API Home Assistant.
 
 Les identifiants SMB et SMTP sont stockes dans le volume prive `/data` avec des permissions `0600`. Ils restent presents dans les exports et les sauvegardes Home Assistant, qui doivent donc etre proteges.
 

@@ -31,8 +31,8 @@ exports téléchargés et dans les sauvegardes Home Assistant : conservez-les da
 un emplacement sûr.
 
 Les rapports SMTP sont facultatifs. Les certificats TLS du serveur SMTP sont
-vérifiés. Le privilège `SYS_ADMIN` est requis uniquement pour monter et démonter
-les partages CIFS.
+vérifiés. Les privilèges `SYS_ADMIN` et `DAC_READ_SEARCH` sont requis uniquement
+par `mount.cifs` pour monter et démonter les partages CIFS.
 
 [Documentation française complète](https://github.com/tlamoureux24/haos_apps/blob/main/rsync_manager/README.fr.md)
 
@@ -64,6 +64,7 @@ SMB and SMTP credentials are stored in the private `/data` volume with mode
 clear text and must be stored securely.
 
 SMTP reports are optional and SMTP TLS certificates are verified. `SYS_ADMIN`
-is required only to mount and unmount CIFS shares.
+and `DAC_READ_SEARCH` are required only by `mount.cifs` to mount and unmount
+CIFS shares.
 
 [Full English documentation](https://github.com/tlamoureux24/haos_apps/blob/main/rsync_manager/README.md)

@@ -88,9 +88,11 @@ Rsync Manager uses SMB 3.0 with `ntlmssp`, `noserverino` and `nounix`. These
 safe defaults are intentionally fixed in the interface. Credentials are passed
 to `mount.cifs` through a temporary mode-`0600` file and are masked in logs.
 
-The App needs `SYS_ADMIN` solely to mount and unmount CIFS shares. It does not
-request `DAC_READ_SEARCH`, access to the Docker socket or either Home Assistant
-API.
+The App needs `SYS_ADMIN` and `DAC_READ_SEARCH` for `mount.cifs`. The helper
+creates a restricted capability set containing `SYS_ADMIN`, `DAC_READ_SEARCH`
+and `DAC_OVERRIDE` before performing the mount. AppArmor permits that exact set
+plus `SETPCAP`, which is used when the helper adjusts its capability bounding
+set. The App does not access the Docker socket or either Home Assistant API.
 
 ## Rsync behavior
 
