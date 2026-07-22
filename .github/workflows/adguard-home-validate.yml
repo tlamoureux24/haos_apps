@@ -152,5 +152,6 @@ jobs:
           assert response[:2] == query[:2] and response[2] & 0x80
           PY
 
-          test -s "${smoke_root}/config/conf/AdGuardHome.yaml"
+          docker exec ha-adguard-home-smoke \
+            test -s /config/conf/AdGuardHome.yaml
           echo "AdGuard Home web setup and DNS over TCP/UDP are healthy"
