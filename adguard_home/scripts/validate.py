@@ -124,7 +124,8 @@ def main() -> int:
 
     launcher_invariants = (
         'readonly CONFIG_ROOT="/config"',
-        'if [ ! -s "${CONFIG_FILE}" ]; then',
+        'if su-exec nobody:nogroup test -s "${CONFIG_FILE}"; then',
+        "start_unprivileged",
         'find "${CONF_DIR}" "${WORK_DIR}" -depth',
         "normalize_default_admin_port",
         'sub(/:80[[:space:]]*$/, ":3000")',

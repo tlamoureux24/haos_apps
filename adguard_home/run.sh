@@ -13,6 +13,14 @@ handover_to_nobody() {
     -exec chown nobody:nogroup '{}' \;
 }
 
+start_unprivileged() {
+  echo "[INFO] Starting AdGuard Home as an unprivileged user"
+  exec su-exec nobody:nogroup /opt/adguardhome/AdGuardHome \
+    --no-check-update \
+    --config "${CONFIG_FILE}" \
+    --work-dir "${WORK_DIR}"
+}
+
 normalize_default_admin_port() {
   readonly normalized_config="${CONF_DIR}/.AdGuardHome.yaml.normalized.$$"
 
@@ -49,48 +57,46 @@ mkdir -p "${CONF_DIR}" "${WORK_DIR}"
 # Home Assistant owns these addon_config mount points.  Their modes cannot be
 # changed reliably from the App; only hand over the files created inside them.
 
-if [ ! -s "${CONFIG_FILE}" ]; then
-  echo "[NOTICE] First-run setup requires temporary administrator privileges"
-  echo "[NOTICE] AdGuard Home will restart automatically as nobody after setup"
-
-  /opt/adguardhome/AdGuardHome \
-    --no-check-update \
-    --config "${CONFIG_FILE}" \
-    --work-dir "${WORK_DIR}" &
-  child_pid=$!
-
-  trap 'kill -TERM "${child_pid}" 2>/dev/null || true' TERM INT
-
-  while kill -0 "${child_pid}" 2>/dev/null; do
-    if [ -s "${CONFIG_FILE}" ]; then
-      echo "[INFO] Initial configuration created; dropping privileges"
-      sleep 2
-      kill -TERM "${child_pid}" 2>/dev/null || true
-      wait "${child_pid}" || true
-      trap - TERM INT
-      break
-    fi
-    sleep 1
-  done
-
-  if kill -0 "${child_pid}" 2>/dev/null; then
-    kill -TERM "${child_pid}" 2>/dev/null || true
-    wait "${child_pid}" || true
-  elif [ ! -s "${CONFIG_FILE}" ]; then
-    if wait "${child_pid}"; then
-      exit 0
-    else
-      status=$?
-      exit "${status}"
-    fi
-  fi
-
-  normalize_default_admin_port
-  handover_to_nobody
+if su-exec nobody:nogroup test -s "${CONFIG_FILE}"; then
+  start_unprivileged
 fi
 
-echo "[INFO] Starting AdGuard Home as an unprivileged user"
-exec su-exec nobody:nogroup /opt/adguardhome/AdGuardHome \
+echo "[NOTICE] First-run setup requires temporary administrator privileges"
+echo "[NOTICE] AdGuard Home will restart automatically as nobody after setup"
+
+/opt/adguardhome/AdGuardHome \
   --no-check-update \
   --config "${CONFIG_FILE}" \
-  --work-dir "${WORK_DIR}"
+  --work-dir "${WORK_DIR}" &
+child_pid=$!
+
+trap 'kill -TERM "${child_pid}" 2>/dev/null || true' TERM INT
+
+while kill -0 "${child_pid}" 2>/dev/null; do
+  if [ -s "${CONFIG_FILE}" ]; then
+    echo "[INFO] Initial configuration created; dropping privileges"
+    sleep 2
+    kill -TERM "${child_pid}" 2>/dev/null || true
+    wait "${child_pid}" || true
+    trap - TERM INT
+    break
+  fi
+  sleep 1
+done
+
+if kill -0 "${child_pid}" 2>/dev/null; then
+  kill -TERM "${child_pid}" 2>/dev/null || true
+  wait "${child_pid}" || true
+elif [ ! -s "${CONFIG_FILE}" ]; then
+  if wait "${child_pid}"; then
+    exit 0
+  else
+    status=$?
+    exit "${status}"
+  fi
+fi
+
+normalize_default_admin_port
+handover_to_nobody
+
+start_unprivileged

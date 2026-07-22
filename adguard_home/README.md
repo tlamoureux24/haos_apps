@@ -20,8 +20,8 @@ There is intentionally no Home Assistant Ingress, authentication delegation,
 discovery, `host_network`, privileged mode, or Supervisor token.
 
 The app version follows `<AdGuard Home version>-<package revision>`. For
-example, `0.107.78-5` contains official AdGuard Home `0.107.78` and package
-revision `5`.
+example, `0.107.78-6` contains official AdGuard Home `0.107.78` and package
+revision `6`.
 
 ## Installation
 

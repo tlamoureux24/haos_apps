@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.107.78-6 - 2026-07-22
+
+- Detect an existing configuration as the unprivileged runtime user so
+  restrictive persistent directory permissions do not look like a first run.
+- Reserve the temporary root startup exclusively for a genuine first run.
+
 ## 0.107.78-5 - 2026-07-22
 
 - Fixed restarts on Home Assistant systems that reject permission changes on
