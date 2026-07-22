@@ -1,0 +1,21 @@
+configuration:
+  ssl:
+    name: HTTPS web shortcut
+    description: >-
+      Changes only the Home Assistant Open Web UI shortcut and must match the
+      HTTPS configuration made inside AdGuard Home. It does not enable TLS.
+network:
+  53/tcp: Plain DNS over TCP.
+  53/udp: Plain DNS over UDP.
+  80/tcp: Optional HTTP and DNS-over-HTTPS.
+  443/tcp: Optional HTTPS and DNS-over-HTTPS.
+  443/udp: Optional HTTPS and DNS-over-HTTPS over HTTP/3.
+  3000/tcp: Administration and initial setup interface.
+  3000/udp: Optional administration HTTPS over HTTP/3.
+  853/tcp: Optional DNS-over-TLS.
+  853/udp: Optional DNS-over-QUIC.
+  784/udp: Optional DNS-over-QUIC alternative port.
+  8853/udp: Optional DNS-over-QUIC alternative port.
+  5443/tcp: Optional DNSCrypt over TCP.
+  5443/udp: Optional DNSCrypt over UDP.
+  6060/tcp: Optional debugging profiler. Never expose it publicly.

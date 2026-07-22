@@ -1,0 +1,145 @@
+name: Validate AdGuard Home App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "adguard_home/**"
+      - ".github/workflows/adguard-home-*.yml"
+  pull_request:
+    paths:
+      - "adguard_home/**"
+      - ".github/workflows/adguard-home-*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate metadata and scripts
+        run: |
+          set -euo pipefail
+          python3 adguard_home/scripts/validate.py
+          sh -n adguard_home/run.sh
+          python3 -m py_compile \
+            adguard_home/scripts/update_adguard_home_version.py \
+            adguard_home/scripts/validate.py
+
+      - name: Read pinned versions
+        id: versions
+        run: |
+          set -euo pipefail
+          upstream="$(<adguard_home/upstream_version)"
+          package="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' adguard_home/config.yaml)"
+          echo "upstream=${upstream}" >>"${GITHUB_OUTPUT}"
+          echo "package=${package}" >>"${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify official multi-architecture image
+        env:
+          ADGUARD_HOME_VERSION: ${{ steps.versions.outputs.upstream }}
+        run: |
+          set -euo pipefail
+          manifest="$(docker buildx imagetools inspect \
+            "adguard/adguardhome:v${ADGUARD_HOME_VERSION}")"
+          grep -q 'linux/amd64' <<<"${manifest}"
+          grep -q 'linux/arm64' <<<"${manifest}"
+
+      - name: Build wrapper
+        env:
+          ADGUARD_HOME_VERSION: ${{ steps.versions.outputs.upstream }}
+          APP_VERSION: ${{ steps.versions.outputs.package }}
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --build-arg "ADGUARD_HOME_VERSION=${ADGUARD_HOME_VERSION}" \
+            --build-arg "BUILD_VERSION=${APP_VERSION}" \
+            --build-arg "BUILD_ARCH=amd64" \
+            --tag "ha-adguard-home-smoke:${APP_VERSION}" \
+            adguard_home
+
+      - name: Smoke-test setup, unprivileged service and DNS
+        env:
+          APP_VERSION: ${{ steps.versions.outputs.package }}
+        run: |
+          set -euo pipefail
+          smoke_root="${RUNNER_TEMP}/adguard-home-smoke"
+          mkdir -p "${smoke_root}/config"
+
+          cleanup() {
+            docker logs ha-adguard-home-smoke 2>&1 || true
+            docker rm --force ha-adguard-home-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name ha-adguard-home-smoke \
+            --publish 127.0.0.1:13000:3000/tcp \
+            --publish 127.0.0.1:15353:53/tcp \
+            --publish 127.0.0.1:15353:53/udp \
+            --volume "${smoke_root}/config:/config" \
+            "ha-adguard-home-smoke:${APP_VERSION}"
+
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:13000/ >/dev/null 2>&1; then
+              break
+            fi
+            test "$(docker inspect --format '{{.State.Running}}' \
+              ha-adguard-home-smoke)" = "true"
+            sleep 1
+          done
+          curl --fail --silent --show-error \
+            http://127.0.0.1:13000/ >/dev/null
+
+          docker exec ha-adguard-home-smoke sh -c \
+            'test "$(awk '\''/^Uid:/ {print $2}'\'' /proc/1/status)" = "65534"'
+
+          curl --fail --silent --show-error \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data '{"web":{"ip":"0.0.0.0","port":3000},"dns":{"ip":"0.0.0.0","port":53},"username":"smokeadmin","password":"smoke-password-2026"}' \
+            http://127.0.0.1:13000/control/install/configure >/dev/null
+
+          for attempt in {1..30}; do
+            if curl --silent --output /dev/null \
+              http://127.0.0.1:13000/login.html; then
+              break
+            fi
+            sleep 1
+          done
+
+          python3 - <<'PY'
+          import socket
+          import struct
+
+          name = "healthcheck.adguardhome.test"
+          qname = b"".join(bytes([len(label)]) + label.encode() for label in name.split(".")) + b"\0"
+          query = struct.pack("!HHHHHH", 0xA6D1, 0x0100, 1, 0, 0, 0) + qname + struct.pack("!HH", 1, 1)
+
+          udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+          udp.settimeout(5)
+          udp.sendto(query, ("127.0.0.1", 15353))
+          response, _ = udp.recvfrom(4096)
+          assert response[:2] == query[:2] and response[2] & 0x80
+
+          tcp = socket.create_connection(("127.0.0.1", 15353), timeout=5)
+          tcp.sendall(struct.pack("!H", len(query)) + query)
+          size = struct.unpack("!H", tcp.recv(2))[0]
+          response = tcp.recv(size)
+          assert response[:2] == query[:2] and response[2] & 0x80
+          PY
+
+          test -s "${smoke_root}/config/conf/AdGuardHome.yaml"
+          echo "AdGuard Home web setup and DNS over TCP/UDP are healthy"

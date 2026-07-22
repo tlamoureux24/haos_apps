@@ -1,0 +1,225 @@
+# AdGuard Home for Home Assistant
+
+Documentation: [English](README.md) | [Français](README.fr.md)
+
+This Home Assistant app is a deliberately thin package around the official
+[AdGuard Home](https://github.com/AdguardTeam/AdGuardHome) Docker image. It
+does not fork or patch AdGuard Home. Home Assistant OS is only the container
+host: AdGuard Home keeps its own administrator account and is not granted any
+Home Assistant or Supervisor API access.
+
+The app adds only:
+
+- Home Assistant metadata and configurable network ports;
+- persistent official configuration and work directories in `addon_config`;
+- an unprivileged launcher and an AppArmor profile;
+- cold Home Assistant backups;
+- automated tracking and validation of stable upstream releases.
+
+There is intentionally no Home Assistant Ingress, authentication delegation,
+discovery, `host_network`, privileged mode, or Supervisor token.
+
+The app version follows `<AdGuard Home version>-<package revision>`. For
+example, `0.107.78-1` contains official AdGuard Home `0.107.78` and package
+revision `1`.
+
+## Installation
+
+Add this Home Assistant app repository:
+
+```text
+https://github.com/tlamoureux24/haos_apps
+```
+
+Install **AdGuard Home**, start it, then open
+`http://HOME_ASSISTANT_LAN_IP:3000`. Complete the official setup wizard with:
+
+- web interface: all interfaces, port `3000`;
+- DNS server: all interfaces, port `53`;
+- a unique administrator username and strong password.
+
+Do not publish the administration port on the Internet. Restrict it to trusted
+LAN and VPN clients with your router or firewall.
+
+The app supports `amd64` and `aarch64`.
+
+## Isolation and Client Addresses
+
+The app uses Docker bridge networking. The DNS ports are published by the
+Supervisor and `host_network` is deliberately not enabled. This retains an
+independent network namespace and avoids giving AdGuard Home direct access to
+every Home Assistant host interface.
+
+Standard Linux Docker port forwarding normally preserves the source address of
+DNS clients. Confirm this after installation in **Dashboard → Top clients** or
+the query log. If all requests unexpectedly appear from one Docker gateway
+address, report the environment before changing the package security model.
+
+Clients must query the Home Assistant LAN address directly. If a router accepts
+client DNS queries and forwards them to AdGuard Home, AdGuard Home will see the
+router as the client.
+
+## Network Ports
+
+Only plain DNS and the setup interface are enabled by default. Every other
+official service port is available in the app Network configuration and remains
+disabled until assigned a host port.
+
+| Container port | Default | Purpose |
+| --- | ---: | --- |
+| `53/tcp` | `53` | Plain DNS over TCP |
+| `53/udp` | `53` | Plain DNS over UDP |
+| `3000/tcp` | `3000` | Initial setup and administration |
+| `80/tcp` | disabled | HTTP and optional DNS-over-HTTPS |
+| `443/tcp` | disabled | HTTPS and DNS-over-HTTPS |
+| `443/udp` | disabled | HTTPS/DoH over HTTP/3 |
+| `3000/udp` | disabled | Alternative HTTPS over HTTP/3 |
+| `853/tcp` | disabled | DNS-over-TLS |
+| `853/udp` | disabled | DNS-over-QUIC |
+| `784/udp` | disabled | Alternative DNS-over-QUIC |
+| `8853/udp` | disabled | Alternative DNS-over-QUIC |
+| `5443/tcp` | disabled | DNSCrypt over TCP |
+| `5443/udp` | disabled | DNSCrypt over UDP |
+| `6060/tcp` | disabled | Go pprof debugging interface |
+
+The host-side value of every listed port can be changed in the Home Assistant
+Network panel. Changing a host port does not change the port on which AdGuard
+Home listens inside the container. The AdGuard Home service configuration and
+the enabled container ports must agree.
+
+Never expose `3000` or `6060` publicly. Enable encrypted incoming DNS ports only
+when they are intentionally configured with a valid certificate and protected
+by firewall rules.
+
+## Why DHCP Is Not Included
+
+The official image exposes DHCP ports 67 and 68, but AdGuard Home's DHCP server
+depends on layer-2 broadcasts and requires Docker host networking. This app
+deliberately avoids `host_network`, so publishing those ports in bridge mode
+would suggest a feature that cannot work reliably.
+
+Keep DHCP on your router. If AdGuard Home DHCP is required, use a separate
+installation designed for host networking; do not add ports 67/68 to this app.
+
+## Administration over HTTPS
+
+The first-run wizard is necessarily available over HTTP on port 3000. AdGuard
+Home can later provide its native administration interface over HTTPS after a
+certificate and private key are configured in **Settings → Encryption**.
+
+To keep HTTPS administration on host port 3000, configure AdGuard Home so its
+HTTPS listener uses container port 3000 and move or disable the conflicting
+plain HTTP listener. Enable `3000/udp` only if HTTP/3 is also wanted. Then set
+the app option **HTTPS web shortcut** to `true` so Home Assistant's **Open Web
+UI** link uses `https://`.
+
+That option changes only the shortcut scheme. It does not configure TLS,
+install a certificate, change AdGuard Home ports, or redirect HTTP. Set it only
+after native AdGuard Home HTTPS works directly in a browser. A certificate for
+a hostname trusted by your clients is preferable to an untrusted self-signed
+certificate.
+
+Official encrypted-DNS documentation:
+<https://github.com/AdguardTeam/AdGuardHome/wiki/Encryption>
+
+## Persistent Data and Backups
+
+The official Docker paths are redirected through command-line options to:
+
+```text
+/config/conf/AdGuardHome.yaml
+/config/work/
+```
+
+Home Assistant maps `/config` to this app's private `addon_config` directory.
+The configuration, administrator password hash, filter settings, statistics and
+query log are therefore persistent and included in backups.
+
+The app requests a cold backup: Supervisor briefly stops it while copying its
+files, then restarts it. Backups are sensitive because they contain the
+AdGuard Home configuration and password hash.
+
+## DNS Deployment
+
+For consistent filtering, advertise only the Home Assistant LAN IP as DNS to
+clients through the router's DHCP settings. A secondary unfiltered router or
+public DNS allows clients to bypass filtering because clients do not reserve
+the second DNS exclusively for outages.
+
+An optional firewall policy can:
+
+1. allow clients to reach `HOME_ASSISTANT_IP` on TCP/UDP 53;
+2. block client DNS to the router and Internet on TCP/UDP 53;
+3. block client DoT and DoQ on TCP/UDP 853;
+4. allow the Home Assistant host to reach the selected upstream resolvers.
+
+DNS-over-HTTPS uses ordinary port 443 and cannot be blocked globally without
+affecting normal HTTPS traffic. IPv4 and IPv6 policies must be considered
+separately.
+
+Give the Home Assistant host itself a static external DNS resolver. Do not make
+HAOS depend exclusively on the app it must be able to start, update or repair.
+
+## Upstream DNS
+
+AdGuard Home may use plain DNS, DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC or
+DNSCrypt resolvers upstream. Configure these in the official web interface.
+Encrypted upstream DNS does not require exposing the corresponding incoming
+ports: outbound connections are independent of the app Network mappings.
+
+Official documentation:
+
+- Current knowledge base: <https://adguard-dns.io/kb/adguard-home/overview/>
+- Secure setup: <https://adguard-dns.io/kb/adguard-home/running-securely/>
+- Overview: <https://github.com/AdguardTeam/AdGuardHome>
+- Getting started: <https://github.com/AdguardTeam/AdGuardHome/wiki/Getting-Started>
+- Configuration: <https://github.com/AdguardTeam/AdGuardHome/wiki/Configuration>
+- Docker: <https://github.com/AdguardTeam/AdGuardHome/wiki/Docker>
+- Encryption: <https://github.com/AdguardTeam/AdGuardHome/wiki/Encryption>
+
+## Security Model
+
+AdGuard Home runs as the upstream `nobody` user rather than root. The official
+binary carries only the capability needed to bind privileged service ports.
+The launcher starts as root solely to prepare persistent directories, then
+drops to `nobody:nogroup` before starting AdGuard Home.
+
+The package has no access to Home Assistant configuration, backups, devices,
+Docker socket or Supervisor APIs. Its administrator authentication remains
+independent from Home Assistant.
+
+Hosting the app on HAOS still means a compromised Home Assistant Supervisor
+administrator can stop, reconfigure, update or remove the container. This
+package prevents automatic credential sharing and unnecessary API privilege;
+it cannot create absolute isolation from its host administrator.
+
+## Automatic Updates
+
+The repository checks the official GitHub latest-release API daily and also
+supports manual execution from GitHub Actions. When a new stable semantic
+version appears, the workflow:
+
+1. verifies the official Docker image for `amd64` and `arm64`;
+2. updates the pinned upstream and app versions;
+3. validates metadata, ports, security invariants, scripts and official assets;
+4. builds the wrapper and performs web, installation and DNS smoke tests;
+5. commits the validated update directly to the repository.
+
+Home Assistant then offers the new package as an available update. Installing
+it remains voluntary. AdGuard Home's internal updater is disabled, as in the
+official Docker image.
+
+The workflow requires only `contents: write`; no personal access token is
+needed when repository workflow permissions allow GitHub Actions to write.
+
+## Scope and Support
+
+AdGuard Home functionality and security fixes come from the official image.
+This repository maintains only the Home Assistant packaging and automation.
+
+- Upstream: <https://github.com/AdguardTeam/AdGuardHome>
+- Official knowledge base: <https://adguard-dns.io/kb/adguard-home/overview/>
+- Home Assistant package: <https://github.com/tlamoureux24/haos_apps/tree/main/adguard_home>
+
+Official icon assets are reused unchanged; see
+[UPSTREAM_ASSETS.md](UPSTREAM_ASSETS.md) for their sources and checksums.

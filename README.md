@@ -116,6 +116,29 @@ Documentation détaillée:
 - [Documentation française](gatus/README.fr.md)
 - [English documentation](gatus/README.md)
 
+### AdGuard Home
+
+App Home Assistant minimale basée sur l'image Docker officielle AdGuard Home
+pour filtrer les publicités, traqueurs et domaines indésirables au niveau DNS.
+
+Fonctionnalités principales :
+
+- image officielle AdGuard Home épinglée sur une version stable ;
+- version de l'App alignée au format `<version AdGuard Home>-<révision>` ;
+- DNS TCP/UDP et interface d'administration activés par défaut ;
+- ports DoH, DoH3, DoT, DoQ, DNSCrypt et diagnostic disponibles séparément ;
+- réseau bridge sans `host_network`, Ingress ou API Supervisor ;
+- authentification administrateur AdGuard Home indépendante de Home Assistant ;
+- exécution non-root avec AppArmor et privilèges minimaux ;
+- configuration, statistiques et journaux persistés dans `addon_config` ;
+- sauvegarde à froid et suivi automatisé des nouvelles versions officielles ;
+- DHCP volontairement absent car il nécessite les broadcasts de niveau 2 et le réseau hôte.
+
+Documentation détaillée :
+
+- [Documentation française](adguard_home/README.fr.md)
+- [English documentation](adguard_home/README.md)
+
 ## Prerequis
 
 Ce repository est destine aux installations Home Assistant avec Supervisor, par exemple:
@@ -154,3 +177,7 @@ Pour Nginx Proxy Manager:
 Pour Gatus:
 
 [gatus/README.fr.md](gatus/README.fr.md)
+
+Pour AdGuard Home:
+
+[adguard_home/README.fr.md](adguard_home/README.fr.md)

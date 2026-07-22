@@ -1,0 +1,197 @@
+name: Update AdGuard Home
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: adguard-home-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Read latest stable upstream release
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release="$(curl --fail --silent --show-error \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/AdguardTeam/AdGuardHome/releases/latest)"
+          version="$(jq -r '.tag_name' <<<"${release}")"
+          draft="$(jq -r '.draft' <<<"${release}")"
+          prerelease="$(jq -r '.prerelease' <<<"${release}")"
+          version="${version#v}"
+
+          if [[ "${draft}" != "false" || "${prerelease}" != "false" ]]; then
+            echo "Latest release is not stable" >&2
+            exit 1
+          fi
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unsupported upstream version: ${version}" >&2
+            exit 1
+          fi
+
+          current="$(<adguard_home/upstream_version)"
+          echo "version=${version}" >>"${GITHUB_OUTPUT}"
+          if [[ "${version}" == "${current}" ]]; then
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
+            echo "AdGuard Home ${version} is already current"
+          else
+            echo "changed=true" >>"${GITHUB_OUTPUT}"
+            echo "AdGuard Home update detected: ${current} -> ${version}"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.upstream.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify official multi-architecture image
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          ADGUARD_HOME_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          manifest="$(docker buildx imagetools inspect \
+            "adguard/adguardhome:v${ADGUARD_HOME_VERSION}")"
+          grep -q 'linux/amd64' <<<"${manifest}"
+          grep -q 'linux/arm64' <<<"${manifest}"
+
+      - name: Update package version
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          ADGUARD_HOME_VERSION: ${{ steps.upstream.outputs.version }}
+        run: >-
+          python3 adguard_home/scripts/update_adguard_home_version.py
+          "${ADGUARD_HOME_VERSION}"
+
+      - name: Validate package metadata and scripts
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python3 adguard_home/scripts/validate.py
+          sh -n adguard_home/run.sh
+          python3 -m py_compile \
+            adguard_home/scripts/update_adguard_home_version.py \
+            adguard_home/scripts/validate.py
+
+      - name: Build wrapper
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          ADGUARD_HOME_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --build-arg "ADGUARD_HOME_VERSION=${ADGUARD_HOME_VERSION}" \
+            --build-arg "BUILD_VERSION=${ADGUARD_HOME_VERSION}-1" \
+            --build-arg "BUILD_ARCH=amd64" \
+            --tag "ha-adguard-home-update:${ADGUARD_HOME_VERSION}" \
+            adguard_home
+
+      - name: Smoke-test setup, unprivileged service and DNS
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          ADGUARD_HOME_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          smoke_root="${RUNNER_TEMP}/adguard-home-update-smoke"
+          mkdir -p "${smoke_root}/config"
+
+          cleanup() {
+            docker logs ha-adguard-home-update 2>&1 || true
+            docker rm --force ha-adguard-home-update >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name ha-adguard-home-update \
+            --publish 127.0.0.1:13000:3000/tcp \
+            --publish 127.0.0.1:15353:53/tcp \
+            --publish 127.0.0.1:15353:53/udp \
+            --volume "${smoke_root}/config:/config" \
+            "ha-adguard-home-update:${ADGUARD_HOME_VERSION}"
+
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:13000/ >/dev/null 2>&1; then
+              break
+            fi
+            test "$(docker inspect --format '{{.State.Running}}' \
+              ha-adguard-home-update)" = "true"
+            sleep 1
+          done
+          curl --fail --silent --show-error \
+            http://127.0.0.1:13000/ >/dev/null
+
+          docker exec ha-adguard-home-update sh -c \
+            'test "$(awk '\''/^Uid:/ {print $2}'\'' /proc/1/status)" = "65534"'
+
+          curl --fail --silent --show-error \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data '{"web":{"ip":"0.0.0.0","port":3000},"dns":{"ip":"0.0.0.0","port":53},"username":"smokeadmin","password":"smoke-password-2026"}' \
+            http://127.0.0.1:13000/control/install/configure >/dev/null
+
+          python3 - <<'PY'
+          import socket
+          import struct
+          import time
+
+          name = "healthcheck.adguardhome.test"
+          qname = b"".join(bytes([len(label)]) + label.encode() for label in name.split(".")) + b"\0"
+          query = struct.pack("!HHHHHH", 0xA6D1, 0x0100, 1, 0, 0, 0) + qname + struct.pack("!HH", 1, 1)
+
+          last_error = None
+          for _ in range(20):
+              try:
+                  udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                  udp.settimeout(2)
+                  udp.sendto(query, ("127.0.0.1", 15353))
+                  response, _ = udp.recvfrom(4096)
+                  assert response[:2] == query[:2] and response[2] & 0x80
+                  break
+              except (OSError, AssertionError) as err:
+                  last_error = err
+                  time.sleep(0.5)
+          else:
+              raise RuntimeError("UDP DNS smoke test failed") from last_error
+
+          tcp = socket.create_connection(("127.0.0.1", 15353), timeout=5)
+          tcp.sendall(struct.pack("!H", len(query)) + query)
+          size = struct.unpack("!H", tcp.recv(2))[0]
+          response = tcp.recv(size)
+          assert response[:2] == query[:2] and response[2] & 0x80
+          PY
+
+          test -s "${smoke_root}/config/conf/AdGuardHome.yaml"
+          echo "AdGuard Home update passed web and DNS smoke tests"
+
+      - name: Commit validated update
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          ADGUARD_HOME_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            adguard_home/CHANGELOG.md \
+            adguard_home/Dockerfile \
+            adguard_home/config.yaml \
+            adguard_home/upstream_version
+          git commit -m "Update AdGuard Home to ${ADGUARD_HOME_VERSION}"
+          git push

@@ -1,0 +1,57 @@
+name: "AdGuard Home"
+slug: "adguard_home"
+version: "0.107.78-1"
+description: "Official AdGuard Home packaged as a Home Assistant app"
+url: "https://github.com/tlamoureux24/haos_apps/tree/main/adguard_home"
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+apparmor: true
+tmpfs: true
+backup: cold
+webui: "[PROTO:ssl]://[HOST]:[PORT:3000]/"
+
+ports:
+  53/tcp: 53
+  53/udp: 53
+  80/tcp: null
+  443/tcp: null
+  443/udp: null
+  3000/tcp: 3000
+  3000/udp: null
+  853/tcp: null
+  853/udp: null
+  784/udp: null
+  8853/udp: null
+  5443/tcp: null
+  5443/udp: null
+  6060/tcp: null
+
+ports_description:
+  53/tcp: "Plain DNS over TCP"
+  53/udp: "Plain DNS over UDP"
+  80/tcp: "Optional HTTP and DNS-over-HTTPS"
+  443/tcp: "Optional HTTPS and DNS-over-HTTPS"
+  443/udp: "Optional HTTPS and DNS-over-HTTPS over HTTP/3"
+  3000/tcp: "Administration and initial setup interface"
+  3000/udp: "Optional administration HTTPS over HTTP/3"
+  853/tcp: "Optional DNS-over-TLS"
+  853/udp: "Optional DNS-over-QUIC"
+  784/udp: "Optional DNS-over-QUIC alternative port"
+  8853/udp: "Optional DNS-over-QUIC alternative port"
+  5443/tcp: "Optional DNSCrypt over TCP"
+  5443/udp: "Optional DNSCrypt over UDP"
+  6060/tcp: "Optional debugging profiler; do not expose publicly"
+
+map:
+  - type: addon_config
+    read_only: false
+
+options:
+  ssl: false
+
+schema:
+  ssl: bool
