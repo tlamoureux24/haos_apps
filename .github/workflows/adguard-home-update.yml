@@ -137,14 +137,21 @@ jobs:
           curl --fail --silent --show-error \
             http://127.0.0.1:13000/ >/dev/null
 
-          docker exec ha-adguard-home-update sh -c \
-            'test "$(awk '\''/^Uid:/ {print $2}'\'' /proc/1/status)" = "65534"'
-
           curl --fail --silent --show-error \
             --request POST \
             --header 'Content-Type: application/json' \
             --data '{"web":{"ip":"0.0.0.0","port":3000},"dns":{"ip":"0.0.0.0","port":53},"username":"smokeadmin","password":"smoke-password-2026"}' \
             http://127.0.0.1:13000/control/install/configure >/dev/null
+
+          for attempt in {1..30}; do
+            if docker exec ha-adguard-home-update sh -c \
+              'test "$(awk '\''/^Uid:/ {print $2}'\'' /proc/1/status)" = "65534"'; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec ha-adguard-home-update sh -c \
+            'test "$(awk '\''/^Uid:/ {print $2}'\'' /proc/1/status)" = "65534"'
 
           python3 - <<'PY'
           import socket

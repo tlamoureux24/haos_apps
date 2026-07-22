@@ -39,6 +39,12 @@ Installez **AdGuard Home**, démarrez l'App puis ouvrez
 - serveur DNS : toutes les interfaces, port `53` ;
 - un identifiant administrateur unique et un mot de passe fort.
 
+AdGuard Home exige des privilèges administrateur pendant la création de son
+tout premier fichier de configuration. Le lanceur détecte la fin de l'assistant,
+redémarre brièvement AdGuard Home puis continue immédiatement avec l'utilisateur
+non privilégié `nobody`. La page peut se déconnecter quelques secondes à la fin
+de l'assistant.
+
 Ne publiez jamais le port d'administration sur Internet. Limitez-le aux clients
 LAN et VPN de confiance avec le routeur ou le pare-feu.
 
@@ -185,10 +191,13 @@ Documentation officielle :
 
 ## Modèle de sécurité
 
-AdGuard Home s'exécute avec l'utilisateur amont `nobody` et non avec root. Le
-binaire officiel porte uniquement la capacité nécessaire à l'ouverture des
-ports privilégiés. Le lanceur utilise root seulement pour préparer les dossiers
-persistants puis abandonne ses droits avant de démarrer AdGuard Home.
+AdGuard Home s'exécute avec l'utilisateur amont `nobody` pendant son
+fonctionnement normal. Le projet amont exige temporairement les droits
+administrateur pour le premier assistant. Le lanceur détecte la création de
+`AdGuardHome.yaml`, redémarre automatiquement le service, corrige les
+propriétaires persistants puis abandonne immédiatement ses droits au profit de
+`nobody:nogroup`. Le binaire officiel porte la capacité nécessaire à l'ouverture
+des ports privilégiés après cette transition.
 
 L'App n'accède ni à la configuration HA, ni aux sauvegardes générales, ni aux
 périphériques, ni au socket Docker, ni aux API Supervisor. Son authentification

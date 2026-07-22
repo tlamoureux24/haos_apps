@@ -103,9 +103,6 @@ jobs:
           curl --fail --silent --show-error \
             http://127.0.0.1:13000/ >/dev/null
 
-          docker exec ha-adguard-home-smoke sh -c \
-            'test "$(awk '\''/^Uid:/ {print $2}'\'' /proc/1/status)" = "65534"'
-
           curl --fail --silent --show-error \
             --request POST \
             --header 'Content-Type: application/json' \
@@ -113,12 +110,16 @@ jobs:
             http://127.0.0.1:13000/control/install/configure >/dev/null
 
           for attempt in {1..30}; do
-            if curl --silent --output /dev/null \
-              http://127.0.0.1:13000/login.html; then
+            if docker exec ha-adguard-home-smoke sh -c \
+              'test "$(awk '\''/^Uid:/ {print $2}'\'' /proc/1/status)" = "65534"'; then
               break
             fi
             sleep 1
           done
+          docker exec ha-adguard-home-smoke sh -c \
+            'test "$(awk '\''/^Uid:/ {print $2}'\'' /proc/1/status)" = "65534"'
+          curl --silent --output /dev/null \
+            http://127.0.0.1:13000/login.html
 
           python3 - <<'PY'
           import socket

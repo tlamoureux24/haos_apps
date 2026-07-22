@@ -124,6 +124,9 @@ def main() -> int:
 
     launcher_invariants = (
         'readonly CONFIG_ROOT="/config"',
+        'if [ ! -s "${CONFIG_FILE}" ]; then',
+        "First-run setup requires temporary administrator privileges",
+        "Initial configuration created; dropping privileges",
         'exec su-exec nobody:nogroup /opt/adguardhome/AdGuardHome',
         "--no-check-update",
         '--config "${CONFIG_FILE}"',

@@ -38,6 +38,11 @@ Install **AdGuard Home**, start it, then open
 - DNS server: all interfaces, port `53`;
 - a unique administrator username and strong password.
 
+AdGuard Home requires administrator privileges while its very first setup file
+is being created. The launcher detects completion of the wizard, briefly
+restarts AdGuard Home, and immediately continues as the unprivileged `nobody`
+user. The web page can disconnect for a few seconds at the end of the wizard.
+
 Do not publish the administration port on the Internet. Restrict it to trusted
 LAN and VPN clients with your router or firewall.
 
@@ -179,10 +184,12 @@ Official documentation:
 
 ## Security Model
 
-AdGuard Home runs as the upstream `nobody` user rather than root. The official
-binary carries only the capability needed to bind privileged service ports.
-The launcher starts as root solely to prepare persistent directories, then
-drops to `nobody:nogroup` before starting AdGuard Home.
+AdGuard Home runs as the upstream `nobody` user rather than root during normal
+operation. Upstream requires temporary administrator privileges for the
+first-run wizard. The launcher detects creation of `AdGuardHome.yaml`, restarts
+the service automatically, fixes persistent ownership, and immediately drops
+to `nobody:nogroup`. The official binary carries the capability required to
+bind privileged service ports after that transition.
 
 The package has no access to Home Assistant configuration, backups, devices,
 Docker socket or Supervisor APIs. Its administrator authentication remains

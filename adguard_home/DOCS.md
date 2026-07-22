@@ -18,6 +18,9 @@ Supervisor et avec une authentification AdGuard Home indépendante.
 4. Créez un identifiant administrateur unique et un mot de passe fort.
 5. Configurez les résolveurs amont et les listes depuis AdGuard Home.
 
+À la fin de l'assistant, l'App redémarre brièvement AdGuard Home pour abandonner
+les privilèges exigés par le premier lancement et continuer sous `nobody`.
+
 Ne publiez jamais le port d'administration sur Internet. Limitez-le au LAN et
 au VPN par le pare-feu.
 
@@ -71,6 +74,9 @@ AdGuard Home authentication.
 3. Keep web port `3000` and DNS port `53` on all interfaces.
 4. Create a unique administrator username and strong password.
 5. Configure upstream resolvers and filters in AdGuard Home.
+
+At the end of the wizard, the app briefly restarts AdGuard Home to drop the
+privileges required by first launch and continue as `nobody`.
 
 Never expose the administration port to the Internet. Restrict it to trusted
 LAN and VPN clients with a firewall.
