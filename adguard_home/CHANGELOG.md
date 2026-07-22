@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.107.78-3 - 2026-07-22
+
+- Transfer persistent ownership depth-first so restrictive `0700` parent
+  directories remain traversable throughout the handover.
+- Complete the first-run handover without granting `dac_override`; later
+  starts leave the persistent ownership unchanged.
+
 ## 0.107.78-2 - 2026-07-22
 
 - Keep the persistent directories owned by the temporary root process during

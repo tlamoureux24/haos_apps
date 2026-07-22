@@ -6,12 +6,17 @@ readonly CONF_DIR="${CONFIG_ROOT}/conf"
 readonly WORK_DIR="${CONFIG_ROOT}/work"
 readonly CONFIG_FILE="${CONF_DIR}/AdGuardHome.yaml"
 
+handover_to_nobody() {
+  # Change children before their 0700 parents so traversal remains possible
+  # without granting dac_override in AppArmor.
+  find "${CONF_DIR}" "${WORK_DIR}" -depth \
+    -exec chown nobody:nogroup '{}' \;
+}
+
 mkdir -p "${CONF_DIR}" "${WORK_DIR}"
 
 if [ ! -s "${CONFIG_FILE}" ]; then
-  # AppArmor intentionally denies dac_override.  Keep the first-run trees
-  # owned by the temporary root process until the setup file is written.
-  chown -R root:root "${CONF_DIR}" "${WORK_DIR}"
+  chmod 700 "${CONF_DIR}" "${WORK_DIR}"
 
   echo "[NOTICE] First-run setup requires temporary administrator privileges"
   echo "[NOTICE] AdGuard Home will restart automatically as nobody after setup"
@@ -31,7 +36,6 @@ if [ ! -s "${CONFIG_FILE}" ]; then
       kill -TERM "${child_pid}" 2>/dev/null || true
       wait "${child_pid}" || true
       trap - TERM INT
-      chown -R nobody:nogroup "${CONF_DIR}" "${WORK_DIR}"
       break
     fi
     sleep 1
@@ -48,9 +52,9 @@ if [ ! -s "${CONFIG_FILE}" ]; then
       exit "${status}"
     fi
   fi
-fi
 
-chown -R nobody:nogroup "${CONF_DIR}" "${WORK_DIR}"
+  handover_to_nobody
+fi
 
 echo "[INFO] Starting AdGuard Home as an unprivileged user"
 exec su-exec nobody:nogroup /opt/adguardhome/AdGuardHome \
