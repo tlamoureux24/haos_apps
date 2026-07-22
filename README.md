@@ -45,7 +45,6 @@ Fonctionnalités principales :
 Documentation détaillée :
 
 - [Documentation française](rsync_manager/README.fr.md)
-- [English documentation](rsync_manager/README.md)
 
 #### UniFi Autoblock
 
@@ -68,7 +67,6 @@ Fonctionnalités principales :
 Documentation détaillée :
 
 - [Documentation française](unifi_autoblock/README.fr.md)
-- [English documentation](unifi_autoblock/README.md)
 
 #### Nginx Proxy Manager
 
@@ -88,7 +86,6 @@ Fonctionnalités principales :
 Documentation détaillée :
 
 - [Documentation française](nginx_proxy_manager/README.fr.md)
-- [English documentation](nginx_proxy_manager/README.md)
 
 #### Gatus
 
@@ -108,7 +105,6 @@ Fonctionnalités principales :
 Documentation détaillée :
 
 - [Documentation française](gatus/README.fr.md)
-- [English documentation](gatus/README.md)
 
 #### AdGuard Home
 
@@ -130,7 +126,6 @@ Fonctionnalités principales :
 Documentation détaillée :
 
 - [Documentation française](adguard_home/README.fr.md)
-- [English documentation](adguard_home/README.md)
 
 ### Prérequis
 
@@ -205,7 +200,6 @@ Main features:
 
 Detailed documentation:
 
-- [Documentation française](rsync_manager/README.fr.md)
 - [English documentation](rsync_manager/README.md)
 
 #### UniFi Autoblock
@@ -228,7 +222,6 @@ Main features:
 
 Detailed documentation:
 
-- [Documentation française](unifi_autoblock/README.fr.md)
 - [English documentation](unifi_autoblock/README.md)
 
 #### Nginx Proxy Manager
@@ -248,7 +241,6 @@ Main features:
 
 Detailed documentation:
 
-- [Documentation française](nginx_proxy_manager/README.fr.md)
 - [English documentation](nginx_proxy_manager/README.md)
 
 #### Gatus
@@ -268,7 +260,6 @@ Main features:
 
 Detailed documentation:
 
-- [Documentation française](gatus/README.fr.md)
 - [English documentation](gatus/README.md)
 
 #### AdGuard Home
@@ -290,7 +281,6 @@ Main features:
 
 Detailed documentation:
 
-- [Documentation française](adguard_home/README.fr.md)
 - [English documentation](adguard_home/README.md)
 
 ### Requirements
