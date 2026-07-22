@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.107.78-5 - 2026-07-22
+
+- Fixed restarts on Home Assistant systems that reject permission changes on
+  the mounted `addon_config` directory roots.
+- Preserved the existing unprivileged runtime and first-run ownership handover.
+
 ## 0.107.78-4 - 2026-07-22
 
 - Normalize the setup wizard's default administration port from 80 to 3000

@@ -22,7 +22,7 @@ découverte Home Assistant, ni `host_network`, ni mode privilégié, ni token
 Supervisor.
 
 La version suit `<version AdGuard Home>-<révision du paquet>`. Par exemple,
-`0.107.78-4` contient AdGuard Home officiel `0.107.78`, révision `4`.
+`0.107.78-5` contient AdGuard Home officiel `0.107.78`, révision `5`.
 
 ## Installation
 

@@ -46,10 +46,10 @@ normalize_default_admin_port() {
 }
 
 mkdir -p "${CONF_DIR}" "${WORK_DIR}"
+# Home Assistant owns these addon_config mount points.  Their modes cannot be
+# changed reliably from the App; only hand over the files created inside them.
 
 if [ ! -s "${CONFIG_FILE}" ]; then
-  chmod 700 "${CONF_DIR}" "${WORK_DIR}"
-
   echo "[NOTICE] First-run setup requires temporary administrator privileges"
   echo "[NOTICE] AdGuard Home will restart automatically as nobody after setup"
 

@@ -125,7 +125,6 @@ def main() -> int:
     launcher_invariants = (
         'readonly CONFIG_ROOT="/config"',
         'if [ ! -s "${CONFIG_FILE}" ]; then',
-        'chmod 700 "${CONF_DIR}" "${WORK_DIR}"',
         'find "${CONF_DIR}" "${WORK_DIR}" -depth',
         "normalize_default_admin_port",
         'sub(/:80[[:space:]]*$/, ":3000")',
@@ -140,6 +139,8 @@ def main() -> int:
     for item in launcher_invariants:
         if item not in launcher:
             raise RuntimeError(f"Missing launcher invariant: {item}")
+    if 'chmod 700 "${CONF_DIR}" "${WORK_DIR}"' in launcher:
+        raise RuntimeError("Launcher must not chmod Home Assistant mount points")
     if "SUPERVISOR_TOKEN" in launcher or "bashio" in launcher:
         raise RuntimeError("Launcher must remain independent from Supervisor APIs")
 
