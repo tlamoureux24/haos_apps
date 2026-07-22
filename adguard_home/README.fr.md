@@ -35,13 +35,21 @@ https://github.com/tlamoureux24/haos_apps
 Installez **AdGuard Home**, démarrez l'App puis ouvrez
 `http://IP_LAN_HOME_ASSISTANT:3000`. Dans l'assistant officiel, choisissez :
 
+> [!WARNING]
+> **PORT D'ADMINISTRATION OBLIGATOIRE : remplacez le port web `80` proposé par
+> défaut par `3000`.** Si vous conservez `80`, le dernier bouton de l'assistant
+> tentera d'ouvrir `http://IP_LAN_HOME_ASSISTANT:80`, qui n'est pas publié par
+> défaut et peut déjà être utilisé par un autre service. Cette valeur doit être
+> modifiée directement dans l'assistant initial.
+
 - interface web : toutes les interfaces, port `3000` ;
 - serveur DNS : toutes les interfaces, port `53` ;
 - un identifiant administrateur unique et un mot de passe fort.
 
-Si le port web `80` proposé par défaut par l'assistant est conservé, le lanceur
-le remplace automatiquement par `3000` avant le redémarrage final. Le port 80
-reste ainsi disponible séparément pour HTTP ou DoH et peut rester désactivé.
+Le lanceur remplace également `80` par `3000` avant le redémarrage final comme
+garde-fou, mais il ne peut pas corriger le lien déjà généré par le dernier
+bouton de l'assistant. Le port 80 reste ainsi disponible séparément pour HTTP
+ou DoH et peut rester désactivé.
 
 AdGuard Home exige des privilèges administrateur pendant la création de son
 tout premier fichier de configuration. Le lanceur détecte la fin de l'assistant,
