@@ -118,8 +118,18 @@ jobs:
           done
           docker exec ha-adguard-home-smoke sh -c \
             'test "$(awk '\''/^Uid:/ {print $2}'\'' /proc/1/status)" = "65534"'
-          curl --silent --output /dev/null \
-            http://127.0.0.1:13000/login.html
+
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:13000/login.html >/dev/null 2>&1; then
+              break
+            fi
+            test "$(docker inspect --format '{{.State.Running}}' \
+              ha-adguard-home-smoke)" = "true"
+            sleep 1
+          done
+          curl --fail --silent --show-error \
+            http://127.0.0.1:13000/login.html >/dev/null
 
           python3 - <<'PY'
           import socket
