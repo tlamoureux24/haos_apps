@@ -20,8 +20,8 @@ There is intentionally no Home Assistant Ingress, authentication delegation,
 discovery, `host_network`, privileged mode, or Supervisor token.
 
 The app version follows `<AdGuard Home version>-<package revision>`. For
-example, `0.107.78-3` contains official AdGuard Home `0.107.78` and package
-revision `3`.
+example, `0.107.78-4` contains official AdGuard Home `0.107.78` and package
+revision `4`.
 
 ## Installation
 
@@ -37,6 +37,10 @@ Install **AdGuard Home**, start it, then open
 - web interface: all interfaces, port `3000`;
 - DNS server: all interfaces, port `53`;
 - a unique administrator username and strong password.
+
+If the wizard's default web port `80` is kept, the launcher automatically
+changes it to `3000` before the final restart. Port 80 therefore remains
+separate for HTTP or DoH and may stay disabled.
 
 AdGuard Home requires administrator privileges while its very first setup file
 is being created. The launcher detects completion of the wizard, briefly

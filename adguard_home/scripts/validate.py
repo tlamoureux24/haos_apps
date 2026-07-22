@@ -127,6 +127,8 @@ def main() -> int:
         'if [ ! -s "${CONFIG_FILE}" ]; then',
         'chmod 700 "${CONF_DIR}" "${WORK_DIR}"',
         'find "${CONF_DIR}" "${WORK_DIR}" -depth',
+        "normalize_default_admin_port",
+        'sub(/:80[[:space:]]*$/, ":3000")',
         "First-run setup requires temporary administrator privileges",
         "Initial configuration created; dropping privileges",
         "-exec chown nobody:nogroup '{}' \\;",

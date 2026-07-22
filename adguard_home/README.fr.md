@@ -22,7 +22,7 @@ découverte Home Assistant, ni `host_network`, ni mode privilégié, ni token
 Supervisor.
 
 La version suit `<version AdGuard Home>-<révision du paquet>`. Par exemple,
-`0.107.78-3` contient AdGuard Home officiel `0.107.78`, révision `3`.
+`0.107.78-4` contient AdGuard Home officiel `0.107.78`, révision `4`.
 
 ## Installation
 
@@ -38,6 +38,10 @@ Installez **AdGuard Home**, démarrez l'App puis ouvrez
 - interface web : toutes les interfaces, port `3000` ;
 - serveur DNS : toutes les interfaces, port `53` ;
 - un identifiant administrateur unique et un mot de passe fort.
+
+Si le port web `80` proposé par défaut par l'assistant est conservé, le lanceur
+le remplace automatiquement par `3000` avant le redémarrage final. Le port 80
+reste ainsi disponible séparément pour HTTP ou DoH et peut rester désactivé.
 
 AdGuard Home exige des privilèges administrateur pendant la création de son
 tout premier fichier de configuration. Le lanceur détecte la fin de l'assistant,

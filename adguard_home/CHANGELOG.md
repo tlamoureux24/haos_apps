@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.107.78-4 - 2026-07-22
+
+- Normalize the setup wizard's default administration port from 80 to 3000
+  before the unprivileged restart.
+- Keep port 80 optional while making the default App and wizard configurations
+  work together without manual intervention.
+
 ## 0.107.78-3 - 2026-07-22
 
 - Transfer persistent ownership depth-first so restrictive `0700` parent

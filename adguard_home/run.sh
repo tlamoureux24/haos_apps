@@ -13,6 +13,38 @@ handover_to_nobody() {
     -exec chown nobody:nogroup '{}' \;
 }
 
+normalize_default_admin_port() {
+  readonly normalized_config="${CONF_DIR}/.AdGuardHome.yaml.normalized.$$"
+
+  if awk '
+    /^http:[[:space:]]*$/ {
+      in_http = 1
+    }
+    in_http && !/^http:[[:space:]]*$/ && /^[^[:space:]]/ {
+      in_http = 0
+    }
+    in_http && /^[[:space:]]+address:[[:space:]]/ && /:80[[:space:]]*$/ {
+      sub(/:80[[:space:]]*$/, ":3000")
+      changed = 1
+    }
+    { print }
+    END {
+      if (!changed) {
+        exit 42
+      }
+    }
+  ' "${CONFIG_FILE}" > "${normalized_config}"; then
+    mv "${normalized_config}" "${CONFIG_FILE}"
+    echo "[INFO] Normalized the default administration port from 80 to 3000"
+  else
+    status=$?
+    rm -f "${normalized_config}"
+    if [ "${status}" -ne 42 ]; then
+      return "${status}"
+    fi
+  fi
+}
+
 mkdir -p "${CONF_DIR}" "${WORK_DIR}"
 
 if [ ! -s "${CONFIG_FILE}" ]; then
@@ -53,6 +85,7 @@ if [ ! -s "${CONFIG_FILE}" ]; then
     fi
   fi
 
+  normalize_default_admin_port
   handover_to_nobody
 fi
 

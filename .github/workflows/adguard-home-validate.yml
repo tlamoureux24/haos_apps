@@ -106,7 +106,7 @@ jobs:
           curl --fail --silent --show-error \
             --request POST \
             --header 'Content-Type: application/json' \
-            --data '{"web":{"ip":"0.0.0.0","port":3000},"dns":{"ip":"0.0.0.0","port":53},"username":"smokeadmin","password":"smoke-password-2026"}' \
+            --data '{"web":{"ip":"0.0.0.0","port":80},"dns":{"ip":"0.0.0.0","port":53},"username":"smokeadmin","password":"smoke-password-2026"}' \
             http://127.0.0.1:13000/control/install/configure >/dev/null
 
           for attempt in {1..30}; do
@@ -154,4 +154,6 @@ jobs:
 
           docker exec ha-adguard-home-smoke \
             test -s /config/conf/AdGuardHome.yaml
+          docker exec ha-adguard-home-smoke sh -c \
+            "grep -Eq '^[[:space:]]+address:[[:space:]]+0\\.0\\.0\\.0:3000$' /config/conf/AdGuardHome.yaml"
           echo "AdGuard Home web setup and DNS over TCP/UDP are healthy"
