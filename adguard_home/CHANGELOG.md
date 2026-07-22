@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.107.78-2 - 2026-07-22
+
+- Keep the persistent directories owned by the temporary root process during
+  the first-run wizard, then hand them to `nobody` before normal operation.
+- Fix first-run startup under AppArmor without granting `dac_override`.
+
 ## 0.107.78-1 - 2026-07-22
 
 - Initial Home Assistant package based on the official AdGuard Home 0.107.78 image.
