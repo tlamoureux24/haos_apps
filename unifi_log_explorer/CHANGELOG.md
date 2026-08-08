@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Parse the RFC3164 system logs that UniFi sends alongside CEF events.
+- Display Syslog messages separately instead of reporting them as CEF errors.
+- Count rejected datagrams by source address without retaining their payload.
+
 ## 0.1.0
 
 - Add standalone authenticated web setup and administration interface.

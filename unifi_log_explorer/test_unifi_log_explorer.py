@@ -10,10 +10,20 @@ spec.loader.exec_module(ule)
 
 class ParserTests(unittest.TestCase):
     def test_cef(self):
-        event = ule.parse_cef(b"<134>CEF:0|Ubiquiti|UniFi Network|9.3.33|401|WiFi Client Disconnected|2|UNIFIclientIp=192.168.1.20 UNIFIclientAlias=Phone msg=Phone disconnected")
+        event = ule.parse_syslog_or_cef(b"<134>CEF:0|Ubiquiti|UniFi Network|9.3.33|401|WiFi Client Disconnected|2|UNIFIclientIp=192.168.1.20 UNIFIclientAlias=Phone msg=Phone disconnected")
         self.assertEqual(event["event_id"], "401")
         self.assertEqual(event["fields"]["UNIFIclientIp"], "192.168.1.20")
         self.assertEqual(event["fields"]["msg"], "Phone disconnected")
+
+    def test_unifi_rfc3164_syslog(self):
+        event = ule.parse_syslog_or_cef(b"<30>Aug  8 09:19:57 UCG-Fiber UCG-Fiber dnsmasq-dhcp[3487]: DHCPACK(br0) 192.168.1.20 aa:bb:cc:dd:ee:ff phone")
+        self.assertEqual(event["_kind"], "syslog")
+        self.assertEqual(event["facility"], 3)
+        self.assertEqual(event["severity"], 6)
+        self.assertEqual(event["hostname"], "UCG-Fiber")
+        self.assertEqual(event["app_name"], "dnsmasq-dhcp")
+        self.assertEqual(event["process_id"], 3487)
+        self.assertIn("DHCPACK", event["message"])
 
     def test_ipfix_template_and_data(self):
         fields = struct.pack("!HHHHHH", 8, 4, 12, 4, 1, 8)

@@ -31,6 +31,8 @@ IPFIX_PORT = 2055
 CEF_PORT = 5514
 CEF_HEADER = re.compile(r"(?:<\d+>)?\s*CEF:(\d+)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|([^|]*)\|(.*)")
 CEF_PAIR = re.compile(r"([A-Za-z][A-Za-z0-9_]*)=((?:\\[=\\]|[^ ])*(?: (?![A-Za-z][A-Za-z0-9_]*=)[^ ]*)*)")
+SYSLOG_HEADER = re.compile(r"^<(\d{1,3})>([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(\S+)\s+(.*)$")
+SYSLOG_TAG = re.compile(r"^([A-Za-z0-9_.-]+)(?:\[(\d+)\])?:\s*(.*)$", re.DOTALL)
 IPFIX_NAMES = {1: "octetDeltaCount", 2: "packetDeltaCount", 4: "protocolIdentifier",
                7: "sourceTransportPort", 8: "sourceIPv4Address", 11: "destinationTransportPort",
                12: "destinationIPv4Address", 21: "flowEndSysUpTime", 22: "flowStartSysUpTime",
@@ -116,9 +118,15 @@ class Store:
             counters = {r["key"]: r["value"] for r in self.db.execute("SELECT key,value FROM counters")}
             recent = [dict(r) for r in self.db.execute("SELECT id,received_at,kind,source_ip,summary FROM records ORDER BY id DESC LIMIT 100")]
             cef_types = [dict(r) for r in self.db.execute("SELECT json_extract(detail,'$.name') name,count(*) count FROM records WHERE kind='cef' GROUP BY name ORDER BY count DESC LIMIT 20")]
+            syslog_apps = [dict(r) for r in self.db.execute("SELECT json_extract(detail,'$.app_name') app_name,count(*) count FROM records WHERE kind='syslog' GROUP BY app_name ORDER BY count DESC LIMIT 20")]
             templates = [dict(r) for r in self.db.execute("SELECT json_extract(detail,'$.template_id') template_id,count(*) count FROM records WHERE kind='ipfix_template' GROUP BY template_id ORDER BY count DESC")]
+            rejected_sources = {}
+            for row in self.db.execute("SELECT key,value FROM counters WHERE key LIKE 'cef_rejected_source:%' OR key LIKE 'ipfix_rejected_source:%'"):
+                address = row["key"].split(":", 1)[1]
+                rejected_sources[address] = rejected_sources.get(address, 0) + row["value"]
         return {"counts": counts, "counters": counters, "recent": recent,
-                "cef_types": cef_types, "templates": templates,
+                "cef_types": cef_types, "syslog_apps": syslog_apps, "templates": templates,
+                "rejected_sources": rejected_sources,
                 "allowed_source_ips": sorted(self.options["allowed_source_ips"]),
                 "retention_hours": self.options["retention_hours"], "max_records": self.options["max_records"]}
 
@@ -222,7 +230,29 @@ def parse_cef(raw):
     fields = {m.group(1): m.group(2).replace("\\=", "=").replace("\\\\", "\\") for m in CEF_PAIR.finditer(extension)}
     return {"cef_version": version, "vendor": vendor, "product": product,
             "device_version": device_version, "event_id": event_id, "name": name,
-            "severity": severity, "fields": fields, "bytes": len(raw)}
+            "severity": severity, "fields": fields, "bytes": len(raw), "_kind": "cef"}
+
+
+def parse_syslog_or_cef(raw):
+    text = raw.decode("utf-8", "replace").strip("\x00\r\n ")
+    if "CEF:" in text:
+        return parse_cef(raw)
+    match = SYSLOG_HEADER.match(text)
+    if not match:
+        raise ValueError("message is neither CEF nor supported RFC3164 syslog")
+    priority_text, timestamp, hostname, body = match.groups()
+    priority = int(priority_text)
+    if body.startswith(hostname + " "):
+        body = body[len(hostname) + 1:]
+    tag = SYSLOG_TAG.match(body)
+    if tag:
+        app_name, process_id, message = tag.groups()
+    else:
+        app_name, process_id, message = None, None, body
+    return {"_kind": "syslog", "priority": priority, "facility": priority // 8,
+            "severity": priority % 8, "timestamp": timestamp, "hostname": hostname,
+            "app_name": app_name, "process_id": int(process_id) if process_id else None,
+            "message": message, "bytes": len(raw)}
 
 
 class Collector(threading.Thread):
@@ -243,6 +273,7 @@ class Collector(threading.Thread):
             source = peer[0].removeprefix("::ffff:")
             if source not in self.store.options["allowed_source_ips"]:
                 self.store.increment(f"{self.name}_rejected_source")
+                self.store.increment(f"{self.name}_rejected_source:{source}")
                 continue
             self.store.increment(f"{self.name}_datagrams")
             self.store.increment(f"{self.name}_bytes", len(raw))
@@ -264,7 +295,13 @@ class Collector(threading.Thread):
                         for template in item.get("templates", []):
                             self.store.add("ipfix_template", source, f"Template {template['template_id']} ({template['field_count']} fields)", template)
                 else:
-                    self.store.add("cef", source, f"{parsed['name']} · severity {parsed['severity']}", parsed)
+                    kind = parsed.pop("_kind", "cef")
+                    if kind == "cef":
+                        summary = f"{parsed['name']} · severity {parsed['severity']}"
+                    else:
+                        label = parsed.get("app_name") or "syslog"
+                        summary = f"{label} · {parsed.get('message', '')[:120]}"
+                    self.store.add(kind, source, summary, parsed)
             except Exception as exc:
                 self.store.increment(f"{self.name}_parse_errors")
                 self.store.add(f"{self.name}_error", source, str(exc), {"bytes": len(raw), "prefix_hex": raw[:64].hex()})
@@ -347,11 +384,12 @@ class Web(BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Disposition", "attachment; filename=unifi-log-explorer-diagnostics.json"); self.send_header("Content-Length", str(len(payload))); self.end_headers(); self.wfile.write(payload); return
         if path != "/": return self.send_error(404)
         data = self.store.dashboard(); counts = data["counts"]; counters = data["counters"]
-        metrics = [("Datagrammes IPFIX", counters.get("ipfix_datagrams",0)), ("Messages IPFIX", counts.get("ipfix_message",0)), ("Templates", counts.get("ipfix_template",0)), ("Événements CEF", counts.get("cef",0)), ("Sources refusées", counters.get("ipfix_rejected_source",0)+counters.get("cef_rejected_source",0)), ("Erreurs de parsing", counters.get("ipfix_parse_errors",0)+counters.get("cef_parse_errors",0))]
+        metrics = [("Datagrammes IPFIX", counters.get("ipfix_datagrams",0)), ("Messages IPFIX", counts.get("ipfix_message",0)), ("Templates", counts.get("ipfix_template",0)), ("Événements CEF", counts.get("cef",0)), ("Messages Syslog", counts.get("syslog",0)), ("Sources refusées", counters.get("ipfix_rejected_source",0)+counters.get("cef_rejected_source",0)), ("Erreurs de parsing", counters.get("ipfix_parse_errors",0)+counters.get("cef_parse_errors",0))]
         cards = "".join(f"<div class=card><div class=metric>{v}</div><div class=muted>{html.escape(k)}</div></div>" for k,v in metrics)
         rows = "".join(f"<tr><td>{time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(r['received_at']))}</td><td>{html.escape(r['kind'])}</td><td>{html.escape(r['source_ip'])}</td><td>{html.escape(r['summary'])}</td></tr>" for r in data["recent"])
         csrf = session["csrf"]
-        body = f"<nav><form method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form></nav><h1>UniFi Log Explorer</h1><p>Phase 1 · collecte diagnostique</p><div class=grid>{cards}</div><div class=card><b>Sources autorisées :</b> {', '.join(map(html.escape,data['allowed_source_ips']))}<br><b>Rétention :</b> {data['retention_hours']} h · <b>Limite :</b> {data['max_records']} enregistrements</div><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p><div class=card><h2>Derniers enregistrements</h2><table><thead><tr><th>Date</th><th>Type</th><th>Source</th><th>Résumé</th></tr></thead><tbody>{rows}</tbody></table></div>"
+        rejected = ", ".join(f"{html.escape(ip)} ({count})" for ip,count in sorted(data["rejected_sources"].items())) or "aucune"
+        body = f"<nav><form method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form></nav><h1>UniFi Log Explorer</h1><p>Phase 1 · collecte diagnostique</p><div class=grid>{cards}</div><div class=card><b>Sources autorisées :</b> {', '.join(map(html.escape,data['allowed_source_ips']))}<br><b>Sources refusées observées :</b> {rejected}<br><b>Rétention :</b> {data['retention_hours']} h · <b>Limite :</b> {data['max_records']} enregistrements</div><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p><div class=card><h2>Derniers enregistrements</h2><table><thead><tr><th>Date</th><th>Type</th><th>Source</th><th>Résumé</th></tr></thead><tbody>{rows}</tbody></table></div>"
         self.send_html(body)
 
     def do_POST(self):
@@ -386,7 +424,7 @@ def main():
     options = load_options()
     logging.basicConfig(level=getattr(logging, str(options["log_level"]).upper()), format="%(asctime)s %(levelname)s %(message)s")
     store = Store(options)
-    for collector in (Collector("ipfix", IPFIX_PORT, store, parse_ipfix), Collector("cef", CEF_PORT, store, parse_cef)):
+    for collector in (Collector("ipfix", IPFIX_PORT, store, parse_ipfix), Collector("cef", CEF_PORT, store, parse_syslog_or_cef)):
         collector.start()
     threading.Thread(target=maintenance, args=(store,), daemon=True).start()
     Web.store = store
