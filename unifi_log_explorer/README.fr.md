@@ -45,6 +45,23 @@ Laissez `verify_ssl` désactivé pour le certificat autosigné habituel de la
 console. Activez-le uniquement si la chaîne du certificat est reconnue dans
 l'App.
 
+### Collecte expérimentale des flows
+
+Une fois le test réussi, activez `flow_collection_enabled`. Par défaut, l'App :
+
+- importe les 30 dernières minutes au premier démarrage ;
+- interroge l'UCG toutes les 120 secondes ;
+- reprend deux minutes avant son dernier curseur pour éviter les pertes ;
+- pagine les réponses par lots de 100 ;
+- découpe les fenêtres atteignant la limite UniFi de 10 000 résultats ;
+- élimine les doublons grâce à l'identifiant stable du flow ;
+- reprend après redémarrage, avec un rattrapage plafonné à 24 heures par sécurité.
+
+Les flows sont conservés dans une table SQLite séparée et bornés par
+`retention_hours` et `max_records`. Ils ne sont pas inclus dans l'export JSON
+diagnostique. Ce stockage est volontairement expérimental avant la validation
+du volume réel et le choix définitif de ClickHouse.
+
 Les ports hôtes peuvent être modifiés dans le panneau Réseau de l'App. Les ports
 configurés côté UniFi doivent alors correspondre aux ports hôtes.
 
@@ -69,7 +86,7 @@ volumineuse sera séparée et exclue des sauvegardes.
 - Les champs IPFIX de longueur variable sont inventoriés mais pas encore décodés.
 - Les échantillons de valeurs sont limités à dix par jeu de données IPFIX.
 - Il ne s'agit pas encore d'un historique exhaustif ni d'un moteur d'alertes.
-- Le test Traffic Flows ne lance pas encore de collecte périodique.
+- L'interface ne propose pas encore de recherche dans les flows archivés.
 
 Une capture de 48 heures à une semaine est recommandée. L'export JSON permettra
 d'établir le schéma définitif sans inclure l'adresse IP source de la passerelle.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- Add opt-in periodic collection of complete Traffic Flows through the local API.
+- Poll every two minutes by default with a two-minute overlap.
+- Paginate and split large time windows below UniFi's 10,000-result cap.
+- Deduplicate flows by their stable UniFi identifier.
+- Persist the collection cursor and resume after restarts with a 24-hour safety cap.
+- Bound archived flows by the configured age and record limits.
+- Show archived flow count and last collection-cycle status in the web UI.
+
 ## 0.2.0
 
 - Add a manual, non-persistent probe for the internal Traffic Flows endpoint.

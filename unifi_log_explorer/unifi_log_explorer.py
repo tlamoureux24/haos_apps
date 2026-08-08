@@ -60,6 +60,8 @@ def load_options():
                 "max_records": 250000, "session_timeout_minutes": 60,
                 "unifi_base_url": "https://192.168.1.1", "unifi_site_slug": "default",
                 "unifi_api_key": "", "verify_ssl": False,
+                "flow_collection_enabled": False, "flow_poll_interval_seconds": 120,
+                "flow_initial_backfill_minutes": 30,
                 "log_level": "info"}
     try:
         defaults.update(json.loads(OPTIONS_PATH.read_text()))
@@ -147,7 +149,7 @@ def prepare_secrets():
     logging.info("UniFi API key encrypted locally and cleared from App options")
 
 
-def flow_probe(options):
+def traffic_flow_page(options, timestamp_from, timestamp_to, page_number=1, page_size=100):
     base_url = str(options.get("unifi_base_url") or "").rstrip("/")
     parsed_url = urllib.parse.urlparse(base_url)
     if parsed_url.scheme != "https" or not parsed_url.hostname:
@@ -155,14 +157,13 @@ def flow_probe(options):
     site = str(options.get("unifi_site_slug") or "default").strip()
     if not re.fullmatch(r"[A-Za-z0-9_-]+", site):
         raise RuntimeError("L'identifiant de site UniFi est invalide")
-    now = int(time.time() * 1000)
     empty_filters = ("risk action direction protocol policy policy_type service destination_domain "
                      "destination_host destination_ip destination_mac destination_network_id destination_port "
                      "destination_region destination_zone_id except_for in_network_id next_ai_query out_network_id "
                      "source_domain source_host source_ip source_mac source_network_id source_port source_region source_zone_id").split()
     payload = {key: [] for key in empty_filters}
-    payload.update({"pageNumber": 1, "pageSize": 1, "search_text": "", "skip_count": False,
-                    "timestampFrom": now - 5 * 60 * 1000, "timestampTo": now})
+    payload.update({"pageNumber": page_number, "pageSize": page_size, "search_text": "", "skip_count": False,
+                    "timestampFrom": timestamp_from, "timestampTo": timestamp_to})
     url = f"{base_url}/proxy/network/v2/api/site/{site}/traffic-flows"
     request = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST",
         headers={"Accept": "application/json", "Content-Type": "application/json",
@@ -178,6 +179,12 @@ def flow_probe(options):
         raise RuntimeError(str(exc.reason)) from exc
     if not isinstance(result, dict) or not isinstance(result.get("data"), list):
         raise RuntimeError("Réponse Traffic Flows inattendue")
+    return result
+
+
+def flow_probe(options):
+    now = int(time.time() * 1000)
+    result = traffic_flow_page(options, now - 5 * 60 * 1000, now, 1, 1)
     sample_fields = sorted(result["data"][0].keys()) if result["data"] else []
     return {"ok": True, "tested_at": int(time.time()), "returned": len(result["data"]),
             "total": result.get("total_element_count"), "has_next": result.get("has_next"),
@@ -201,6 +208,11 @@ class Store:
           CREATE INDEX IF NOT EXISTS records_time ON records(received_at);
           CREATE INDEX IF NOT EXISTS records_kind_time ON records(kind, received_at);
           CREATE TABLE IF NOT EXISTS counters(key TEXT PRIMARY KEY, value INTEGER NOT NULL DEFAULT 0);
+          CREATE TABLE IF NOT EXISTS traffic_flows(
+            id TEXT PRIMARY KEY, flow_start_time INTEGER NOT NULL, flow_end_time INTEGER NOT NULL,
+            source_ip TEXT, destination_ip TEXT, service TEXT, action TEXT, detail TEXT NOT NULL,
+            collected_at INTEGER NOT NULL);
+          CREATE INDEX IF NOT EXISTS traffic_flows_end ON traffic_flows(flow_end_time);
         """)
         self.db.commit()
 
@@ -233,7 +245,26 @@ class Store:
             count = self.db.execute("SELECT count(*) FROM records").fetchone()[0]
             if count > limit:
                 self.db.execute("DELETE FROM records WHERE id IN (SELECT id FROM records ORDER BY id LIMIT ?)", (count - limit,))
+            self.db.execute("DELETE FROM traffic_flows WHERE flow_end_time < ?", (cutoff * 1000,))
+            flow_count = self.db.execute("SELECT count(*) FROM traffic_flows").fetchone()[0]
+            if flow_count > limit:
+                self.db.execute("DELETE FROM traffic_flows WHERE id IN (SELECT id FROM traffic_flows ORDER BY flow_end_time LIMIT ?)", (flow_count - limit,))
             self.db.commit()
+
+    def add_flows(self, flows):
+        inserted = 0
+        with self.lock:
+            for flow in flows:
+                flow_id = str(flow.get("id") or "")
+                start, end = flow.get("flow_start_time"), flow.get("flow_end_time")
+                if not flow_id or not isinstance(start, int) or not isinstance(end, int):
+                    continue
+                cursor = self.db.execute("INSERT OR IGNORE INTO traffic_flows(id,flow_start_time,flow_end_time,source_ip,destination_ip,service,action,detail,collected_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (flow_id, start, end, flow.get("source", {}).get("ip"), flow.get("destination", {}).get("ip"),
+                     flow.get("service"), flow.get("action"), json.dumps(flow, separators=(",", ":")), int(time.time())))
+                inserted += cursor.rowcount
+            self.db.commit()
+        return inserted
 
     def dashboard(self):
         with self.lock:
@@ -247,9 +278,11 @@ class Store:
             for row in self.db.execute("SELECT key,value FROM counters WHERE key LIKE 'cef_rejected_source:%' OR key LIKE 'ipfix_rejected_source:%'"):
                 address = row["key"].split(":", 1)[1]
                 rejected_sources[address] = rejected_sources.get(address, 0) + row["value"]
+            flow_stats = dict(self.db.execute("SELECT count(*) count, min(flow_end_time) oldest, max(flow_end_time) newest FROM traffic_flows").fetchone())
         return {"counts": counts, "counters": counters, "recent": recent,
                 "cef_types": cef_types, "syslog_apps": syslog_apps, "templates": templates,
                 "rejected_sources": rejected_sources,
+                "flow_stats": flow_stats,
                 "allowed_source_ips": sorted(self.options["allowed_source_ips"]),
                 "retention_hours": self.options["retention_hours"], "max_records": self.options["max_records"]}
 
@@ -430,6 +463,67 @@ class Collector(threading.Thread):
                 self.store.add(f"{self.name}_error", source, str(exc), {"bytes": len(raw), "prefix_hex": raw[:64].hex()})
 
 
+class FlowCollector(threading.Thread):
+    OVERLAP_MS = 120_000
+    CHUNK_MS = 30 * 60_000
+    MAX_CATCHUP_MS = 24 * 60 * 60_000
+
+    def __init__(self, store):
+        super().__init__(name="traffic-flows", daemon=True)
+        self.store = store
+
+    def collect_window(self, start, end, depth=0):
+        first = traffic_flow_page(self.store.options, start, end, 1, 100)
+        if first.get("or_more") and end - start > 60_000 and depth < 12:
+            middle = start + (end - start) // 2
+            left = self.collect_window(start, middle, depth + 1)
+            right = self.collect_window(middle + 1, end, depth + 1)
+            return tuple(a + b for a, b in zip(left, right))
+        fetched = len(first["data"])
+        inserted = self.store.add_flows(first["data"])
+        pages = 1
+        page = 2
+        while first.get("has_next") and page <= int(first.get("total_page_count") or 100):
+            result = traffic_flow_page(self.store.options, start, end, page, 100)
+            fetched += len(result["data"])
+            inserted += self.store.add_flows(result["data"])
+            pages += 1
+            if not result.get("has_next"): break
+            page += 1
+        return fetched, inserted, pages
+
+    def cycle(self):
+        now = int(time.time() * 1000)
+        raw_cursor = self.store.setting("flow_cursor_ms")
+        if raw_cursor:
+            start = max(int(raw_cursor) - self.OVERLAP_MS, now - self.MAX_CATCHUP_MS)
+        else:
+            start = now - int(self.store.options["flow_initial_backfill_minutes"]) * 60_000
+        totals = [0, 0, 0]
+        cursor = start
+        while cursor < now:
+            chunk_end = min(cursor + self.CHUNK_MS, now)
+            values = self.collect_window(cursor, chunk_end)
+            totals = [a + b for a, b in zip(totals, values)]
+            cursor = chunk_end + 1
+        self.store.set_setting("flow_cursor_ms", str(now))
+        status = {"ok": True, "time": int(time.time()), "fetched": totals[0],
+                  "inserted": totals[1], "pages": totals[2], "cursor_ms": now}
+        self.store.set_setting("flow_collection_status", json.dumps(status, separators=(",", ":")))
+        logging.info("Traffic Flows cycle: fetched=%s inserted=%s pages=%s", *totals)
+
+    def run(self):
+        interval = int(self.store.options["flow_poll_interval_seconds"])
+        while True:
+            try:
+                self.cycle()
+            except Exception as exc:
+                logging.warning("Traffic Flows collection failed: %s", exc)
+                status = {"ok": False, "time": int(time.time()), "error": str(exc)}
+                self.store.set_setting("flow_collection_status", json.dumps(status, separators=(",", ":")))
+            time.sleep(interval)
+
+
 SESSIONS = {}
 SESSION_LOCK = threading.Lock()
 
@@ -507,7 +601,7 @@ class Web(BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Disposition", "attachment; filename=unifi-log-explorer-diagnostics.json"); self.send_header("Content-Length", str(len(payload))); self.end_headers(); self.wfile.write(payload); return
         if path != "/": return self.send_error(404)
         data = self.store.dashboard(); counts = data["counts"]; counters = data["counters"]
-        metrics = [("Datagrammes IPFIX", counters.get("ipfix_datagrams",0)), ("Messages IPFIX", counts.get("ipfix_message",0)), ("Templates", counts.get("ipfix_template",0)), ("Événements CEF", counts.get("cef",0)), ("Messages Syslog", counts.get("syslog",0)), ("Sources refusées", counters.get("ipfix_rejected_source",0)+counters.get("cef_rejected_source",0)), ("Erreurs de parsing", counters.get("ipfix_parse_errors",0)+counters.get("cef_parse_errors",0))]
+        metrics = [("Traffic Flows archivés", data["flow_stats"].get("count", 0)), ("Événements CEF", counts.get("cef",0)), ("Messages Syslog", counts.get("syslog",0)), ("Datagrammes IPFIX", counters.get("ipfix_datagrams",0)), ("Messages IPFIX", counts.get("ipfix_message",0)), ("Templates", counts.get("ipfix_template",0)), ("Sources refusées", counters.get("ipfix_rejected_source",0)+counters.get("cef_rejected_source",0)), ("Erreurs de parsing", counters.get("ipfix_parse_errors",0)+counters.get("cef_parse_errors",0))]
         cards = "".join(f"<div class=card><div class=metric>{v}</div><div class=muted>{html.escape(k)}</div></div>" for k,v in metrics)
         rows = "".join(f"<tr><td>{time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(r['received_at']))}</td><td>{html.escape(r['kind'])}</td><td>{html.escape(r['source_ip'])}</td><td>{html.escape(r['summary'])}</td></tr>" for r in data["recent"])
         csrf = session["csrf"]
@@ -522,7 +616,15 @@ class Web(BaseHTTPRequestHandler):
             probe_text = "<span class=muted>Aucun test effectué.</span>"
         api_ready = bool(self.store.options.get("unifi_api_key"))
         probe_button = f"<form method=post action=/probe><input type=hidden name=csrf value='{csrf}'><button {'disabled' if not api_ready else ''}>Tester l’API Traffic Flows</button></form>"
-        body = f"<nav><form method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form></nav><h1>UniFi Log Explorer</h1><p>Phase 1 · collecte diagnostique</p><div class=grid>{cards}</div><div class=card><b>Sources autorisées :</b> {', '.join(map(html.escape,data['allowed_source_ips']))}<br><b>Sources refusées observées :</b> {rejected}<br><b>Rétention :</b> {data['retention_hours']} h · <b>Limite :</b> {data['max_records']} enregistrements</div><div class=card><h2>API Traffic Flows</h2><p>{probe_text}</p>{probe_button}<p class=muted>Le test lit au maximum un flow des cinq dernières minutes et ne le conserve pas.</p></div><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p><div class=card><h2>Derniers enregistrements</h2><table><thead><tr><th>Date</th><th>Type</th><th>Source</th><th>Résumé</th></tr></thead><tbody>{rows}</tbody></table></div>"
+        raw_collection = self.store.setting("flow_collection_status")
+        collection = json.loads(raw_collection) if raw_collection else None
+        if collection and collection.get("ok"):
+            collection_text = f"Dernier cycle réussi · {collection.get('fetched')} lus · {collection.get('inserted')} nouveaux · {collection.get('pages')} pages"
+        elif collection:
+            collection_text = f"<span class=bad>Dernier cycle en échec : {html.escape(str(collection.get('error')))}</span>"
+        else:
+            collection_text = "En attente du premier cycle" if self.store.options.get("flow_collection_enabled") else "Collecte désactivée dans les options"
+        body = f"<nav><form method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form></nav><h1>UniFi Log Explorer</h1><p>Phase 1 · collecte diagnostique</p><div class=grid>{cards}</div><div class=card><b>Sources autorisées :</b> {', '.join(map(html.escape,data['allowed_source_ips']))}<br><b>Sources refusées observées :</b> {rejected}<br><b>Rétention :</b> {data['retention_hours']} h · <b>Limite :</b> {data['max_records']} enregistrements</div><div class=card><h2>API Traffic Flows</h2><p>{probe_text}</p>{probe_button}<p class=muted>Le test lit au maximum un flow des cinq dernières minutes et ne le conserve pas.</p><h3>Collecte périodique</h3><p>{collection_text}</p></div><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p><div class=card><h2>Derniers enregistrements</h2><table><thead><tr><th>Date</th><th>Type</th><th>Source</th><th>Résumé</th></tr></thead><tbody>{rows}</tbody></table></div>"
         self.send_html(body)
 
     def do_POST(self):
@@ -568,6 +670,11 @@ def main():
     for collector in (Collector("ipfix", IPFIX_PORT, store, parse_ipfix), Collector("cef", CEF_PORT, store, parse_syslog_or_cef)):
         collector.start()
     threading.Thread(target=maintenance, args=(store,), daemon=True).start()
+    if options.get("flow_collection_enabled"):
+        if not options.get("unifi_api_key"):
+            logging.warning("Traffic Flows collection enabled but no UniFi API key is configured")
+        else:
+            FlowCollector(store).start()
     Web.store = store
     logging.info("Web interface listening on TCP %s; allowed sources: %s", WEB_PORT, ", ".join(sorted(options["allowed_source_ips"])))
     ThreadingHTTPServer(("", WEB_PORT), Web).serve_forever()

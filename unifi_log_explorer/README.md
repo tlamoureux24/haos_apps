@@ -12,5 +12,6 @@ authentication and UDP listeners for IPFIX (`2055`) and CEF (`5514`). Only exact
 addresses listed in `allowed_source_ips` are parsed or retained; the default is
 `192.168.1.1`.
 
-Version `0.2.0` also includes a non-persistent diagnostic probe for the internal
-Traffic Flows endpoint using a locally encrypted dedicated UniFi API key.
+Version `0.3.0` also includes a non-persistent API probe and opt-in experimental
+collection of complete Traffic Flows using a locally encrypted dedicated UniFi
+API key, without enabling IPFIX.

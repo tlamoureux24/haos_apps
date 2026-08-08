@@ -23,6 +23,15 @@ configuration:
   verify_ssl:
     name: Vérifier le certificat TLS
     description: Activez uniquement si le certificat de la console est reconnu par l'App.
+  flow_collection_enabled:
+    name: Activer la collecte des Traffic Flows
+    description: Archive périodiquement les Traffic Flows complets via l'API UniFi locale.
+  flow_poll_interval_seconds:
+    name: Intervalle de collecte des flows (secondes)
+    description: Délai entre deux cycles de collecte Traffic Flows.
+  flow_initial_backfill_minutes:
+    name: Historique initial des flows (minutes)
+    description: Période importée au premier démarrage avant la collecte incrémentale.
   log_level:
     name: Niveau de journalisation
     description: Niveau de détail des journaux de l'application.

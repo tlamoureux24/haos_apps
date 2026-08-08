@@ -1,5 +1,6 @@
 import importlib.util
 import struct
+import tempfile
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -60,6 +61,18 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(payload["pageSize"], 1)
         self.assertEqual(result["total"], 7)
         self.assertNotIn("data", result)
+
+    def test_flow_storage_deduplicates_unifi_id(self):
+        flow = {"id": "stable-id", "flow_start_time": 1000, "flow_end_time": 2000,
+                "source": {"ip": "192.168.1.20"}, "destination": {"ip": "1.1.1.1"},
+                "service": "HTTPS", "action": "allowed"}
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(ule, "DATA", Path(directory)), mock.patch.object(ule, "DB_PATH", Path(directory) / "test.db"):
+                store = ule.Store({"retention_hours": 168, "max_records": 1000,
+                                   "allowed_source_ips": {"192.168.1.1"}})
+                self.assertEqual(store.add_flows([flow]), 1)
+                self.assertEqual(store.add_flows([flow]), 0)
+                self.assertEqual(store.dashboard()["flow_stats"]["count"], 1)
 
 
 if __name__ == "__main__":

@@ -11,3 +11,8 @@ Pour tester l'API Traffic Flows, renseignez l'URL HTTPS locale de l'UCG, le site
 `default` et une clé API dédiée dans les options, puis redémarrez l'App. La clé
 est chiffrée et le champ est automatiquement vidé. Lancez ensuite le test depuis
 l'interface web ; un flow au maximum est lu et aucune donnée n'est conservée.
+
+Après un test réussi, activez `flow_collection_enabled` pour archiver les flows
+toutes les deux minutes. La collecte utilise pagination, chevauchement,
+déduplication et reprise sur curseur. Les données restent bornées par la durée de
+rétention et la limite d'enregistrements configurées.
