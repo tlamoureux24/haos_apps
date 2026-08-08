@@ -1,6 +1,7 @@
 import importlib.util
 import struct
 import unittest
+from unittest import mock
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("ule", Path(__file__).with_name("unifi_log_explorer.py"))
@@ -43,6 +44,22 @@ class ParserTests(unittest.TestCase):
     def test_reject_netflow_v9(self):
         with self.assertRaisesRegex(ValueError, "unsupported flow version 9"):
             ule.parse_ipfix(struct.pack("!HHIII", 9, 16, 0, 0, 0))
+
+    def test_flow_probe_uses_api_key_and_discards_flow(self):
+        response = mock.MagicMock()
+        response.read.return_value = b'{"data":[{"id":"sample","service":"HTTPS"}],"total_element_count":7,"has_next":true}'
+        response.__enter__.return_value = response
+        options = {"unifi_base_url": "https://192.168.1.1", "unifi_site_slug": "default",
+                   "unifi_api_key": "secret-test-key", "verify_ssl": False}
+        with mock.patch.object(ule.urllib.request, "urlopen", return_value=response) as urlopen:
+            result = ule.flow_probe(options)
+        request = urlopen.call_args.args[0]
+        payload = ule.json.loads(request.data)
+        self.assertEqual(request.full_url, "https://192.168.1.1/proxy/network/v2/api/site/default/traffic-flows")
+        self.assertEqual(request.get_header("X-api-key"), "secret-test-key")
+        self.assertEqual(payload["pageSize"], 1)
+        self.assertEqual(result["total"], 7)
+        self.assertNotIn("data", result)
 
 
 if __name__ == "__main__":

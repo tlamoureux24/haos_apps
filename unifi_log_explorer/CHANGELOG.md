@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- Add a manual, non-persistent probe for the internal Traffic Flows endpoint.
+- Authenticate the probe with a dedicated UniFi API key.
+- Encrypt the API key locally and clear it from Supervisor options after restart.
+- Request at most one flow from the last five minutes and retain no returned flow.
+
 ## 0.1.1
 
 - Parse the RFC3164 system logs that UniFi sends alongside CEF events.

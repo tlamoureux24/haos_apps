@@ -13,6 +13,7 @@ Elle fournit :
 - une interface web autonome protégée par un compte administrateur local ;
 - une rétention en durée et en nombre maximal d'enregistrements ;
 - un export JSON du diagnostic, sans adresse IP de l'émetteur.
+- un test non persistant de l'endpoint interne Traffic Flows avec une clé API dédiée.
 
 Il n'y a volontairement pas d'Ingress. L'interface est publiée sur le réseau
 local, comme AdGuard Home ou Nginx Proxy Manager.
@@ -27,6 +28,22 @@ local, comme AdGuard Home ou Nginx Proxy Manager.
 4. Dans UniFi Network, activez NetFlow/IPFIX vers l'adresse de Home Assistant,
    port UDP `2055`.
 5. Activez l'export SIEM/CEF vers la même adresse, port UDP `5514`.
+
+## Test de l'API Traffic Flows
+
+Configurez `unifi_base_url`, généralement `https://192.168.1.1`, conservez
+`unifi_site_slug` à `default`, puis saisissez une clé API UniFi dédiée. Au
+redémarrage, la clé est chiffrée dans le volume privé et le champ d'option est
+automatiquement vidé. Ne ressaisissez pas la clé tant qu'elle ne change pas.
+
+Ouvrez ensuite l'interface et utilisez **Tester l'API Traffic Flows**. Le test
+interroge les cinq dernières minutes, demande au maximum un flow et ne conserve
+aucune donnée retournée. Son seul objectif est de déterminer si l'endpoint
+interne accepte l'authentification `X-API-Key`.
+
+Laissez `verify_ssl` désactivé pour le certificat autosigné habituel de la
+console. Activez-le uniquement si la chaîne du certificat est reconnue dans
+l'App.
 
 Les ports hôtes peuvent être modifiés dans le panneau Réseau de l'App. Les ports
 configurés côté UniFi doivent alors correspondre aux ports hôtes.
@@ -52,6 +69,7 @@ volumineuse sera séparée et exclue des sauvegardes.
 - Les champs IPFIX de longueur variable sont inventoriés mais pas encore décodés.
 - Les échantillons de valeurs sont limités à dix par jeu de données IPFIX.
 - Il ne s'agit pas encore d'un historique exhaustif ni d'un moteur d'alertes.
+- Le test Traffic Flows ne lance pas encore de collecte périodique.
 
 Une capture de 48 heures à une semaine est recommandée. L'export JSON permettra
 d'établir le schéma définitif sans inclure l'adresse IP source de la passerelle.

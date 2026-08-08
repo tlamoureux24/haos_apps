@@ -11,6 +11,18 @@ configuration:
   session_timeout_minutes:
     name: Expiration de session web (minutes)
     description: Les sessions administrateur inactives expirent après cette durée.
+  unifi_base_url:
+    name: URL de la console UniFi
+    description: URL HTTPS locale de la passerelle UniFi Cloud Gateway.
+  unifi_site_slug:
+    name: Identifiant interne du site UniFi
+    description: Nom du site utilisé par l'endpoint Traffic Flows, généralement default.
+  unifi_api_key:
+    name: Clé API UniFi
+    description: Clé dédiée chiffrée localement puis effacée des options après redémarrage.
+  verify_ssl:
+    name: Vérifier le certificat TLS
+    description: Activez uniquement si le certificat de la console est reconnu par l'App.
   log_level:
     name: Niveau de journalisation
     description: Niveau de détail des journaux de l'application.

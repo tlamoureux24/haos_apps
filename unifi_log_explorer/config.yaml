@@ -1,6 +1,6 @@
 name: "UniFi Log Explorer"
 slug: "unifi_log_explorer"
-version: "0.1.1"
+version: "0.2.0"
 description: "Capture and inspect UniFi IPFIX and CEF diagnostic data"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/unifi_log_explorer"
 arch:
@@ -12,6 +12,9 @@ init: false
 apparmor: true
 tmpfs: true
 backup: cold
+hassio_api: true
+backup_exclude:
+  - /data/unifi_api_key.key
 webui: "http://[HOST]:[PORT:8090]/"
 watchdog: "http://[HOST]:[PORT:8090]/health"
 
@@ -31,6 +34,10 @@ options:
   retention_hours: 168
   max_records: 250000
   session_timeout_minutes: 60
+  unifi_base_url: "https://192.168.1.1"
+  unifi_site_slug: "default"
+  unifi_api_key: ""
+  verify_ssl: false
   log_level: "info"
 
 schema:
@@ -39,4 +46,8 @@ schema:
   retention_hours: "int(1,720)"
   max_records: "int(1000,2000000)"
   session_timeout_minutes: "int(5,1440)"
+  unifi_base_url: url
+  unifi_site_slug: str
+  unifi_api_key: password?
+  verify_ssl: bool
   log_level: "list(debug|info|warning|error)"

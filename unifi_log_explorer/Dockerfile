@@ -8,7 +8,9 @@ LABEL \
   io.hass.type="app" \
   io.hass.arch="${BUILD_ARCH}"
 
-RUN apk add --no-cache python3
+RUN apk add --no-cache \
+  py3-cryptography \
+  python3
 
 COPY run.sh /
 COPY unifi_log_explorer.py /app/unifi_log_explorer.py

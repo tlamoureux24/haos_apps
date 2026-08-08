@@ -14,18 +14,32 @@ import re
 import secrets
 import socket
 import sqlite3
+import ssl
+import stat
 import struct
+import sys
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections import Counter
 from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+try:
+    from cryptography.fernet import Fernet, InvalidToken
+except ImportError:  # Host-side parser tests do not require the container dependency.
+    Fernet = None
+    InvalidToken = ValueError
+
 DATA = Path(os.environ.get("UNIFI_LOG_EXPLORER_DATA", "/data"))
 DB_PATH = DATA / "diagnostics.db"
 OPTIONS_PATH = DATA / "options.json"
+ENCRYPTED_API_KEY_PATH = DATA / "unifi_api_key.enc"
+API_KEY_KEY_PATH = DATA / "unifi_api_key.key"
 WEB_PORT = 8090
 IPFIX_PORT = 2055
 CEF_PORT = 5514
@@ -44,6 +58,8 @@ IPFIX_NAMES = {1: "octetDeltaCount", 2: "packetDeltaCount", 4: "protocolIdentifi
 def load_options():
     defaults = {"allowed_source_ips": ["192.168.1.1"], "retention_hours": 168,
                 "max_records": 250000, "session_timeout_minutes": 60,
+                "unifi_base_url": "https://192.168.1.1", "unifi_site_slug": "default",
+                "unifi_api_key": "", "verify_ssl": False,
                 "log_level": "info"}
     try:
         defaults.update(json.loads(OPTIONS_PATH.read_text()))
@@ -58,7 +74,114 @@ def load_options():
     if not allowed:
         raise SystemExit("allowed_source_ips must contain at least one valid address")
     defaults["allowed_source_ips"] = allowed
+    configured_key = str(defaults.get("unifi_api_key") or "").strip()
+    if configured_key and os.environ.get("UNIFI_LOG_EXPLORER_SECRETS_PREPARED") != "1":
+        defaults["unifi_api_key"] = configured_key
+    else:
+        defaults["unifi_api_key"] = decrypt_api_key(required=False)
     return defaults
+
+
+def save_private(path, data):
+    temp = path.with_suffix(path.suffix + ".tmp")
+    with os.fdopen(os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as handle:
+        handle.write(data)
+    os.replace(temp, path)
+    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
+
+def encryption_key():
+    if Fernet is None:
+        raise RuntimeError("cryptography is unavailable")
+    try:
+        key = API_KEY_KEY_PATH.read_bytes().strip()
+    except FileNotFoundError:
+        key = Fernet.generate_key()
+        save_private(API_KEY_KEY_PATH, key + b"\n")
+    Fernet(key)
+    return key
+
+
+def encrypt_api_key(value):
+    token = Fernet(encryption_key()).encrypt(value.encode()).decode("ascii")
+    save_private(ENCRYPTED_API_KEY_PATH, json.dumps({"version": 1, "algorithm": "fernet", "token": token}).encode() + b"\n")
+
+
+def decrypt_api_key(required=True):
+    if not ENCRYPTED_API_KEY_PATH.exists():
+        if required: raise RuntimeError("Aucune clé API UniFi n'est configurée")
+        return ""
+    if Fernet is None:
+        raise RuntimeError("cryptography is unavailable")
+    try:
+        payload = json.loads(ENCRYPTED_API_KEY_PATH.read_text())
+        key = API_KEY_KEY_PATH.read_bytes().strip()
+        return Fernet(key).decrypt(payload["token"].encode("ascii")).decode()
+    except (OSError, KeyError, ValueError, InvalidToken, json.JSONDecodeError) as exc:
+        raise RuntimeError("La clé API UniFi chiffrée ne peut pas être déchiffrée") from exc
+
+
+def save_supervisor_options(options):
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        raise RuntimeError("SUPERVISOR_TOKEN indisponible pour effacer la clé API des options")
+    request = urllib.request.Request("http://supervisor/addons/self/options",
+        data=json.dumps({"options": options}).encode(), method="POST",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/json"})
+    with urllib.request.urlopen(request, timeout=10) as response:
+        response.read()
+
+
+def prepare_secrets():
+    DATA.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        options = json.loads(OPTIONS_PATH.read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+    configured = str(options.get("unifi_api_key") or "").strip()
+    if not configured:
+        return
+    encrypt_api_key(configured)
+    sanitized = dict(options); sanitized["unifi_api_key"] = ""
+    save_supervisor_options(sanitized)
+    logging.info("UniFi API key encrypted locally and cleared from App options")
+
+
+def flow_probe(options):
+    base_url = str(options.get("unifi_base_url") or "").rstrip("/")
+    parsed_url = urllib.parse.urlparse(base_url)
+    if parsed_url.scheme != "https" or not parsed_url.hostname:
+        raise RuntimeError("L'URL UniFi doit être une URL HTTPS valide")
+    site = str(options.get("unifi_site_slug") or "default").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", site):
+        raise RuntimeError("L'identifiant de site UniFi est invalide")
+    now = int(time.time() * 1000)
+    empty_filters = ("risk action direction protocol policy policy_type service destination_domain "
+                     "destination_host destination_ip destination_mac destination_network_id destination_port "
+                     "destination_region destination_zone_id except_for in_network_id next_ai_query out_network_id "
+                     "source_domain source_host source_ip source_mac source_network_id source_port source_region source_zone_id").split()
+    payload = {key: [] for key in empty_filters}
+    payload.update({"pageNumber": 1, "pageSize": 1, "search_text": "", "skip_count": False,
+                    "timestampFrom": now - 5 * 60 * 1000, "timestampTo": now})
+    url = f"{base_url}/proxy/network/v2/api/site/{site}/traffic-flows"
+    request = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST",
+        headers={"Accept": "application/json", "Content-Type": "application/json",
+                 "X-API-KEY": str(options.get("unifi_api_key") or decrypt_api_key())})
+    context = ssl.create_default_context() if options.get("verify_ssl") else ssl._create_unverified_context()
+    try:
+        with urllib.request.urlopen(request, context=context, timeout=15) as response:
+            result = json.loads(response.read().decode())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", "replace")[:500]
+        raise RuntimeError(f"HTTP {exc.code}: {body}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(str(exc.reason)) from exc
+    if not isinstance(result, dict) or not isinstance(result.get("data"), list):
+        raise RuntimeError("Réponse Traffic Flows inattendue")
+    sample_fields = sorted(result["data"][0].keys()) if result["data"] else []
+    return {"ok": True, "tested_at": int(time.time()), "returned": len(result["data"]),
+            "total": result.get("total_element_count"), "has_next": result.get("has_next"),
+            "sample_fields": sample_fields}
 
 
 class Store:
@@ -389,7 +512,17 @@ class Web(BaseHTTPRequestHandler):
         rows = "".join(f"<tr><td>{time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(r['received_at']))}</td><td>{html.escape(r['kind'])}</td><td>{html.escape(r['source_ip'])}</td><td>{html.escape(r['summary'])}</td></tr>" for r in data["recent"])
         csrf = session["csrf"]
         rejected = ", ".join(f"{html.escape(ip)} ({count})" for ip,count in sorted(data["rejected_sources"].items())) or "aucune"
-        body = f"<nav><form method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form></nav><h1>UniFi Log Explorer</h1><p>Phase 1 · collecte diagnostique</p><div class=grid>{cards}</div><div class=card><b>Sources autorisées :</b> {', '.join(map(html.escape,data['allowed_source_ips']))}<br><b>Sources refusées observées :</b> {rejected}<br><b>Rétention :</b> {data['retention_hours']} h · <b>Limite :</b> {data['max_records']} enregistrements</div><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p><div class=card><h2>Derniers enregistrements</h2><table><thead><tr><th>Date</th><th>Type</th><th>Source</th><th>Résumé</th></tr></thead><tbody>{rows}</tbody></table></div>"
+        raw_probe = self.store.setting("flow_probe_result")
+        probe = json.loads(raw_probe) if raw_probe else None
+        if probe and probe.get("ok"):
+            probe_text = f"<span>Connexion réussie · {probe.get('returned')} flow retourné · total fenêtre : {probe.get('total')}</span>"
+        elif probe:
+            probe_text = f"<span class=bad>Échec : {html.escape(str(probe.get('error', 'erreur inconnue')))}</span>"
+        else:
+            probe_text = "<span class=muted>Aucun test effectué.</span>"
+        api_ready = bool(self.store.options.get("unifi_api_key"))
+        probe_button = f"<form method=post action=/probe><input type=hidden name=csrf value='{csrf}'><button {'disabled' if not api_ready else ''}>Tester l’API Traffic Flows</button></form>"
+        body = f"<nav><form method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form></nav><h1>UniFi Log Explorer</h1><p>Phase 1 · collecte diagnostique</p><div class=grid>{cards}</div><div class=card><b>Sources autorisées :</b> {', '.join(map(html.escape,data['allowed_source_ips']))}<br><b>Sources refusées observées :</b> {rejected}<br><b>Rétention :</b> {data['retention_hours']} h · <b>Limite :</b> {data['max_records']} enregistrements</div><div class=card><h2>API Traffic Flows</h2><p>{probe_text}</p>{probe_button}<p class=muted>Le test lit au maximum un flow des cinq dernières minutes et ne le conserve pas.</p></div><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p><div class=card><h2>Derniers enregistrements</h2><table><thead><tr><th>Date</th><th>Type</th><th>Source</th><th>Résumé</th></tr></thead><tbody>{rows}</tbody></table></div>"
         self.send_html(body)
 
     def do_POST(self):
@@ -406,6 +539,14 @@ class Web(BaseHTTPRequestHandler):
                 return self.redirect("/", f"ule_session={token}; Path=/; HttpOnly; SameSite=Strict")
             time.sleep(0.5); return self.send_html("<h1>Connexion refusée</h1><a href=/login>Réessayer</a>", 401)
         session = self.session()
+        if path == "/probe" and session and hmac.compare_digest(form.get("csrf", ""), session["csrf"]):
+            try:
+                result = flow_probe(self.store.options)
+            except Exception as exc:
+                logging.warning("Traffic Flows API probe failed: %s", exc)
+                result = {"ok": False, "tested_at": int(time.time()), "error": str(exc)}
+            self.store.set_setting("flow_probe_result", json.dumps(result, separators=(",", ":")))
+            return self.redirect("/")
         if path == "/logout" and session and hmac.compare_digest(form.get("csrf", ""), session["csrf"]):
             jar = cookies.SimpleCookie(self.headers.get("Cookie", "")); token = jar.get("ule_session")
             if token:
@@ -433,4 +574,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--prepare-secrets":
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+        prepare_secrets()
+    else:
+        main()
