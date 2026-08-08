@@ -1,0 +1,20 @@
+configuration:
+  allowed_source_ips:
+    name: Allowed source IPs
+    description: Only datagrams originating from these exact IP addresses are parsed or stored.
+  retention_hours:
+    name: Diagnostic retention (hours)
+    description: Delete diagnostic records older than this duration.
+  max_records:
+    name: Maximum records
+    description: Hard limit shared by IPFIX and CEF diagnostic records.
+  session_timeout_minutes:
+    name: Web session timeout (minutes)
+    description: Inactive administrator sessions expire after this duration.
+  log_level:
+    name: Log level
+    description: Application logging verbosity.
+network:
+  8090/tcp: Web administration interface
+  2055/udp: NetFlow/IPFIX receiver
+  5514/udp: Syslog/CEF receiver

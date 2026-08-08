@@ -1,0 +1,57 @@
+# UniFi Log Explorer
+
+UniFi Log Explorer est une App Home Assistant autonome qui reçoit et inspecte
+les exports IPFIX et Syslog/CEF d'une passerelle UniFi. Cette version `0.1.0`
+est une phase de collecte diagnostique : son objectif est d'observer les champs
+réellement émis avant de figer le stockage analytique et l'interface finale.
+
+Elle fournit :
+
+- un récepteur IPFIX UDP avec lecture des templates et échantillons décodés ;
+- un récepteur Syslog/CEF UDP ;
+- un filtrage strict par adresse IP source avant analyse ou stockage ;
+- une interface web autonome protégée par un compte administrateur local ;
+- une rétention en durée et en nombre maximal d'enregistrements ;
+- un export JSON du diagnostic, sans adresse IP de l'émetteur.
+
+Il n'y a volontairement pas d'Ingress. L'interface est publiée sur le réseau
+local, comme AdGuard Home ou Nginx Proxy Manager.
+
+## Installation et premier démarrage
+
+1. Installez l'App et vérifiez `allowed_source_ips`. Par défaut, seule
+   `192.168.1.1` est acceptée.
+2. Démarrez l'App puis ouvrez son interface web.
+3. Créez le compte administrateur local. Le mot de passe doit contenir au moins
+   12 caractères et seul son dérivé `scrypt` salé est conservé.
+4. Dans UniFi Network, activez NetFlow/IPFIX vers l'adresse de Home Assistant,
+   port UDP `2055`.
+5. Activez l'export SIEM/CEF vers la même adresse, port UDP `5514`.
+
+Les ports hôtes peuvent être modifiés dans le panneau Réseau de l'App. Les ports
+configurés côté UniFi doivent alors correspondre aux ports hôtes.
+
+## Sécurité
+
+Les datagrammes dont l'adresse source ne figure pas dans `allowed_source_ips`
+ne sont ni analysés ni conservés. Seul leur nombre est incrémenté. Les adresses
+doivent être des IPv4 ou IPv6 exactes ; les sous-réseaux CIDR ne sont pas admis.
+
+Le port web `8090` doit rester accessible uniquement depuis le LAN ou un VPN.
+Pour un accès HTTPS, placez-le derrière Nginx Proxy Manager. Ne publiez jamais
+les ports `8090`, `2055` ou `5514` directement sur Internet.
+
+La base diagnostique est incluse dans les sauvegardes de cette première phase.
+Elle est bornée par `retention_hours` et `max_records`. La future base analytique
+volumineuse sera séparée et exclue des sauvegardes.
+
+## Limites de la phase 1
+
+- IPFIX version 10 uniquement ; NetFlow v9 est signalé comme non pris en charge.
+- Transport UDP uniquement pour IPFIX et CEF.
+- Les champs IPFIX de longueur variable sont inventoriés mais pas encore décodés.
+- Les échantillons de valeurs sont limités à dix par jeu de données IPFIX.
+- Il ne s'agit pas encore d'un historique exhaustif ni d'un moteur d'alertes.
+
+Une capture de 48 heures à une semaine est recommandée. L'export JSON permettra
+d'établir le schéma définitif sans inclure l'adresse IP source de la passerelle.

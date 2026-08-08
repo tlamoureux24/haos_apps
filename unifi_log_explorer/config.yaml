@@ -1,0 +1,42 @@
+name: "UniFi Log Explorer"
+slug: "unifi_log_explorer"
+version: "0.1.0"
+description: "Capture and inspect UniFi IPFIX and CEF diagnostic data"
+url: "https://github.com/tlamoureux24/haos_apps/tree/main/unifi_log_explorer"
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+apparmor: true
+tmpfs: true
+backup: cold
+webui: "http://[HOST]:[PORT:8090]/"
+watchdog: "http://[HOST]:[PORT:8090]/health"
+
+ports:
+  8090/tcp: 8090
+  2055/udp: 2055
+  5514/udp: 5514
+
+ports_description:
+  8090/tcp: "UniFi Log Explorer administration interface"
+  2055/udp: "UniFi NetFlow/IPFIX receiver"
+  5514/udp: "UniFi Syslog/CEF receiver"
+
+options:
+  allowed_source_ips:
+    - "192.168.1.1"
+  retention_hours: 168
+  max_records: 250000
+  session_timeout_minutes: 60
+  log_level: "info"
+
+schema:
+  allowed_source_ips:
+    - str
+  retention_hours: "int(1,720)"
+  max_records: "int(1000,2000000)"
+  session_timeout_minutes: "int(5,1440)"
+  log_level: "list(debug|info|warning|error)"
