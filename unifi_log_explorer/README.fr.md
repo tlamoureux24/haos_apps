@@ -49,13 +49,17 @@ l'App.
 
 Une fois le test réussi, activez `flow_collection_enabled`. Par défaut, l'App :
 
-- importe les 30 dernières minutes au premier démarrage ;
+- importe les dernières 24 heures au premier démarrage ou lors d'une migration ;
 - interroge l'UCG toutes les 120 secondes ;
-- reprend deux minutes avant son dernier curseur pour éviter les pertes ;
+- lit les pages les plus récentes jusqu'à retrouver deux pages déjà archivées ;
 - pagine les réponses par lots de 100 ;
 - découpe les fenêtres atteignant la limite UniFi de 10 000 résultats ;
 - élimine les doublons grâce à l'identifiant stable du flow ;
-- reprend après redémarrage, avec un rattrapage plafonné à 24 heures par sécurité.
+- reste à deux requêtes par cycle lorsque l'UCG n'a publié aucun nouveau lot.
+
+UniFi peut rendre les flows visibles par lots espacés de plusieurs heures. La
+lecture depuis les éléments les plus récents évite de dépendre de cette latence
+de publication et de la durée réelle des sessions.
 
 Les flows sont conservés dans une table SQLite séparée et bornés par
 `retention_hours` et `max_records`. Ils ne sont pas inclus dans l'export JSON

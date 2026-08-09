@@ -31,7 +31,7 @@ configuration:
     description: Delay between Traffic Flows collection cycles.
   flow_initial_backfill_minutes:
     name: Initial flow backfill (minutes)
-    description: Time imported on first startup before incremental collection begins.
+    description: Time imported during a backfill; at least 1440 minutes are used for format migrations.
   log_level:
     name: Log level
     description: Application logging verbosity.

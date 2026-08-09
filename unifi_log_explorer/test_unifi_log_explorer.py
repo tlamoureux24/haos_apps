@@ -27,6 +27,15 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(event["process_id"], 3487)
         self.assertIn("DHCPACK", event["message"])
 
+    def test_multiline_and_switch_syslog_variants(self):
+        multiline = ule.parse_syslog_or_cef(b"<14>Aug  9 02:01:46 UCG-Fiber UCG-Fiber linkcheck[953]: speedtest\nsecond line")
+        self.assertEqual(multiline["app_name"], "linkcheck")
+        self.assertIn("second line", multiline["message"])
+        switch = ule.parse_syslog_or_cef(b"<30>USWUltra210W 6c63f82a3348,USW-Ultra-210W-2.1.8.971: switch: port changed")
+        self.assertEqual(switch["hostname"], "USWUltra210W")
+        self.assertIsNone(switch["timestamp"])
+        self.assertIn("switch", switch["message"])
+
     def test_ipfix_template_and_data(self):
         fields = struct.pack("!HHHHHH", 8, 4, 12, 4, 1, 8)
         template = struct.pack("!HH", 256, 3) + fields
@@ -73,6 +82,26 @@ class ParserTests(unittest.TestCase):
                 self.assertEqual(store.add_flows([flow]), 1)
                 self.assertEqual(store.add_flows([flow]), 0)
                 self.assertEqual(store.dashboard()["flow_stats"]["count"], 1)
+
+    def test_newest_scan_stops_after_two_known_pages(self):
+        class FakeStore:
+            options = {}
+            known = {"known-1", "known-2"}
+            def known_flow_ids(self, identifiers): return set(identifiers) & self.known
+            def add_flows(self, flows):
+                new = [flow["id"] for flow in flows if flow["id"] not in self.known]
+                self.known.update(new)
+                return len(new)
+        pages = {
+            1: {"data": [{"id": "new-1"}], "has_next": True},
+            2: {"data": [{"id": "known-1"}], "has_next": True},
+            3: {"data": [{"id": "known-2"}], "has_next": True},
+            4: {"data": [{"id": "must-not-be-read"}], "has_next": False},
+        }
+        with mock.patch.object(ule, "traffic_flow_page", side_effect=lambda options, start, end, page, size: pages[page]) as request:
+            totals = ule.FlowCollector(FakeStore()).scan_newest(2_000_000_000_000)
+        self.assertEqual(totals, [3, 1, 3])
+        self.assertEqual(request.call_count, 3)
 
 
 if __name__ == "__main__":

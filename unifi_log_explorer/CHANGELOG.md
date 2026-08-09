@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Replace narrow cursor windows with newest-first scanning until known pages are reached.
+- Add a one-time, chunked 24-hour repair to recover flows missed by delayed UniFi batches.
+- Keep idle polling to two API pages while fully paging newly published batches.
+- Parse multiline RFC3164 messages and timestamp-less UniFi switch messages.
+
 ## 0.3.0
 
 - Add opt-in periodic collection of complete Traffic Flows through the local API.

@@ -45,7 +45,8 @@ IPFIX_PORT = 2055
 CEF_PORT = 5514
 CEF_HEADER = re.compile(r"(?:<\d+>)?\s*CEF:(\d+)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|([^|]*)\|(.*)")
 CEF_PAIR = re.compile(r"([A-Za-z][A-Za-z0-9_]*)=((?:\\[=\\]|[^ ])*(?: (?![A-Za-z][A-Za-z0-9_]*=)[^ ]*)*)")
-SYSLOG_HEADER = re.compile(r"^<(\d{1,3})>([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(\S+)\s+(.*)$")
+SYSLOG_HEADER = re.compile(r"^<(\d{1,3})>([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(\S+)\s+(.*)$", re.DOTALL)
+SYSLOG_NO_TIMESTAMP = re.compile(r"^<(\d{1,3})>(\S+)\s+(.*)$", re.DOTALL)
 SYSLOG_TAG = re.compile(r"^([A-Za-z0-9_.-]+)(?:\[(\d+)\])?:\s*(.*)$", re.DOTALL)
 IPFIX_NAMES = {1: "octetDeltaCount", 2: "packetDeltaCount", 4: "protocolIdentifier",
                7: "sourceTransportPort", 8: "sourceIPv4Address", 11: "destinationTransportPort",
@@ -61,7 +62,7 @@ def load_options():
                 "unifi_base_url": "https://192.168.1.1", "unifi_site_slug": "default",
                 "unifi_api_key": "", "verify_ssl": False,
                 "flow_collection_enabled": False, "flow_poll_interval_seconds": 120,
-                "flow_initial_backfill_minutes": 30,
+                "flow_initial_backfill_minutes": 1440,
                 "log_level": "info"}
     try:
         defaults.update(json.loads(OPTIONS_PATH.read_text()))
@@ -266,6 +267,13 @@ class Store:
             self.db.commit()
         return inserted
 
+    def known_flow_ids(self, identifiers):
+        values = [str(value) for value in identifiers if value]
+        if not values: return set()
+        placeholders = ",".join("?" for _ in values)
+        with self.lock:
+            return {row[0] for row in self.db.execute(f"SELECT id FROM traffic_flows WHERE id IN ({placeholders})", values)}
+
     def dashboard(self):
         with self.lock:
             counts = {r["kind"]: r["n"] for r in self.db.execute("SELECT kind,count(*) n FROM records GROUP BY kind")}
@@ -394,9 +402,14 @@ def parse_syslog_or_cef(raw):
     if "CEF:" in text:
         return parse_cef(raw)
     match = SYSLOG_HEADER.match(text)
-    if not match:
-        raise ValueError("message is neither CEF nor supported RFC3164 syslog")
-    priority_text, timestamp, hostname, body = match.groups()
+    if match:
+        priority_text, timestamp, hostname, body = match.groups()
+    else:
+        fallback = SYSLOG_NO_TIMESTAMP.match(text)
+        if not fallback:
+            raise ValueError("message is neither CEF nor supported syslog")
+        priority_text, hostname, body = fallback.groups()
+        timestamp = None
     priority = int(priority_text)
     if body.startswith(hostname + " "):
         body = body[len(hostname) + 1:]
@@ -464,9 +477,9 @@ class Collector(threading.Thread):
 
 
 class FlowCollector(threading.Thread):
-    OVERLAP_MS = 120_000
     CHUNK_MS = 30 * 60_000
-    MAX_CATCHUP_MS = 24 * 60 * 60_000
+    SCAN_WINDOW_MS = 24 * 60 * 60_000
+    BACKFILL_VERSION = "2"
 
     def __init__(self, store):
         super().__init__(name="traffic-flows", daemon=True)
@@ -492,23 +505,48 @@ class FlowCollector(threading.Thread):
             page += 1
         return fetched, inserted, pages
 
-    def cycle(self):
-        now = int(time.time() * 1000)
-        raw_cursor = self.store.setting("flow_cursor_ms")
-        if raw_cursor:
-            start = max(int(raw_cursor) - self.OVERLAP_MS, now - self.MAX_CATCHUP_MS)
-        else:
-            start = now - int(self.store.options["flow_initial_backfill_minutes"]) * 60_000
+    def repair_backfill(self, now):
         totals = [0, 0, 0]
-        cursor = start
+        backfill_ms = max(1440, int(self.store.options["flow_initial_backfill_minutes"])) * 60_000
+        cursor = now - backfill_ms
         while cursor < now:
             chunk_end = min(cursor + self.CHUNK_MS, now)
             values = self.collect_window(cursor, chunk_end)
             totals = [a + b for a, b in zip(totals, values)]
             cursor = chunk_end + 1
-        self.store.set_setting("flow_cursor_ms", str(now))
+        self.store.set_setting("flow_backfill_version", self.BACKFILL_VERSION)
+        logging.info("Traffic Flows 24h repair: fetched=%s inserted=%s pages=%s", *totals)
+        return totals
+
+    def scan_newest(self, now):
+        start = now - self.SCAN_WINDOW_MS
+        totals = [0, 0, 0]
+        consecutive_known_pages = 0
+        page = 1
+        while page <= 100:
+            result = traffic_flow_page(self.store.options, start, now, page, 100)
+            flows = result["data"]
+            identifiers = [flow.get("id") for flow in flows]
+            known_before = self.store.known_flow_ids(identifiers)
+            inserted = self.store.add_flows(flows)
+            totals[0] += len(flows); totals[1] += inserted; totals[2] += 1
+            if flows and len(known_before) == len(flows):
+                consecutive_known_pages += 1
+            else:
+                consecutive_known_pages = 0
+            if not result.get("has_next") or consecutive_known_pages >= 2:
+                break
+            page += 1
+        return totals
+
+    def cycle(self):
+        now = int(time.time() * 1000)
+        if self.store.setting("flow_backfill_version") != self.BACKFILL_VERSION:
+            totals = self.repair_backfill(now)
+        else:
+            totals = self.scan_newest(now)
         status = {"ok": True, "time": int(time.time()), "fetched": totals[0],
-                  "inserted": totals[1], "pages": totals[2], "cursor_ms": now}
+                  "inserted": totals[1], "pages": totals[2], "strategy": "newest-scan"}
         self.store.set_setting("flow_collection_status", json.dumps(status, separators=(",", ":")))
         logging.info("Traffic Flows cycle: fetched=%s inserted=%s pages=%s", *totals)
 
