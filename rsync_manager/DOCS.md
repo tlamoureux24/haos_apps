@@ -34,6 +34,10 @@ Les rapports SMTP sont facultatifs. Les certificats TLS du serveur SMTP sont
 vérifiés. Les privilèges `SYS_ADMIN` et `DAC_READ_SEARCH` sont requis uniquement
 par `mount.cifs` pour monter et démonter les partages CIFS.
 
+L'interface est disponible en francais et en anglais. Elle suit la langue du
+navigateur au premier affichage, utilise le francais par defaut et mémorise le
+choix manuel effectué dans le pied de page.
+
 [Documentation française complète](https://github.com/tlamoureux24/haos_apps/blob/main/rsync_manager/README.fr.md)
 
 ## English
@@ -66,5 +70,9 @@ clear text and must be stored securely.
 SMTP reports are optional and SMTP TLS certificates are verified. `SYS_ADMIN`
 and `DAC_READ_SEARCH` are required only by `mount.cifs` to mount and unmount
 CIFS shares.
+
+The interface is available in French and English. It follows the browser
+language on first use, falls back to French, and remembers the manual language
+selection made in the footer.
 
 [Full English documentation](https://github.com/tlamoureux24/haos_apps/blob/main/rsync_manager/README.md)

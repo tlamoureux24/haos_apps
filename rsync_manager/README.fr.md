@@ -46,7 +46,10 @@ L'interface contient trois onglets:
 - `SMTP`: configuration de l'envoi des rapports email;
 - `GESTION`: import/export des configurations.
 
-Un pied de page permet de basculer entre mode clair et mode sombre. Le choix du theme est conserve dans le navigateur. Le lien GitHub a droite pointe vers le dossier de l'App dans le depot.
+L'interface est disponible en francais et en anglais. Au premier affichage,
+elle suit la langue du navigateur et utilise le francais par defaut. Le pied de
+page permet de choisir durablement la langue ainsi que le mode clair ou sombre.
+Le lien GitHub a droite pointe vers le dossier de l'App dans le depot.
 
 ## Onglet JOBS
 

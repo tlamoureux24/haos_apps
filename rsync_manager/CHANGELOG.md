@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0 - 2026-08-10
+
+- Add complete French and English localization to the Ingress interface.
+- Select English automatically for English-language browsers and keep French as the fallback.
+- Add a persistent manual language selector alongside the light and dark theme controls.
+- Localize forms, job states, validation, confirmations, imports, exports and runtime feedback.
+- Format interface dates according to the selected language.
+
 ## 1.1.3 - 2026-07-19
 
 - Restore `DAC_READ_SEARCH` in the Supervisor privilege set required by `mount.cifs`.

@@ -31,6 +31,10 @@ The interface contains three tabs:
 - `SMTP`: configure optional email reports;
 - `MANAGEMENT`: import or export jobs and email settings.
 
+The interface is available in French and English. It follows the browser
+language on first use, falls back to French, and provides a persistent manual
+selector in the footer next to the light/dark theme controls.
+
 Each job has a stable identifier and can be enabled or disabled independently.
 Disabling a job removes it from the generated cron schedule but does not block
 manual runs.

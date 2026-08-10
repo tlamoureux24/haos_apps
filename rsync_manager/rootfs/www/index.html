@@ -5,6 +5,9 @@
     <title>Rsync Manager Pro</title>
     <script>
         document.documentElement.dataset.theme = localStorage.getItem('rsync-manager-theme') || 'light';
+        const storedLanguage = localStorage.getItem('rsync-manager-language');
+        document.documentElement.lang = storedLanguage === 'en' || storedLanguage === 'fr'
+            ? storedLanguage : (navigator.language.toLowerCase().startsWith('en') ? 'en' : 'fr');
     </script>
     <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
     <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
@@ -71,7 +74,8 @@
             right: 0;
             z-index: 1020;
         }
-        .theme-toggle {
+        .footer-controls { display: flex; align-items: center; gap: 8px; }
+        .theme-toggle, .language-toggle {
             align-items: center;
             background: var(--app-surface);
             border: 1px solid var(--app-border);
@@ -83,7 +87,7 @@
             padding: 3px;
             width: max-content;
         }
-        .theme-toggle button, .github-link {
+        .theme-toggle button, .language-toggle button, .github-link {
             align-items: center;
             background: transparent;
             border: 0;
@@ -94,7 +98,8 @@
             justify-content: center;
             width: 34px;
         }
-        .theme-toggle button.active { background: #0d6efd; color: #fff; }
+        .theme-toggle button.active, .language-toggle button.active { background: #0d6efd; color: #fff; }
+        .language-toggle button { font-size: 0.72rem; font-weight: 700; }
         .footer-title { color: var(--app-text); font-weight: 600; }
         .github-link { color: var(--app-muted); justify-self: end; text-decoration: none; }
         .github-link:hover { color: var(--app-text); }
@@ -174,6 +179,7 @@
 </div>
 
 <footer class="app-footer">
+    <div class="footer-controls">
     <div class="theme-toggle" aria-label="Choix du thème">
         <button id="theme-light-btn" type="button" title="Mode clair" aria-label="Mode clair">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -193,6 +199,11 @@
                 <path d="M12 3a6 6 0 0 0 9 7.4A9 9 0 1 1 12 3Z"></path>
             </svg>
         </button>
+    </div>
+    <div class="language-toggle" aria-label="Choix de la langue">
+        <button id="language-fr-btn" type="button" title="Français" aria-label="Français">FR</button>
+        <button id="language-en-btn" type="button" title="English" aria-label="English">EN</button>
+    </div>
     </div>
     <div class="footer-title">Rsync Manager</div>
     <a class="github-link" href="https://github.com/tlamoureux24/haos_apps/tree/main/rsync_manager" target="_blank" rel="noopener noreferrer" title="Voir l'App sur GitHub" aria-label="Voir l'App sur GitHub">
@@ -307,6 +318,73 @@ let jobStatuses = {};
 let editingJobId = null;
 const API = 'cgi-bin/api.sh';
 const statusTimers = {};
+let language = document.documentElement.lang;
+const EN = {
+    'GESTION':'MANAGEMENT', '+ Ajouter un job':'+ Add job', 'Actualiser':'Refresh',
+    'Activer les emails':'Enable email', 'Serveur':'Server', 'Authentification':'Authentication',
+    'Oui':'Yes', 'Non':'No', 'Utilisateur':'Username', 'Mot de passe':'Password',
+    'TLS actif':'TLS enabled', 'Expéditeur':'Sender', 'Destinataire':'Recipient',
+    'Sauvegarder Config':'Save configuration', 'Envoyer un Test':'Send test',
+    'Les exports contiennent les mots de passe SMTP et SMB/CIFS en clair. Conservez ces fichiers dans un emplacement sûr.':'Exports contain SMTP and SMB/CIFS passwords in plain text. Keep these files in a secure location.',
+    'Export config email':'Export email configuration', 'Export config jobs':'Export job configuration',
+    'Import config email':'Import email configuration', 'Import config jobs':'Import job configuration',
+    'Choix du thème':'Theme selection', 'Mode clair':'Light mode', 'Mode sombre':'Dark mode',
+    "Voir l'App sur GitHub":'View the App on GitHub', 'Ajouter un job':'Add job', 'Fermer':'Close',
+    'Nom':'Name', 'Nom du job (obligatoire)':'Job name (required)', '0 3 * * * (obligatoire)':'0 3 * * * (required)', 'Actif':'Enabled',
+    'Source':'Source', 'Cible':'Target', 'Chemin local (obligatoire)':'Local path (required)',
+    'Adresse IP ou nom (obligatoire)':'IP address or hostname (required)', 'Partage réseau (obligatoire)':'Network share (required)',
+    'Sous-dossier dans le partage (optionnel)':'Subfolder in share (optional)', 'Login (optionnel)':'Username (optional)',
+    'Mot de passe (optionnel)':'Password (optional)', 'Domaine/Workgroup (optionnel)':'Domain/Workgroup (optional)',
+    'Exclusions rsync':'rsync exclusions', 'Exclusions optionnelles, une règle par ligne\ncache/\n*.tmp\n@eaDir/':'Optional exclusions, one rule per line\ncache/\n*.tmp\n@eaDir/',
+    'Supprimer':'Delete', 'Tester montages':'Test mounts', 'Simuler':'Dry run', 'Lancer':'Run', 'Enregistrer':'Save',
+    'Dernier log':'Latest log', 'Désactivé':'Disabled', 'Jamais exécuté':'Never run', 'Voir dernier log':'View latest log',
+    'La planification cron ignore ce job. Les actions manuelles restent possibles.':'Cron scheduling ignores this job. Manual actions remain available.',
+    'Statut inconnu':'Unknown status', 'Aucun job créé.':'No jobs created.', 'Job sans nom':'Unnamed job',
+    'Choix de la langue':'Language selection', 'Français':'French',
+    'Jobs enregistrés et planification cron mise à jour.':'Jobs saved and cron schedule updated.',
+    'Sauvegarde jobs refusée':'Job save rejected', 'Job enregistré et planification cron mise à jour.':'Job saved and cron schedule updated.',
+    'Job supprimé et planification cron mise à jour.':'Job deleted and cron schedule updated.', 'Job activé.':'Job enabled.', 'Job désactivé.':'Job disabled.',
+    'Export de la configuration email prêt.':'Email configuration export ready.', 'Export de la configuration jobs prêt.':'Job configuration export ready.',
+    'La configuration email doit être un objet JSON.':'The email configuration must be a JSON object.', 'Import email refusé':'Email import rejected',
+    'Configuration email importée et prise en compte.':'Email configuration imported and applied.',
+    'La configuration jobs doit être un tableau JSON.':'The job configuration must be a JSON array.', 'Import jobs refusé':'Job import rejected',
+    'Configuration jobs importée, cron régénéré.':'Job configuration imported and cron regenerated.',
+    'Erreur sauvegarde inconnue':'Unknown save error', 'Configuration enregistrée.':'Configuration saved.',
+    'Test email en cours...':'Email test in progress...', 'Email de test envoyé.':'Test email sent.',
+    'Chargement...':'Loading...', 'Log indisponible':'Log unavailable', 'Action refusée':'Action rejected'
+    ,'Succès':'Success', 'Échec':'Failed', 'Erreur montage':'Mount error', 'Montages OK':'Mounts OK',
+    'Configuration JSON invalide':'Invalid configuration JSON', 'Impossible de sauvegarder la configuration':'Unable to save configuration',
+    'Jobs JSON invalide':'Invalid jobs JSON', 'Jobs sauvegardés, mais impossible de régénérer le cron':'Jobs saved, but unable to regenerate cron',
+    'Impossible de sauvegarder les jobs':'Unable to save jobs', 'Id job invalide':'Invalid job ID',
+    'Aucun log disponible pour ce job':'No log available for this job', 'Action inconnue':'Unknown action'
+};
+
+function t(text) { return language === 'en' ? (EN[text] || text) : text; }
+
+function applyLanguage() {
+    document.documentElement.lang = language;
+    document.querySelectorAll('body *').forEach(el => {
+        if (['SCRIPT', 'STYLE'].includes(el.tagName)) return;
+        el.childNodes.forEach(node => {
+            if (node.nodeType !== Node.TEXT_NODE) return;
+            const value = node.nodeValue.trim();
+            if (value && EN[value]) node.nodeValue = node.nodeValue.replace(value, t(value));
+        });
+        for (const attr of ['placeholder', 'title', 'aria-label']) {
+            const value = el.getAttribute(attr);
+            if (value && EN[value]) el.setAttribute(attr, t(value));
+        }
+    });
+    document.getElementById('language-fr-btn')?.classList.toggle('active', language === 'fr');
+    document.getElementById('language-en-btn')?.classList.toggle('active', language === 'en');
+    render();
+}
+
+function setLanguage(value) {
+    language = value === 'en' ? 'en' : 'fr';
+    localStorage.setItem('rsync-manager-language', language);
+    location.reload();
+}
 
 function setTheme(theme) {
     const safeTheme = theme === 'dark' ? 'dark' : 'light';
@@ -323,7 +401,7 @@ function setStatus(message, type = 'info', target = 'email-status', autoHide = t
     el.className = `alert alert-${type} mt-3 d-none`;
     void el.offsetWidth;
     el.className = `alert alert-${type} mt-3`;
-    el.textContent = message;
+    el.textContent = t(message);
 
     if (autoHide) {
         statusTimers[target] = setTimeout(() => {
@@ -347,7 +425,7 @@ async function apiFetch(action, options = {}) {
     try {
         return JSON.parse(text);
     } catch (e) {
-        throw new Error(`Réponse API non JSON pour ${action}: ${text.slice(0, 300)}`);
+        throw new Error(`${language === 'en' ? 'Non-JSON API response for' : 'Réponse API non JSON pour'} ${action}: ${text.slice(0, 300)}`);
     }
 }
 
@@ -370,10 +448,10 @@ function readJsonFile(file) {
             try {
                 resolve(JSON.parse(reader.result));
             } catch (e) {
-                reject(new Error('Fichier JSON invalide.'));
+                reject(new Error(language === 'en' ? 'Invalid JSON file.' : 'Fichier JSON invalide.'));
             }
         };
-        reader.onerror = () => reject(new Error('Impossible de lire le fichier.'));
+        reader.onerror = () => reject(new Error(language === 'en' ? 'Unable to read the file.' : 'Impossible de lire le fichier.'));
         reader.readAsText(file);
     });
 }
@@ -433,7 +511,7 @@ function formatDate(value) {
     if (!value) return '';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleString('fr-FR');
+    return date.toLocaleString(language === 'en' ? 'en-GB' : 'fr-FR');
 }
 
 function formatDuration(seconds) {
@@ -453,17 +531,17 @@ function statusBadgeClass(status) {
 }
 
 function modeLabel(mode) {
-    if (mode === 'mount_test') return 'test montages';
+    if (mode === 'mount_test') return language === 'en' ? 'mount test' : 'test montages';
     return mode === 'dry' ? 'dry-run' : 'run';
 }
 
 function triggerLabel(trigger) {
-    return trigger === 'cron' ? 'cron' : 'manuel';
+    return trigger === 'cron' ? 'cron' : (language === 'en' ? 'manual' : 'manuel');
 }
 
 function jobStatusBlock(job) {
     const disabledBadge = job.enabled === false
-        ? '<span class="badge text-bg-secondary">Désactivé</span>'
+        ? `<span class="badge text-bg-secondary">${t('Désactivé')}</span>`
         : '';
     const status = jobStatuses[job.id];
 
@@ -471,39 +549,39 @@ function jobStatusBlock(job) {
         return `
             <div class="job-status-line mt-2 d-flex flex-wrap align-items-center gap-2">
                 ${disabledBadge}
-                <span class="text-secondary">La planification cron ignore ce job. Les actions manuelles restent possibles.</span>
-                <button class="btn btn-sm btn-outline-dark ms-auto" type="button" onclick="event.stopPropagation(); showJobLog('${escapeAttr(job.id)}')">Voir dernier log</button>
+                <span class="text-secondary">${t('La planification cron ignore ce job. Les actions manuelles restent possibles.')}</span>
+                <button class="btn btn-sm btn-outline-dark ms-auto" type="button" onclick="event.stopPropagation(); showJobLog('${escapeAttr(job.id)}')">${t('Voir dernier log')}</button>
             </div>`;
     }
 
     if (!status) {
         return `
             <div class="job-status-line mt-2 d-flex flex-wrap align-items-center gap-2">
-                <span class="badge text-bg-secondary">Jamais exécuté</span>
-                <button class="btn btn-sm btn-outline-dark ms-auto" type="button" onclick="event.stopPropagation(); showJobLog('${escapeAttr(job.id)}')">Voir dernier log</button>
+                <span class="badge text-bg-secondary">${t('Jamais exécuté')}</span>
+                <button class="btn btn-sm btn-outline-dark ms-auto" type="button" onclick="event.stopPropagation(); showJobLog('${escapeAttr(job.id)}')">${t('Voir dernier log')}</button>
             </div>`;
     }
 
     const summaryParts = [
-        status.finished_at ? `Dernière exécution : ${formatDate(status.finished_at)}` : '',
+        status.finished_at ? `${language === 'en' ? 'Latest run' : 'Dernière exécution'} : ${formatDate(status.finished_at)}` : '',
         status.trigger ? triggerLabel(status.trigger) : '',
         status.mode ? modeLabel(status.mode) : '',
         Number.isFinite(Number(status.duration_seconds)) ? formatDuration(status.duration_seconds) : ''
     ].filter(Boolean);
 
     const rsyncParts = [
-        status.bytes_sent ? `envoyé ${status.bytes_sent}` : '',
-        status.bytes_received ? `reçu ${status.bytes_received}` : '',
+        status.bytes_sent ? `${language === 'en' ? 'sent' : 'envoyé'} ${status.bytes_sent}` : '',
+        status.bytes_received ? `${language === 'en' ? 'received' : 'reçu'} ${status.bytes_received}` : '',
         status.total_size ? `total ${status.total_size}` : ''
     ].filter(Boolean);
 
     return `
         <div class="job-status-line mt-2 d-flex flex-wrap align-items-center gap-2">
             ${disabledBadge}
-            <span class="badge ${statusBadgeClass(status.status)}">${escapeHtml(status.label || 'Statut inconnu')}</span>
+            <span class="badge ${statusBadgeClass(status.status)}">${escapeHtml(t(status.label || 'Statut inconnu'))}</span>
             <span class="text-secondary">${escapeHtml(summaryParts.join(' · '))}</span>
             ${rsyncParts.length ? `<span class="text-secondary">(${escapeHtml(rsyncParts.join(' · '))})</span>` : ''}
-            <button class="btn btn-sm btn-outline-dark ms-auto" type="button" onclick="event.stopPropagation(); showJobLog('${escapeAttr(job.id)}')">Voir dernier log</button>
+            <button class="btn btn-sm btn-outline-dark ms-auto" type="button" onclick="event.stopPropagation(); showJobLog('${escapeAttr(job.id)}')">${t('Voir dernier log')}</button>
         </div>`;
 }
 
@@ -572,14 +650,14 @@ function findJobIndex(jobId) {
     return jobs.findIndex(job => job.id === jobId);
 }
 
-async function persistJobs(successMessage = "Jobs enregistrés et planification cron mise à jour.") {
+async function persistJobs(successMessage = t("Jobs enregistrés et planification cron mise à jour.")) {
     ensureJobIds();
     const data = await apiFetch('save_jobs', {
         method:'POST',
         headers: {'Content-Type': 'application/json'},
         body:JSON.stringify(jobs)
     });
-    if (data.status !== 'ok') throw new Error(data.error || 'Sauvegarde jobs refusée');
+    if (data.status !== 'ok') throw new Error(data.error || t('Sauvegarde jobs refusée'));
     jobs = await apiFetch('list_jobs');
     ensureJobIds();
     jobStatuses = await apiFetch('get_status');
@@ -643,7 +721,7 @@ function validateJobModal() {
     clearJobValidation();
 
     if (!document.getElementById('job_name').value.trim()) {
-        markJobFieldInvalid('job_name', 'Nom', errors);
+        markJobFieldInvalid('job_name', t('Nom'), errors);
     }
 
     if (!document.getElementById('job_cron').value.trim()) {
@@ -651,27 +729,27 @@ function validateJobModal() {
     }
 
     ['source', 'target'].forEach(sideName => {
-        const label = sideName === 'source' ? 'Source' : 'Cible';
+        const label = sideName === 'source' ? t('Source') : t('Cible');
         const type = document.getElementById(`job_${sideName}_type`).value;
 
         if (type === 'local') {
             if (!document.getElementById(`job_${sideName}_path`).value.trim()) {
-                markJobFieldInvalid(`job_${sideName}_path`, `${label}: chemin local`, errors);
+                markJobFieldInvalid(`job_${sideName}_path`, `${label}: ${language === 'en' ? 'local path' : 'chemin local'}`, errors);
             }
             return;
         }
 
         if (!document.getElementById(`job_${sideName}_host`).value.trim()) {
-            markJobFieldInvalid(`job_${sideName}_host`, `${label}: adresse IP ou nom`, errors);
+            markJobFieldInvalid(`job_${sideName}_host`, `${label}: ${language === 'en' ? 'IP address or hostname' : 'adresse IP ou nom'}`, errors);
         }
         if (!document.getElementById(`job_${sideName}_share`).value.trim()) {
-            markJobFieldInvalid(`job_${sideName}_share`, `${label}: partage réseau`, errors);
+            markJobFieldInvalid(`job_${sideName}_share`, `${label}: ${language === 'en' ? 'network share' : 'partage réseau'}`, errors);
         }
     });
 
     if (errors.length) {
         const message = document.getElementById('job-validation-message');
-        message.textContent = `Champs obligatoires manquants : ${errors.join(', ')}.`;
+        message.textContent = `${language === 'en' ? 'Missing required fields' : 'Champs obligatoires manquants'} : ${errors.join(', ')}.`;
         message.classList.remove('d-none');
         document.querySelector('#jobEditModal .is-invalid')?.scrollIntoView({block: 'nearest'});
         return false;
@@ -697,7 +775,7 @@ function modalJobFromFields() {
 
 function fillJobModal(job, isNew) {
     editingJobId = job.id;
-    document.getElementById('jobEditModalTitle').textContent = isNew ? 'Ajouter un job' : `Modifier : ${job.name || 'Job'}`;
+    document.getElementById('jobEditModalTitle').textContent = isNew ? t('Ajouter un job') : `${language === 'en' ? 'Edit' : 'Modifier'} : ${job.name || 'Job'}`;
     document.getElementById('job_name').value = job.name || '';
     document.getElementById('job_cron').value = job.cron || '';
     document.getElementById('job_enabled').checked = job.enabled !== false;
@@ -729,7 +807,7 @@ function render() {
     }));
 
     if (!jobs.length) {
-        document.getElementById('jobsList').innerHTML = '<div class="text-secondary py-4">Aucun job créé.</div>';
+        document.getElementById('jobsList').innerHTML = `<div class="text-secondary py-4">${t('Aucun job créé.')}</div>`;
         return;
     }
 
@@ -737,11 +815,11 @@ function render() {
         <div class="job-card job-card-clickable bg-light p-3 mb-3 border rounded ${j.enabled === false ? 'job-card-disabled' : ''}" onclick="openJobModal('${escapeAttr(j.id)}')">
             <div class="d-flex flex-wrap align-items-start gap-3">
                 <div class="flex-grow-1">
-                    <div class="fw-bold">${escapeHtml(j.name || 'Job sans nom')}</div>
+                    <div class="fw-bold">${escapeHtml(j.name || t('Job sans nom'))}</div>
                 </div>
                 <div class="form-check form-switch" onclick="event.stopPropagation()">
                     <input class="form-check-input" type="checkbox" ${j.enabled !== false ? 'checked' : ''} onchange="toggleJobEnabled('${escapeAttr(j.id)}', this.checked)">
-                    <label class="form-check-label small fw-bold">${j.enabled !== false ? 'Actif' : 'Désactivé'}</label>
+                    <label class="form-check-label small fw-bold">${j.enabled !== false ? t('Actif') : t('Désactivé')}</label>
                 </div>
             </div>
             ${jobStatusBlock(j)}
@@ -758,7 +836,7 @@ async function saveCurrentJob(closeModal = true) {
         } else {
             jobs.push(job);
         }
-        await persistJobs("Job enregistré et planification cron mise à jour.");
+        await persistJobs(t("Job enregistré et planification cron mise à jour."));
         if (closeModal) {
             bootstrap.Modal.getOrCreateInstance(document.getElementById('jobEditModal')).hide();
         }
@@ -771,11 +849,11 @@ async function saveCurrentJob(closeModal = true) {
 
 async function deleteCurrentJob() {
     const job = modalJobFromFields();
-    if (!confirm(`Supprimer le job "${job.name}" ?`)) return;
+    if (!confirm(language === 'en' ? `Delete job "${job.name}"?` : `Supprimer le job "${job.name}" ?`)) return;
 
     try {
         jobs = jobs.filter(item => item.id !== job.id);
-        await persistJobs("Job supprimé et planification cron mise à jour.");
+        await persistJobs(t("Job supprimé et planification cron mise à jour."));
         bootstrap.Modal.getOrCreateInstance(document.getElementById('jobEditModal')).hide();
     } catch (e) {
         setStatus(e.message, 'danger', 'jobs-status');
@@ -791,7 +869,7 @@ async function toggleJobEnabled(jobId, enabled) {
     render();
 
     try {
-        await persistJobs(enabled ? "Job activé." : "Job désactivé.");
+        await persistJobs(t(enabled ? "Job activé." : "Job désactivé."));
     } catch (e) {
         jobs[index].enabled = previous;
         render();
@@ -809,7 +887,7 @@ async function exportEmailConfig() {
     try {
         const conf = await apiFetch('get_config');
         downloadJson(conf, 'rsync-manager-email-config.json');
-        setStatus("Export de la configuration email prêt.", 'success', 'management-status');
+        setStatus(t("Export de la configuration email prêt."), 'success', 'management-status');
     } catch (e) {
         setStatus(e.message, 'danger', 'management-status');
     }
@@ -819,7 +897,7 @@ async function exportJobsConfig() {
     try {
         const exportedJobs = await apiFetch('list_jobs');
         downloadJson(exportedJobs, 'rsync-manager-jobs-config.json');
-        setStatus("Export de la configuration jobs prêt.", 'success', 'management-status');
+        setStatus(t("Export de la configuration jobs prêt."), 'success', 'management-status');
     } catch (e) {
         setStatus(e.message, 'danger', 'management-status');
     }
@@ -829,7 +907,7 @@ async function importEmailConfig(file) {
     try {
         const conf = await readJsonFile(file);
         if (!conf || Array.isArray(conf) || typeof conf !== 'object') {
-            throw new Error('La configuration email doit être un objet JSON.');
+            throw new Error(t('La configuration email doit être un objet JSON.'));
         }
 
         const data = await apiFetch('save_config', {
@@ -837,10 +915,10 @@ async function importEmailConfig(file) {
             headers: {'Content-Type': 'application/json'},
             body:JSON.stringify(conf)
         });
-        if (data.status !== 'ok') throw new Error(data.error || 'Import email refusé');
+        if (data.status !== 'ok') throw new Error(data.error || t('Import email refusé'));
 
         await load();
-        setStatus("Configuration email importée et prise en compte.", 'success', 'management-status');
+        setStatus(t("Configuration email importée et prise en compte."), 'success', 'management-status');
     } catch (e) {
         setStatus(e.message, 'danger', 'management-status');
     }
@@ -850,7 +928,7 @@ async function importJobsConfig(file) {
     try {
         const importedJobs = await readJsonFile(file);
         if (!Array.isArray(importedJobs)) {
-            throw new Error('La configuration jobs doit être un tableau JSON.');
+            throw new Error(t('La configuration jobs doit être un tableau JSON.'));
         }
 
         const data = await apiFetch('save_jobs', {
@@ -858,10 +936,10 @@ async function importJobsConfig(file) {
             headers: {'Content-Type': 'application/json'},
             body:JSON.stringify(importedJobs)
         });
-        if (data.status !== 'ok') throw new Error(data.error || 'Import jobs refusé');
+        if (data.status !== 'ok') throw new Error(data.error || t('Import jobs refusé'));
 
         await load();
-        setStatus("Configuration jobs importée, cron régénéré.", 'success', 'management-status');
+        setStatus(t("Configuration jobs importée, cron régénéré."), 'success', 'management-status');
     } catch (e) {
         setStatus(e.message, 'danger', 'management-status');
     }
@@ -875,8 +953,8 @@ async function saveConfig(showAlert = true) {
             headers: {'Content-Type': 'application/json'},
             body:JSON.stringify(c)
         });
-        if (data.status !== 'ok') throw new Error(data.error || "Erreur sauvegarde inconnue");
-        if (showAlert) setStatus("Configuration enregistrée.", 'success', 'email-status');
+        if (data.status !== 'ok') throw new Error(data.error || t("Erreur sauvegarde inconnue"));
+        if (showAlert) setStatus(t("Configuration enregistrée."), 'success', 'email-status');
         return true;
     } catch (e) {
         setStatus(e.message, 'danger', 'email-status');
@@ -885,13 +963,13 @@ async function saveConfig(showAlert = true) {
 }
 async function testEmail() {
     if (!await saveConfig(false)) return;
-    setStatus("Test email en cours...", 'info', 'email-status');
+    setStatus(t("Test email en cours..."), 'info', 'email-status');
     try {
         const data = await apiFetch('test_email');
         if (data.status === 'sent') {
-            setStatus("Email de test envoyé.", 'success', 'email-status');
+            setStatus(t("Email de test envoyé."), 'success', 'email-status');
         } else {
-            setStatus("Erreur envoi email : " + (data.error || "inconnue"), 'danger', 'email-status');
+            setStatus((language === 'en' ? "Email sending error: " : "Erreur envoi email : ") + (data.error || (language === 'en' ? "unknown" : "inconnue")), 'danger', 'email-status');
         }
     } catch (e) {
         setStatus(e.message, 'danger', 'email-status');
@@ -900,14 +978,14 @@ async function testEmail() {
 
 async function showJobLog(jobId) {
     const job = jobs.find(j => j.id === jobId);
-    document.getElementById('jobLogModalTitle').textContent = job?.name ? `Dernier log : ${job.name}` : 'Dernier log';
-    document.getElementById('jobLogContent').textContent = 'Chargement...';
+    document.getElementById('jobLogModalTitle').textContent = job?.name ? `${t('Dernier log')} : ${job.name}` : t('Dernier log');
+    document.getElementById('jobLogContent').textContent = t('Chargement...');
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('jobLogModal'));
     modal.show();
 
     try {
         const data = await apiFetch(`get_log&id=${encodeURIComponent(jobId)}`);
-        if (data.status !== 'ok') throw new Error(data.error || 'Log indisponible');
+        if (data.status !== 'ok') throw new Error(data.error || t('Log indisponible'));
         document.getElementById('jobLogContent').textContent = data.log || '';
     } catch (e) {
         document.getElementById('jobLogContent').textContent = e.message;
@@ -918,11 +996,12 @@ async function runJob(i, m) {
     try {
         const res = await fetch(`${API}?action=${m}&id=${encodeURIComponent(i)}`, {cache: 'no-store'});
         const data = await res.json();
-        if (data.status !== 'started') throw new Error(data.error || 'Action refusée');
-        const action = m === 'dry' ? 'Dry-run' : (m === 'mount_test' ? 'Test montages' : 'Run manuel');
+        if (data.status !== 'started') throw new Error(data.error || t('Action refusée'));
+        const action = m === 'dry' ? 'Dry-run' : (m === 'mount_test' ? t('Tester montages') : (language === 'en' ? 'Manual run' : 'Run manuel'));
         const job = jobs.find(j => j.id === i);
-        const name = job?.name ? ` pour ${job.name}` : '';
-        setStatus(`${action}${name} lancé. Les logs détaillés sont disponibles dans le journal de l'App.`, 'success', 'jobs-status');
+        const name = job?.name ? `${language === 'en' ? ' for ' : ' pour '}${job.name}` : '';
+        const suffix = language === 'en' ? ' started. Detailed logs are available in the App log.' : " lancé. Les logs détaillés sont disponibles dans le journal de l'App.";
+        setStatus(`${action}${name}${suffix}`, 'success', 'jobs-status');
         setTimeout(load, 2000);
     } catch (e) {
         setStatus(e.message, 'danger', 'jobs-status');
@@ -956,6 +1035,8 @@ document.getElementById('import-email-config-btn').addEventListener('click', () 
 document.getElementById('import-jobs-config-btn').addEventListener('click', () => document.getElementById('import-jobs-config-file').click());
 document.getElementById('theme-light-btn').addEventListener('click', () => setTheme('light'));
 document.getElementById('theme-dark-btn').addEventListener('click', () => setTheme('dark'));
+document.getElementById('language-fr-btn').addEventListener('click', () => setLanguage('fr'));
+document.getElementById('language-en-btn').addEventListener('click', () => setLanguage('en'));
 document.getElementById('import-email-config-file').addEventListener('change', e => {
     const file = e.target.files[0];
     e.target.value = '';
@@ -968,6 +1049,7 @@ document.getElementById('import-jobs-config-file').addEventListener('change', e 
 });
 
 setTheme(localStorage.getItem('rsync-manager-theme') || 'light');
+applyLanguage();
 load();
 </script>
 </body>

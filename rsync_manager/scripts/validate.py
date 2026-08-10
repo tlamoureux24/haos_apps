@@ -149,8 +149,14 @@ def main() -> int:
         (
             'href="vendor/bootstrap/bootstrap.min.css"',
             'src="vendor/bootstrap/bootstrap.bundle.min.js"',
+            "rsync-manager-language",
+            "navigator.language",
+            'id="language-fr-btn"',
+            'id="language-en-btn"',
+            "function applyLanguage()",
+            "toLocaleString(language === 'en' ? 'en-GB' : 'fr-FR')",
         ),
-        "local frontend asset",
+        "local frontend and localization invariant",
     )
     if "cdn.jsdelivr.net" in index:
         raise RuntimeError("The Ingress UI must not depend on jsDelivr")
