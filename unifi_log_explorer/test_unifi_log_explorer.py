@@ -1,12 +1,20 @@
 import importlib.util
 import tempfile
 import unittest
+from html.parser import HTMLParser
 from unittest import mock
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("ule", Path(__file__).with_name("unifi_log_explorer.py"))
 ule = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ule)
+
+
+class LinkParser(HTMLParser):
+    def __init__(self):
+        super().__init__(); self.links = []
+    def handle_starttag(self, tag, attrs):
+        if tag == "a": self.links.append(dict(attrs).get("href"))
 
 
 class ParserTests(unittest.TestCase):
@@ -144,8 +152,10 @@ class ParserTests(unittest.TestCase):
                     handler.do_GET()
                     self.assertTrue(rendered, path)
                     self.assertIn("Traffic Flows", rendered[0])
-                    self.assertIn("href=/flows", rendered[0])
-                    self.assertIn("href=/logs", rendered[0])
+                    parser = LinkParser(); parser.feed(rendered[0])
+                    self.assertIn("/", parser.links)
+                    self.assertIn("/flows", parser.links)
+                    self.assertIn("/logs", parser.links)
                     if path == "/logs?kind=cef":
                         self.assertIn("CEF only", rendered[0])
                         self.assertNotIn("Syslog only", rendered[0])

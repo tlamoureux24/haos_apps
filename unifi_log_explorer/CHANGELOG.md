@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.3
+
+- Fix inactive navigation links whose empty unquoted class consumed the `href` attribute.
+- Keep long overview labels on one line with safe ellipsis truncation.
+- Preserve full ranking labels in the hover tooltip.
+- Validate navigation links by parsing the generated HTML structure.
+
 ## 0.4.2
 
 - Rebuild the authenticated header with reliable, isolated navigation controls.
