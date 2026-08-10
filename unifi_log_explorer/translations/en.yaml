@@ -7,7 +7,7 @@ configuration:
     description: Delete diagnostic records older than this duration.
   max_records:
     name: Maximum records
-    description: Hard limit shared by IPFIX and CEF diagnostic records.
+    description: Hard limit shared by Syslog/CEF records and Traffic Flows.
   session_timeout_minutes:
     name: Web session timeout (minutes)
     description: Inactive administrator sessions expire after this duration.
@@ -37,5 +37,4 @@ configuration:
     description: Application logging verbosity.
 network:
   8090/tcp: Web administration interface
-  2055/udp: NetFlow/IPFIX receiver
   5514/udp: Syslog/CEF receiver

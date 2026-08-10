@@ -1,12 +1,11 @@
 # UniFi Log Explorer
 
 UniFi Log Explorer est une App Home Assistant autonome qui collecte et explore
-les Traffic Flows ainsi que les exports IPFIX et Syslog/CEF d'une passerelle
+les Traffic Flows ainsi que les exports Syslog/CEF d'une passerelle
 UniFi. L'ensemble fonctionne localement sur le réseau domestique.
 
 Elle fournit :
 
-- un récepteur IPFIX UDP avec lecture des templates et échantillons décodés ;
 - un récepteur Syslog/CEF UDP ;
 - un filtrage strict par adresse IP source avant analyse ou stockage ;
 - une interface web autonome protégée par un compte administrateur local ;
@@ -27,9 +26,7 @@ local, comme AdGuard Home ou Nginx Proxy Manager.
 2. Démarrez l'App puis ouvrez son interface web.
 3. Créez le compte administrateur local. Le mot de passe doit contenir au moins
    12 caractères et seul son dérivé `scrypt` salé est conservé.
-4. Dans UniFi Network, activez NetFlow/IPFIX vers l'adresse de Home Assistant,
-   port UDP `2055`.
-5. Activez l'export SIEM/CEF vers la même adresse, port UDP `5514`.
+4. Activez l'export SIEM/CEF vers la même adresse, port UDP `5514`.
 
 ## Test de l'API Traffic Flows
 
@@ -79,7 +76,7 @@ doivent être des IPv4 ou IPv6 exactes ; les sous-réseaux CIDR ne sont pas admi
 
 Le port web `8090` doit rester accessible uniquement depuis le LAN ou un VPN.
 Pour un accès HTTPS, placez-le derrière Nginx Proxy Manager. Ne publiez jamais
-les ports `8090`, `2055` ou `5514` directement sur Internet.
+les ports `8090` ou `5514` directement sur Internet.
 
 La base diagnostique est incluse dans les sauvegardes de cette première phase.
 Elle est bornée par `retention_hours` et `max_records`. La future base analytique
@@ -87,10 +84,7 @@ volumineuse sera séparée et exclue des sauvegardes.
 
 ## Limites actuelles
 
-- IPFIX version 10 uniquement ; NetFlow v9 est signalé comme non pris en charge.
-- Transport UDP uniquement pour IPFIX et CEF.
-- Les champs IPFIX de longueur variable sont inventoriés mais pas encore décodés.
-- Les échantillons de valeurs sont limités à dix par jeu de données IPFIX.
+- Transport UDP uniquement pour Syslog/CEF.
 - Il ne s'agit pas encore d'un historique exhaustif ni d'un moteur d'alertes.
 - L'endpoint Traffic Flows utilisé par UniFi n'est pas documenté publiquement
   et peut évoluer avec une mise à jour de UniFi Network.

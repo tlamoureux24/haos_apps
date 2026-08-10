@@ -16,7 +16,6 @@ import socket
 import sqlite3
 import ssl
 import stat
-import struct
 import sys
 import threading
 import time
@@ -41,7 +40,6 @@ OPTIONS_PATH = DATA / "options.json"
 ENCRYPTED_API_KEY_PATH = DATA / "unifi_api_key.enc"
 API_KEY_KEY_PATH = DATA / "unifi_api_key.key"
 WEB_PORT = 8090
-IPFIX_PORT = 2055
 CEF_PORT = 5514
 ASSET_DIR = Path(__file__).resolve().parent
 CEF_HEADER = re.compile(r"(?:<\d+>)?\s*CEF:(\d+)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|([^|]*)\|(.*)")
@@ -49,14 +47,6 @@ CEF_PAIR = re.compile(r"([A-Za-z][A-Za-z0-9_]*)=((?:\\[=\\]|[^ ])*(?: (?![A-Za-z
 SYSLOG_HEADER = re.compile(r"^<(\d{1,3})>([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(\S+)\s+(.*)$", re.DOTALL)
 SYSLOG_NO_TIMESTAMP = re.compile(r"^<(\d{1,3})>(\S+)\s+(.*)$", re.DOTALL)
 SYSLOG_TAG = re.compile(r"^([A-Za-z0-9_.-]+)(?:\[(\d+)\])?:\s*(.*)$", re.DOTALL)
-IPFIX_NAMES = {1: "octetDeltaCount", 2: "packetDeltaCount", 4: "protocolIdentifier",
-               7: "sourceTransportPort", 8: "sourceIPv4Address", 11: "destinationTransportPort",
-               12: "destinationIPv4Address", 21: "flowEndSysUpTime", 22: "flowStartSysUpTime",
-               27: "sourceIPv6Address", 28: "destinationIPv6Address", 58: "vlanId",
-               60: "ipVersion", 61: "flowDirection", 152: "flowStartMilliseconds",
-               153: "flowEndMilliseconds"}
-
-
 def load_options():
     defaults = {"allowed_source_ips": ["192.168.1.1"], "retention_hours": 168,
                 "max_records": 250000, "session_timeout_minutes": 60,
@@ -281,23 +271,31 @@ class Store:
 
     def dashboard(self):
         with self.lock:
-            counts = {r["kind"]: r["n"] for r in self.db.execute("SELECT kind,count(*) n FROM records GROUP BY kind")}
-            counters = {r["key"]: r["value"] for r in self.db.execute("SELECT key,value FROM counters")}
-            recent = [dict(r) for r in self.db.execute("SELECT id,received_at,kind,source_ip,summary FROM records ORDER BY id DESC LIMIT 100")]
+            counts = {r["kind"]: r["n"] for r in self.db.execute("SELECT kind,count(*) n FROM records WHERE kind IN ('cef','syslog') GROUP BY kind")}
+            counters = {r["key"]: r["value"] for r in self.db.execute("SELECT key,value FROM counters WHERE key LIKE 'cef_%'")}
+            recent = self.recent_records()
             cef_types = [dict(r) for r in self.db.execute("SELECT json_extract(detail,'$.name') name,count(*) count FROM records WHERE kind='cef' GROUP BY name ORDER BY count DESC LIMIT 20")]
             syslog_apps = [dict(r) for r in self.db.execute("SELECT json_extract(detail,'$.app_name') app_name,count(*) count FROM records WHERE kind='syslog' GROUP BY app_name ORDER BY count DESC LIMIT 20")]
-            templates = [dict(r) for r in self.db.execute("SELECT json_extract(detail,'$.template_id') template_id,count(*) count FROM records WHERE kind='ipfix_template' GROUP BY template_id ORDER BY count DESC")]
             rejected_sources = {}
-            for row in self.db.execute("SELECT key,value FROM counters WHERE key LIKE 'cef_rejected_source:%' OR key LIKE 'ipfix_rejected_source:%'"):
+            for row in self.db.execute("SELECT key,value FROM counters WHERE key LIKE 'cef_rejected_source:%'"):
                 address = row["key"].split(":", 1)[1]
                 rejected_sources[address] = rejected_sources.get(address, 0) + row["value"]
             flow_stats = dict(self.db.execute("SELECT count(*) count, min(flow_end_time) oldest, max(flow_end_time) newest FROM traffic_flows").fetchone())
         return {"counts": counts, "counters": counters, "recent": recent,
-                "cef_types": cef_types, "syslog_apps": syslog_apps, "templates": templates,
+                "cef_types": cef_types, "syslog_apps": syslog_apps,
                 "rejected_sources": rejected_sources,
                 "flow_stats": flow_stats,
                 "allowed_source_ips": sorted(self.options["allowed_source_ips"]),
                 "retention_hours": self.options["retention_hours"], "max_records": self.options["max_records"]}
+
+    def recent_records(self, kind=None, limit=100):
+        clauses, values = ["kind IN ('cef','syslog')"], []
+        if kind in ("cef", "syslog"):
+            clauses.append("kind=?"); values.append(kind)
+        with self.lock:
+            return [dict(row) for row in self.db.execute(
+                f"SELECT id,received_at,kind,source_ip,summary FROM records WHERE {' AND '.join(clauses)} ORDER BY id DESC LIMIT ?",
+                values + [max(1, min(500, int(limit)))])]
 
     def flow_overview(self, hours=24):
         cutoff = int(time.time() * 1000) - hours * 3600_000
@@ -358,7 +356,7 @@ class Store:
 
     def export(self):
         with self.lock:
-            rows = [dict(r) for r in self.db.execute("SELECT received_at,kind,summary,detail FROM records ORDER BY id")]
+            rows = [dict(r) for r in self.db.execute("SELECT received_at,kind,summary,detail FROM records WHERE kind IN ('cef','syslog') ORDER BY id")]
         for row in rows:
             row["detail"] = json.loads(row["detail"])
         diagnostics = self.dashboard()
@@ -366,85 +364,6 @@ class Store:
             recent.pop("source_ip", None)
         diagnostics.pop("allowed_source_ips", None)
         return {"generated_at": int(time.time()), "diagnostics": diagnostics, "records": rows}
-
-
-def parse_ipfix(data):
-    if len(data) < 16:
-        raise ValueError("packet shorter than IPFIX header")
-    version, length, export_time, sequence, domain = struct.unpack("!HHIII", data[:16])
-    if version != 10:
-        raise ValueError(f"unsupported flow version {version}")
-    if length > len(data) or length < 16:
-        raise ValueError("invalid IPFIX message length")
-    result = {"version": version, "message_length": length, "export_time": export_time,
-              "sequence": sequence, "observation_domain_id": domain, "sets": []}
-    offset = 16
-    while offset + 4 <= length:
-        set_id, set_length = struct.unpack("!HH", data[offset:offset + 4])
-        if set_length < 4 or offset + set_length > length:
-            raise ValueError("invalid IPFIX set length")
-        payload = data[offset + 4:offset + set_length]
-        item = {"set_id": set_id, "length": set_length}
-        if set_id in (2, 3):
-            templates = []
-            pos = 0
-            while pos + 4 <= len(payload):
-                template_id, field_count = struct.unpack("!HH", payload[pos:pos + 4])
-                pos += 4
-                scope_count = None
-                if set_id == 3:
-                    if pos + 2 > len(payload): break
-                    scope_count = struct.unpack("!H", payload[pos:pos + 2])[0]
-                    pos += 2
-                fields = []
-                valid = True
-                for _ in range(field_count):
-                    if pos + 4 > len(payload): valid = False; break
-                    element, field_len = struct.unpack("!HH", payload[pos:pos + 4]); pos += 4
-                    enterprise = None
-                    if element & 0x8000:
-                        element &= 0x7fff
-                        if pos + 4 > len(payload): valid = False; break
-                        enterprise = struct.unpack("!I", payload[pos:pos + 4])[0]; pos += 4
-                    fields.append({"element_id": element, "length": field_len, "enterprise": enterprise})
-                if not valid: break
-                templates.append({"template_id": template_id, "field_count": field_count,
-                                  "scope_field_count": scope_count, "fields": fields})
-            item["templates"] = templates
-        else:
-            item["data_bytes"] = len(payload)
-            item["template_id"] = set_id if set_id >= 256 else None
-            item["_payload"] = payload
-        result["sets"].append(item)
-        offset += set_length
-    return result
-
-
-def decode_ipfix_records(payload, template, max_samples=10):
-    fields = template["fields"]
-    if any(field["length"] == 65535 for field in fields):
-        return [], "variable-length fields are not decoded yet"
-    record_length = sum(field["length"] for field in fields)
-    if not record_length:
-        return [], "zero-length template"
-    samples = []
-    for base in range(0, len(payload) - record_length + 1, record_length):
-        if len(samples) >= max_samples: break
-        pos, sample = base, {}
-        for field in fields:
-            size = field["length"]; value = payload[pos:pos + size]; pos += size
-            key = IPFIX_NAMES.get(field["element_id"], f"element_{field['element_id']}")
-            if field["enterprise"] is not None: key = f"enterprise_{field['enterprise']}_{key}"
-            try:
-                if field["element_id"] in (8, 12) and size == 4: decoded = str(ipaddress.ip_address(value))
-                elif field["element_id"] in (27, 28) and size == 16: decoded = str(ipaddress.ip_address(value))
-                elif size <= 8: decoded = int.from_bytes(value, "big")
-                else: decoded = value.hex()
-            except ValueError:
-                decoded = value.hex()
-            sample[key] = decoded
-        samples.append(sample)
-    return samples, None
 
 
 def parse_cef(raw):
@@ -490,7 +409,6 @@ class Collector(threading.Thread):
     def __init__(self, name, port, store, parser):
         super().__init__(name=name, daemon=True)
         self.port, self.store, self.parser = port, store, parser
-        self.templates = {}
 
     def run(self):
         sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
@@ -510,29 +428,13 @@ class Collector(threading.Thread):
             self.store.increment(f"{self.name}_bytes", len(raw))
             try:
                 parsed = self.parser(raw)
-                if self.name == "ipfix":
-                    domain = parsed["observation_domain_id"]
-                    for item in parsed["sets"]:
-                        for template in item.get("templates", []):
-                            self.templates[(domain, template["template_id"])] = template
-                    for item in parsed["sets"]:
-                        payload = item.pop("_payload", None)
-                        template = self.templates.get((domain, item.get("template_id")))
-                        if payload is not None and template:
-                            item["record_samples"], item["decode_note"] = decode_ipfix_records(payload, template)
-                            item["estimated_records"] = len(payload) // max(1, sum(f["length"] for f in template["fields"] if f["length"] != 65535))
-                    self.store.add("ipfix_message", source, f"IPFIX seq={parsed['sequence']} sets={len(parsed['sets'])}", parsed)
-                    for item in parsed["sets"]:
-                        for template in item.get("templates", []):
-                            self.store.add("ipfix_template", source, f"Template {template['template_id']} ({template['field_count']} fields)", template)
+                kind = parsed.pop("_kind", "cef")
+                if kind == "cef":
+                    summary = f"{parsed['name']} · severity {parsed['severity']}"
                 else:
-                    kind = parsed.pop("_kind", "cef")
-                    if kind == "cef":
-                        summary = f"{parsed['name']} · severity {parsed['severity']}"
-                    else:
-                        label = parsed.get("app_name") or "syslog"
-                        summary = f"{label} · {parsed.get('message', '')[:120]}"
-                    self.store.add(kind, source, summary, parsed)
+                    label = parsed.get("app_name") or "syslog"
+                    summary = f"{label} · {parsed.get('message', '')[:120]}"
+                self.store.add(kind, source, summary, parsed)
             except Exception as exc:
                 self.store.increment(f"{self.name}_parse_errors")
                 self.store.add(f"{self.name}_error", source, str(exc), {"bytes": len(raw), "prefix_hex": raw[:64].hex()})
@@ -669,6 +571,7 @@ STYLE = """
 html[data-theme=dark]{color-scheme:dark;--bg:#0d1420;--surface:#172235;--surface2:#202c41;--text:#e7edf5;--muted:#a4b2c6;--line:#30415d;--accent:#52c9e6;--accent2:#173b4a;--good:#50c895;--bad:#ff8293;--shadow:none}
 *{box-sizing:border-box}body{font:15px system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);margin:0}main{max-width:1440px;margin:auto;padding:24px}.top{display:flex;align-items:center;gap:20px;margin-bottom:22px}.brand{font-size:25px;font-weight:800;color:var(--accent);margin-right:auto}.nav{display:flex;gap:5px;flex-wrap:wrap}.nav a,.linkbtn{color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px}.nav a:hover,.nav .active{background:var(--accent2);color:var(--accent)}h1{font-size:28px;margin:10px 0 4px}h2{margin:0 0 16px;font-size:19px}.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:var(--shadow)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin:16px 0}.metric{font-size:28px;font-variant-numeric:tabular-nums}.muted{color:var(--muted)}.bad{color:var(--bad)}.good{color:var(--good)}button,.button{display:inline-block;background:var(--accent);color:#fff;border:0;border-radius:7px;padding:9px 14px;font-weight:700;text-decoration:none;cursor:pointer}button.secondary,.button.secondary{background:var(--surface2);color:var(--text);border:1px solid var(--line)}form.inline{display:inline}.filters{display:grid;grid-template-columns:2fr repeat(5,minmax(120px,1fr)) auto;gap:10px;align-items:end;margin:16px 0}.filters label{font-size:12px;color:var(--muted)}input,select{display:block;width:100%;margin-top:5px;padding:9px 10px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:7px}.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:10px}table{width:100%;border-collapse:collapse;white-space:nowrap}td,th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}th{font-size:12px;color:var(--muted);background:var(--surface2)}tr:last-child td{border:0}td.wrap{white-space:normal;min-width:160px}.pill{display:inline-block;padding:3px 8px;border-radius:999px;background:var(--surface2);font-size:12px}.bars{display:grid;gap:9px}.barline{display:grid;grid-template-columns:minmax(90px,1fr) 3fr 55px;gap:10px;align-items:center}.bar{height:8px;border-radius:5px;background:var(--surface2);overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pager{display:flex;justify-content:space-between;align-items:center;margin-top:14px}.route{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:17px}.arrow{color:var(--accent);font-size:22px}.details{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.kv{display:grid;grid-template-columns:120px 1fr;gap:7px 12px}.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}pre{overflow:auto;background:var(--surface2);padding:14px;border-radius:8px;font-size:12px}.empty{text-align:center;padding:38px;color:var(--muted)}@media(max-width:1100px){main{padding:14px}.top{align-items:flex-start;flex-wrap:wrap}.filters{grid-template-columns:1fr 1fr}.twocol{grid-template-columns:1fr}}@media(max-width:560px){.filters{grid-template-columns:1fr}.brand{width:100%}}
 input[type=hidden]{display:none!important}.barlink{color:var(--text);text-decoration:none;border-radius:6px}.barlink:hover{background:var(--accent2)}.clickcard{display:block;color:var(--text);text-decoration:none;transition:transform .15s,border-color .15s}.clickcard:hover{transform:translateY(-2px);border-color:var(--accent)}.authwrap{min-height:calc(100vh - 48px);display:grid;place-items:center}.authbox{width:min(430px,100%)}.authbrand{text-align:center;margin-bottom:18px}.authbrand img{width:96px;height:96px;border-radius:22px}.authbrand h1{margin:10px 0 3px;color:var(--accent)}.authcard{padding:24px}.authcard button{width:100%;margin-top:4px}.publictheme{position:fixed;right:20px;top:16px;color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px;background:var(--surface)}
+.toplogo{display:flex;align-items:center;gap:10px;color:var(--accent);text-decoration:none;font-size:25px;font-weight:800;margin-right:auto}.toplogo img{width:42px;height:42px;border-radius:10px}.menu{display:flex;align-items:center;gap:5px;position:relative;z-index:2}.menu a{display:block;position:relative;color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px}.menu a:hover,.menu a.active{background:var(--accent2);color:var(--accent)}.logout{margin:0;position:relative;z-index:2}.logfilters{display:flex;gap:8px;margin:16px 0}.logfilters a{background:var(--surface);color:var(--text);border:1px solid var(--line)}.logfilters a.active{background:var(--accent);color:#fff;border-color:var(--accent)}@media(max-width:800px){.menu{width:100%;overflow-x:auto}.toplogo{width:100%}}
 """
 
 
@@ -737,13 +640,13 @@ class Web(BaseHTTPRequestHandler):
         opposite = "dark" if self.theme() == "light" else "light"
         theme_label = "☾ Sombre" if opposite == "dark" else "☀ Clair"
         theme_url = "/theme?" + urllib.parse.urlencode({"value": opposite, "next": self.path})
-        return ("<header class=top><div class=brand>UniFi Log Explorer</div><nav class=nav>"
+        return ("<header class=top><a class=toplogo href=/><img src=/icon.png alt=''><span>UniFi Log Explorer</span></a><nav class=menu>"
                 f"<a class={'active' if active=='overview' else ''} href=/>Vue d’ensemble</a>"
                 f"<a class={'active' if active=='flows' else ''} href=/flows>Traffic Flows</a>"
                 f"<a class={'active' if active=='logs' else ''} href=/logs>Journaux</a>"
                 f"<a href='{html.escape(theme_url)}'>{theme_label}</a>"
-                f"<form class=inline method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form>"
-                "</nav></header>")
+                "</nav>"
+                f"<form class=logout method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form></header>")
 
     @staticmethod
     def bars(title, rows, filter_name=None):
@@ -783,7 +686,7 @@ class Web(BaseHTTPRequestHandler):
         parsed = urlparse(self.path); path = parsed.path
         if path == "/health":
             self.send_response(200); self.send_header("Content-Length", "2"); self.end_headers(); self.wfile.write(b"OK"); return
-        if path in ("/logo.png", "/favicon.png"):
+        if path in ("/logo.png", "/icon.png", "/favicon.png"):
             return self.send_asset("logo.png" if path == "/logo.png" else "icon.png")
         if path == "/theme":
             query = parse_qs(parsed.query); value = query.get("value", ["light"])[0]
@@ -810,7 +713,7 @@ class Web(BaseHTTPRequestHandler):
                        ("Événements CEF", counts.get("cef", 0)), ("Messages Syslog", counts.get("syslog", 0))]
             cards = ""
             for index, (label, value) in enumerate(metrics):
-                target = "/logs" if index >= 4 else "/flows?hours=24"
+                target = f"/logs?kind={'cef' if index == 4 else 'syslog'}" if index >= 4 else "/flows?hours=24"
                 cards += f"<a class='card clickcard' href='{target}'><div class=metric>{value:,}</div><div class=muted>{html.escape(label)}</div></a>"
             raw = self.store.setting("flow_collection_status"); collection = json.loads(raw) if raw else None
             if collection and collection.get("ok"):
@@ -865,9 +768,13 @@ class Web(BaseHTTPRequestHandler):
             body = self.nav("flows", session) + "<p><a class='button secondary' href=/flows>← Retour aux flows</a></p>" + f"<section class=card>{route}</section><div class=details><section class=card><h2>Résumé</h2>{summary}</section><section class=card><h2>Source</h2>{endpoint(source)}</section><section class=card><h2>Destination</h2>{endpoint(destination)}</section></div><section class=card><h2>Données UniFi complètes</h2><pre>{html.escape(json.dumps(detail,indent=2,ensure_ascii=False))}</pre></section>"
             return self.send_html(body, title="Détail du flow · UniFi Log Explorer")
         if path == "/logs":
-            data = self.store.dashboard()
-            rows = "".join(f"<tr><td>{time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(r['received_at']))}</td><td><span class=pill>{html.escape(r['kind'])}</span></td><td>{html.escape(r['source_ip'])}</td><td class=wrap>{html.escape(r['summary'])}</td></tr>" for r in data["recent"])
-            body = self.nav("logs", session) + "<h1>Journaux</h1><p class=muted>Les 100 derniers événements Syslog, CEF et IPFIX.</p><section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Type</th><th>Émetteur</th><th>Résumé</th></tr></thead><tbody>" + rows + "</tbody></table></div></section><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p>"
+            kind = parse_qs(parsed.query).get("kind", [""])[0]
+            if kind not in ("cef", "syslog"): kind = ""
+            records = self.store.recent_records(kind)
+            rows = "".join(f"<tr><td>{time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(r['received_at']))}</td><td><span class=pill>{html.escape(r['kind'])}</span></td><td>{html.escape(r['source_ip'])}</td><td class=wrap>{html.escape(r['summary'])}</td></tr>" for r in records)
+            rows = rows or "<tr><td class=empty colspan=4>Aucun événement pour ce filtre.</td></tr>"
+            tabs = "<div class=logfilters>" + "".join(f"<a class='button {'active' if kind == value else ''}' href='{url}'>" + label + "</a>" for value,url,label in (("","/logs","Tous"),("cef","/logs?kind=cef","CEF"),("syslog","/logs?kind=syslog","Syslog"))) + "</div>"
+            body = self.nav("logs", session) + "<h1>Journaux</h1><p class=muted>Les 100 derniers événements Syslog et CEF.</p>" + tabs + "<section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Type</th><th>Émetteur</th><th>Résumé</th></tr></thead><tbody>" + rows + "</tbody></table></div></section><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p>"
             return self.send_html(body, title="Journaux · UniFi Log Explorer")
         return self.send_error(404)
 
@@ -911,8 +818,7 @@ def main():
     options = load_options()
     logging.basicConfig(level=getattr(logging, str(options["log_level"]).upper()), format="%(asctime)s %(levelname)s %(message)s")
     store = Store(options)
-    for collector in (Collector("ipfix", IPFIX_PORT, store, parse_ipfix), Collector("cef", CEF_PORT, store, parse_syslog_or_cef)):
-        collector.start()
+    Collector("cef", CEF_PORT, store, parse_syslog_or_cef).start()
     threading.Thread(target=maintenance, args=(store,), daemon=True).start()
     if options.get("flow_collection_enabled"):
         if not options.get("unifi_api_key"):

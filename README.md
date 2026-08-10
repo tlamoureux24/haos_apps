@@ -152,7 +152,7 @@ Pour comprendre le fonctionnement d’une App ou obtenir de l’aide, consulter 
 
 - [Rsync Manager](rsync_manager/README.fr.md)
 - [UniFi Autoblock](unifi_autoblock/README.fr.md)
-- [UniFi Log Explorer](unifi_log_explorer/README.fr.md) — collecte diagnostique IPFIX et CEF avec interface web autonome
+- [UniFi Log Explorer](unifi_log_explorer/README.fr.md) — exploration locale des Traffic Flows et journaux Syslog/CEF
 - [Nginx Proxy Manager](nginx_proxy_manager/README.fr.md)
 - [Gatus](gatus/README.fr.md)
 - [AdGuard Home](adguard_home/README.fr.md)

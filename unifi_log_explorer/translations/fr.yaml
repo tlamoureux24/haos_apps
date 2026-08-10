@@ -7,7 +7,7 @@ configuration:
     description: Supprime les enregistrements diagnostiques plus anciens que cette durée.
   max_records:
     name: Nombre maximal d'enregistrements
-    description: Limite stricte partagée entre les diagnostics IPFIX et CEF.
+    description: Limite stricte partagée entre les journaux Syslog/CEF et les Traffic Flows.
   session_timeout_minutes:
     name: Expiration de session web (minutes)
     description: Les sessions administrateur inactives expirent après cette durée.
@@ -37,5 +37,4 @@ configuration:
     description: Niveau de détail des journaux de l'application.
 network:
   8090/tcp: Interface web d'administration
-  2055/udp: Récepteur NetFlow/IPFIX
   5514/udp: Récepteur Syslog/CEF

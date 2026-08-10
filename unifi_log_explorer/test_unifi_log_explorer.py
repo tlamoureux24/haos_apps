@@ -1,5 +1,4 @@
 import importlib.util
-import struct
 import tempfile
 import unittest
 from unittest import mock
@@ -35,25 +34,6 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(switch["hostname"], "USWUltra210W")
         self.assertIsNone(switch["timestamp"])
         self.assertIn("switch", switch["message"])
-
-    def test_ipfix_template_and_data(self):
-        fields = struct.pack("!HHHHHH", 8, 4, 12, 4, 1, 8)
-        template = struct.pack("!HH", 256, 3) + fields
-        template_set = struct.pack("!HH", 2, len(template) + 4) + template
-        data = bytes([192,168,1,20, 1,1,1,1]) + (1234).to_bytes(8, "big")
-        data_set = struct.pack("!HH", 256, len(data) + 4) + data
-        length = 16 + len(template_set) + len(data_set)
-        packet = struct.pack("!HHIII", 10, length, 1, 2, 3) + template_set + data_set
-        parsed = ule.parse_ipfix(packet)
-        tmpl = parsed["sets"][0]["templates"][0]
-        samples, error = ule.decode_ipfix_records(parsed["sets"][1]["_payload"], tmpl)
-        self.assertIsNone(error)
-        self.assertEqual(samples[0]["sourceIPv4Address"], "192.168.1.20")
-        self.assertEqual(samples[0]["octetDeltaCount"], 1234)
-
-    def test_reject_netflow_v9(self):
-        with self.assertRaisesRegex(ValueError, "unsupported flow version 9"):
-            ule.parse_ipfix(struct.pack("!HHIII", 9, 16, 0, 0, 0))
 
     def test_flow_probe_uses_api_key_and_discards_flow(self):
         response = mock.MagicMock()
@@ -153,7 +133,9 @@ class ParserTests(unittest.TestCase):
                 store = ule.Store({"retention_hours": 168, "max_records": 1000,
                                    "allowed_source_ips": {"192.168.1.1"}, "session_timeout_minutes": 60})
                 store.set_setting("admin_hash", "configured"); store.add_flows([flow])
-                for path in ("/", "/flows", "/logs", "/flow?id=render-me"):
+                store.add("cef", "192.168.1.1", "CEF only", {"name": "CEF only"})
+                store.add("syslog", "192.168.1.1", "Syslog only", {"message": "Syslog only"})
+                for path in ("/", "/flows", "/logs", "/logs?kind=cef", "/flow?id=render-me"):
                     handler = ule.Web.__new__(ule.Web); handler.path = path; handler.headers = {}; handler.store = store
                     handler.session = lambda: {"csrf": "token"}
                     rendered = []
@@ -162,6 +144,11 @@ class ParserTests(unittest.TestCase):
                     handler.do_GET()
                     self.assertTrue(rendered, path)
                     self.assertIn("Traffic Flows", rendered[0])
+                    self.assertIn("href=/flows", rendered[0])
+                    self.assertIn("href=/logs", rendered[0])
+                    if path == "/logs?kind=cef":
+                        self.assertIn("CEF only", rendered[0])
+                        self.assertNotIn("Syslog only", rendered[0])
 
     def test_login_has_logo_and_public_theme_switch(self):
         handler = ule.Web.__new__(ule.Web); handler.path = "/login"; handler.headers = {}

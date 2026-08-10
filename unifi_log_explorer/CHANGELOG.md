@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.2
+
+- Rebuild the authenticated header with reliable, isolated navigation controls.
+- Add the application icon next to the title on authenticated pages.
+- Add All, CEF and Syslog journal filters.
+- Link the overview CEF and Syslog metrics to their matching journal filters.
+- Remove the unused flow-export receiver and its network port, code, tests and documentation.
+
 ## 0.4.1
 
 - Redesign the login and initial setup pages around the application logo.
@@ -51,10 +59,9 @@
 ## 0.1.0
 
 - Add standalone authenticated web setup and administration interface.
-- Receive IPFIX v10 and UniFi Syslog/CEF over separate UDP ports.
+- Receive UniFi Syslog/CEF over UDP.
 - Reject traffic before parsing unless its exact source address is allowed.
 - Default the allowed source list to `192.168.1.1`.
-- Inventory IPFIX templates and decode fixed-length record samples.
 - Parse CEF headers and extension fields.
 - Bound diagnostic storage by age and record count.
 - Export diagnostic data as JSON without the gateway sender address.

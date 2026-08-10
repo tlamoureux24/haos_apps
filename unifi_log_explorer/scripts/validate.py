@@ -18,7 +18,7 @@ if re.search(r"^ingress:\s*true", config_text, re.MULTILINE):
     errors.append("Ingress must remain disabled")
 if not re.search(r'^\s+- "192\.168\.1\.1"$', config_text, re.MULTILINE):
     errors.append("default allowed source must be 192.168.1.1")
-for port in ("8090/tcp", "2055/udp", "5514/udp"):
+for port in ("8090/tcp", "5514/udp"):
     if not re.search(rf"^\s+{re.escape(port)}:", config_text, re.MULTILINE):
         errors.append(f"missing port {port}")
 for filename in ("Dockerfile", "run.sh", "apparmor.txt", "README.md", "README.fr.md", "DOCS.md", "CHANGELOG.md", "unifi_log_explorer.py", "icon.png", "logo.png"):
