@@ -1,13 +1,22 @@
 # Changelog
 
+## 0.4.1
+
+- Redesign the login and initial setup pages around the application logo.
+- Make the light/dark theme switch available before authentication.
+- Serve the application icon as the browser favicon.
+- Make overview metrics and rankings link to their corresponding filtered views.
+- Prevent the hidden logout security field from covering navigation links.
+- Harden flow rendering against heterogeneous endpoint data.
+
 ## 0.4.0
 
-- Ajoute une vue d'ensemble analytique sur les dernières 24 heures.
-- Ajoute l'explorateur paginé avec recherche et filtres.
-- Ajoute une fiche détaillée donnant accès à tous les champs UniFi d'un flow.
-- Sépare les journaux Syslog/CEF de l'exploration réseau.
-- Ajoute un thème clair par défaut et une bascule persistante clair/sombre.
-- Borne les scans rapides à cinq pages et réconcilie les flows tardifs toutes les six heures.
+- Add a 24-hour analytical overview.
+- Add the paginated explorer with search and filters.
+- Add a detail view exposing every archived UniFi flow field.
+- Separate Syslog/CEF events from network flow exploration.
+- Add a light default theme with a persistent light/dark switch.
+- Bound fast scans to five pages and reconcile late flows every six hours.
 
 ## 0.3.1
 

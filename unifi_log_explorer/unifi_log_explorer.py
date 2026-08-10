@@ -43,6 +43,7 @@ API_KEY_KEY_PATH = DATA / "unifi_api_key.key"
 WEB_PORT = 8090
 IPFIX_PORT = 2055
 CEF_PORT = 5514
+ASSET_DIR = Path(__file__).resolve().parent
 CEF_HEADER = re.compile(r"(?:<\d+>)?\s*CEF:(\d+)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|((?:\\\||[^|])*)\|([^|]*)\|(.*)")
 CEF_PAIR = re.compile(r"([A-Za-z][A-Za-z0-9_]*)=((?:\\[=\\]|[^ ])*(?: (?![A-Za-z][A-Za-z0-9_]*=)[^ ]*)*)")
 SYSLOG_HEADER = re.compile(r"^<(\d{1,3})>([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(\S+)\s+(.*)$", re.DOTALL)
@@ -667,6 +668,7 @@ STYLE = """
 :root{color-scheme:light;--bg:#f4f7fa;--surface:#fff;--surface2:#edf3f8;--text:#17212b;--muted:#64748b;--line:#d8e1ea;--accent:#0787a8;--accent2:#dff5fa;--good:#16845b;--bad:#c43f55;--shadow:0 5px 22px #1e3a5f12}
 html[data-theme=dark]{color-scheme:dark;--bg:#0d1420;--surface:#172235;--surface2:#202c41;--text:#e7edf5;--muted:#a4b2c6;--line:#30415d;--accent:#52c9e6;--accent2:#173b4a;--good:#50c895;--bad:#ff8293;--shadow:none}
 *{box-sizing:border-box}body{font:15px system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);margin:0}main{max-width:1440px;margin:auto;padding:24px}.top{display:flex;align-items:center;gap:20px;margin-bottom:22px}.brand{font-size:25px;font-weight:800;color:var(--accent);margin-right:auto}.nav{display:flex;gap:5px;flex-wrap:wrap}.nav a,.linkbtn{color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px}.nav a:hover,.nav .active{background:var(--accent2);color:var(--accent)}h1{font-size:28px;margin:10px 0 4px}h2{margin:0 0 16px;font-size:19px}.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:var(--shadow)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin:16px 0}.metric{font-size:28px;font-variant-numeric:tabular-nums}.muted{color:var(--muted)}.bad{color:var(--bad)}.good{color:var(--good)}button,.button{display:inline-block;background:var(--accent);color:#fff;border:0;border-radius:7px;padding:9px 14px;font-weight:700;text-decoration:none;cursor:pointer}button.secondary,.button.secondary{background:var(--surface2);color:var(--text);border:1px solid var(--line)}form.inline{display:inline}.filters{display:grid;grid-template-columns:2fr repeat(5,minmax(120px,1fr)) auto;gap:10px;align-items:end;margin:16px 0}.filters label{font-size:12px;color:var(--muted)}input,select{display:block;width:100%;margin-top:5px;padding:9px 10px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:7px}.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:10px}table{width:100%;border-collapse:collapse;white-space:nowrap}td,th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}th{font-size:12px;color:var(--muted);background:var(--surface2)}tr:last-child td{border:0}td.wrap{white-space:normal;min-width:160px}.pill{display:inline-block;padding:3px 8px;border-radius:999px;background:var(--surface2);font-size:12px}.bars{display:grid;gap:9px}.barline{display:grid;grid-template-columns:minmax(90px,1fr) 3fr 55px;gap:10px;align-items:center}.bar{height:8px;border-radius:5px;background:var(--surface2);overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pager{display:flex;justify-content:space-between;align-items:center;margin-top:14px}.route{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:17px}.arrow{color:var(--accent);font-size:22px}.details{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.kv{display:grid;grid-template-columns:120px 1fr;gap:7px 12px}.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}pre{overflow:auto;background:var(--surface2);padding:14px;border-radius:8px;font-size:12px}.empty{text-align:center;padding:38px;color:var(--muted)}@media(max-width:1100px){main{padding:14px}.top{align-items:flex-start;flex-wrap:wrap}.filters{grid-template-columns:1fr 1fr}.twocol{grid-template-columns:1fr}}@media(max-width:560px){.filters{grid-template-columns:1fr}.brand{width:100%}}
+input[type=hidden]{display:none!important}.barlink{color:var(--text);text-decoration:none;border-radius:6px}.barlink:hover{background:var(--accent2)}.clickcard{display:block;color:var(--text);text-decoration:none;transition:transform .15s,border-color .15s}.clickcard:hover{transform:translateY(-2px);border-color:var(--accent)}.authwrap{min-height:calc(100vh - 48px);display:grid;place-items:center}.authbox{width:min(430px,100%)}.authbrand{text-align:center;margin-bottom:18px}.authbrand img{width:96px;height:96px;border-radius:22px}.authbrand h1{margin:10px 0 3px;color:var(--accent)}.authcard{padding:24px}.authcard button{width:100%;margin-top:4px}.publictheme{position:fixed;right:20px;top:16px;color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px;background:var(--surface)}
 """
 
 
@@ -677,7 +679,9 @@ def fmt_ms(value):
 
 def party_label(flow, side):
     item = flow.get(side) or {}
+    if not isinstance(item, dict): return str(item)
     fingerprint = item.get("client_fingerprint") or {}
+    if not isinstance(fingerprint, dict): fingerprint = {}
     return str(item.get("name") or item.get("client_name") or item.get("host") or
                fingerprint.get("name") or fingerprint.get("device_name") or item.get("ip") or "—")
 
@@ -701,6 +705,7 @@ class Web(BaseHTTPRequestHandler):
     def send_html(self, body, status=200, headers=None, title="UniFi Log Explorer"):
         raw = (f"<!doctype html><html lang=fr data-theme='{self.theme()}'><head><meta charset=utf-8>"
                f"<meta name=viewport content='width=device-width,initial-scale=1'><title>{html.escape(title)}</title>"
+               "<link rel=icon type=image/png href=/favicon.png>"
                f"<style>{STYLE}</style></head><body><main>{body}</main></body></html>").encode()
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -708,9 +713,24 @@ class Web(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+        self.send_header("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
         for key, value in (headers or {}).items(): self.send_header(key, value)
         self.end_headers(); self.wfile.write(raw)
+
+    def send_asset(self, filename):
+        try: raw = (ASSET_DIR / filename).read_bytes()
+        except OSError: return self.send_error(404)
+        self.send_response(200); self.send_header("Content-Type", "image/png")
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.send_header("Content-Length", str(len(raw))); self.end_headers(); self.wfile.write(raw)
+
+    def auth_page(self, content, title):
+        opposite = "dark" if self.theme() == "light" else "light"
+        label = "☾ Mode sombre" if opposite == "dark" else "☀ Mode clair"
+        theme_url = "/theme?" + urllib.parse.urlencode({"value": opposite, "next": self.path})
+        return (f"<a class=publictheme href='{html.escape(theme_url)}'>{label}</a><div class=authwrap><div class=authbox>"
+                "<div class=authbrand><img src=/logo.png alt='Logo UniFi Log Explorer'><h1>UniFi Log Explorer</h1>"
+                f"<div class=muted>{html.escape(title)}</div></div><section class='card authcard'>{content}</section></div></div>")
 
     def nav(self, active, session):
         csrf = html.escape(session["csrf"])
@@ -726,10 +746,17 @@ class Web(BaseHTTPRequestHandler):
                 "</nav></header>")
 
     @staticmethod
-    def bars(title, rows):
+    def bars(title, rows, filter_name=None):
         maximum = max([row["count"] for row in rows] or [1])
-        lines = "".join("<div class=barline><span title='{0}'>{0}</span><span class=bar><i style='width:{1:.1f}%'></i></span><b>{2}</b></div>".format(
-            html.escape(str(row["label"] or "Inconnu")), row["count"] * 100 / maximum, row["count"]) for row in rows)
+        lines = ""
+        for row in rows:
+            label = str(row["label"] or "Inconnu")
+            inner = "<span title='{0}'>{0}</span><span class=bar><i style='width:{1:.1f}%'></i></span><b>{2}</b>".format(
+                html.escape(label), row["count"] * 100 / maximum, row["count"])
+            if filter_name:
+                url = "/flows?" + urllib.parse.urlencode({"hours": 24, filter_name: label})
+                lines += f"<a class='barline barlink' href='{html.escape(url)}'>{inner}</a>"
+            else: lines += f"<div class=barline>{inner}</div>"
         return f"<section class=card><h2>{html.escape(title)}</h2><div class=bars>{lines}</div></section>"
 
     def form(self):
@@ -756,18 +783,22 @@ class Web(BaseHTTPRequestHandler):
         parsed = urlparse(self.path); path = parsed.path
         if path == "/health":
             self.send_response(200); self.send_header("Content-Length", "2"); self.end_headers(); self.wfile.write(b"OK"); return
-        if not self.store.setting("admin_hash"):
-            return self.send_html("<h1>UniFi Log Explorer</h1><div class=card><h2>Créer le compte administrateur</h2><form method=post action=/setup><label>Nom d’utilisateur<input name=username required minlength=3 maxlength=64 autocomplete=username></label><label>Mot de passe<input type=password name=password required minlength=12 autocomplete=new-password></label><label>Confirmation<input type=password name=confirm required minlength=12 autocomplete=new-password></label><button>Créer le compte</button></form></div>")
-        session = self.session()
-        if path == "/login":
-            return self.send_html("<h1>UniFi Log Explorer</h1><div class=card><form method=post action=/login><label>Utilisateur<input name=username autocomplete=username required></label><label>Mot de passe<input type=password name=password autocomplete=current-password required></label><button>Connexion</button></form></div>")
-        if not session: return self.redirect("/login")
+        if path in ("/logo.png", "/favicon.png"):
+            return self.send_asset("logo.png" if path == "/logo.png" else "icon.png")
         if path == "/theme":
             query = parse_qs(parsed.query); value = query.get("value", ["light"])[0]
             value = "dark" if value == "dark" else "light"
             target = query.get("next", ["/"])[0]
             if not target.startswith("/") or target.startswith("//"): target = "/"
             return self.redirect(target, f"ule_theme={value}; Path=/; Max-Age=31536000; SameSite=Strict")
+        if not self.store.setting("admin_hash"):
+            form = "<form method=post action=/setup><label>Nom d’utilisateur<input name=username required minlength=3 maxlength=64 autocomplete=username></label><label>Mot de passe<input type=password name=password required minlength=12 autocomplete=new-password></label><label>Confirmation<input type=password name=confirm required minlength=12 autocomplete=new-password></label><button>Créer le compte</button></form>"
+            return self.send_html(self.auth_page(form, "Créer le compte administrateur"))
+        session = self.session()
+        if path == "/login":
+            form = "<form method=post action=/login><label>Utilisateur<input name=username autocomplete=username required autofocus></label><label>Mot de passe<input type=password name=password autocomplete=current-password required></label><button>Connexion</button></form>"
+            return self.send_html(self.auth_page(form, "Connexion à votre espace local"))
+        if not session: return self.redirect("/login")
         if path == "/export.json":
             payload = json.dumps(self.store.export(), indent=2).encode()
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Disposition", "attachment; filename=unifi-log-explorer-diagnostics.json"); self.send_header("Content-Length", str(len(payload))); self.end_headers(); self.wfile.write(payload); return
@@ -777,7 +808,10 @@ class Web(BaseHTTPRequestHandler):
             metrics = [("Flows sur 24 h", flow["count"]), ("Sources actives", flow["sources"]),
                        ("Destinations", flow["destinations"]), ("Flows archivés", data["flow_stats"].get("count", 0)),
                        ("Événements CEF", counts.get("cef", 0)), ("Messages Syslog", counts.get("syslog", 0))]
-            cards = "".join(f"<div class=card><div class=metric>{v:,}</div><div class=muted>{html.escape(k)}</div></div>" for k,v in metrics)
+            cards = ""
+            for index, (label, value) in enumerate(metrics):
+                target = "/logs" if index >= 4 else "/flows?hours=24"
+                cards += f"<a class='card clickcard' href='{target}'><div class=metric>{value:,}</div><div class=muted>{html.escape(label)}</div></a>"
             raw = self.store.setting("flow_collection_status"); collection = json.loads(raw) if raw else None
             if collection and collection.get("ok"):
                 state = (f"<span class=good>● Collecte opérationnelle</span> · dernier cycle : "
@@ -787,8 +821,8 @@ class Web(BaseHTTPRequestHandler):
             else: state = "<span class=muted>Collecte en attente</span>"
             body = (self.nav("overview", session) + "<h1>Vue d’ensemble</h1><p class=muted>Activité réseau des dernières 24 heures</p>"
                     f"<div class=grid>{cards}</div><section class=card>{state}</section><div class=twocol>"
-                    + self.bars("Principaux clients", flow["sources_top"]) + self.bars("Services", flow["services"])
-                    + self.bars("Destinations", flow["destinations_top"]) + self.bars("Actions", flow["actions"])
+                    + self.bars("Principaux clients", flow["sources_top"], "q") + self.bars("Services", flow["services"], "service")
+                    + self.bars("Destinations", flow["destinations_top"], "q") + self.bars("Actions", flow["actions"], "action")
                     + "</div>")
             return self.send_html(body, title="Vue d’ensemble · UniFi Log Explorer")
         if path == "/flows":
@@ -803,7 +837,9 @@ class Web(BaseHTTPRequestHandler):
                        "<label>Période<select name=hours>"+options+"</select></label><button>Filtrer</button></form>")
             rows = []
             for row in result["rows"]:
-                detail = row["detail"]; source = detail.get("source") or {}; destination = detail.get("destination") or {}
+                detail = row["detail"] if isinstance(row["detail"], dict) else {}
+                source = detail.get("source") if isinstance(detail.get("source"), dict) else {}
+                destination = detail.get("destination") if isinstance(detail.get("destination"), dict) else {}
                 direction = "→" if detail.get("direction") == "outgoing" else "←" if detail.get("direction") == "incoming" else "↔"
                 rows.append(f"<tr><td>{fmt_ms(row['flow_end_time'])}</td><td class=wrap><b>{html.escape(party_label(detail,'source'))}</b><br><span class=muted>{html.escape(str(source.get('ip') or row['source_ip'] or '—'))}</span></td>"
                     f"<td class=arrow>{direction}</td><td class=wrap><b>{html.escape(party_label(detail,'destination'))}</b><br><span class=muted>{html.escape(str(destination.get('ip') or row['destination_ip'] or '—'))}</span></td>"
@@ -818,7 +854,9 @@ class Web(BaseHTTPRequestHandler):
         if path == "/flow":
             flow_id = parse_qs(parsed.query).get("id", [""])[0]; row = self.store.flow_by_id(flow_id)
             if not row: return self.send_error(404)
-            detail = row["detail"]; source = detail.get("source") or {}; destination = detail.get("destination") or {}
+            detail = row["detail"] if isinstance(row["detail"], dict) else {}
+            source = detail.get("source") if isinstance(detail.get("source"), dict) else {}
+            destination = detail.get("destination") if isinstance(detail.get("destination"), dict) else {}
             def endpoint(item):
                 return f"<dl class=kv><dt>Nom</dt><dd>{html.escape(party_label({ 'item': item }, 'item'))}</dd><dt>Adresse IP</dt><dd>{html.escape(str(item.get('ip') or '—'))}</dd><dt>Port</dt><dd>{html.escape(str(item.get('port') or '—'))}</dd><dt>Région</dt><dd>{html.escape(str(item.get('region') or '—'))}</dd><dt>Zone</dt><dd>{html.escape(str(item.get('zone_name') or '—'))}</dd></dl>"
             duration = max(0, row["flow_end_time"] - row["flow_start_time"])

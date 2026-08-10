@@ -142,6 +142,34 @@ class ParserTests(unittest.TestCase):
         self.assertFalse(collector.reconciliation_due(1_000_001))
         self.assertTrue(collector.reconciliation_due(1_000_000 + collector.RECONCILE_INTERVAL_SECONDS))
 
+    def test_authenticated_navigation_routes_render(self):
+        now = int(ule.time.time() * 1000)
+        flow = {"id": "render-me", "flow_start_time": now - 1000, "flow_end_time": now,
+                "source": {"ip": "192.168.1.20", "name": "Phone"},
+                "destination": {"ip": "9.9.9.9"}, "direction": "outgoing",
+                "service": "HTTPS", "action": "allowed"}
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(ule, "DATA", Path(directory)), mock.patch.object(ule, "DB_PATH", Path(directory) / "test.db"):
+                store = ule.Store({"retention_hours": 168, "max_records": 1000,
+                                   "allowed_source_ips": {"192.168.1.1"}, "session_timeout_minutes": 60})
+                store.set_setting("admin_hash", "configured"); store.add_flows([flow])
+                for path in ("/", "/flows", "/logs", "/flow?id=render-me"):
+                    handler = ule.Web.__new__(ule.Web); handler.path = path; handler.headers = {}; handler.store = store
+                    handler.session = lambda: {"csrf": "token"}
+                    rendered = []
+                    handler.send_html = lambda body, **kwargs: rendered.append(body)
+                    handler.send_error = lambda code: self.fail(f"{path} returned HTTP {code}")
+                    handler.do_GET()
+                    self.assertTrue(rendered, path)
+                    self.assertIn("Traffic Flows", rendered[0])
+
+    def test_login_has_logo_and_public_theme_switch(self):
+        handler = ule.Web.__new__(ule.Web); handler.path = "/login"; handler.headers = {}
+        body = handler.auth_page("<form></form>", "Connexion")
+        self.assertIn("/logo.png", body)
+        self.assertIn("/theme?", body)
+        self.assertIn("input[type=hidden]{display:none!important}", ule.STYLE)
+
 
 if __name__ == "__main__":
     unittest.main()

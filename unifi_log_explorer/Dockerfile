@@ -14,6 +14,7 @@ RUN apk add --no-cache \
 
 COPY run.sh /
 COPY unifi_log_explorer.py /app/unifi_log_explorer.py
+COPY logo.png icon.png /app/
 
 RUN chmod 755 /run.sh
 
