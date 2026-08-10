@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- Ajoute une vue d'ensemble analytique sur les dernières 24 heures.
+- Ajoute l'explorateur paginé avec recherche et filtres.
+- Ajoute une fiche détaillée donnant accès à tous les champs UniFi d'un flow.
+- Sépare les journaux Syslog/CEF de l'exploration réseau.
+- Ajoute un thème clair par défaut et une bascule persistante clair/sombre.
+- Borne les scans rapides à cinq pages et réconcilie les flows tardifs toutes les six heures.
+
 ## 0.3.1
 
 - Replace narrow cursor windows with newest-first scanning until known pages are reached.

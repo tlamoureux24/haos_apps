@@ -14,7 +14,12 @@ l'interface web ; un flow au maximum est lu et aucune donnée n'est conservée.
 
 Après un test réussi, activez `flow_collection_enabled` pour archiver les flows
 toutes les deux minutes. La collecte utilise pagination, déduplication et
-lecture des pages récentes jusqu'aux éléments déjà connus. Une
-réparation initiale des dernières 24 heures récupère les lots publiés en retard.
+une lecture rapide bornée à cinq pages. Une réparation initiale puis une
+réconciliation toutes les six heures des dernières 24 heures récupèrent les lots publiés en retard.
 Les données restent bornées par la durée de rétention et la limite
 d'enregistrements configurées.
+
+L'interface propose une vue d'ensemble, un explorateur filtrable des Traffic
+Flows, leur détail complet et une page séparée pour les journaux. Le thème clair
+est utilisé par défaut et peut être remplacé par le thème sombre depuis la barre
+de navigation.

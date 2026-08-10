@@ -1,9 +1,8 @@
 # UniFi Log Explorer
 
-UniFi Log Explorer est une App Home Assistant autonome qui reçoit et inspecte
-les exports IPFIX et Syslog/CEF d'une passerelle UniFi. Cette version `0.1.0`
-est une phase de collecte diagnostique : son objectif est d'observer les champs
-réellement émis avant de figer le stockage analytique et l'interface finale.
+UniFi Log Explorer est une App Home Assistant autonome qui collecte et explore
+les Traffic Flows ainsi que les exports IPFIX et Syslog/CEF d'une passerelle
+UniFi. L'ensemble fonctionne localement sur le réseau domestique.
 
 Elle fournit :
 
@@ -11,6 +10,9 @@ Elle fournit :
 - un récepteur Syslog/CEF UDP ;
 - un filtrage strict par adresse IP source avant analyse ou stockage ;
 - une interface web autonome protégée par un compte administrateur local ;
+- une vue d'ensemble des clients, services, destinations et actions ;
+- un explorateur de flows filtrable, paginé, avec fiche détaillée ;
+- une interface responsive en mode clair ou sombre ;
 - une rétention en durée et en nombre maximal d'enregistrements ;
 - un export JSON du diagnostic, sans adresse IP de l'émetteur.
 - un test non persistant de l'endpoint interne Traffic Flows avec une clé API dédiée.
@@ -45,13 +47,14 @@ Laissez `verify_ssl` désactivé pour le certificat autosigné habituel de la
 console. Activez-le uniquement si la chaîne du certificat est reconnue dans
 l'App.
 
-### Collecte expérimentale des flows
+### Collecte des flows
 
 Une fois le test réussi, activez `flow_collection_enabled`. Par défaut, l'App :
 
 - importe les dernières 24 heures au premier démarrage ou lors d'une migration ;
 - interroge l'UCG toutes les 120 secondes ;
-- lit les pages les plus récentes jusqu'à retrouver deux pages déjà archivées ;
+- lit au maximum cinq pages récentes par cycle ;
+- réconcilie les dernières 24 heures toutes les six heures pour les publications tardives ;
 - pagine les réponses par lots de 100 ;
 - découpe les fenêtres atteignant la limite UniFi de 10 000 résultats ;
 - élimine les doublons grâce à l'identifiant stable du flow ;
@@ -63,8 +66,7 @@ de publication et de la durée réelle des sessions.
 
 Les flows sont conservés dans une table SQLite séparée et bornés par
 `retention_hours` et `max_records`. Ils ne sont pas inclus dans l'export JSON
-diagnostique. Ce stockage est volontairement expérimental avant la validation
-du volume réel et le choix définitif de ClickHouse.
+diagnostique.
 
 Les ports hôtes peuvent être modifiés dans le panneau Réseau de l'App. Les ports
 configurés côté UniFi doivent alors correspondre aux ports hôtes.
@@ -83,14 +85,12 @@ La base diagnostique est incluse dans les sauvegardes de cette première phase.
 Elle est bornée par `retention_hours` et `max_records`. La future base analytique
 volumineuse sera séparée et exclue des sauvegardes.
 
-## Limites de la phase 1
+## Limites actuelles
 
 - IPFIX version 10 uniquement ; NetFlow v9 est signalé comme non pris en charge.
 - Transport UDP uniquement pour IPFIX et CEF.
 - Les champs IPFIX de longueur variable sont inventoriés mais pas encore décodés.
 - Les échantillons de valeurs sont limités à dix par jeu de données IPFIX.
 - Il ne s'agit pas encore d'un historique exhaustif ni d'un moteur d'alertes.
-- L'interface ne propose pas encore de recherche dans les flows archivés.
-
-Une capture de 48 heures à une semaine est recommandée. L'export JSON permettra
-d'établir le schéma définitif sans inclure l'adresse IP source de la passerelle.
+- L'endpoint Traffic Flows utilisé par UniFi n'est pas documenté publiquement
+  et peut évoluer avec une mise à jour de UniFi Network.

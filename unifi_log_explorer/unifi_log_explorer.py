@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""UniFi Log Explorer diagnostic collector (phase 1)."""
+"""UniFi Log Explorer local collector and network activity explorer."""
 
 from __future__ import annotations
 
@@ -214,6 +214,10 @@ class Store:
             source_ip TEXT, destination_ip TEXT, service TEXT, action TEXT, detail TEXT NOT NULL,
             collected_at INTEGER NOT NULL);
           CREATE INDEX IF NOT EXISTS traffic_flows_end ON traffic_flows(flow_end_time);
+          CREATE INDEX IF NOT EXISTS traffic_flows_source ON traffic_flows(source_ip);
+          CREATE INDEX IF NOT EXISTS traffic_flows_destination ON traffic_flows(destination_ip);
+          CREATE INDEX IF NOT EXISTS traffic_flows_service ON traffic_flows(service);
+          CREATE INDEX IF NOT EXISTS traffic_flows_action ON traffic_flows(action);
         """)
         self.db.commit()
 
@@ -293,6 +297,63 @@ class Store:
                 "flow_stats": flow_stats,
                 "allowed_source_ips": sorted(self.options["allowed_source_ips"]),
                 "retention_hours": self.options["retention_hours"], "max_records": self.options["max_records"]}
+
+    def flow_overview(self, hours=24):
+        cutoff = int(time.time() * 1000) - hours * 3600_000
+        with self.lock:
+            summary = dict(self.db.execute("""
+                SELECT count(*) count, count(DISTINCT source_ip) sources,
+                       count(DISTINCT destination_ip) destinations,
+                       coalesce(sum(flow_end_time-flow_start_time),0) duration_ms
+                FROM traffic_flows WHERE flow_end_time>=?""", (cutoff,)).fetchone())
+            def top(column):
+                return [dict(row) for row in self.db.execute(
+                    f"SELECT coalesce({column},'Inconnu') label,count(*) count FROM traffic_flows "
+                    "WHERE flow_end_time>=? GROUP BY label ORDER BY count DESC LIMIT 8", (cutoff,))]
+            summary["services"] = top("service")
+            summary["actions"] = top("action")
+            summary["sources_top"] = top("coalesce(json_extract(detail,'$.source.client_name'),source_ip)")
+            summary["destinations_top"] = top("coalesce(json_extract(detail,'$.destination.domain'),json_extract(detail,'$.destination.domains[0]'),destination_ip)")
+        return summary
+
+    def query_flows(self, filters, page=1, page_size=50):
+        clauses, values = [], []
+        hours = max(1, min(720, int(filters.get("hours") or 24)))
+        clauses.append("flow_end_time>=?"); values.append(int(time.time() * 1000) - hours * 3600_000)
+        columns = {"source": "source_ip", "destination": "destination_ip",
+                   "service": "service", "action": "action"}
+        for key, column in columns.items():
+            value = str(filters.get(key) or "").strip()
+            if value:
+                clauses.append(f"{column} LIKE ?"); values.append(f"%{value}%")
+        direction = str(filters.get("direction") or "").strip()
+        if direction:
+            clauses.append("json_extract(detail,'$.direction')=?"); values.append(direction)
+        query = str(filters.get("q") or "").strip()
+        if query:
+            clauses.append("(source_ip LIKE ? OR destination_ip LIKE ? OR service LIKE ? OR detail LIKE ?)")
+            values.extend([f"%{query}%"] * 4)
+        where = " AND ".join(clauses)
+        page_size = max(10, min(100, int(page_size)))
+        with self.lock:
+            total = self.db.execute(f"SELECT count(*) FROM traffic_flows WHERE {where}", values).fetchone()[0]
+            pages = max(1, (total + page_size - 1) // page_size)
+            page = max(1, min(int(page), pages))
+            rows = [dict(row) for row in self.db.execute(
+                f"SELECT id,flow_start_time,flow_end_time,source_ip,destination_ip,service,action,detail "
+                f"FROM traffic_flows WHERE {where} ORDER BY flow_end_time DESC LIMIT ? OFFSET ?",
+                values + [page_size, (page - 1) * page_size])]
+        for row in rows:
+            row["detail"] = json.loads(row["detail"])
+        return {"rows": rows, "total": total, "page": page, "pages": pages,
+                "page_size": page_size, "hours": hours}
+
+    def flow_by_id(self, flow_id):
+        with self.lock:
+            row = self.db.execute("SELECT * FROM traffic_flows WHERE id=?", (flow_id,)).fetchone()
+        if not row: return None
+        result = dict(row); result["detail"] = json.loads(result["detail"])
+        return result
 
     def export(self):
         with self.lock:
@@ -602,7 +663,28 @@ def password_valid(password, encoded):
         return False
 
 
-STYLE = """body{font:15px system-ui;background:#0d1420;color:#e7edf5;margin:0}main{max-width:1100px;margin:auto;padding:28px}h1{color:#66d9ef}.card{background:#172235;border:1px solid #293a55;border-radius:10px;padding:18px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.metric{font-size:28px}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;border-bottom:1px solid #293a55}input{display:block;width:100%;box-sizing:border-box;padding:10px;margin:8px 0 14px}button,.button{background:#25a6c8;color:#07131b;border:0;border-radius:6px;padding:10px 16px;font-weight:700;text-decoration:none}.bad{color:#ff8293}.muted{color:#9fb0c5}nav{float:right}code{word-break:break-all}"""
+STYLE = """
+:root{color-scheme:light;--bg:#f4f7fa;--surface:#fff;--surface2:#edf3f8;--text:#17212b;--muted:#64748b;--line:#d8e1ea;--accent:#0787a8;--accent2:#dff5fa;--good:#16845b;--bad:#c43f55;--shadow:0 5px 22px #1e3a5f12}
+html[data-theme=dark]{color-scheme:dark;--bg:#0d1420;--surface:#172235;--surface2:#202c41;--text:#e7edf5;--muted:#a4b2c6;--line:#30415d;--accent:#52c9e6;--accent2:#173b4a;--good:#50c895;--bad:#ff8293;--shadow:none}
+*{box-sizing:border-box}body{font:15px system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);margin:0}main{max-width:1440px;margin:auto;padding:24px}.top{display:flex;align-items:center;gap:20px;margin-bottom:22px}.brand{font-size:25px;font-weight:800;color:var(--accent);margin-right:auto}.nav{display:flex;gap:5px;flex-wrap:wrap}.nav a,.linkbtn{color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px}.nav a:hover,.nav .active{background:var(--accent2);color:var(--accent)}h1{font-size:28px;margin:10px 0 4px}h2{margin:0 0 16px;font-size:19px}.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:var(--shadow)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin:16px 0}.metric{font-size:28px;font-variant-numeric:tabular-nums}.muted{color:var(--muted)}.bad{color:var(--bad)}.good{color:var(--good)}button,.button{display:inline-block;background:var(--accent);color:#fff;border:0;border-radius:7px;padding:9px 14px;font-weight:700;text-decoration:none;cursor:pointer}button.secondary,.button.secondary{background:var(--surface2);color:var(--text);border:1px solid var(--line)}form.inline{display:inline}.filters{display:grid;grid-template-columns:2fr repeat(5,minmax(120px,1fr)) auto;gap:10px;align-items:end;margin:16px 0}.filters label{font-size:12px;color:var(--muted)}input,select{display:block;width:100%;margin-top:5px;padding:9px 10px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:7px}.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:10px}table{width:100%;border-collapse:collapse;white-space:nowrap}td,th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}th{font-size:12px;color:var(--muted);background:var(--surface2)}tr:last-child td{border:0}td.wrap{white-space:normal;min-width:160px}.pill{display:inline-block;padding:3px 8px;border-radius:999px;background:var(--surface2);font-size:12px}.bars{display:grid;gap:9px}.barline{display:grid;grid-template-columns:minmax(90px,1fr) 3fr 55px;gap:10px;align-items:center}.bar{height:8px;border-radius:5px;background:var(--surface2);overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pager{display:flex;justify-content:space-between;align-items:center;margin-top:14px}.route{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:17px}.arrow{color:var(--accent);font-size:22px}.details{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.kv{display:grid;grid-template-columns:120px 1fr;gap:7px 12px}.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}pre{overflow:auto;background:var(--surface2);padding:14px;border-radius:8px;font-size:12px}.empty{text-align:center;padding:38px;color:var(--muted)}@media(max-width:1100px){main{padding:14px}.top{align-items:flex-start;flex-wrap:wrap}.filters{grid-template-columns:1fr 1fr}.twocol{grid-template-columns:1fr}}@media(max-width:560px){.filters{grid-template-columns:1fr}.brand{width:100%}}
+"""
+
+
+def fmt_ms(value):
+    if not value: return "—"
+    return time.strftime("%d/%m/%Y %H:%M:%S", time.localtime(value / 1000))
+
+
+def party_label(flow, side):
+    item = flow.get(side) or {}
+    fingerprint = item.get("client_fingerprint") or {}
+    return str(item.get("name") or item.get("client_name") or item.get("host") or
+               fingerprint.get("name") or fingerprint.get("device_name") or item.get("ip") or "—")
+
+
+def query_link(path, query, **changes):
+    values = dict(query); values.update(changes)
+    return path + "?" + urllib.parse.urlencode({k: v for k, v in values.items() if v not in (None, "")})
 
 
 class Web(BaseHTTPRequestHandler):
@@ -612,9 +694,14 @@ class Web(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         logging.debug("web: " + fmt, *args)
 
-    def send_html(self, body, status=200, headers=None):
-        raw = ("<!doctype html><html lang=fr><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
-               f"<style>{STYLE}</style><main>{body}</main></html>").encode()
+    def theme(self):
+        jar = cookies.SimpleCookie(self.headers.get("Cookie", ""))
+        return "dark" if jar.get("ule_theme") and jar["ule_theme"].value == "dark" else "light"
+
+    def send_html(self, body, status=200, headers=None, title="UniFi Log Explorer"):
+        raw = (f"<!doctype html><html lang=fr data-theme='{self.theme()}'><head><meta charset=utf-8>"
+               f"<meta name=viewport content='width=device-width,initial-scale=1'><title>{html.escape(title)}</title>"
+               f"<style>{STYLE}</style></head><body><main>{body}</main></body></html>").encode()
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
@@ -624,6 +711,26 @@ class Web(BaseHTTPRequestHandler):
         self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
         for key, value in (headers or {}).items(): self.send_header(key, value)
         self.end_headers(); self.wfile.write(raw)
+
+    def nav(self, active, session):
+        csrf = html.escape(session["csrf"])
+        opposite = "dark" if self.theme() == "light" else "light"
+        theme_label = "☾ Sombre" if opposite == "dark" else "☀ Clair"
+        theme_url = "/theme?" + urllib.parse.urlencode({"value": opposite, "next": self.path})
+        return ("<header class=top><div class=brand>UniFi Log Explorer</div><nav class=nav>"
+                f"<a class={'active' if active=='overview' else ''} href=/>Vue d’ensemble</a>"
+                f"<a class={'active' if active=='flows' else ''} href=/flows>Traffic Flows</a>"
+                f"<a class={'active' if active=='logs' else ''} href=/logs>Journaux</a>"
+                f"<a href='{html.escape(theme_url)}'>{theme_label}</a>"
+                f"<form class=inline method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form>"
+                "</nav></header>")
+
+    @staticmethod
+    def bars(title, rows):
+        maximum = max([row["count"] for row in rows] or [1])
+        lines = "".join("<div class=barline><span title='{0}'>{0}</span><span class=bar><i style='width:{1:.1f}%'></i></span><b>{2}</b></div>".format(
+            html.escape(str(row["label"] or "Inconnu")), row["count"] * 100 / maximum, row["count"]) for row in rows)
+        return f"<section class=card><h2>{html.escape(title)}</h2><div class=bars>{lines}</div></section>"
 
     def form(self):
         length = min(int(self.headers.get("Content-Length", "0")), 8192)
@@ -646,7 +753,7 @@ class Web(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path); path = parsed.path
         if path == "/health":
             self.send_response(200); self.send_header("Content-Length", "2"); self.end_headers(); self.wfile.write(b"OK"); return
         if not self.store.setting("admin_hash"):
@@ -655,36 +762,76 @@ class Web(BaseHTTPRequestHandler):
         if path == "/login":
             return self.send_html("<h1>UniFi Log Explorer</h1><div class=card><form method=post action=/login><label>Utilisateur<input name=username autocomplete=username required></label><label>Mot de passe<input type=password name=password autocomplete=current-password required></label><button>Connexion</button></form></div>")
         if not session: return self.redirect("/login")
+        if path == "/theme":
+            query = parse_qs(parsed.query); value = query.get("value", ["light"])[0]
+            value = "dark" if value == "dark" else "light"
+            target = query.get("next", ["/"])[0]
+            if not target.startswith("/") or target.startswith("//"): target = "/"
+            return self.redirect(target, f"ule_theme={value}; Path=/; Max-Age=31536000; SameSite=Strict")
         if path == "/export.json":
             payload = json.dumps(self.store.export(), indent=2).encode()
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Disposition", "attachment; filename=unifi-log-explorer-diagnostics.json"); self.send_header("Content-Length", str(len(payload))); self.end_headers(); self.wfile.write(payload); return
-        if path != "/": return self.send_error(404)
-        data = self.store.dashboard(); counts = data["counts"]; counters = data["counters"]
-        metrics = [("Traffic Flows archivés", data["flow_stats"].get("count", 0)), ("Événements CEF", counts.get("cef",0)), ("Messages Syslog", counts.get("syslog",0)), ("Datagrammes IPFIX", counters.get("ipfix_datagrams",0)), ("Messages IPFIX", counts.get("ipfix_message",0)), ("Templates", counts.get("ipfix_template",0)), ("Sources refusées", counters.get("ipfix_rejected_source",0)+counters.get("cef_rejected_source",0)), ("Erreurs de parsing", counters.get("ipfix_parse_errors",0)+counters.get("cef_parse_errors",0))]
-        cards = "".join(f"<div class=card><div class=metric>{v}</div><div class=muted>{html.escape(k)}</div></div>" for k,v in metrics)
-        rows = "".join(f"<tr><td>{time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(r['received_at']))}</td><td>{html.escape(r['kind'])}</td><td>{html.escape(r['source_ip'])}</td><td>{html.escape(r['summary'])}</td></tr>" for r in data["recent"])
-        csrf = session["csrf"]
-        rejected = ", ".join(f"{html.escape(ip)} ({count})" for ip,count in sorted(data["rejected_sources"].items())) or "aucune"
-        raw_probe = self.store.setting("flow_probe_result")
-        probe = json.loads(raw_probe) if raw_probe else None
-        if probe and probe.get("ok"):
-            probe_text = f"<span>Connexion réussie · {probe.get('returned')} flow retourné · total fenêtre : {probe.get('total')}</span>"
-        elif probe:
-            probe_text = f"<span class=bad>Échec : {html.escape(str(probe.get('error', 'erreur inconnue')))}</span>"
-        else:
-            probe_text = "<span class=muted>Aucun test effectué.</span>"
-        api_ready = bool(self.store.options.get("unifi_api_key"))
-        probe_button = f"<form method=post action=/probe><input type=hidden name=csrf value='{csrf}'><button {'disabled' if not api_ready else ''}>Tester l’API Traffic Flows</button></form>"
-        raw_collection = self.store.setting("flow_collection_status")
-        collection = json.loads(raw_collection) if raw_collection else None
-        if collection and collection.get("ok"):
-            collection_text = f"Dernier cycle réussi · {collection.get('fetched')} lus · {collection.get('inserted')} nouveaux · {collection.get('pages')} pages"
-        elif collection:
-            collection_text = f"<span class=bad>Dernier cycle en échec : {html.escape(str(collection.get('error')))}</span>"
-        else:
-            collection_text = "En attente du premier cycle" if self.store.options.get("flow_collection_enabled") else "Collecte désactivée dans les options"
-        body = f"<nav><form method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form></nav><h1>UniFi Log Explorer</h1><p>Phase 1 · collecte diagnostique</p><div class=grid>{cards}</div><div class=card><b>Sources autorisées :</b> {', '.join(map(html.escape,data['allowed_source_ips']))}<br><b>Sources refusées observées :</b> {rejected}<br><b>Rétention :</b> {data['retention_hours']} h · <b>Limite :</b> {data['max_records']} enregistrements</div><div class=card><h2>API Traffic Flows</h2><p>{probe_text}</p>{probe_button}<p class=muted>Le test lit au maximum un flow des cinq dernières minutes et ne le conserve pas.</p><h3>Collecte périodique</h3><p>{collection_text}</p></div><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p><div class=card><h2>Derniers enregistrements</h2><table><thead><tr><th>Date</th><th>Type</th><th>Source</th><th>Résumé</th></tr></thead><tbody>{rows}</tbody></table></div>"
-        self.send_html(body)
+        if path == "/":
+            data = self.store.dashboard(); flow = self.store.flow_overview(24)
+            counts = data["counts"]; counters = data["counters"]
+            metrics = [("Flows sur 24 h", flow["count"]), ("Sources actives", flow["sources"]),
+                       ("Destinations", flow["destinations"]), ("Flows archivés", data["flow_stats"].get("count", 0)),
+                       ("Événements CEF", counts.get("cef", 0)), ("Messages Syslog", counts.get("syslog", 0))]
+            cards = "".join(f"<div class=card><div class=metric>{v:,}</div><div class=muted>{html.escape(k)}</div></div>" for k,v in metrics)
+            raw = self.store.setting("flow_collection_status"); collection = json.loads(raw) if raw else None
+            if collection and collection.get("ok"):
+                state = (f"<span class=good>● Collecte opérationnelle</span> · dernier cycle : "
+                         f"{collection.get('inserted')} nouveaux / {collection.get('fetched')} lus / "
+                         f"{collection.get('pages')} pages · {html.escape(collection.get('strategy',''))}")
+            elif collection: state = f"<span class=bad>● Échec : {html.escape(str(collection.get('error')))}</span>"
+            else: state = "<span class=muted>Collecte en attente</span>"
+            body = (self.nav("overview", session) + "<h1>Vue d’ensemble</h1><p class=muted>Activité réseau des dernières 24 heures</p>"
+                    f"<div class=grid>{cards}</div><section class=card>{state}</section><div class=twocol>"
+                    + self.bars("Principaux clients", flow["sources_top"]) + self.bars("Services", flow["services"])
+                    + self.bars("Destinations", flow["destinations_top"]) + self.bars("Actions", flow["actions"])
+                    + "</div>")
+            return self.send_html(body, title="Vue d’ensemble · UniFi Log Explorer")
+        if path == "/flows":
+            raw_query = {key: values[0] for key, values in parse_qs(parsed.query).items()}
+            result = self.store.query_flows(raw_query, raw_query.get("page", 1), raw_query.get("size", 50))
+            def val(name): return html.escape(str(raw_query.get(name, "")), quote=True)
+            options = "".join(f"<option value={n} {'selected' if result['hours']==n else ''}>{label}</option>" for n,label in ((1,"1 heure"),(6,"6 heures"),(24,"24 heures"),(72,"3 jours"),(168,"7 jours"),(720,"30 jours")))
+            directions = "".join(f"<option value='{v}' {'selected' if raw_query.get('direction')==v else ''}>{label}</option>" for v,label in (("","Toutes"),("outgoing","Sortant"),("incoming","Entrant")))
+            filters = ("<form class=filters method=get><label>Recherche<input name=q value='"+val("q")+"' placeholder='IP, client, domaine…'></label>"
+                       "<label>Source<input name=source value='"+val("source")+"'></label><label>Destination<input name=destination value='"+val("destination")+"'></label>"
+                       "<label>Service<input name=service value='"+val("service")+"'></label><label>Direction<select name=direction>"+directions+"</select></label>"
+                       "<label>Période<select name=hours>"+options+"</select></label><button>Filtrer</button></form>")
+            rows = []
+            for row in result["rows"]:
+                detail = row["detail"]; source = detail.get("source") or {}; destination = detail.get("destination") or {}
+                direction = "→" if detail.get("direction") == "outgoing" else "←" if detail.get("direction") == "incoming" else "↔"
+                rows.append(f"<tr><td>{fmt_ms(row['flow_end_time'])}</td><td class=wrap><b>{html.escape(party_label(detail,'source'))}</b><br><span class=muted>{html.escape(str(source.get('ip') or row['source_ip'] or '—'))}</span></td>"
+                    f"<td class=arrow>{direction}</td><td class=wrap><b>{html.escape(party_label(detail,'destination'))}</b><br><span class=muted>{html.escape(str(destination.get('ip') or row['destination_ip'] or '—'))}</span></td>"
+                    f"<td>{html.escape(str(row['service'] or detail.get('protocol') or '—'))}</td><td><span class=pill>{html.escape(str(row['action'] or '—'))}</span></td><td><a class=button href='/flow?id={urllib.parse.quote(row['id'])}'>Détails</a></td></tr>")
+            table = "".join(rows) or "<tr><td class=empty colspan=7>Aucun flow ne correspond à ces filtres.</td></tr>"
+            query_without_page = dict(raw_query); query_without_page.pop("page", None)
+            previous = query_link("/flows", query_without_page, page=result["page"]-1) if result["page"] > 1 else ""
+            following = query_link("/flows", query_without_page, page=result["page"]+1) if result["page"] < result["pages"] else ""
+            pager = f"<div class=pager><span>{result['total']:,} résultats · page {result['page']} / {result['pages']}</span><span>{f'<a class=button secondary href={html.escape(previous)}>Précédent</a>' if previous else ''} {f'<a class=button secondary href={html.escape(following)}>Suivant</a>' if following else ''}</span></div>"
+            body = self.nav("flows", session) + "<h1>Traffic Flows</h1><p class=muted>Recherchez et inspectez les connexions archivées.</p>" + filters + f"<section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Source</th><th></th><th>Destination</th><th>Service</th><th>Action</th><th></th></tr></thead><tbody>{table}</tbody></table></div>{pager}</section>"
+            return self.send_html(body, title="Traffic Flows · UniFi Log Explorer")
+        if path == "/flow":
+            flow_id = parse_qs(parsed.query).get("id", [""])[0]; row = self.store.flow_by_id(flow_id)
+            if not row: return self.send_error(404)
+            detail = row["detail"]; source = detail.get("source") or {}; destination = detail.get("destination") or {}
+            def endpoint(item):
+                return f"<dl class=kv><dt>Nom</dt><dd>{html.escape(party_label({ 'item': item }, 'item'))}</dd><dt>Adresse IP</dt><dd>{html.escape(str(item.get('ip') or '—'))}</dd><dt>Port</dt><dd>{html.escape(str(item.get('port') or '—'))}</dd><dt>Région</dt><dd>{html.escape(str(item.get('region') or '—'))}</dd><dt>Zone</dt><dd>{html.escape(str(item.get('zone_name') or '—'))}</dd></dl>"
+            duration = max(0, row["flow_end_time"] - row["flow_start_time"])
+            route = f"<div class=route><b>{html.escape(party_label(detail,'source'))}</b><span class=arrow>→</span><b>{html.escape(party_label(detail,'destination'))}</b></div>"
+            summary = f"<dl class=kv><dt>Début</dt><dd>{fmt_ms(row['flow_start_time'])}</dd><dt>Fin</dt><dd>{fmt_ms(row['flow_end_time'])}</dd><dt>Durée</dt><dd>{duration/1000:.1f} s</dd><dt>Service</dt><dd>{html.escape(str(row['service'] or '—'))}</dd><dt>Protocole</dt><dd>{html.escape(str(detail.get('protocol') or '—'))}</dd><dt>Action</dt><dd>{html.escape(str(row['action'] or '—'))}</dd><dt>Risque</dt><dd>{html.escape(str(detail.get('risk') or '—'))}</dd></dl>"
+            body = self.nav("flows", session) + "<p><a class='button secondary' href=/flows>← Retour aux flows</a></p>" + f"<section class=card>{route}</section><div class=details><section class=card><h2>Résumé</h2>{summary}</section><section class=card><h2>Source</h2>{endpoint(source)}</section><section class=card><h2>Destination</h2>{endpoint(destination)}</section></div><section class=card><h2>Données UniFi complètes</h2><pre>{html.escape(json.dumps(detail,indent=2,ensure_ascii=False))}</pre></section>"
+            return self.send_html(body, title="Détail du flow · UniFi Log Explorer")
+        if path == "/logs":
+            data = self.store.dashboard()
+            rows = "".join(f"<tr><td>{time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(r['received_at']))}</td><td><span class=pill>{html.escape(r['kind'])}</span></td><td>{html.escape(r['source_ip'])}</td><td class=wrap>{html.escape(r['summary'])}</td></tr>" for r in data["recent"])
+            body = self.nav("logs", session) + "<h1>Journaux</h1><p class=muted>Les 100 derniers événements Syslog, CEF et IPFIX.</p><section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Type</th><th>Émetteur</th><th>Résumé</th></tr></thead><tbody>" + rows + "</tbody></table></div></section><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p>"
+            return self.send_html(body, title="Journaux · UniFi Log Explorer")
+        return self.send_error(404)
 
     def do_POST(self):
         path = urlparse(self.path).path; form = self.form()

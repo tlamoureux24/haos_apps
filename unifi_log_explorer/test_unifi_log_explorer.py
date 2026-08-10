@@ -83,6 +83,23 @@ class ParserTests(unittest.TestCase):
                 self.assertEqual(store.add_flows([flow]), 0)
                 self.assertEqual(store.dashboard()["flow_stats"]["count"], 1)
 
+    def test_flow_explorer_filters_and_details(self):
+        now = int(ule.time.time() * 1000)
+        flow = {"id": "flow-searchable", "flow_start_time": now - 2000, "flow_end_time": now,
+                "source": {"ip": "192.168.1.20", "name": "Téléphone"},
+                "destination": {"ip": "9.9.9.9", "domains": ["dns.quad9.net"]},
+                "direction": "outgoing", "service": "HTTPS", "action": "allowed"}
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(ule, "DATA", Path(directory)), mock.patch.object(ule, "DB_PATH", Path(directory) / "test.db"):
+                store = ule.Store({"retention_hours": 168, "max_records": 1000,
+                                   "allowed_source_ips": {"192.168.1.1"}})
+                store.add_flows([flow])
+                result = store.query_flows({"q": "quad9", "direction": "outgoing", "hours": 24})
+                self.assertEqual(result["total"], 1)
+                self.assertEqual(result["rows"][0]["id"], "flow-searchable")
+                self.assertEqual(store.flow_by_id("flow-searchable")["detail"]["service"], "HTTPS")
+                self.assertEqual(store.flow_overview()["services"][0], {"label": "HTTPS", "count": 1})
+
     def test_newest_scan_stops_after_two_known_pages(self):
         class FakeStore:
             options = {}
