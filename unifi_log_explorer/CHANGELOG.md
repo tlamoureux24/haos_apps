@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Move the collection status banner below the page header and above the overview metrics.
+
 ## 0.5.0
 
 - Rename the Journaux section to CEF / Syslog to clarify its contents.

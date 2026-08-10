@@ -750,7 +750,7 @@ class Web(BaseHTTPRequestHandler):
             elif collection: state = f"<span class=bad>● Échec : {html.escape(str(collection.get('error')))}</span>"
             else: state = "<span class=muted>Collecte en attente</span>"
             body = (self.nav("overview", session) + "<h1>Vue d’ensemble</h1><p class=muted>Activité réseau des dernières 24 heures</p>"
-                    f"<div class=grid>{cards}</div><section class=card>{state}</section><div class=twocol>"
+                    f"<section class=card>{state}</section><div class=grid>{cards}</div><div class=twocol>"
                     + self.bars("Principaux clients", flow["sources_top"], "q") + self.bars("Services", flow["services"], "service")
                     + self.bars("Destinations", flow["destinations_top"], "q") + self.bars("Actions", flow["actions"], "action")
                     + "</div>")
