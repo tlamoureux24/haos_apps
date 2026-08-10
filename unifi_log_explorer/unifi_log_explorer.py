@@ -599,6 +599,7 @@ input[type=hidden]{display:none!important}.barlink{color:var(--text);text-decora
 .toplogo{display:flex;align-items:center;gap:10px;color:var(--accent);text-decoration:none;font-size:25px;font-weight:800;margin-right:auto}.toplogo img{width:42px;height:42px;border-radius:10px}.menu{display:flex;align-items:center;gap:5px;position:relative;z-index:2}.menu a{display:block;position:relative;color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px}.menu a:hover,.menu a.active{background:var(--accent2);color:var(--accent)}.logout{margin:0;position:relative;z-index:2}.logfilters{display:flex;gap:8px;margin:16px 0}.logfilters a{background:var(--surface);color:var(--text);border:1px solid var(--line)}.logfilters a.active{background:var(--accent);color:#fff;border-color:var(--accent)}@media(max-width:800px){.menu{width:100%;overflow-x:auto}.toplogo{width:100%}}
 .barline{grid-template-columns:minmax(0,1.4fr) minmax(80px,3fr) 55px}.barlabel{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .eventfilters{grid-template-columns:2fr minmax(130px,1fr) minmax(130px,1fr) minmax(130px,1fr) auto}
+.overviewhead{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center;margin:8px 0 12px}.overviewhead h1{margin-top:0}.overviewhead p{margin-bottom:0}.statuscard{margin:0;box-shadow:var(--shadow)}@media(max-width:800px){.overviewhead{grid-template-columns:1fr;gap:12px}}
 """
 
 
@@ -749,8 +750,8 @@ class Web(BaseHTTPRequestHandler):
                          f"{collection.get('pages')} pages · {html.escape(collection.get('strategy',''))}")
             elif collection: state = f"<span class=bad>● Échec : {html.escape(str(collection.get('error')))}</span>"
             else: state = "<span class=muted>Collecte en attente</span>"
-            body = (self.nav("overview", session) + "<h1>Vue d’ensemble</h1><p class=muted>Activité réseau des dernières 24 heures</p>"
-                    f"<section class=card>{state}</section><div class=grid>{cards}</div><div class=twocol>"
+            body = (self.nav("overview", session) + "<div class=overviewhead><div><h1>Vue d’ensemble</h1><p class=muted>Activité réseau des dernières 24 heures</p></div>"
+                    f"<section class='card statuscard'>{state}</section></div><div class=grid>{cards}</div><div class=twocol>"
                     + self.bars("Principaux clients", flow["sources_top"], "q") + self.bars("Services", flow["services"], "service")
                     + self.bars("Destinations", flow["destinations_top"], "q") + self.bars("Actions", flow["actions"], "action")
                     + "</div>")

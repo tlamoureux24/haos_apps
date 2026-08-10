@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2
+
+- Place the collection status in the right side of the overview heading, alongside the page title.
+- Stack the heading and status cleanly on narrow screens.
+
 ## 0.5.1
 
 - Move the collection status banner below the page header and above the overview metrics.

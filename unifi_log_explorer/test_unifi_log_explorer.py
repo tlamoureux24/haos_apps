@@ -159,6 +159,8 @@ class ParserTests(unittest.TestCase):
                     self.assertIn("/flows", parser.links)
                     self.assertIn("/events", parser.links)
                     if path == "/":
+                        self.assertIn("class=overviewhead", rendered[0])
+                        self.assertIn("class='card statuscard'", rendered[0])
                         self.assertLess(rendered[0].index("Collecte en attente"), rendered[0].index("class=grid"))
                     if path == "/events?size=10":
                         self.assertTrue(any(link and link.startswith("/events?") and "page=2" in link for link in parser.links))
