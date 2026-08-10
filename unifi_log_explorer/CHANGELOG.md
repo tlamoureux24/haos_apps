@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Rename the Journaux section to CEF / Syslog to clarify its contents.
+- Replace the fixed 100-event view with paginated access to retained events.
+- Add full-text, event-type, source-address and time-period filters.
+- Preserve filters while moving between result pages.
+- Redirect the former `/logs` route to the new `/events` explorer.
+
 ## 0.4.3
 
 - Fix inactive navigation links whose empty unquoted class consumed the `href` attribute.

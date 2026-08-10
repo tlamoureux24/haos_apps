@@ -11,5 +11,5 @@ addresses listed in `allowed_source_ips` are parsed or retained; the default is
 `192.168.1.1`.
 
 It includes a 24-hour analytical overview, a searchable and paginated flow
-explorer, full flow details, a separate event log and persistent light/dark
+explorer, full flow details, a searchable and paginated CEF/Syslog explorer and persistent light/dark
 themes. Traffic Flows are collected with a locally encrypted UniFi API key.

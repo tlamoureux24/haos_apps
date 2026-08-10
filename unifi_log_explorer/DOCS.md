@@ -20,6 +20,7 @@ Les données restent bornées par la durée de rétention et la limite
 d'enregistrements configurées.
 
 L'interface propose une vue d'ensemble, un explorateur filtrable des Traffic
-Flows, leur détail complet et une page séparée pour les journaux. Le thème clair
+Flows, leur détail complet et un explorateur séparé CEF / Syslog avec recherche,
+filtres et pagination. Le thème clair
 est utilisé par défaut et peut être remplacé par le thème sombre depuis la barre
 de navigation.

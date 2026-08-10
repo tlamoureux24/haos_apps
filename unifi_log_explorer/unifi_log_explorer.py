@@ -297,6 +297,31 @@ class Store:
                 f"SELECT id,received_at,kind,source_ip,summary FROM records WHERE {' AND '.join(clauses)} ORDER BY id DESC LIMIT ?",
                 values + [max(1, min(500, int(limit)))])]
 
+    def query_events(self, filters, page=1, page_size=50):
+        clauses, values = ["kind IN ('cef','syslog')"], []
+        kind = str(filters.get("kind") or "").lower()
+        if kind in ("cef", "syslog"):
+            clauses.append("kind=?"); values.append(kind)
+        hours = max(1, min(720, int(filters.get("hours") or 24)))
+        clauses.append("received_at>=?"); values.append(int(time.time()) - hours * 3600)
+        source = str(filters.get("source") or "").strip()
+        if source:
+            clauses.append("source_ip LIKE ?"); values.append(f"%{source}%")
+        query = str(filters.get("q") or "").strip()
+        if query:
+            clauses.append("(summary LIKE ? OR detail LIKE ?)"); values.extend([f"%{query}%"] * 2)
+        where = " AND ".join(clauses)
+        page_size = max(10, min(100, int(page_size)))
+        with self.lock:
+            total = self.db.execute(f"SELECT count(*) FROM records WHERE {where}", values).fetchone()[0]
+            pages = max(1, (total + page_size - 1) // page_size)
+            page = max(1, min(int(page), pages))
+            rows = [dict(row) for row in self.db.execute(
+                f"SELECT id,received_at,kind,source_ip,summary FROM records WHERE {where} "
+                "ORDER BY id DESC LIMIT ? OFFSET ?", values + [page_size, (page - 1) * page_size])]
+        return {"rows": rows, "total": total, "page": page, "pages": pages,
+                "page_size": page_size, "hours": hours, "kind": kind}
+
     def flow_overview(self, hours=24):
         cutoff = int(time.time() * 1000) - hours * 3600_000
         with self.lock:
@@ -573,6 +598,7 @@ html[data-theme=dark]{color-scheme:dark;--bg:#0d1420;--surface:#172235;--surface
 input[type=hidden]{display:none!important}.barlink{color:var(--text);text-decoration:none;border-radius:6px}.barlink:hover{background:var(--accent2)}.clickcard{display:block;color:var(--text);text-decoration:none;transition:transform .15s,border-color .15s}.clickcard:hover{transform:translateY(-2px);border-color:var(--accent)}.authwrap{min-height:calc(100vh - 48px);display:grid;place-items:center}.authbox{width:min(430px,100%)}.authbrand{text-align:center;margin-bottom:18px}.authbrand img{width:96px;height:96px;border-radius:22px}.authbrand h1{margin:10px 0 3px;color:var(--accent)}.authcard{padding:24px}.authcard button{width:100%;margin-top:4px}.publictheme{position:fixed;right:20px;top:16px;color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px;background:var(--surface)}
 .toplogo{display:flex;align-items:center;gap:10px;color:var(--accent);text-decoration:none;font-size:25px;font-weight:800;margin-right:auto}.toplogo img{width:42px;height:42px;border-radius:10px}.menu{display:flex;align-items:center;gap:5px;position:relative;z-index:2}.menu a{display:block;position:relative;color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px}.menu a:hover,.menu a.active{background:var(--accent2);color:var(--accent)}.logout{margin:0;position:relative;z-index:2}.logfilters{display:flex;gap:8px;margin:16px 0}.logfilters a{background:var(--surface);color:var(--text);border:1px solid var(--line)}.logfilters a.active{background:var(--accent);color:#fff;border-color:var(--accent)}@media(max-width:800px){.menu{width:100%;overflow-x:auto}.toplogo{width:100%}}
 .barline{grid-template-columns:minmax(0,1.4fr) minmax(80px,3fr) 55px}.barlabel{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eventfilters{grid-template-columns:2fr minmax(130px,1fr) minmax(130px,1fr) minmax(130px,1fr) auto}
 """
 
 
@@ -644,7 +670,7 @@ class Web(BaseHTTPRequestHandler):
         return ("<header class=top><a class=toplogo href=/><img src=/icon.png alt=''><span>UniFi Log Explorer</span></a><nav class=menu>"
                 f"<a class='{'active' if active=='overview' else ''}' href='/'>Vue d’ensemble</a>"
                 f"<a class='{'active' if active=='flows' else ''}' href='/flows'>Traffic Flows</a>"
-                f"<a class='{'active' if active=='logs' else ''}' href='/logs'>Journaux</a>"
+                f"<a class='{'active' if active=='events' else ''}' href='/events'>CEF / Syslog</a>"
                 f"<a href='{html.escape(theme_url)}'>{theme_label}</a>"
                 "</nav>"
                 f"<form class=logout method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form></header>")
@@ -714,7 +740,7 @@ class Web(BaseHTTPRequestHandler):
                        ("Événements CEF", counts.get("cef", 0)), ("Messages Syslog", counts.get("syslog", 0))]
             cards = ""
             for index, (label, value) in enumerate(metrics):
-                target = f"/logs?kind={'cef' if index == 4 else 'syslog'}" if index >= 4 else "/flows?hours=24"
+                target = f"/events?kind={'cef' if index == 4 else 'syslog'}&hours=24" if index >= 4 else "/flows?hours=24"
                 cards += f"<a class='card clickcard' href='{target}'><div class=metric>{value:,}</div><div class=muted>{html.escape(label)}</div></a>"
             raw = self.store.setting("flow_collection_status"); collection = json.loads(raw) if raw else None
             if collection and collection.get("ok"):
@@ -752,7 +778,9 @@ class Web(BaseHTTPRequestHandler):
             query_without_page = dict(raw_query); query_without_page.pop("page", None)
             previous = query_link("/flows", query_without_page, page=result["page"]-1) if result["page"] > 1 else ""
             following = query_link("/flows", query_without_page, page=result["page"]+1) if result["page"] < result["pages"] else ""
-            pager = f"<div class=pager><span>{result['total']:,} résultats · page {result['page']} / {result['pages']}</span><span>{f'<a class=button secondary href={html.escape(previous)}>Précédent</a>' if previous else ''} {f'<a class=button secondary href={html.escape(following)}>Suivant</a>' if following else ''}</span></div>"
+            previous_link = f"<a class='button secondary' href='{html.escape(previous)}'>Précédent</a>" if previous else ""
+            following_link = f"<a class='button secondary' href='{html.escape(following)}'>Suivant</a>" if following else ""
+            pager = f"<div class=pager><span>{result['total']:,} résultats · page {result['page']} / {result['pages']}</span><span>{previous_link} {following_link}</span></div>"
             body = self.nav("flows", session) + "<h1>Traffic Flows</h1><p class=muted>Recherchez et inspectez les connexions archivées.</p>" + filters + f"<section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Source</th><th></th><th>Destination</th><th>Service</th><th>Action</th><th></th></tr></thead><tbody>{table}</tbody></table></div>{pager}</section>"
             return self.send_html(body, title="Traffic Flows · UniFi Log Explorer")
         if path == "/flow":
@@ -769,14 +797,27 @@ class Web(BaseHTTPRequestHandler):
             body = self.nav("flows", session) + "<p><a class='button secondary' href=/flows>← Retour aux flows</a></p>" + f"<section class=card>{route}</section><div class=details><section class=card><h2>Résumé</h2>{summary}</section><section class=card><h2>Source</h2>{endpoint(source)}</section><section class=card><h2>Destination</h2>{endpoint(destination)}</section></div><section class=card><h2>Données UniFi complètes</h2><pre>{html.escape(json.dumps(detail,indent=2,ensure_ascii=False))}</pre></section>"
             return self.send_html(body, title="Détail du flow · UniFi Log Explorer")
         if path == "/logs":
-            kind = parse_qs(parsed.query).get("kind", [""])[0]
-            if kind not in ("cef", "syslog"): kind = ""
-            records = self.store.recent_records(kind)
-            rows = "".join(f"<tr><td>{time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(r['received_at']))}</td><td><span class=pill>{html.escape(r['kind'])}</span></td><td>{html.escape(r['source_ip'])}</td><td class=wrap>{html.escape(r['summary'])}</td></tr>" for r in records)
-            rows = rows or "<tr><td class=empty colspan=4>Aucun événement pour ce filtre.</td></tr>"
-            tabs = "<div class=logfilters>" + "".join(f"<a class='button {'active' if kind == value else ''}' href='{url}'>" + label + "</a>" for value,url,label in (("","/logs","Tous"),("cef","/logs?kind=cef","CEF"),("syslog","/logs?kind=syslog","Syslog"))) + "</div>"
-            body = self.nav("logs", session) + "<h1>Journaux</h1><p class=muted>Les 100 derniers événements Syslog et CEF.</p>" + tabs + "<section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Type</th><th>Émetteur</th><th>Résumé</th></tr></thead><tbody>" + rows + "</tbody></table></div></section><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p>"
-            return self.send_html(body, title="Journaux · UniFi Log Explorer")
+            target = "/events" + ("?" + parsed.query if parsed.query else "")
+            return self.redirect(target)
+        if path == "/events":
+            raw_query = {key: values[0] for key, values in parse_qs(parsed.query).items()}
+            result = self.store.query_events(raw_query, raw_query.get("page", 1), raw_query.get("size", 50))
+            def event_val(name): return html.escape(str(raw_query.get(name, "")), quote=True)
+            types = "".join(f"<option value='{value}' {'selected' if result['kind']==value else ''}>{label}</option>" for value,label in (("","Tous"),("cef","CEF"),("syslog","Syslog")))
+            periods = "".join(f"<option value={value} {'selected' if result['hours']==value else ''}>{label}</option>" for value,label in ((1,"1 heure"),(6,"6 heures"),(24,"24 heures"),(72,"3 jours"),(168,"7 jours"),(720,"30 jours")))
+            filters = ("<form class='filters eventfilters' method=get><label>Recherche<input name=q value='"+event_val("q")+"' placeholder='Message, application, événement…'></label>"
+                       "<label>Type<select name=kind>"+types+"</select></label><label>Source<input name=source value='"+event_val("source")+"' placeholder='Adresse IP'></label>"
+                       "<label>Période<select name=hours>"+periods+"</select></label><button>Filtrer</button></form>")
+            rows = "".join(f"<tr><td>{time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(r['received_at']))}</td><td><span class=pill>{html.escape(r['kind'])}</span></td><td>{html.escape(r['source_ip'])}</td><td class=wrap>{html.escape(r['summary'])}</td></tr>" for r in result["rows"])
+            rows = rows or "<tr><td class=empty colspan=4>Aucun événement ne correspond à ces filtres.</td></tr>"
+            query_without_page = dict(raw_query); query_without_page.pop("page", None)
+            previous = query_link("/events", query_without_page, page=result["page"]-1) if result["page"] > 1 else ""
+            following = query_link("/events", query_without_page, page=result["page"]+1) if result["page"] < result["pages"] else ""
+            previous_link = f"<a class='button secondary' href='{html.escape(previous)}'>Précédent</a>" if previous else ""
+            following_link = f"<a class='button secondary' href='{html.escape(following)}'>Suivant</a>" if following else ""
+            pager = f"<div class=pager><span>{result['total']:,} événements · page {result['page']} / {result['pages']}</span><span>{previous_link} {following_link}</span></div>"
+            body = self.nav("events", session) + "<h1>CEF / Syslog</h1><p class=muted>Recherchez dans les événements transmis par vos équipements UniFi.</p>" + filters + "<section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Type</th><th>Émetteur</th><th>Résumé</th></tr></thead><tbody>" + rows + "</tbody></table></div>" + pager + "</section><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p>"
+            return self.send_html(body, title="CEF / Syslog · UniFi Log Explorer")
         return self.send_error(404)
 
     def do_POST(self):

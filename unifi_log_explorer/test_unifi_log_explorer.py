@@ -143,7 +143,9 @@ class ParserTests(unittest.TestCase):
                 store.set_setting("admin_hash", "configured"); store.add_flows([flow])
                 store.add("cef", "192.168.1.1", "CEF only", {"name": "CEF only"})
                 store.add("syslog", "192.168.1.1", "Syslog only", {"message": "Syslog only"})
-                for path in ("/", "/flows", "/logs", "/logs?kind=cef", "/flow?id=render-me"):
+                for number in range(10):
+                    store.add("syslog", "192.168.1.20", f"Routine {number}", {"message": f"Routine {number}"})
+                for path in ("/", "/flows", "/events?size=10", "/events?kind=cef", "/flow?id=render-me"):
                     handler = ule.Web.__new__(ule.Web); handler.path = path; handler.headers = {}; handler.store = store
                     handler.session = lambda: {"csrf": "token"}
                     rendered = []
@@ -155,10 +157,16 @@ class ParserTests(unittest.TestCase):
                     parser = LinkParser(); parser.feed(rendered[0])
                     self.assertIn("/", parser.links)
                     self.assertIn("/flows", parser.links)
-                    self.assertIn("/logs", parser.links)
-                    if path == "/logs?kind=cef":
+                    self.assertIn("/events", parser.links)
+                    if path == "/events?size=10":
+                        self.assertTrue(any(link and link.startswith("/events?") and "page=2" in link for link in parser.links))
+                    if path == "/events?kind=cef":
                         self.assertIn("CEF only", rendered[0])
                         self.assertNotIn("Syslog only", rendered[0])
+
+                result = store.query_events({"kind": "syslog", "q": "Syslog only", "hours": 24}, page=1, page_size=10)
+                self.assertEqual(result["total"], 1)
+                self.assertEqual(result["rows"][0]["kind"], "syslog")
 
     def test_login_has_logo_and_public_theme_switch(self):
         handler = ule.Web.__new__(ule.Web); handler.path = "/login"; handler.headers = {}
