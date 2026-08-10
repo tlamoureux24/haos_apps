@@ -639,6 +639,54 @@ LOGIN_WINDOW_SECONDS = 5 * 60
 LOGIN_BLOCK_SECONDS = 15 * 60
 LOGIN_MAX_FAILURES = 5
 
+EN = {
+    "Vue d’ensemble": "Overview", "Traffic Flows": "Traffic Flows", "CEF / Syslog": "CEF / Syslog", "Paramètres": "Settings",
+    "Déconnexion": "Sign out", "Mode clair": "Light mode", "Mode sombre": "Dark mode",
+    "Créer le compte administrateur": "Create the administrator account", "Connexion à votre espace local": "Sign in to your local workspace",
+    "Nom d’utilisateur": "Username", "Utilisateur": "Username", "Mot de passe": "Password", "Confirmation": "Confirmation",
+    "Créer le compte": "Create account", "Connexion": "Sign in", "Activité réseau des dernières 24 heures": "Network activity over the last 24 hours",
+    "Flows sur 24 h": "Flows over 24 h", "Sources actives": "Active sources", "Destinations": "Destinations", "Flows archivés": "Archived flows",
+    "Événements CEF": "CEF events", "Messages Syslog": "Syslog messages", "Principaux clients": "Top clients", "Services": "Services",
+    "Actions": "Actions", "Activité horaire": "Hourly activity", "Collecte opérationnelle": "Collection operational",
+    "Collecte en attente": "Collection pending", "Collecte opérationnelle": "Collection operational",
+    "Recherchez et inspectez les connexions archivées.": "Search and inspect archived connections.",
+    "Recherche": "Search", "Source": "Source", "Destination": "Destination", "Service": "Service", "Direction": "Direction",
+    "Période": "Period", "Filtrer": "Filter", "Toutes": "All", "Sortant": "Outgoing", "Entrant": "Incoming",
+    "1 heure": "1 hour", "6 heures": "6 hours", "24 heures": "24 hours", "3 jours": "3 days", "7 jours": "7 days", "30 jours": "30 days",
+    "Exporter les résultats CSV": "Export filtered CSV", "Date": "Date", "Action": "Action", "Détails": "Details",
+    "Précédent": "Previous", "Suivant": "Next", "Aucun flow ne correspond à ces filtres.": "No flow matches these filters.",
+    "Retour aux flows": "Back to flows", "Résumé": "Summary", "Début": "Start", "Fin": "End", "Durée": "Duration",
+    "Protocole": "Protocol", "Risque": "Risk", "Nom": "Name", "Adresse IP": "IP address", "Port": "Port", "Région": "Region", "Zone": "Zone",
+    "Données UniFi complètes": "Complete UniFi data", "Recherchez dans les événements transmis par vos équipements UniFi.": "Search events forwarded by your UniFi devices.",
+    "Type": "Type", "Émetteur": "Sender", "Aucun événement ne correspond à ces filtres.": "No event matches these filters.",
+    "Retour aux événements": "Back to events", "Événement": "Event", "Données complètes": "Complete data",
+    "Outils et état de la configuration locale.": "Tools and local configuration status.", "État et stockage": "Status and storage",
+    "Base SQLite": "SQLite database", "Événements": "Events", "Prochaine réconciliation": "Next reconciliation",
+    "Sécurité du compte": "Account security", "Mot de passe actuel": "Current password", "Nouveau mot de passe": "New password",
+    "Modifier le mot de passe": "Change password", "Toutes les sessions seront déconnectées.": "All sessions will be signed out.",
+    "Apparence": "Appearance", "Le choix est mémorisé uniquement dans ce navigateur.": "The choice is stored only in this browser.",
+    "Langue": "Language", "Français": "French", "Anglais": "English", "API UniFi": "UniFi API", "Tester la connexion": "Test connection",
+    "Aucun test effectué.": "No test performed.", "Diagnostic": "Diagnostics", "Exporter le diagnostic JSON": "Export diagnostic JSON",
+    "Configuration": "Configuration", "Sources autorisées": "Allowed sources", "Rétention": "Retention", "Limite": "Limit",
+    "Collecte des flows": "Flow collection", "Fréquence": "Frequency", "Site": "Site", "Vérification TLS": "TLS verification",
+    "Activée": "Enabled", "Désactivée": "Disabled", "Maintenance des données": "Data maintenance", "Données à supprimer": "Data to delete",
+    "Événements CEF / Syslog": "CEF / Syslog events", "Saisissez PURGER pour confirmer": "Enter PURGE to confirm",
+    "Supprimer les données": "Delete data", "Opérationnelle": "Operational", "En retard": "Delayed", "Aucun cycle enregistré.": "No recorded cycle.",
+    "Lecture seule · les modifications s’effectuent dans les options de l’App Home Assistant.": "Read-only · make changes in the Home Assistant App options.",
+    "Le test lit au maximum un flow récent et ne le conserve pas. La clé API n’est jamais affichée.": "The test reads at most one recent flow and does not retain it. The API key is never displayed.",
+    "L’export contient les compteurs et événements CEF/Syslog, sans les Traffic Flows ni la clé API.": "The export contains counters and CEF/Syslog events, without Traffic Flows or the API key.",
+    "Cette suppression est définitive et ne modifie pas les options de collecte.": "This deletion is permanent and does not change collection options.",
+    "Outils et état de la configuration locale.": "Tools and local configuration status.",
+    "Aucune donnée n’a été supprimée.": "No data was deleted.", "Retour": "Back",
+    "Détail du flow": "Flow details", "Détail de l’événement": "Event details",
+    "Configuration refusée": "Setup rejected", "Connexion temporairement bloquée": "Sign-in temporarily blocked",
+    "Connexion refusée": "Sign-in rejected", "Modification refusée": "Change rejected", "Purge refusée": "Purge rejected",
+    "Identifiants incorrects.": "Incorrect credentials.", "Réessayer": "Try again",
+    "Le mot de passe actuel est incorrect.": "The current password is incorrect.",
+    "Le nouveau mot de passe doit comporter au moins 12 caractères, être confirmé et être différent.": "The new password must be at least 12 characters long, confirmed, and different.",
+    "Confirmation incorrecte. Aucune donnée n’a été supprimée.": "Incorrect confirmation. No data was deleted.",
+}
+
 
 def login_block_remaining(address, now=None):
     now = now or time.time()
@@ -695,10 +743,11 @@ def fmt_ms(value):
     return time.strftime("%d/%m/%Y %H:%M:%S", time.localtime(value / 1000))
 
 
-def fmt_bytes(value):
+def fmt_bytes(value, language="fr"):
     size = float(value or 0)
-    for unit in ("o", "Kio", "Mio", "Gio"):
-        if size < 1024 or unit == "Gio": return f"{size:.1f} {unit}"
+    units = ("B", "KiB", "MiB", "GiB") if language == "en" else ("o", "Kio", "Mio", "Gio")
+    for unit in units:
+        if size < 1024 or unit == units[-1]: return f"{size:.1f} {unit}"
         size /= 1024
 
 
@@ -732,8 +781,29 @@ class Web(BaseHTTPRequestHandler):
         jar = cookies.SimpleCookie(self.headers.get("Cookie", ""))
         return "dark" if jar.get("ule_theme") and jar["ule_theme"].value == "dark" else "light"
 
+    def language(self):
+        jar = cookies.SimpleCookie(self.headers.get("Cookie", ""))
+        if jar.get("ule_language") and jar["ule_language"].value in ("fr", "en"):
+            return jar["ule_language"].value
+        preferred = self.headers.get("Accept-Language", "").lower()
+        for item in preferred.split(","):
+            code = item.split(";", 1)[0].strip()
+            if code.startswith("en"): return "en"
+            if code.startswith("fr"): return "fr"
+        return "fr"
+
+    def t(self, value):
+        return EN.get(value, value) if self.language() == "en" else value
+
+    def localize_markup(self, markup):
+        if self.language() != "en": return markup
+        for french, english in EN.items():
+            markup = markup.replace(f">{french}<", f">{english}<")
+        return markup
+
     def send_html(self, body, status=200, headers=None, title="UniFi Log Explorer"):
-        raw = (f"<!doctype html><html lang=fr data-theme='{self.theme()}'><head><meta charset=utf-8>"
+        body = self.localize_markup(body); title = self.t(title)
+        raw = (f"<!doctype html><html lang='{self.language()}' data-theme='{self.theme()}'><head><meta charset=utf-8>"
                f"<meta name=viewport content='width=device-width,initial-scale=1'><title>{html.escape(title)}</title>"
                "<link rel=icon type=image/png href=/favicon.png>"
                f"<style>{STYLE}</style></head><body><main>{body}</main></body></html>").encode()
@@ -764,21 +834,24 @@ class Web(BaseHTTPRequestHandler):
 
     def auth_page(self, content, title):
         opposite = "dark" if self.theme() == "light" else "light"
-        label = "☾ Mode sombre" if opposite == "dark" else "☀ Mode clair"
+        label = "☾ " + self.t("Mode sombre") if opposite == "dark" else "☀ " + self.t("Mode clair")
         theme_url = "/theme?" + urllib.parse.urlencode({"value": opposite, "next": self.path})
-        return (f"<a class=publictheme href='{html.escape(theme_url)}'>{label}</a><div class=authwrap><div class=authbox>"
+        other_language = "en" if self.language() == "fr" else "fr"
+        language_label = "English" if other_language == "en" else "Français"
+        language_url = "/language?" + urllib.parse.urlencode({"value": other_language, "next": self.path})
+        return (f"<div class=publictheme><a class=linkbtn href='{html.escape(language_url)}'>{language_label}</a><a class=linkbtn href='{html.escape(theme_url)}'>{label}</a></div><div class=authwrap><div class=authbox>"
                 "<div class=authbrand><img src=/logo.png alt='Logo UniFi Log Explorer'><h1>UniFi Log Explorer</h1>"
-                f"<div class=muted>{html.escape(title)}</div></div><section class='card authcard'>{content}</section></div></div>")
+                f"<div class=muted>{html.escape(self.t(title))}</div></div><section class='card authcard'>{content}</section></div></div>")
 
     def nav(self, active, session):
         csrf = html.escape(session["csrf"])
         return ("<header class=top><a class=toplogo href=/><img src=/icon.png alt=''><span>UniFi Log Explorer</span></a><nav class=menu>"
-                f"<a class='{'active' if active=='overview' else ''}' href='/'>Vue d’ensemble</a>"
+                f"<a class='{'active' if active=='overview' else ''}' href='/'>{self.t('Vue d’ensemble')}</a>"
                 f"<a class='{'active' if active=='flows' else ''}' href='/flows'>Traffic Flows</a>"
                 f"<a class='{'active' if active=='events' else ''}' href='/events'>CEF / Syslog</a>"
-                f"<a class='{'active' if active=='settings' else ''}' href='/settings'>Paramètres</a>"
+                f"<a class='{'active' if active=='settings' else ''}' href='/settings'>{self.t('Paramètres')}</a>"
                 "</nav>"
-                f"<form class=logout method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form></header>")
+                f"<form class=logout method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>{self.t('Déconnexion')}</button></form></header>")
 
     @staticmethod
     def bars(title, rows, filter_name=None):
@@ -794,11 +867,10 @@ class Web(BaseHTTPRequestHandler):
             else: lines += f"<div class=barline>{inner}</div>"
         return f"<section class=card><h2>{html.escape(title)}</h2><div class=bars>{lines}</div></section>"
 
-    @staticmethod
-    def timeline_chart(points):
+    def timeline_chart(self, points):
         maximum = max([max(point["flows"], point["events"]) for point in points] or [1]) or 1
-        columns = "".join(f"<span class=chartcol title='{time.strftime('%H:%M',time.localtime(point['time']))} · {point['flows']} flows · {point['events']} événements'><i class=chartbar style='height:{max(2,point['flows']*100/maximum):.1f}%'></i><i class='chartbar events' style='height:{max(2,point['events']*100/maximum):.1f}%'></i></span>" for point in points)
-        return "<section class=card><h2>Activité horaire</h2><div class=chart>" + columns + "</div><div class=legend><span><i></i>Traffic Flows</span><span><i class=events></i>CEF / Syslog</span></div></section>"
+        columns = "".join(f"<span class=chartcol title='{time.strftime('%H:%M',time.localtime(point['time']))} · {point['flows']} flows · {point['events']} {self.t('Événements').lower()}'><i class=chartbar style='height:{max(2,point['flows']*100/maximum):.1f}%'></i><i class='chartbar events' style='height:{max(2,point['events']*100/maximum):.1f}%'></i></span>" for point in points)
+        return f"<section class=card><h2>{self.t('Activité horaire')}</h2><div class=chart>" + columns + "</div><div class=legend><span><i></i>Traffic Flows</span><span><i class=events></i>CEF / Syslog</span></div></section>"
 
     def form(self):
         length = min(int(self.headers.get("Content-Length", "0")), 8192)
@@ -832,12 +904,18 @@ class Web(BaseHTTPRequestHandler):
             target = query.get("next", ["/"])[0]
             if not target.startswith("/") or target.startswith("//"): target = "/"
             return self.redirect(target, f"ule_theme={value}; Path=/; Max-Age=31536000; SameSite=Strict")
+        if path == "/language":
+            query = parse_qs(parsed.query); value = query.get("value", ["fr"])[0]
+            value = "en" if value == "en" else "fr"
+            target = query.get("next", ["/"])[0]
+            if not target.startswith("/") or target.startswith("//"): target = "/"
+            return self.redirect(target, f"ule_language={value}; Path=/; Max-Age=31536000; SameSite=Strict")
         if not self.store.setting("admin_hash"):
-            form = "<form method=post action=/setup><label>Nom d’utilisateur<input name=username required minlength=3 maxlength=64 autocomplete=username></label><label>Mot de passe<input type=password name=password required minlength=12 autocomplete=new-password></label><label>Confirmation<input type=password name=confirm required minlength=12 autocomplete=new-password></label><button>Créer le compte</button></form>"
+            form = f"<form method=post action=/setup><label>{self.t('Nom d’utilisateur')}<input name=username required minlength=3 maxlength=64 autocomplete=username></label><label>{self.t('Mot de passe')}<input type=password name=password required minlength=12 autocomplete=new-password></label><label>{self.t('Confirmation')}<input type=password name=confirm required minlength=12 autocomplete=new-password></label><button>{self.t('Créer le compte')}</button></form>"
             return self.send_html(self.auth_page(form, "Créer le compte administrateur"))
         session = self.session()
         if path == "/login":
-            form = "<form method=post action=/login><label>Utilisateur<input name=username autocomplete=username required autofocus></label><label>Mot de passe<input type=password name=password autocomplete=current-password required></label><button>Connexion</button></form>"
+            form = f"<form method=post action=/login><label>{self.t('Utilisateur')}<input name=username autocomplete=username required autofocus></label><label>{self.t('Mot de passe')}<input type=password name=password autocomplete=current-password required></label><button>{self.t('Connexion')}</button></form>"
             return self.send_html(self.auth_page(form, "Connexion à votre espace local"))
         if not session: return self.redirect("/login")
         if path == "/export.json":
@@ -859,36 +937,39 @@ class Web(BaseHTTPRequestHandler):
         if path == "/":
             data = self.store.dashboard(); flow = self.store.flow_overview(24)
             counts = data["counts"]; counters = data["counters"]
-            metrics = [("Flows sur 24 h", flow["count"]), ("Sources actives", flow["sources"]),
-                       ("Destinations", flow["destinations"]), ("Flows archivés", data["flow_stats"].get("count", 0)),
-                       ("Événements CEF", counts.get("cef", 0)), ("Messages Syslog", counts.get("syslog", 0))]
+            metrics = [(self.t("Flows sur 24 h"), flow["count"]), (self.t("Sources actives"), flow["sources"]),
+                       (self.t("Destinations"), flow["destinations"]), (self.t("Flows archivés"), data["flow_stats"].get("count", 0)),
+                       (self.t("Événements CEF"), counts.get("cef", 0)), (self.t("Messages Syslog"), counts.get("syslog", 0))]
             cards = ""
             for index, (label, value) in enumerate(metrics):
                 target = f"/events?kind={'cef' if index == 4 else 'syslog'}&hours=24" if index >= 4 else "/flows?hours=24"
                 cards += f"<a class='card clickcard' href='{target}'><div class=metric>{value:,}</div><div class=muted>{html.escape(label)}</div></a>"
             raw = self.store.setting("flow_collection_status"); collection = json.loads(raw) if raw else None
             if collection and collection.get("ok"):
-                state = (f"<span class=good>● Collecte opérationnelle</span> · dernier cycle : "
-                         f"{collection.get('inserted')} nouveaux / {collection.get('fetched')} lus / "
-                         f"{collection.get('pages')} pages · {html.escape(collection.get('strategy',''))}")
-            elif collection: state = f"<span class=bad>● Échec : {html.escape(str(collection.get('error')))}</span>"
-            else: state = "<span class=muted>Collecte en attente</span>"
-            body = (self.nav("overview", session) + "<div class=overviewhead><div><h1>Vue d’ensemble</h1><p class=muted>Activité réseau des dernières 24 heures</p></div>"
+                if self.language() == "en":
+                    state = (f"<span class=good>● Collection operational</span> · last cycle: "
+                             f"{collection.get('inserted')} new / {collection.get('fetched')} read / {collection.get('pages')} pages · {html.escape(collection.get('strategy',''))}")
+                else:
+                    state = (f"<span class=good>● Collecte opérationnelle</span> · dernier cycle : "
+                             f"{collection.get('inserted')} nouveaux / {collection.get('fetched')} lus / {collection.get('pages')} pages · {html.escape(collection.get('strategy',''))}")
+            elif collection: state = f"<span class=bad>● {'Failure' if self.language()=='en' else 'Échec'} : {html.escape(str(collection.get('error')))}</span>"
+            else: state = f"<span class=muted>{self.t('Collecte en attente')}</span>"
+            body = (self.nav("overview", session) + f"<div class=overviewhead><div><h1>{self.t('Vue d’ensemble')}</h1><p class=muted>{self.t('Activité réseau des dernières 24 heures')}</p></div>"
                     f"<section class='card statuscard'>{state}</section></div><div class=grid>{cards}</div><div class=twocol>"
-                    + self.bars("Principaux clients", flow["sources_top"], "q") + self.bars("Services", flow["services"], "service")
-                    + self.bars("Destinations", flow["destinations_top"], "q") + self.bars("Actions", flow["actions"], "action")
+                    + self.bars(self.t("Principaux clients"), flow["sources_top"], "q") + self.bars(self.t("Services"), flow["services"], "service")
+                    + self.bars(self.t("Destinations"), flow["destinations_top"], "q") + self.bars(self.t("Actions"), flow["actions"], "action")
                     + "</div>" + self.timeline_chart(self.store.timeline()))
             return self.send_html(body, title="Vue d’ensemble · UniFi Log Explorer")
         if path == "/flows":
             raw_query = {key: values[0] for key, values in parse_qs(parsed.query).items()}
             result = self.store.query_flows(raw_query, raw_query.get("page", 1), raw_query.get("size", 50))
             def val(name): return html.escape(str(raw_query.get(name, "")), quote=True)
-            options = "".join(f"<option value={n} {'selected' if result['hours']==n else ''}>{label}</option>" for n,label in ((1,"1 heure"),(6,"6 heures"),(24,"24 heures"),(72,"3 jours"),(168,"7 jours"),(720,"30 jours")))
-            directions = "".join(f"<option value='{v}' {'selected' if raw_query.get('direction')==v else ''}>{label}</option>" for v,label in (("","Toutes"),("outgoing","Sortant"),("incoming","Entrant")))
-            filters = ("<form class=filters method=get><label>Recherche<input name=q value='"+val("q")+"' placeholder='IP, client, domaine…'></label>"
-                       "<label>Source<input name=source value='"+val("source")+"'></label><label>Destination<input name=destination value='"+val("destination")+"'></label>"
-                       "<label>Service<input name=service value='"+val("service")+"'></label><label>Direction<select name=direction>"+directions+"</select></label>"
-                       "<label>Période<select name=hours>"+options+"</select></label><button>Filtrer</button></form>")
+            options = "".join(f"<option value={n} {'selected' if result['hours']==n else ''}>{self.t(label)}</option>" for n,label in ((1,"1 heure"),(6,"6 heures"),(24,"24 heures"),(72,"3 jours"),(168,"7 jours"),(720,"30 jours")))
+            directions = "".join(f"<option value='{v}' {'selected' if raw_query.get('direction')==v else ''}>{self.t(label)}</option>" for v,label in (("","Toutes"),("outgoing","Sortant"),("incoming","Entrant")))
+            filters = (f"<form class=filters method=get><label>{self.t('Recherche')}<input name=q value='"+val("q")+"' placeholder='IP, client, domain…'></label>"
+                       f"<label>{self.t('Source')}<input name=source value='"+val("source")+f"'></label><label>{self.t('Destination')}<input name=destination value='"+val("destination")+"'></label>"
+                       f"<label>{self.t('Service')}<input name=service value='"+val("service")+f"'></label><label>{self.t('Direction')}<select name=direction>"+directions+"</select></label>"
+                       f"<label>{self.t('Période')}<select name=hours>"+options+f"</select></label><button>{self.t('Filtrer')}</button></form>")
             rows = []
             for row in result["rows"]:
                 detail = row["detail"] if isinstance(row["detail"], dict) else {}
@@ -897,16 +978,17 @@ class Web(BaseHTTPRequestHandler):
                 direction = "→" if detail.get("direction") == "outgoing" else "←" if detail.get("direction") == "incoming" else "↔"
                 rows.append(f"<tr><td>{fmt_ms(row['flow_end_time'])}</td><td class=wrap><b>{html.escape(party_label(detail,'source'))}</b><br><span class=muted>{html.escape(str(source.get('ip') or row['source_ip'] or '—'))}</span></td>"
                     f"<td class=arrow>{direction}</td><td class=wrap><b>{html.escape(party_label(detail,'destination'))}</b><br><span class=muted>{html.escape(str(destination.get('ip') or row['destination_ip'] or '—'))}</span></td>"
-                    f"<td>{html.escape(str(row['service'] or detail.get('protocol') or '—'))}</td><td><span class=pill>{html.escape(str(row['action'] or '—'))}</span></td><td><a class=button href='/flow?id={urllib.parse.quote(row['id'])}'>Détails</a></td></tr>")
-            table = "".join(rows) or "<tr><td class=empty colspan=7>Aucun flow ne correspond à ces filtres.</td></tr>"
+                    f"<td>{html.escape(str(row['service'] or detail.get('protocol') or '—'))}</td><td><span class=pill>{html.escape(str(row['action'] or '—'))}</span></td><td><a class=button href='/flow?id={urllib.parse.quote(row['id'])}'>{self.t('Détails')}</a></td></tr>")
+            table = "".join(rows) or f"<tr><td class=empty colspan=7>{self.t('Aucun flow ne correspond à ces filtres.')}</td></tr>"
             query_without_page = dict(raw_query); query_without_page.pop("page", None)
             previous = query_link("/flows", query_without_page, page=result["page"]-1) if result["page"] > 1 else ""
             following = query_link("/flows", query_without_page, page=result["page"]+1) if result["page"] < result["pages"] else ""
-            previous_link = f"<a class='button secondary' href='{html.escape(previous)}'>Précédent</a>" if previous else ""
-            following_link = f"<a class='button secondary' href='{html.escape(following)}'>Suivant</a>" if following else ""
-            pager = f"<div class=pager><span>{result['total']:,} résultats · page {result['page']} / {result['pages']}</span><span>{previous_link} {following_link}</span></div>"
+            previous_link = f"<a class='button secondary' href='{html.escape(previous)}'>{self.t('Précédent')}</a>" if previous else ""
+            following_link = f"<a class='button secondary' href='{html.escape(following)}'>{self.t('Suivant')}</a>" if following else ""
+            count_label = "results · page" if self.language()=="en" else "résultats · page"
+            pager = f"<div class=pager><span>{result['total']:,} {count_label} {result['page']} / {result['pages']}</span><span>{previous_link} {following_link}</span></div>"
             export_url = "/flows.csv?" + urllib.parse.urlencode({k:v for k,v in raw_query.items() if k != "page"})
-            body = self.nav("flows", session) + "<h1>Traffic Flows</h1><p class=muted>Recherchez et inspectez les connexions archivées.</p>" + filters + f"<p><a class='button secondary' href='{html.escape(export_url)}'>Exporter les résultats CSV</a></p><section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Source</th><th></th><th>Destination</th><th>Service</th><th>Action</th><th></th></tr></thead><tbody>{table}</tbody></table></div>{pager}</section>"
+            body = self.nav("flows", session) + f"<h1>Traffic Flows</h1><p class=muted>{self.t('Recherchez et inspectez les connexions archivées.')}</p>" + filters + f"<p><a class='button secondary' href='{html.escape(export_url)}'>{self.t('Exporter les résultats CSV')}</a></p><section class=card><div class=tablewrap><table><thead><tr><th>{self.t('Date')}</th><th>{self.t('Source')}</th><th></th><th>{self.t('Destination')}</th><th>{self.t('Service')}</th><th>{self.t('Action')}</th><th></th></tr></thead><tbody>{table}</tbody></table></div>{pager}</section>"
             return self.send_html(body, title="Traffic Flows · UniFi Log Explorer")
         if path == "/flow":
             flow_id = parse_qs(parsed.query).get("id", [""])[0]; row = self.store.flow_by_id(flow_id)
@@ -919,8 +1001,8 @@ class Web(BaseHTTPRequestHandler):
             duration = max(0, row["flow_end_time"] - row["flow_start_time"])
             route = f"<div class=route><b>{html.escape(party_label(detail,'source'))}</b><span class=arrow>→</span><b>{html.escape(party_label(detail,'destination'))}</b></div>"
             summary = f"<dl class=kv><dt>Début</dt><dd>{fmt_ms(row['flow_start_time'])}</dd><dt>Fin</dt><dd>{fmt_ms(row['flow_end_time'])}</dd><dt>Durée</dt><dd>{duration/1000:.1f} s</dd><dt>Service</dt><dd>{html.escape(str(row['service'] or '—'))}</dd><dt>Protocole</dt><dd>{html.escape(str(detail.get('protocol') or '—'))}</dd><dt>Action</dt><dd>{html.escape(str(row['action'] or '—'))}</dd><dt>Risque</dt><dd>{html.escape(str(detail.get('risk') or '—'))}</dd></dl>"
-            body = self.nav("flows", session) + "<p><a class='button secondary' href=/flows>← Retour aux flows</a></p>" + f"<section class=card>{route}</section><div class=details><section class=card><h2>Résumé</h2>{summary}</section><section class=card><h2>Source</h2>{endpoint(source)}</section><section class=card><h2>Destination</h2>{endpoint(destination)}</section></div><section class=card><h2>Données UniFi complètes</h2><pre>{html.escape(json.dumps(detail,indent=2,ensure_ascii=False))}</pre></section>"
-            return self.send_html(body, title="Détail du flow · UniFi Log Explorer")
+            body = self.nav("flows", session) + f"<p><a class='button secondary' href=/flows>← {self.t('Retour aux flows')}</a></p>" + f"<section class=card>{route}</section><div class=details><section class=card><h2>{self.t('Résumé')}</h2>{summary}</section><section class=card><h2>{self.t('Source')}</h2>{endpoint(source)}</section><section class=card><h2>{self.t('Destination')}</h2>{endpoint(destination)}</section></div><section class=card><h2>{self.t('Données UniFi complètes')}</h2><pre>{html.escape(json.dumps(detail,indent=2,ensure_ascii=False))}</pre></section>"
+            return self.send_html(body, title=f"{self.t('Détail du flow')} · UniFi Log Explorer")
         if path == "/logs":
             target = "/events" + ("?" + parsed.query if parsed.query else "")
             return self.redirect(target)
@@ -928,21 +1010,22 @@ class Web(BaseHTTPRequestHandler):
             raw_query = {key: values[0] for key, values in parse_qs(parsed.query).items()}
             result = self.store.query_events(raw_query, raw_query.get("page", 1), raw_query.get("size", 50))
             def event_val(name): return html.escape(str(raw_query.get(name, "")), quote=True)
-            types = "".join(f"<option value='{value}' {'selected' if result['kind']==value else ''}>{label}</option>" for value,label in (("","Tous"),("cef","CEF"),("syslog","Syslog")))
-            periods = "".join(f"<option value={value} {'selected' if result['hours']==value else ''}>{label}</option>" for value,label in ((1,"1 heure"),(6,"6 heures"),(24,"24 heures"),(72,"3 jours"),(168,"7 jours"),(720,"30 jours")))
-            filters = ("<form class='filters eventfilters' method=get><label>Recherche<input name=q value='"+event_val("q")+"' placeholder='Message, application, événement…'></label>"
-                       "<label>Type<select name=kind>"+types+"</select></label><label>Source<input name=source value='"+event_val("source")+"' placeholder='Adresse IP'></label>"
-                       "<label>Période<select name=hours>"+periods+"</select></label><button>Filtrer</button></form>")
-            rows = "".join(f"<tr><td>{time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(r['received_at']))}</td><td><span class=pill>{html.escape(r['kind'])}</span></td><td>{html.escape(r['source_ip'])}</td><td class=wrap>{html.escape(r['summary'])}</td><td><a class=button href='/event?id={r['id']}'>Détails</a></td></tr>" for r in result["rows"])
-            rows = rows or "<tr><td class=empty colspan=5>Aucun événement ne correspond à ces filtres.</td></tr>"
+            types = "".join(f"<option value='{value}' {'selected' if result['kind']==value else ''}>{self.t(label)}</option>" for value,label in (("","Toutes"),("cef","CEF"),("syslog","Syslog")))
+            periods = "".join(f"<option value={value} {'selected' if result['hours']==value else ''}>{self.t(label)}</option>" for value,label in ((1,"1 heure"),(6,"6 heures"),(24,"24 heures"),(72,"3 jours"),(168,"7 jours"),(720,"30 jours")))
+            filters = (f"<form class='filters eventfilters' method=get><label>{self.t('Recherche')}<input name=q value='"+event_val("q")+"' placeholder='Message, application, event…'></label>"
+                       f"<label>{self.t('Type')}<select name=kind>"+types+f"</select></label><label>{self.t('Source')}<input name=source value='"+event_val("source")+"' placeholder='IP address'></label>"
+                       f"<label>{self.t('Période')}<select name=hours>"+periods+f"</select></label><button>{self.t('Filtrer')}</button></form>")
+            rows = "".join(f"<tr><td>{time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(r['received_at']))}</td><td><span class=pill>{html.escape(r['kind'])}</span></td><td>{html.escape(r['source_ip'])}</td><td class=wrap>{html.escape(r['summary'])}</td><td><a class=button href='/event?id={r['id']}'>{self.t('Détails')}</a></td></tr>" for r in result["rows"])
+            rows = rows or f"<tr><td class=empty colspan=5>{self.t('Aucun événement ne correspond à ces filtres.')}</td></tr>"
             query_without_page = dict(raw_query); query_without_page.pop("page", None)
             previous = query_link("/events", query_without_page, page=result["page"]-1) if result["page"] > 1 else ""
             following = query_link("/events", query_without_page, page=result["page"]+1) if result["page"] < result["pages"] else ""
-            previous_link = f"<a class='button secondary' href='{html.escape(previous)}'>Précédent</a>" if previous else ""
-            following_link = f"<a class='button secondary' href='{html.escape(following)}'>Suivant</a>" if following else ""
-            pager = f"<div class=pager><span>{result['total']:,} événements · page {result['page']} / {result['pages']}</span><span>{previous_link} {following_link}</span></div>"
+            previous_link = f"<a class='button secondary' href='{html.escape(previous)}'>{self.t('Précédent')}</a>" if previous else ""
+            following_link = f"<a class='button secondary' href='{html.escape(following)}'>{self.t('Suivant')}</a>" if following else ""
+            count_label = "events · page" if self.language()=="en" else "événements · page"
+            pager = f"<div class=pager><span>{result['total']:,} {count_label} {result['page']} / {result['pages']}</span><span>{previous_link} {following_link}</span></div>"
             export_url = "/events.csv?" + urllib.parse.urlencode({k:v for k,v in raw_query.items() if k != "page"})
-            body = self.nav("events", session) + "<h1>CEF / Syslog</h1><p class=muted>Recherchez dans les événements transmis par vos équipements UniFi.</p>" + filters + f"<p><a class='button secondary' href='{html.escape(export_url)}'>Exporter les résultats CSV</a></p><section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Type</th><th>Émetteur</th><th>Résumé</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>" + pager + "</section>"
+            body = self.nav("events", session) + f"<h1>CEF / Syslog</h1><p class=muted>{self.t('Recherchez dans les événements transmis par vos équipements UniFi.')}</p>" + filters + f"<p><a class='button secondary' href='{html.escape(export_url)}'>{self.t('Exporter les résultats CSV')}</a></p><section class=card><div class=tablewrap><table><thead><tr><th>{self.t('Date')}</th><th>{self.t('Type')}</th><th>{self.t('Émetteur')}</th><th>{self.t('Résumé')}</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>" + pager + "</section>"
             return self.send_html(body, title="CEF / Syslog · UniFi Log Explorer")
         if path == "/event":
             event_id = parse_qs(parsed.query).get("id", [""])[0]; event = self.store.event_by_id(event_id)
@@ -951,8 +1034,8 @@ class Web(BaseHTTPRequestHandler):
             summary = (f"<dl class=kv><dt>Date</dt><dd>{time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(event['received_at']))}</dd>"
                        f"<dt>Type</dt><dd>{html.escape(event['kind'])}</dd><dt>Émetteur</dt><dd>{html.escape(event['source_ip'])}</dd>"
                        f"<dt>Résumé</dt><dd>{html.escape(event['summary'])}</dd></dl>")
-            body = self.nav("events", session) + "<p><a class='button secondary' href=/events>← Retour aux événements</a></p>" + f"<div class=details><section class=card><h2>Événement</h2>{summary}</section><section class=card><h2>Données complètes</h2><pre>{html.escape(json.dumps(detail,indent=2,ensure_ascii=False))}</pre></section></div>"
-            return self.send_html(body, title="Détail de l’événement · UniFi Log Explorer")
+            body = self.nav("events", session) + f"<p><a class='button secondary' href=/events>← {self.t('Retour aux événements')}</a></p>" + f"<div class=details><section class=card><h2>{self.t('Événement')}</h2>{summary}</section><section class=card><h2>{self.t('Données complètes')}</h2><pre>{html.escape(json.dumps(detail,indent=2,ensure_ascii=False))}</pre></section></div>"
+            return self.send_html(body, title=f"{self.t('Détail de l’événement')} · UniFi Log Explorer")
         if path == "/settings":
             csrf = html.escape(session["csrf"]); current_theme = self.theme()
             light_class = "" if current_theme == "light" else " secondary"
@@ -960,13 +1043,22 @@ class Web(BaseHTTPRequestHandler):
             theme = ("<section class=card><h2>Apparence</h2><p class=muted>Le choix est mémorisé uniquement dans ce navigateur.</p><div class=settingactions>"
                      f"<a class='button{light_class}' href='/theme?value=light&amp;next=/settings'>☀ Mode clair</a>"
                      f"<a class='button{dark_class}' href='/theme?value=dark&amp;next=/settings'>☾ Mode sombre</a></div></section>")
+            current_language = self.language()
+            fr_class = "" if current_language == "fr" else " secondary"
+            en_class = "" if current_language == "en" else " secondary"
+            language_card = ("<section class=card><h2>Langue</h2><p class=muted>Le choix est mémorisé uniquement dans ce navigateur.</p><div class=settingactions>"
+                             f"<a class='button{fr_class}' href='/language?value=fr&amp;next=/settings'>Français</a>"
+                             f"<a class='button{en_class}' href='/language?value=en&amp;next=/settings'>English</a></div></section>")
             raw_probe = self.store.setting("flow_probe_result"); probe = json.loads(raw_probe) if raw_probe else None
             if probe and probe.get("ok"):
                 tested = time.strftime("%d/%m/%Y %H:%M:%S", time.localtime(probe.get("tested_at", 0)))
-                probe_state = f"<span class=good>● Connexion réussie</span><br><span class=muted>Dernier test : {tested} · total de la fenêtre : {probe.get('total', '—')}</span>"
+                probe_state = (f"<span class=good>● Connection successful</span><br><span class=muted>Last test: {tested} · window total: {probe.get('total', '—')}</span>" if self.language()=="en" else
+                               f"<span class=good>● Connexion réussie</span><br><span class=muted>Dernier test : {tested} · total de la fenêtre : {probe.get('total', '—')}</span>")
             elif probe:
-                probe_state = f"<span class=bad>● Échec : {html.escape(str(probe.get('error', 'erreur inconnue')))}</span>"
-            else: probe_state = "<span class=muted>Aucun test effectué.</span>"
+                failure = "Failure" if self.language() == "en" else "Échec"
+                unknown = "unknown error" if self.language() == "en" else "erreur inconnue"
+                probe_state = f"<span class=bad>● {failure} : {html.escape(str(probe.get('error', unknown)))}</span>"
+            else: probe_state = f"<span class=muted>{self.t('Aucun test effectué.')}</span>"
             disabled = "disabled" if not self.store.options.get("unifi_api_key") else ""
             api = ("<section class=card><h2>API UniFi</h2><p>" + probe_state + "</p>"
                    f"<form method=post action=/probe><input type=hidden name=csrf value='{csrf}'><button {disabled}>Tester la connexion</button></form>"
@@ -975,29 +1067,37 @@ class Web(BaseHTTPRequestHandler):
                           "<a class=button href=/export.json>Exporter le diagnostic JSON</a></section>")
             options = self.store.options
             sources = ", ".join(html.escape(value) for value in sorted(options.get("allowed_source_ips", []))) or "—"
-            verify = "Activée" if options.get("verify_ssl") else "Désactivée"
-            enabled = "Activée" if options.get("flow_collection_enabled") else "Désactivée"
+            verify = self.t("Activée" if options.get("verify_ssl") else "Désactivée")
+            enabled = self.t("Activée" if options.get("flow_collection_enabled") else "Désactivée")
+            hour_unit = "hours" if self.language() == "en" else "heures"
+            record_unit = "records" if self.language() == "en" else "enregistrements"
+            second_unit = "seconds" if self.language() == "en" else "secondes"
             config = ("<section class=card><h2>Configuration</h2><p class=muted>Lecture seule · les modifications s’effectuent dans les options de l’App Home Assistant.</p><div class=readonly><dl class=kv>"
-                      f"<dt>Sources autorisées</dt><dd>{sources}</dd><dt>Rétention</dt><dd>{options.get('retention_hours', '—')} heures</dd>"
-                      f"<dt>Limite</dt><dd>{options.get('max_records', '—')} enregistrements</dd><dt>Collecte des flows</dt><dd>{enabled}</dd>"
-                      f"<dt>Fréquence</dt><dd>{options.get('flow_poll_interval_seconds', '—')} secondes</dd><dt>URL UniFi</dt><dd>{html.escape(str(options.get('unifi_base_url', '—')))}</dd>"
+                      f"<dt>Sources autorisées</dt><dd>{sources}</dd><dt>Rétention</dt><dd>{options.get('retention_hours', '—')} {hour_unit}</dd>"
+                      f"<dt>Limite</dt><dd>{options.get('max_records', '—')} {record_unit}</dd><dt>Collecte des flows</dt><dd>{enabled}</dd>"
+                      f"<dt>Fréquence</dt><dd>{options.get('flow_poll_interval_seconds', '—')} {second_unit}</dd><dt>URL UniFi</dt><dd>{html.escape(str(options.get('unifi_base_url', '—')))}</dd>"
                       f"<dt>Site</dt><dd>{html.escape(str(options.get('unifi_site_slug', '—')))}</dd><dt>Vérification TLS</dt><dd>{verify}</dd></dl></div></section>")
             operation = self.store.operational_status(); collection = operation["collection"]
             if collection and collection.get("ok"):
                 age = max(0, int(time.time()) - int(collection.get("time", 0)))
                 stale_after = max(600, int(options.get("flow_poll_interval_seconds", 120)) * 3)
-                collection_state = f"<span class={'bad' if age > stale_after else 'good'}>● {'En retard' if age > stale_after else 'Opérationnelle'}</span> · dernier succès il y a {age // 60} min"
-            elif collection: collection_state = f"<span class=bad>● Échec : {html.escape(str(collection.get('error', 'inconnu')))}</span>"
-            else: collection_state = "<span class=muted>Aucun cycle enregistré.</span>"
+                if self.language() == "en": collection_state = f"<span class={'bad' if age > stale_after else 'good'}>● {'Delayed' if age > stale_after else 'Operational'}</span> · last success {age // 60} min ago"
+                else: collection_state = f"<span class={'bad' if age > stale_after else 'good'}>● {'En retard' if age > stale_after else 'Opérationnelle'}</span> · dernier succès il y a {age // 60} min"
+            elif collection:
+                failure = "Failure" if self.language() == "en" else "Échec"
+                unknown = "unknown" if self.language() == "en" else "inconnu"
+                collection_state = f"<span class=bad>● {failure} : {html.escape(str(collection.get('error', unknown)))}</span>"
+            else: collection_state = f"<span class=muted>{self.t('Aucun cycle enregistré.')}</span>"
             reconciliation = operation["last_reconciliation"]
             if reconciliation:
                 next_reconciliation = reconciliation + FlowCollector.RECONCILE_INTERVAL_SECONDS
                 reconciliation_text = time.strftime("%d/%m/%Y %H:%M:%S", time.localtime(next_reconciliation))
             else: reconciliation_text = "—"
             monitoring = ("<section class=card><h2>État et stockage</h2><p class=statusnote>" + collection_state + "</p><dl class=kv>"
-                          f"<dt>Base SQLite</dt><dd>{fmt_bytes(operation['database_bytes'])}</dd><dt>Traffic Flows</dt><dd>{operation['flows']['count']:,}</dd>"
+                          f"<dt>Base SQLite</dt><dd>{fmt_bytes(operation['database_bytes'], self.language())}</dd><dt>Traffic Flows</dt><dd>{operation['flows']['count']:,}</dd>"
                           f"<dt>Événements</dt><dd>{operation['events']['count']:,}</dd><dt>Prochaine réconciliation</dt><dd>{reconciliation_text}</dd></dl></section>")
-            security = ("<section class=card><h2>Sécurité du compte</h2><p class=muted>Utilisateur : " + html.escape(self.store.setting("admin_user") or "—") + "</p>"
+            user_label = "Username" if self.language()=="en" else "Utilisateur"
+            security = (f"<section class=card><h2>Sécurité du compte</h2><p class=muted>{user_label} : " + html.escape(self.store.setting("admin_user") or "—") + "</p>"
                         f"<form class=stackform method=post action=/password><input type=hidden name=csrf value='{csrf}'>"
                         "<label>Mot de passe actuel<input type=password name=current required autocomplete=current-password></label>"
                         "<label>Nouveau mot de passe<input type=password name=password required minlength=12 autocomplete=new-password></label>"
@@ -1006,8 +1106,8 @@ class Web(BaseHTTPRequestHandler):
             maintenance_card = ("<section class='card danger'><h2>Maintenance des données</h2><p class=muted>Cette suppression est définitive et ne modifie pas les options de collecte.</p>"
                                 f"<form class=stackform method=post action=/purge><input type=hidden name=csrf value='{csrf}'>"
                                 "<label>Données à supprimer<select name=target required><option value=events>Événements CEF / Syslog</option><option value=flows>Traffic Flows</option></select></label>"
-                                "<label>Saisissez PURGER pour confirmer<input name=confirm required autocomplete=off></label><button>Supprimer les données</button></form></section>")
-            body = self.nav("settings", session) + "<h1>Paramètres</h1><p class=muted>Outils et état de la configuration locale.</p><div class=settingsgrid>" + monitoring + security + theme + api + diagnostic + config + maintenance_card + "</div>"
+                                f"<label>{'Enter PURGE to confirm' if self.language()=='en' else 'Saisissez PURGER pour confirmer'}<input name=confirm required autocomplete=off></label><button>Supprimer les données</button></form></section>")
+            body = self.nav("settings", session) + "<h1>Paramètres</h1><p class=muted>Outils et état de la configuration locale.</p><div class=settingsgrid>" + monitoring + security + theme + language_card + api + diagnostic + config + maintenance_card + "</div>"
             return self.send_html(body, title="Paramètres · UniFi Log Explorer")
         return self.send_error(404)
 
@@ -1016,14 +1116,18 @@ class Web(BaseHTTPRequestHandler):
         if path == "/setup" and not self.store.setting("admin_hash"):
             username = form.get("username", "").strip(); password = form.get("password", "")
             if len(username) < 3 or len(password) < 12 or password != form.get("confirm"):
-                return self.send_html("<h1>Configuration refusée</h1><p>Utilisateur ≥ 3 caractères, mot de passe ≥ 12 caractères et confirmation identique.</p><a href=/ >Retour</a>", 400)
+                message = ("Username ≥ 3 characters, password ≥ 12 characters, and matching confirmation." if self.language() == "en" else
+                           "Utilisateur ≥ 3 caractères, mot de passe ≥ 12 caractères et confirmation identique.")
+                return self.send_html(f"<h1>{self.t('Configuration refusée')}</h1><p>{message}</p><a href=/ >{self.t('Retour')}</a>", 400)
             self.store.set_setting("admin_user", username); self.store.set_setting("admin_hash", password_hash(password)); return self.redirect("/login")
         if path == "/login":
             address = self.client_address[0] if getattr(self, "client_address", None) else "unknown"
             blocked = login_block_remaining(address)
             if blocked:
-                content = f"<p class=bad>Trop de tentatives. Réessayez dans {max(1, blocked // 60)} minutes.</p><a class=button href=/login>Retour</a>"
-                return self.send_html(self.auth_page(content, "Connexion temporairement bloquée"), 429)
+                message = (f"Too many attempts. Try again in {max(1, blocked // 60)} minutes." if self.language() == "en" else
+                           f"Trop de tentatives. Réessayez dans {max(1, blocked // 60)} minutes.")
+                content = f"<p class=bad>{message}</p><a class=button href=/login>{self.t('Retour')}</a>"
+                return self.send_html(self.auth_page(content, self.t("Connexion temporairement bloquée")), 429)
             valid = hmac.compare_digest(form.get("username", ""), self.store.setting("admin_user") or "")
             valid = password_valid(form.get("password", ""), self.store.setting("admin_hash")) and valid
             if valid:
@@ -1032,20 +1136,24 @@ class Web(BaseHTTPRequestHandler):
                 with SESSION_LOCK: SESSIONS[token] = {"last": time.time(), "csrf": secrets.token_urlsafe(24)}
                 return self.redirect("/", f"ule_session={token}; Path=/; HttpOnly; SameSite=Strict")
             record_login_failure(address); time.sleep(0.5)
-            return self.send_html(self.auth_page("<p class=bad>Identifiants incorrects.</p><a class=button href=/login>Réessayer</a>", "Connexion refusée"), 401)
+            content = f"<p class=bad>{self.t('Identifiants incorrects.')}</p><a class=button href=/login>{self.t('Réessayer')}</a>"
+            return self.send_html(self.auth_page(content, self.t("Connexion refusée")), 401)
         session = self.session()
         if path == "/password" and session and hmac.compare_digest(form.get("csrf", ""), session["csrf"]):
             current = form.get("current", ""); password = form.get("password", "")
             if not password_valid(current, self.store.setting("admin_hash")):
-                return self.send_html(self.auth_page("<p class=bad>Le mot de passe actuel est incorrect.</p><a class=button href=/settings>Retour</a>", "Modification refusée"), 400)
+                content = f"<p class=bad>{self.t('Le mot de passe actuel est incorrect.')}</p><a class=button href=/settings>{self.t('Retour')}</a>"
+                return self.send_html(self.auth_page(content, self.t("Modification refusée")), 400)
             if len(password) < 12 or password != form.get("confirm") or password == current:
-                return self.send_html(self.auth_page("<p class=bad>Le nouveau mot de passe doit comporter au moins 12 caractères, être confirmé et être différent.</p><a class=button href=/settings>Retour</a>", "Modification refusée"), 400)
+                content = f"<p class=bad>{self.t('Le nouveau mot de passe doit comporter au moins 12 caractères, être confirmé et être différent.')}</p><a class=button href=/settings>{self.t('Retour')}</a>"
+                return self.send_html(self.auth_page(content, self.t("Modification refusée")), 400)
             self.store.set_setting("admin_hash", password_hash(password))
             with SESSION_LOCK: SESSIONS.clear()
             return self.redirect("/login", "ule_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict")
         if path == "/purge" and session and hmac.compare_digest(form.get("csrf", ""), session["csrf"]):
-            if form.get("confirm") != "PURGER" or form.get("target") not in ("events", "flows"):
-                return self.send_html(self.auth_page("<p class=bad>Confirmation incorrecte. Aucune donnée n’a été supprimée.</p><a class=button href=/settings>Retour</a>", "Purge refusée"), 400)
+            if form.get("confirm") not in ("PURGER", "PURGE") or form.get("target") not in ("events", "flows"):
+                content = f"<p class=bad>{self.t('Confirmation incorrecte. Aucune donnée n’a été supprimée.')}</p><a class=button href=/settings>{self.t('Retour')}</a>"
+                return self.send_html(self.auth_page(content, self.t("Purge refusée")), 400)
             count = self.store.purge(form["target"])
             self.store.set_setting("maintenance_notice", json.dumps({"time": int(time.time()), "target": form["target"], "count": count}))
             return self.redirect("/settings")

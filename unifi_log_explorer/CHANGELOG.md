@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0
+
+- Add French and English web interfaces with browser-language detection.
+- Add a persistent manual language selector before and after authentication.
+- Keep French as the fallback language when no supported preference is available.
+- Localize navigation, authentication, explorers, details, status, Settings, and maintenance controls.
+- Accept the localized destructive-action confirmation in either supported language.
+
 ## 0.8.0
 
 - Rate-limit repeated web login failures with a temporary per-client block.

@@ -20,6 +20,8 @@ accès HTTPS est souhaité.
 - détail complet de chaque flow archivé ;
 - explorateur CEF / Syslog avec recherche par contenu, type, source et période ;
 - thèmes clair et sombre mémorisés dans le navigateur ;
+- interface française ou anglaise détectée automatiquement, avec choix manuel
+  mémorisé dans le navigateur ;
 - page Paramètres regroupant test API, export diagnostic et résumé en lecture
   seule de la configuration Home Assistant ;
 - changement sécurisé du mot de passe, limitation des tentatives de connexion

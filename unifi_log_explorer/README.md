@@ -19,6 +19,7 @@ access is required.
 - complete detail page for every archived flow;
 - searchable and paginated CEF / Syslog explorer;
 - persistent light and dark browser themes;
+- automatic French or English interface selection with a persistent manual override;
 - Settings page for API testing, diagnostic export, and a read-only Home
   Assistant configuration summary;
 - password changes, login rate limiting, and collection health monitoring;

@@ -25,6 +25,9 @@ modifications s’effectuent exclusivement dans les options de l’App.
 - **CEF / Syslog** : recherche par contenu, type, source et période.
 - **Paramètres** : thème, test API, export diagnostic et résumé de configuration.
 
+L’interface est disponible en français et en anglais. La langue du navigateur
+est utilisée au premier accès, puis le choix manuel est mémorisé localement.
+
 L’App utilise une authentification locale et n’active pas Ingress. Gardez les
 ports web et UDP sur un réseau de confiance. Consultez le
 [guide français complet](README.fr.md) ou la

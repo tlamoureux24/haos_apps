@@ -198,6 +198,19 @@ class ParserTests(unittest.TestCase):
         self.assertIn("/theme?", body)
         self.assertIn("input[type=hidden]{display:none!important}", ule.STYLE)
 
+    def test_english_interface_and_language_override(self):
+        handler = ule.Web.__new__(ule.Web); handler.path = "/settings"
+        handler.headers = {"Accept-Language": "en-US,en;q=0.9"}
+        self.assertEqual(handler.language(), "en")
+        self.assertEqual(handler.t("Vue d’ensemble"), "Overview")
+        nav = handler.nav("settings", {"csrf": "token"})
+        self.assertIn("Overview", nav); self.assertIn("Settings", nav); self.assertIn("Sign out", nav)
+        auth = handler.auth_page("<form></form>", "Connexion à votre espace local")
+        self.assertIn("Sign in to your local workspace", auth)
+        self.assertIn("value=fr", auth)
+        handler.headers = {"Accept-Language": "en", "Cookie": "ule_language=fr"}
+        self.assertEqual(handler.language(), "fr")
+
     def test_login_rate_limit_and_reset(self):
         address = "test-client"
         with ule.LOGIN_LOCK: ule.LOGIN_ATTEMPTS.pop(address, None)
