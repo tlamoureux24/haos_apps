@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0
+
+- Rate-limit repeated web login failures with a temporary per-client block.
+- Add administrator password changes and invalidate every session afterwards.
+- Add complete detail pages for archived CEF and Syslog events.
+- Detect stale Traffic Flows collection cycles in Settings.
+- Show SQLite size, stored volumes, and the next scheduled reconciliation.
+- Add filtered CSV exports for Traffic Flows and CEF/Syslog events.
+- Add a dependency-free 24-hour activity chart to the overview.
+- Add explicit, CSRF-protected data maintenance controls with typed confirmation.
+
 ## 0.6.0
 
 - Add a dedicated Settings page and replace the authenticated theme menu entry.

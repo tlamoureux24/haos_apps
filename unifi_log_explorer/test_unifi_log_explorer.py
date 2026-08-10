@@ -145,7 +145,8 @@ class ParserTests(unittest.TestCase):
                 store.add("syslog", "192.168.1.1", "Syslog only", {"message": "Syslog only"})
                 for number in range(10):
                     store.add("syslog", "192.168.1.20", f"Routine {number}", {"message": f"Routine {number}"})
-                for path in ("/", "/flows", "/events?size=10", "/events?kind=cef", "/settings", "/flow?id=render-me"):
+                cef_id = store.query_events({"kind": "cef", "hours": 24})["rows"][0]["id"]
+                for path in ("/", "/flows", "/events?size=10", "/events?kind=cef", f"/event?id={cef_id}", "/settings", "/flow?id=render-me"):
                     handler = ule.Web.__new__(ule.Web); handler.path = path; handler.headers = {}; handler.store = store
                     handler.session = lambda: {"csrf": "token"}
                     rendered = []
@@ -162,6 +163,7 @@ class ParserTests(unittest.TestCase):
                     if path == "/":
                         self.assertIn("class=overviewhead", rendered[0])
                         self.assertIn("class='card statuscard'", rendered[0])
+                        self.assertIn("Activité horaire", rendered[0])
                         self.assertLess(rendered[0].index("Collecte en attente"), rendered[0].index("class=grid"))
                     if path == "/events?size=10":
                         self.assertTrue(any(link and link.startswith("/events?") and "page=2" in link for link in parser.links))
@@ -173,10 +175,21 @@ class ParserTests(unittest.TestCase):
                         self.assertIn("Exporter le diagnostic JSON", rendered[0])
                         self.assertIn("Lecture seule", rendered[0])
                         self.assertIn("Tester la connexion", rendered[0])
+                        self.assertIn("Sécurité du compte", rendered[0])
+                        self.assertIn("Prochaine réconciliation", rendered[0])
+                        self.assertIn("Maintenance des données", rendered[0])
+                    if path.startswith("/event?"):
+                        self.assertIn("CEF only", rendered[0])
+                        self.assertIn("Données complètes", rendered[0])
 
                 result = store.query_events({"kind": "syslog", "q": "Syslog only", "hours": 24}, page=1, page_size=10)
                 self.assertEqual(result["total"], 1)
                 self.assertEqual(result["rows"][0]["kind"], "syslog")
+                self.assertGreaterEqual(len(store.timeline()), 24)
+                self.assertEqual(len(store.export_flow_rows({"hours": 24})), 1)
+                self.assertGreaterEqual(len(store.export_event_rows({"hours": 24})), 12)
+                self.assertEqual(store.purge("flows"), 1)
+                self.assertEqual(store.dashboard()["flow_stats"]["count"], 0)
 
     def test_login_has_logo_and_public_theme_switch(self):
         handler = ule.Web.__new__(ule.Web); handler.path = "/login"; handler.headers = {}
@@ -184,6 +197,16 @@ class ParserTests(unittest.TestCase):
         self.assertIn("/logo.png", body)
         self.assertIn("/theme?", body)
         self.assertIn("input[type=hidden]{display:none!important}", ule.STYLE)
+
+    def test_login_rate_limit_and_reset(self):
+        address = "test-client"
+        with ule.LOGIN_LOCK: ule.LOGIN_ATTEMPTS.pop(address, None)
+        for offset in range(ule.LOGIN_MAX_FAILURES):
+            ule.record_login_failure(address, now=1000 + offset)
+        self.assertGreater(ule.login_block_remaining(address, now=1010), 0)
+        ule.clear_login_failures(address)
+        self.assertEqual(ule.login_block_remaining(address, now=1010), 0)
+        self.assertEqual(ule.csv_safe("=SUM(A1:A2)"), "'=SUM(A1:A2)")
 
 
 if __name__ == "__main__":

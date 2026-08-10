@@ -22,6 +22,10 @@ accès HTTPS est souhaité.
 - thèmes clair et sombre mémorisés dans le navigateur ;
 - page Paramètres regroupant test API, export diagnostic et résumé en lecture
   seule de la configuration Home Assistant ;
+- changement sécurisé du mot de passe, limitation des tentatives de connexion
+  et supervision de l’état de collecte ;
+- exports CSV des résultats filtrés, graphique horaire sur 24 heures et outils
+  de purge avec confirmation explicite ;
 - rétention configurable par durée et par nombre maximal d’enregistrements.
 
 ## Prérequis
@@ -121,9 +125,9 @@ adaptation de l’App.
 - **Traffic Flows** : recherche par texte, source, destination, service,
   direction et période, avec pagination et fiche détaillée.
 - **CEF / Syslog** : recherche dans tous les événements conservés, avec filtres
-  par type, source et période.
+  par type, source et période, et accès aux données complètes de chaque événement.
 - **Paramètres** : thème, test API, export diagnostic et configuration en lecture
-  seule.
+  seule, état du stockage et changement du mot de passe.
 
 ## Stockage et sauvegardes
 

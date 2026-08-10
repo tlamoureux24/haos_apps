@@ -21,6 +21,8 @@ access is required.
 - persistent light and dark browser themes;
 - Settings page for API testing, diagnostic export, and a read-only Home
   Assistant configuration summary;
+- password changes, login rate limiting, and collection health monitoring;
+- filtered CSV exports, a 24-hour activity chart, and confirmed maintenance tools;
 - configurable age and record-count retention limits.
 
 French documentation: [README.fr.md](README.fr.md).
@@ -116,9 +118,9 @@ adaptation.
 - **Traffic Flows**: text, source, destination, service, direction, and period
   filters with pagination and full flow details.
 - **CEF / Syslog**: search across retained events with type, source, and period
-  filters.
+  filters, plus complete event details.
 - **Settings**: appearance, API test, diagnostic export, and read-only
-  configuration.
+  configuration, storage health, and password changes.
 
 ## Storage and backups
 

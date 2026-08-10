@@ -7,6 +7,8 @@ import hashlib
 import hmac
 import html
 import ipaddress
+import csv
+import io
 import json
 import logging
 import os
@@ -322,6 +324,63 @@ class Store:
         return {"rows": rows, "total": total, "page": page, "pages": pages,
                 "page_size": page_size, "hours": hours, "kind": kind}
 
+    def event_by_id(self, event_id):
+        try: event_id = int(event_id)
+        except (TypeError, ValueError): return None
+        with self.lock:
+            row = self.db.execute("SELECT * FROM records WHERE id=? AND kind IN ('cef','syslog')", (event_id,)).fetchone()
+        if not row: return None
+        result = dict(row); result["detail"] = json.loads(result["detail"])
+        return result
+
+    def operational_status(self):
+        with self.lock:
+            page_size = self.db.execute("PRAGMA page_size").fetchone()[0]
+            page_count = self.db.execute("PRAGMA page_count").fetchone()[0]
+            event = dict(self.db.execute("SELECT count(*) count,min(received_at) oldest,max(received_at) newest FROM records WHERE kind IN ('cef','syslog')").fetchone())
+            flows = dict(self.db.execute("SELECT count(*) count,min(flow_end_time) oldest,max(flow_end_time) newest FROM traffic_flows").fetchone())
+        raw = self.setting("flow_collection_status")
+        try: collection = json.loads(raw) if raw else None
+        except json.JSONDecodeError: collection = None
+        reconciliation = self.setting("flow_last_reconciliation")
+        return {"database_bytes": page_size * page_count, "events": event, "flows": flows,
+                "collection": collection, "last_reconciliation": int(reconciliation) if reconciliation and reconciliation.isdigit() else None}
+
+    def timeline(self, hours=24):
+        now_hour = int(time.time()) // 3600 * 3600
+        first = now_hour - (hours - 1) * 3600
+        with self.lock:
+            flow_values = {row["bucket"]: row["count"] for row in self.db.execute(
+                "SELECT (flow_end_time/3600000)*3600 bucket,count(*) count FROM traffic_flows WHERE flow_end_time>=? GROUP BY bucket",
+                (first * 1000,))}
+            event_values = {row["bucket"]: row["count"] for row in self.db.execute(
+                "SELECT (received_at/3600)*3600 bucket,count(*) count FROM records WHERE received_at>=? AND kind IN ('cef','syslog') GROUP BY bucket",
+                (first,))}
+        return [{"time": stamp, "flows": flow_values.get(stamp, 0), "events": event_values.get(stamp, 0)}
+                for stamp in range(first, now_hour + 1, 3600)]
+
+    def export_flow_rows(self, filters, limit=50000):
+        result = self.query_flows(filters, 1, 100)
+        rows = list(result["rows"])
+        for page in range(2, min(result["pages"], (limit + 99) // 100) + 1):
+            rows.extend(self.query_flows(filters, page, 100)["rows"])
+        return rows[:limit]
+
+    def export_event_rows(self, filters, limit=50000):
+        result = self.query_events(filters, 1, 100)
+        rows = list(result["rows"])
+        for page in range(2, min(result["pages"], (limit + 99) // 100) + 1):
+            rows.extend(self.query_events(filters, page, 100)["rows"])
+        return rows[:limit]
+
+    def purge(self, target):
+        table = {"events": "records", "flows": "traffic_flows"}.get(target)
+        if not table: raise ValueError("invalid purge target")
+        with self.lock:
+            count = self.db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            self.db.execute(f"DELETE FROM {table}"); self.db.commit()
+        return count
+
     def flow_overview(self, hours=24):
         cutoff = int(time.time() * 1000) - hours * 3600_000
         with self.lock:
@@ -574,6 +633,31 @@ class FlowCollector(threading.Thread):
 
 SESSIONS = {}
 SESSION_LOCK = threading.Lock()
+LOGIN_ATTEMPTS = {}
+LOGIN_LOCK = threading.Lock()
+LOGIN_WINDOW_SECONDS = 5 * 60
+LOGIN_BLOCK_SECONDS = 15 * 60
+LOGIN_MAX_FAILURES = 5
+
+
+def login_block_remaining(address, now=None):
+    now = now or time.time()
+    with LOGIN_LOCK:
+        failures = [stamp for stamp in LOGIN_ATTEMPTS.get(address, []) if now - stamp < LOGIN_BLOCK_SECONDS]
+        LOGIN_ATTEMPTS[address] = failures
+        if len(failures) < LOGIN_MAX_FAILURES: return 0
+        return max(0, int(LOGIN_BLOCK_SECONDS - (now - failures[-LOGIN_MAX_FAILURES])))
+
+
+def record_login_failure(address, now=None):
+    now = now or time.time()
+    with LOGIN_LOCK:
+        failures = [stamp for stamp in LOGIN_ATTEMPTS.get(address, []) if now - stamp < LOGIN_WINDOW_SECONDS]
+        failures.append(now); LOGIN_ATTEMPTS[address] = failures
+
+
+def clear_login_failures(address):
+    with LOGIN_LOCK: LOGIN_ATTEMPTS.pop(address, None)
 
 
 def password_hash(password, salt=None):
@@ -601,12 +685,26 @@ input[type=hidden]{display:none!important}.barlink{color:var(--text);text-decora
 .eventfilters{grid-template-columns:2fr minmax(130px,1fr) minmax(130px,1fr) minmax(130px,1fr) auto}
 .overviewhead{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center;margin:8px 0 12px}.overviewhead h1{margin-top:0}.overviewhead p{margin-bottom:0}.statuscard{margin:0;box-shadow:var(--shadow)}@media(max-width:800px){.overviewhead{grid-template-columns:1fr;gap:12px}}
 .settingsgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.settingactions{display:flex;gap:8px;flex-wrap:wrap}.readonly{background:var(--surface2);border-radius:8px;padding:12px}.readonly .kv{grid-template-columns:minmax(150px,220px) 1fr}@media(max-width:800px){.settingsgrid{grid-template-columns:1fr}}
+.stackform{display:grid;gap:10px}.stackform label{color:var(--muted);font-size:13px}.statusnote{padding:10px 12px;border-left:4px solid var(--accent);background:var(--surface2);border-radius:6px}
+.chart{display:grid;grid-template-columns:repeat(24,1fr);gap:4px;height:130px;align-items:end}.chartcol{height:100%;display:flex;gap:2px;align-items:end}.chartbar{display:block;flex:1;min-height:2px;border-radius:3px 3px 0 0;background:var(--accent)}.chartbar.events{background:var(--good)}.legend{display:flex;gap:18px;margin-top:10px;color:var(--muted)}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--accent);margin-right:5px}.legend i.events{background:var(--good)}.danger{border-color:var(--bad)}.danger button{background:var(--bad)}
 """
 
 
 def fmt_ms(value):
     if not value: return "—"
     return time.strftime("%d/%m/%Y %H:%M:%S", time.localtime(value / 1000))
+
+
+def fmt_bytes(value):
+    size = float(value or 0)
+    for unit in ("o", "Kio", "Mio", "Gio"):
+        if size < 1024 or unit == "Gio": return f"{size:.1f} {unit}"
+        size /= 1024
+
+
+def csv_safe(value):
+    text = "" if value is None else str(value)
+    return "'" + text if text.startswith(("=", "+", "-", "@")) else text
 
 
 def party_label(flow, side):
@@ -656,6 +754,14 @@ class Web(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "public, max-age=86400")
         self.send_header("Content-Length", str(len(raw))); self.end_headers(); self.wfile.write(raw)
 
+    def send_csv(self, filename, headers, rows):
+        output = io.StringIO(); writer = csv.writer(output)
+        writer.writerow(headers); writer.writerows([[csv_safe(value) for value in row] for row in rows])
+        raw = output.getvalue().encode("utf-8-sig")
+        self.send_response(200); self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition", f"attachment; filename={filename}")
+        self.send_header("Content-Length", str(len(raw))); self.end_headers(); self.wfile.write(raw)
+
     def auth_page(self, content, title):
         opposite = "dark" if self.theme() == "light" else "light"
         label = "☾ Mode sombre" if opposite == "dark" else "☀ Mode clair"
@@ -687,6 +793,12 @@ class Web(BaseHTTPRequestHandler):
                 lines += f"<a class='barline barlink' href='{html.escape(url)}'>{inner}</a>"
             else: lines += f"<div class=barline>{inner}</div>"
         return f"<section class=card><h2>{html.escape(title)}</h2><div class=bars>{lines}</div></section>"
+
+    @staticmethod
+    def timeline_chart(points):
+        maximum = max([max(point["flows"], point["events"]) for point in points] or [1]) or 1
+        columns = "".join(f"<span class=chartcol title='{time.strftime('%H:%M',time.localtime(point['time']))} · {point['flows']} flows · {point['events']} événements'><i class=chartbar style='height:{max(2,point['flows']*100/maximum):.1f}%'></i><i class='chartbar events' style='height:{max(2,point['events']*100/maximum):.1f}%'></i></span>" for point in points)
+        return "<section class=card><h2>Activité horaire</h2><div class=chart>" + columns + "</div><div class=legend><span><i></i>Traffic Flows</span><span><i class=events></i>CEF / Syslog</span></div></section>"
 
     def form(self):
         length = min(int(self.headers.get("Content-Length", "0")), 8192)
@@ -731,6 +843,19 @@ class Web(BaseHTTPRequestHandler):
         if path == "/export.json":
             payload = json.dumps(self.store.export(), indent=2).encode()
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Disposition", "attachment; filename=unifi-log-explorer-diagnostics.json"); self.send_header("Content-Length", str(len(payload))); self.end_headers(); self.wfile.write(payload); return
+        if path == "/flows.csv":
+            filters = {key: values[0] for key, values in parse_qs(parsed.query).items()}
+            rows = []
+            for row in self.store.export_flow_rows(filters):
+                detail = row["detail"] if isinstance(row["detail"], dict) else {}
+                rows.append((fmt_ms(row["flow_start_time"]), fmt_ms(row["flow_end_time"]), row["source_ip"], row["destination_ip"],
+                             row["service"], row["action"], detail.get("direction"), detail.get("protocol"), row["id"]))
+            return self.send_csv("unifi-traffic-flows.csv", ("start", "end", "source_ip", "destination_ip", "service", "action", "direction", "protocol", "id"), rows)
+        if path == "/events.csv":
+            filters = {key: values[0] for key, values in parse_qs(parsed.query).items()}
+            rows = [(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(row["received_at"])), row["kind"], row["source_ip"], row["summary"], row["id"])
+                    for row in self.store.export_event_rows(filters)]
+            return self.send_csv("unifi-cef-syslog.csv", ("date", "type", "source_ip", "summary", "id"), rows)
         if path == "/":
             data = self.store.dashboard(); flow = self.store.flow_overview(24)
             counts = data["counts"]; counters = data["counters"]
@@ -752,7 +877,7 @@ class Web(BaseHTTPRequestHandler):
                     f"<section class='card statuscard'>{state}</section></div><div class=grid>{cards}</div><div class=twocol>"
                     + self.bars("Principaux clients", flow["sources_top"], "q") + self.bars("Services", flow["services"], "service")
                     + self.bars("Destinations", flow["destinations_top"], "q") + self.bars("Actions", flow["actions"], "action")
-                    + "</div>")
+                    + "</div>" + self.timeline_chart(self.store.timeline()))
             return self.send_html(body, title="Vue d’ensemble · UniFi Log Explorer")
         if path == "/flows":
             raw_query = {key: values[0] for key, values in parse_qs(parsed.query).items()}
@@ -780,7 +905,8 @@ class Web(BaseHTTPRequestHandler):
             previous_link = f"<a class='button secondary' href='{html.escape(previous)}'>Précédent</a>" if previous else ""
             following_link = f"<a class='button secondary' href='{html.escape(following)}'>Suivant</a>" if following else ""
             pager = f"<div class=pager><span>{result['total']:,} résultats · page {result['page']} / {result['pages']}</span><span>{previous_link} {following_link}</span></div>"
-            body = self.nav("flows", session) + "<h1>Traffic Flows</h1><p class=muted>Recherchez et inspectez les connexions archivées.</p>" + filters + f"<section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Source</th><th></th><th>Destination</th><th>Service</th><th>Action</th><th></th></tr></thead><tbody>{table}</tbody></table></div>{pager}</section>"
+            export_url = "/flows.csv?" + urllib.parse.urlencode({k:v for k,v in raw_query.items() if k != "page"})
+            body = self.nav("flows", session) + "<h1>Traffic Flows</h1><p class=muted>Recherchez et inspectez les connexions archivées.</p>" + filters + f"<p><a class='button secondary' href='{html.escape(export_url)}'>Exporter les résultats CSV</a></p><section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Source</th><th></th><th>Destination</th><th>Service</th><th>Action</th><th></th></tr></thead><tbody>{table}</tbody></table></div>{pager}</section>"
             return self.send_html(body, title="Traffic Flows · UniFi Log Explorer")
         if path == "/flow":
             flow_id = parse_qs(parsed.query).get("id", [""])[0]; row = self.store.flow_by_id(flow_id)
@@ -807,16 +933,26 @@ class Web(BaseHTTPRequestHandler):
             filters = ("<form class='filters eventfilters' method=get><label>Recherche<input name=q value='"+event_val("q")+"' placeholder='Message, application, événement…'></label>"
                        "<label>Type<select name=kind>"+types+"</select></label><label>Source<input name=source value='"+event_val("source")+"' placeholder='Adresse IP'></label>"
                        "<label>Période<select name=hours>"+periods+"</select></label><button>Filtrer</button></form>")
-            rows = "".join(f"<tr><td>{time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(r['received_at']))}</td><td><span class=pill>{html.escape(r['kind'])}</span></td><td>{html.escape(r['source_ip'])}</td><td class=wrap>{html.escape(r['summary'])}</td></tr>" for r in result["rows"])
-            rows = rows or "<tr><td class=empty colspan=4>Aucun événement ne correspond à ces filtres.</td></tr>"
+            rows = "".join(f"<tr><td>{time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(r['received_at']))}</td><td><span class=pill>{html.escape(r['kind'])}</span></td><td>{html.escape(r['source_ip'])}</td><td class=wrap>{html.escape(r['summary'])}</td><td><a class=button href='/event?id={r['id']}'>Détails</a></td></tr>" for r in result["rows"])
+            rows = rows or "<tr><td class=empty colspan=5>Aucun événement ne correspond à ces filtres.</td></tr>"
             query_without_page = dict(raw_query); query_without_page.pop("page", None)
             previous = query_link("/events", query_without_page, page=result["page"]-1) if result["page"] > 1 else ""
             following = query_link("/events", query_without_page, page=result["page"]+1) if result["page"] < result["pages"] else ""
             previous_link = f"<a class='button secondary' href='{html.escape(previous)}'>Précédent</a>" if previous else ""
             following_link = f"<a class='button secondary' href='{html.escape(following)}'>Suivant</a>" if following else ""
             pager = f"<div class=pager><span>{result['total']:,} événements · page {result['page']} / {result['pages']}</span><span>{previous_link} {following_link}</span></div>"
-            body = self.nav("events", session) + "<h1>CEF / Syslog</h1><p class=muted>Recherchez dans les événements transmis par vos équipements UniFi.</p>" + filters + "<section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Type</th><th>Émetteur</th><th>Résumé</th></tr></thead><tbody>" + rows + "</tbody></table></div>" + pager + "</section>"
+            export_url = "/events.csv?" + urllib.parse.urlencode({k:v for k,v in raw_query.items() if k != "page"})
+            body = self.nav("events", session) + "<h1>CEF / Syslog</h1><p class=muted>Recherchez dans les événements transmis par vos équipements UniFi.</p>" + filters + f"<p><a class='button secondary' href='{html.escape(export_url)}'>Exporter les résultats CSV</a></p><section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Type</th><th>Émetteur</th><th>Résumé</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>" + pager + "</section>"
             return self.send_html(body, title="CEF / Syslog · UniFi Log Explorer")
+        if path == "/event":
+            event_id = parse_qs(parsed.query).get("id", [""])[0]; event = self.store.event_by_id(event_id)
+            if not event: return self.send_error(404)
+            detail = event["detail"] if isinstance(event["detail"], dict) else {"value": event["detail"]}
+            summary = (f"<dl class=kv><dt>Date</dt><dd>{time.strftime('%d/%m/%Y %H:%M:%S',time.localtime(event['received_at']))}</dd>"
+                       f"<dt>Type</dt><dd>{html.escape(event['kind'])}</dd><dt>Émetteur</dt><dd>{html.escape(event['source_ip'])}</dd>"
+                       f"<dt>Résumé</dt><dd>{html.escape(event['summary'])}</dd></dl>")
+            body = self.nav("events", session) + "<p><a class='button secondary' href=/events>← Retour aux événements</a></p>" + f"<div class=details><section class=card><h2>Événement</h2>{summary}</section><section class=card><h2>Données complètes</h2><pre>{html.escape(json.dumps(detail,indent=2,ensure_ascii=False))}</pre></section></div>"
+            return self.send_html(body, title="Détail de l’événement · UniFi Log Explorer")
         if path == "/settings":
             csrf = html.escape(session["csrf"]); current_theme = self.theme()
             light_class = "" if current_theme == "light" else " secondary"
@@ -846,7 +982,32 @@ class Web(BaseHTTPRequestHandler):
                       f"<dt>Limite</dt><dd>{options.get('max_records', '—')} enregistrements</dd><dt>Collecte des flows</dt><dd>{enabled}</dd>"
                       f"<dt>Fréquence</dt><dd>{options.get('flow_poll_interval_seconds', '—')} secondes</dd><dt>URL UniFi</dt><dd>{html.escape(str(options.get('unifi_base_url', '—')))}</dd>"
                       f"<dt>Site</dt><dd>{html.escape(str(options.get('unifi_site_slug', '—')))}</dd><dt>Vérification TLS</dt><dd>{verify}</dd></dl></div></section>")
-            body = self.nav("settings", session) + "<h1>Paramètres</h1><p class=muted>Outils et état de la configuration locale.</p><div class=settingsgrid>" + theme + api + diagnostic + config + "</div>"
+            operation = self.store.operational_status(); collection = operation["collection"]
+            if collection and collection.get("ok"):
+                age = max(0, int(time.time()) - int(collection.get("time", 0)))
+                stale_after = max(600, int(options.get("flow_poll_interval_seconds", 120)) * 3)
+                collection_state = f"<span class={'bad' if age > stale_after else 'good'}>● {'En retard' if age > stale_after else 'Opérationnelle'}</span> · dernier succès il y a {age // 60} min"
+            elif collection: collection_state = f"<span class=bad>● Échec : {html.escape(str(collection.get('error', 'inconnu')))}</span>"
+            else: collection_state = "<span class=muted>Aucun cycle enregistré.</span>"
+            reconciliation = operation["last_reconciliation"]
+            if reconciliation:
+                next_reconciliation = reconciliation + FlowCollector.RECONCILE_INTERVAL_SECONDS
+                reconciliation_text = time.strftime("%d/%m/%Y %H:%M:%S", time.localtime(next_reconciliation))
+            else: reconciliation_text = "—"
+            monitoring = ("<section class=card><h2>État et stockage</h2><p class=statusnote>" + collection_state + "</p><dl class=kv>"
+                          f"<dt>Base SQLite</dt><dd>{fmt_bytes(operation['database_bytes'])}</dd><dt>Traffic Flows</dt><dd>{operation['flows']['count']:,}</dd>"
+                          f"<dt>Événements</dt><dd>{operation['events']['count']:,}</dd><dt>Prochaine réconciliation</dt><dd>{reconciliation_text}</dd></dl></section>")
+            security = ("<section class=card><h2>Sécurité du compte</h2><p class=muted>Utilisateur : " + html.escape(self.store.setting("admin_user") or "—") + "</p>"
+                        f"<form class=stackform method=post action=/password><input type=hidden name=csrf value='{csrf}'>"
+                        "<label>Mot de passe actuel<input type=password name=current required autocomplete=current-password></label>"
+                        "<label>Nouveau mot de passe<input type=password name=password required minlength=12 autocomplete=new-password></label>"
+                        "<label>Confirmation<input type=password name=confirm required minlength=12 autocomplete=new-password></label>"
+                        "<button>Modifier le mot de passe</button></form><p class=muted>Toutes les sessions seront déconnectées.</p></section>")
+            maintenance_card = ("<section class='card danger'><h2>Maintenance des données</h2><p class=muted>Cette suppression est définitive et ne modifie pas les options de collecte.</p>"
+                                f"<form class=stackform method=post action=/purge><input type=hidden name=csrf value='{csrf}'>"
+                                "<label>Données à supprimer<select name=target required><option value=events>Événements CEF / Syslog</option><option value=flows>Traffic Flows</option></select></label>"
+                                "<label>Saisissez PURGER pour confirmer<input name=confirm required autocomplete=off></label><button>Supprimer les données</button></form></section>")
+            body = self.nav("settings", session) + "<h1>Paramètres</h1><p class=muted>Outils et état de la configuration locale.</p><div class=settingsgrid>" + monitoring + security + theme + api + diagnostic + config + maintenance_card + "</div>"
             return self.send_html(body, title="Paramètres · UniFi Log Explorer")
         return self.send_error(404)
 
@@ -858,12 +1019,36 @@ class Web(BaseHTTPRequestHandler):
                 return self.send_html("<h1>Configuration refusée</h1><p>Utilisateur ≥ 3 caractères, mot de passe ≥ 12 caractères et confirmation identique.</p><a href=/ >Retour</a>", 400)
             self.store.set_setting("admin_user", username); self.store.set_setting("admin_hash", password_hash(password)); return self.redirect("/login")
         if path == "/login":
-            if hmac.compare_digest(form.get("username", ""), self.store.setting("admin_user") or "") and password_valid(form.get("password", ""), self.store.setting("admin_hash")):
+            address = self.client_address[0] if getattr(self, "client_address", None) else "unknown"
+            blocked = login_block_remaining(address)
+            if blocked:
+                content = f"<p class=bad>Trop de tentatives. Réessayez dans {max(1, blocked // 60)} minutes.</p><a class=button href=/login>Retour</a>"
+                return self.send_html(self.auth_page(content, "Connexion temporairement bloquée"), 429)
+            valid = hmac.compare_digest(form.get("username", ""), self.store.setting("admin_user") or "")
+            valid = password_valid(form.get("password", ""), self.store.setting("admin_hash")) and valid
+            if valid:
+                clear_login_failures(address)
                 token = secrets.token_urlsafe(32)
                 with SESSION_LOCK: SESSIONS[token] = {"last": time.time(), "csrf": secrets.token_urlsafe(24)}
                 return self.redirect("/", f"ule_session={token}; Path=/; HttpOnly; SameSite=Strict")
-            time.sleep(0.5); return self.send_html("<h1>Connexion refusée</h1><a href=/login>Réessayer</a>", 401)
+            record_login_failure(address); time.sleep(0.5)
+            return self.send_html(self.auth_page("<p class=bad>Identifiants incorrects.</p><a class=button href=/login>Réessayer</a>", "Connexion refusée"), 401)
         session = self.session()
+        if path == "/password" and session and hmac.compare_digest(form.get("csrf", ""), session["csrf"]):
+            current = form.get("current", ""); password = form.get("password", "")
+            if not password_valid(current, self.store.setting("admin_hash")):
+                return self.send_html(self.auth_page("<p class=bad>Le mot de passe actuel est incorrect.</p><a class=button href=/settings>Retour</a>", "Modification refusée"), 400)
+            if len(password) < 12 or password != form.get("confirm") or password == current:
+                return self.send_html(self.auth_page("<p class=bad>Le nouveau mot de passe doit comporter au moins 12 caractères, être confirmé et être différent.</p><a class=button href=/settings>Retour</a>", "Modification refusée"), 400)
+            self.store.set_setting("admin_hash", password_hash(password))
+            with SESSION_LOCK: SESSIONS.clear()
+            return self.redirect("/login", "ule_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict")
+        if path == "/purge" and session and hmac.compare_digest(form.get("csrf", ""), session["csrf"]):
+            if form.get("confirm") != "PURGER" or form.get("target") not in ("events", "flows"):
+                return self.send_html(self.auth_page("<p class=bad>Confirmation incorrecte. Aucune donnée n’a été supprimée.</p><a class=button href=/settings>Retour</a>", "Purge refusée"), 400)
+            count = self.store.purge(form["target"])
+            self.store.set_setting("maintenance_notice", json.dumps({"time": int(time.time()), "target": form["target"], "count": count}))
+            return self.redirect("/settings")
         if path == "/probe" and session and hmac.compare_digest(form.get("csrf", ""), session["csrf"]):
             try:
                 result = flow_probe(self.store.options)
