@@ -157,6 +157,10 @@ Ce dépôt est destiné aux installations Home Assistant avec Supervisor, notamm
 
 Il n’est pas destiné à une installation Home Assistant Core seule sans Supervisor, car les Apps Home Assistant dépendent du Supervisor.
 
+### Convention du dépôt
+
+- [Convention commune d’internationalisation](INTERNATIONALIZATION.md#français)
+
 ### Mises à jour
 
 Home Assistant surveille les dépôts d’Apps ajoutés à la boutique. Lorsqu’une nouvelle version d’une App est publiée, elle apparaît comme mise à jour disponible dans l’interface Home Assistant.
@@ -334,6 +338,10 @@ This repository is intended for Home Assistant installations with Supervisor, in
 - Home Assistant Supervised.
 
 It is not intended for a standalone Home Assistant Core installation without Supervisor because Home Assistant Apps depend on Supervisor.
+
+### Repository convention
+
+- [Shared internationalization convention](INTERNATIONALIZATION.md#english)
 
 ### Updates
 
