@@ -479,6 +479,8 @@ class Collector(threading.Thread):
 class FlowCollector(threading.Thread):
     CHUNK_MS = 30 * 60_000
     SCAN_WINDOW_MS = 24 * 60 * 60_000
+    FAST_SCAN_MAX_PAGES = 5
+    RECONCILE_INTERVAL_SECONDS = 6 * 60 * 60
     BACKFILL_VERSION = "2"
 
     def __init__(self, store):
@@ -523,7 +525,7 @@ class FlowCollector(threading.Thread):
         totals = [0, 0, 0]
         consecutive_known_pages = 0
         page = 1
-        while page <= 100:
+        while page <= self.FAST_SCAN_MAX_PAGES:
             result = traffic_flow_page(self.store.options, start, now, page, 100)
             flows = result["data"]
             identifiers = [flow.get("id") for flow in flows]
@@ -539,14 +541,33 @@ class FlowCollector(threading.Thread):
             page += 1
         return totals
 
+    def reconciliation_due(self, now_seconds):
+        value = self.store.setting("flow_last_reconciliation")
+        if value is None:
+            # An installation upgraded from 0.3.1 has already completed its
+            # initial repair. Start the new schedule without repeating it.
+            self.store.set_setting("flow_last_reconciliation", str(now_seconds))
+            return False
+        try:
+            return now_seconds - int(value) >= self.RECONCILE_INTERVAL_SECONDS
+        except (TypeError, ValueError):
+            return True
+
     def cycle(self):
         now = int(time.time() * 1000)
         if self.store.setting("flow_backfill_version") != self.BACKFILL_VERSION:
             totals = self.repair_backfill(now)
+            strategy = "initial-repair"
+            self.store.set_setting("flow_last_reconciliation", str(now // 1000))
+        elif self.reconciliation_due(now // 1000):
+            totals = self.repair_backfill(now)
+            strategy = "scheduled-reconciliation"
+            self.store.set_setting("flow_last_reconciliation", str(now // 1000))
         else:
             totals = self.scan_newest(now)
+            strategy = "fast-scan"
         status = {"ok": True, "time": int(time.time()), "fetched": totals[0],
-                  "inserted": totals[1], "pages": totals[2], "strategy": "newest-scan"}
+                  "inserted": totals[1], "pages": totals[2], "strategy": strategy}
         self.store.set_setting("flow_collection_status", json.dumps(status, separators=(",", ":")))
         logging.info("Traffic Flows cycle: fetched=%s inserted=%s pages=%s", *totals)
 

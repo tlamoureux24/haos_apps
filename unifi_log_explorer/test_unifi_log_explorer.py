@@ -103,6 +103,28 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(totals, [3, 1, 3])
         self.assertEqual(request.call_count, 3)
 
+    def test_newest_scan_is_bounded_when_pages_keep_changing(self):
+        class FakeStore:
+            options = {}
+            def known_flow_ids(self, identifiers): return set()
+            def add_flows(self, flows): return len(flows)
+        page = {"data": [{"id": "new"}], "has_next": True}
+        with mock.patch.object(ule, "traffic_flow_page", return_value=page) as request:
+            totals = ule.FlowCollector(FakeStore()).scan_newest(2_000_000_000_000)
+        self.assertEqual(totals, [5, 5, 5])
+        self.assertEqual(request.call_count, 5)
+
+    def test_reconciliation_schedule_is_initialized_without_immediate_repair(self):
+        class FakeStore:
+            values = {}
+            def setting(self, key): return self.values.get(key)
+            def set_setting(self, key, value): self.values[key] = value
+        store = FakeStore()
+        collector = ule.FlowCollector(store)
+        self.assertFalse(collector.reconciliation_due(1_000_000))
+        self.assertFalse(collector.reconciliation_due(1_000_001))
+        self.assertTrue(collector.reconciliation_due(1_000_000 + collector.RECONCILE_INTERVAL_SECONDS))
+
 
 if __name__ == "__main__":
     unittest.main()
