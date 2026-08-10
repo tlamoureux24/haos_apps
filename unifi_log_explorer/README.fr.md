@@ -13,6 +13,8 @@ Elle fournit :
 - un explorateur de flows filtrable, paginé, avec fiche détaillée ;
 - une interface responsive en mode clair ou sombre ;
 - un explorateur CEF / Syslog paginé avec recherche par contenu, type, source et période ;
+- une page Paramètres regroupant apparence, test API, export diagnostic et résumé
+  en lecture seule des options Home Assistant ;
 - une rétention en durée et en nombre maximal d'enregistrements ;
 - un export JSON du diagnostic, sans adresse IP de l'émetteur.
 - un test non persistant de l'endpoint interne Traffic Flows avec une clé API dédiée.

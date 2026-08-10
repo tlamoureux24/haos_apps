@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Add a dedicated Settings page and replace the authenticated theme menu entry.
+- Move appearance selection, API testing and diagnostic export into Settings.
+- Add a read-only summary of the Home Assistant App configuration.
+- Remove the diagnostic export action from the CEF / Syslog explorer.
+- Keep the pre-login appearance switch available.
+
 ## 0.5.2
 
 - Place the collection status in the right side of the overview heading, alongside the page title.

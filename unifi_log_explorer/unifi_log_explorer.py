@@ -600,6 +600,7 @@ input[type=hidden]{display:none!important}.barlink{color:var(--text);text-decora
 .barline{grid-template-columns:minmax(0,1.4fr) minmax(80px,3fr) 55px}.barlabel{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .eventfilters{grid-template-columns:2fr minmax(130px,1fr) minmax(130px,1fr) minmax(130px,1fr) auto}
 .overviewhead{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center;margin:8px 0 12px}.overviewhead h1{margin-top:0}.overviewhead p{margin-bottom:0}.statuscard{margin:0;box-shadow:var(--shadow)}@media(max-width:800px){.overviewhead{grid-template-columns:1fr;gap:12px}}
+.settingsgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.settingactions{display:flex;gap:8px;flex-wrap:wrap}.readonly{background:var(--surface2);border-radius:8px;padding:12px}.readonly .kv{grid-template-columns:minmax(150px,220px) 1fr}@media(max-width:800px){.settingsgrid{grid-template-columns:1fr}}
 """
 
 
@@ -665,14 +666,11 @@ class Web(BaseHTTPRequestHandler):
 
     def nav(self, active, session):
         csrf = html.escape(session["csrf"])
-        opposite = "dark" if self.theme() == "light" else "light"
-        theme_label = "☾ Sombre" if opposite == "dark" else "☀ Clair"
-        theme_url = "/theme?" + urllib.parse.urlencode({"value": opposite, "next": self.path})
         return ("<header class=top><a class=toplogo href=/><img src=/icon.png alt=''><span>UniFi Log Explorer</span></a><nav class=menu>"
                 f"<a class='{'active' if active=='overview' else ''}' href='/'>Vue d’ensemble</a>"
                 f"<a class='{'active' if active=='flows' else ''}' href='/flows'>Traffic Flows</a>"
                 f"<a class='{'active' if active=='events' else ''}' href='/events'>CEF / Syslog</a>"
-                f"<a href='{html.escape(theme_url)}'>{theme_label}</a>"
+                f"<a class='{'active' if active=='settings' else ''}' href='/settings'>Paramètres</a>"
                 "</nav>"
                 f"<form class=logout method=post action=/logout><input type=hidden name=csrf value='{csrf}'><button>Déconnexion</button></form></header>")
 
@@ -817,8 +815,39 @@ class Web(BaseHTTPRequestHandler):
             previous_link = f"<a class='button secondary' href='{html.escape(previous)}'>Précédent</a>" if previous else ""
             following_link = f"<a class='button secondary' href='{html.escape(following)}'>Suivant</a>" if following else ""
             pager = f"<div class=pager><span>{result['total']:,} événements · page {result['page']} / {result['pages']}</span><span>{previous_link} {following_link}</span></div>"
-            body = self.nav("events", session) + "<h1>CEF / Syslog</h1><p class=muted>Recherchez dans les événements transmis par vos équipements UniFi.</p>" + filters + "<section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Type</th><th>Émetteur</th><th>Résumé</th></tr></thead><tbody>" + rows + "</tbody></table></div>" + pager + "</section><p><a class=button href=/export.json>Exporter le diagnostic JSON</a></p>"
+            body = self.nav("events", session) + "<h1>CEF / Syslog</h1><p class=muted>Recherchez dans les événements transmis par vos équipements UniFi.</p>" + filters + "<section class=card><div class=tablewrap><table><thead><tr><th>Date</th><th>Type</th><th>Émetteur</th><th>Résumé</th></tr></thead><tbody>" + rows + "</tbody></table></div>" + pager + "</section>"
             return self.send_html(body, title="CEF / Syslog · UniFi Log Explorer")
+        if path == "/settings":
+            csrf = html.escape(session["csrf"]); current_theme = self.theme()
+            light_class = "" if current_theme == "light" else " secondary"
+            dark_class = "" if current_theme == "dark" else " secondary"
+            theme = ("<section class=card><h2>Apparence</h2><p class=muted>Le choix est mémorisé uniquement dans ce navigateur.</p><div class=settingactions>"
+                     f"<a class='button{light_class}' href='/theme?value=light&amp;next=/settings'>☀ Mode clair</a>"
+                     f"<a class='button{dark_class}' href='/theme?value=dark&amp;next=/settings'>☾ Mode sombre</a></div></section>")
+            raw_probe = self.store.setting("flow_probe_result"); probe = json.loads(raw_probe) if raw_probe else None
+            if probe and probe.get("ok"):
+                tested = time.strftime("%d/%m/%Y %H:%M:%S", time.localtime(probe.get("tested_at", 0)))
+                probe_state = f"<span class=good>● Connexion réussie</span><br><span class=muted>Dernier test : {tested} · total de la fenêtre : {probe.get('total', '—')}</span>"
+            elif probe:
+                probe_state = f"<span class=bad>● Échec : {html.escape(str(probe.get('error', 'erreur inconnue')))}</span>"
+            else: probe_state = "<span class=muted>Aucun test effectué.</span>"
+            disabled = "disabled" if not self.store.options.get("unifi_api_key") else ""
+            api = ("<section class=card><h2>API UniFi</h2><p>" + probe_state + "</p>"
+                   f"<form method=post action=/probe><input type=hidden name=csrf value='{csrf}'><button {disabled}>Tester la connexion</button></form>"
+                   "<p class=muted>Le test lit au maximum un flow récent et ne le conserve pas. La clé API n’est jamais affichée.</p></section>")
+            diagnostic = ("<section class=card><h2>Diagnostic</h2><p class=muted>L’export contient les compteurs et événements CEF/Syslog, sans les Traffic Flows ni la clé API.</p>"
+                          "<a class=button href=/export.json>Exporter le diagnostic JSON</a></section>")
+            options = self.store.options
+            sources = ", ".join(html.escape(value) for value in sorted(options.get("allowed_source_ips", []))) or "—"
+            verify = "Activée" if options.get("verify_ssl") else "Désactivée"
+            enabled = "Activée" if options.get("flow_collection_enabled") else "Désactivée"
+            config = ("<section class=card><h2>Configuration</h2><p class=muted>Lecture seule · les modifications s’effectuent dans les options de l’App Home Assistant.</p><div class=readonly><dl class=kv>"
+                      f"<dt>Sources autorisées</dt><dd>{sources}</dd><dt>Rétention</dt><dd>{options.get('retention_hours', '—')} heures</dd>"
+                      f"<dt>Limite</dt><dd>{options.get('max_records', '—')} enregistrements</dd><dt>Collecte des flows</dt><dd>{enabled}</dd>"
+                      f"<dt>Fréquence</dt><dd>{options.get('flow_poll_interval_seconds', '—')} secondes</dd><dt>URL UniFi</dt><dd>{html.escape(str(options.get('unifi_base_url', '—')))}</dd>"
+                      f"<dt>Site</dt><dd>{html.escape(str(options.get('unifi_site_slug', '—')))}</dd><dt>Vérification TLS</dt><dd>{verify}</dd></dl></div></section>")
+            body = self.nav("settings", session) + "<h1>Paramètres</h1><p class=muted>Outils et état de la configuration locale.</p><div class=settingsgrid>" + theme + api + diagnostic + config + "</div>"
+            return self.send_html(body, title="Paramètres · UniFi Log Explorer")
         return self.send_error(404)
 
     def do_POST(self):
@@ -842,7 +871,7 @@ class Web(BaseHTTPRequestHandler):
                 logging.warning("Traffic Flows API probe failed: %s", exc)
                 result = {"ok": False, "tested_at": int(time.time()), "error": str(exc)}
             self.store.set_setting("flow_probe_result", json.dumps(result, separators=(",", ":")))
-            return self.redirect("/")
+            return self.redirect("/settings")
         if path == "/logout" and session and hmac.compare_digest(form.get("csrf", ""), session["csrf"]):
             jar = cookies.SimpleCookie(self.headers.get("Cookie", "")); token = jar.get("ule_session")
             if token:

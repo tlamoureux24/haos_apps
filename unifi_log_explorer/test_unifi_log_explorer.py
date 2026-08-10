@@ -145,7 +145,7 @@ class ParserTests(unittest.TestCase):
                 store.add("syslog", "192.168.1.1", "Syslog only", {"message": "Syslog only"})
                 for number in range(10):
                     store.add("syslog", "192.168.1.20", f"Routine {number}", {"message": f"Routine {number}"})
-                for path in ("/", "/flows", "/events?size=10", "/events?kind=cef", "/flow?id=render-me"):
+                for path in ("/", "/flows", "/events?size=10", "/events?kind=cef", "/settings", "/flow?id=render-me"):
                     handler = ule.Web.__new__(ule.Web); handler.path = path; handler.headers = {}; handler.store = store
                     handler.session = lambda: {"csrf": "token"}
                     rendered = []
@@ -158,6 +158,7 @@ class ParserTests(unittest.TestCase):
                     self.assertIn("/", parser.links)
                     self.assertIn("/flows", parser.links)
                     self.assertIn("/events", parser.links)
+                    self.assertIn("/settings", parser.links)
                     if path == "/":
                         self.assertIn("class=overviewhead", rendered[0])
                         self.assertIn("class='card statuscard'", rendered[0])
@@ -167,6 +168,11 @@ class ParserTests(unittest.TestCase):
                     if path == "/events?kind=cef":
                         self.assertIn("CEF only", rendered[0])
                         self.assertNotIn("Syslog only", rendered[0])
+                        self.assertNotIn("Exporter le diagnostic JSON", rendered[0])
+                    if path == "/settings":
+                        self.assertIn("Exporter le diagnostic JSON", rendered[0])
+                        self.assertIn("Lecture seule", rendered[0])
+                        self.assertIn("Tester la connexion", rendered[0])
 
                 result = store.query_events({"kind": "syslog", "q": "Syslog only", "hours": 24}, page=1, page_size=10)
                 self.assertEqual(result["total"], 1)

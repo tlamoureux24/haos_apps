@@ -23,4 +23,6 @@ L'interface propose une vue d'ensemble, un explorateur filtrable des Traffic
 Flows, leur détail complet et un explorateur séparé CEF / Syslog avec recherche,
 filtres et pagination. Le thème clair
 est utilisé par défaut et peut être remplacé par le thème sombre depuis la barre
-de navigation.
+de navigation avant connexion ou depuis la page Paramètres. Cette page regroupe
+aussi le test API, l’export diagnostic et un résumé en lecture seule de la
+configuration ; les modifications restent dans les options de l’App Home Assistant.
