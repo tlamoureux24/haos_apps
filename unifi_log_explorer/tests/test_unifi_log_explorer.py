@@ -5,7 +5,7 @@ from html.parser import HTMLParser
 from unittest import mock
 from pathlib import Path
 
-spec = importlib.util.spec_from_file_location("ule", Path(__file__).with_name("unifi_log_explorer.py"))
+spec = importlib.util.spec_from_file_location("ule", Path(__file__).resolve().parents[1] / "unifi_log_explorer.py")
 ule = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ule)
 

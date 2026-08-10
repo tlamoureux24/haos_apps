@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0
+
+- Mark the application as stable after validation of collection, exploration, security, maintenance, and bilingual interfaces.
+- Move the automated test suite into a dedicated `tests` directory.
+- Keep development tests in the source repository while excluding them from the runtime Docker image.
+
 ## 0.9.0
 
 - Add French and English web interfaces with browser-language detection.

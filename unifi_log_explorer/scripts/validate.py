@@ -24,6 +24,11 @@ for port in ("8090/tcp", "5514/udp"):
 for filename in ("Dockerfile", "run.sh", "apparmor.txt", "README.md", "README.fr.md", "DOCS.md", "CHANGELOG.md", "unifi_log_explorer.py", "icon.png", "logo.png"):
     if not (ROOT / filename).is_file():
         errors.append(f"missing {filename}")
+if not (ROOT / "tests" / "test_unifi_log_explorer.py").is_file():
+    errors.append("missing tests/test_unifi_log_explorer.py")
+dockerfile = (ROOT / "Dockerfile").read_text()
+if re.search(r"^COPY\s+(?:tests|\.)", dockerfile, re.MULTILINE):
+    errors.append("development tests must not be copied into the runtime image")
 
 if errors:
     print("\n".join(f"ERROR: {error}" for error in errors))
