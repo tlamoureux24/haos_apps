@@ -68,6 +68,27 @@ Documentation détaillée :
 
 - [Documentation française](unifi_autoblock/README.fr.md)
 
+#### UniFi Log Explorer
+
+App Home Assistant autonome pour collecter, conserver et explorer localement
+les Traffic Flows et événements CEF/Syslog d’un environnement UniFi.
+
+Fonctionnalités principales :
+
+- collecte des Traffic Flows par l’API locale UniFi avec déduplication et
+  réconciliation des publications tardives ;
+- réception Syslog/CEF en UDP avec filtrage strict des adresses sources ;
+- vue d’ensemble sur 24 heures et classements interactifs ;
+- explorateurs Traffic Flows et CEF/Syslog avec recherche, filtres et pagination ;
+- interface web autonome avec compte administrateur, thèmes clair et sombre ;
+- clé API chiffrée localement puis retirée des options Home Assistant ;
+- rétention configurable, sauvegarde à froid et export diagnostic sans secret ;
+- page Paramètres avec test API et configuration Home Assistant en lecture seule.
+
+Documentation détaillée :
+
+- [Documentation française](unifi_log_explorer/README.fr.md)
+
 #### Nginx Proxy Manager
 
 Enveloppe Home Assistant minimale autour de l’image Docker officielle Nginx Proxy Manager. L’App conserve toutes les fonctionnalités de NPM sans fork ni modification et ajoute uniquement l’intégration nécessaire au Supervisor.
@@ -225,6 +246,27 @@ Detailed documentation:
 
 - [English documentation](unifi_autoblock/README.md)
 
+#### UniFi Log Explorer
+
+Standalone Home Assistant App for locally collecting, retaining, and exploring
+Traffic Flows and CEF/Syslog events from a UniFi environment.
+
+Main features:
+
+- Traffic Flows collection through the local UniFi API with deduplication and
+  reconciliation of late publications;
+- UDP Syslog/CEF reception with a strict source-address allowlist;
+- interactive 24-hour overview and rankings;
+- searchable, filterable, and paginated Traffic Flows and CEF/Syslog explorers;
+- standalone authenticated web interface with light and dark themes;
+- locally encrypted API key cleared from Home Assistant options;
+- configurable retention, cold backups, and secret-free diagnostic exports;
+- Settings page with API testing and a read-only Home Assistant configuration summary.
+
+Detailed documentation:
+
+- [English documentation](unifi_log_explorer/README.md)
+
 #### Nginx Proxy Manager
 
 Minimal Home Assistant wrapper around the official Nginx Proxy Manager Docker image. The App preserves all NPM functionality without a fork or modification and adds only the integration required by Supervisor.
@@ -309,6 +351,7 @@ For details or help with an App, consult its English documentation first:
 
 - [Rsync Manager](rsync_manager/README.md)
 - [UniFi Autoblock](unifi_autoblock/README.md)
+- [UniFi Log Explorer](unifi_log_explorer/README.md)
 - [Nginx Proxy Manager](nginx_proxy_manager/README.md)
 - [Gatus](gatus/README.md)
 - [AdGuard Home](adguard_home/README.md)

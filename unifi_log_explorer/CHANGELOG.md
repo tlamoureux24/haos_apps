@@ -7,6 +7,7 @@
 - Add a read-only summary of the Home Assistant App configuration.
 - Remove the diagnostic export action from the CEF / Syslog explorer.
 - Keep the pre-login appearance switch available.
+- Rewrite the French and English documentation for the completed explorer.
 
 ## 0.5.2
 
@@ -93,7 +94,6 @@
 - Add standalone authenticated web setup and administration interface.
 - Receive UniFi Syslog/CEF over UDP.
 - Reject traffic before parsing unless its exact source address is allowed.
-- Default the allowed source list to `192.168.1.1`.
 - Parse CEF headers and extension fields.
 - Bound diagnostic storage by age and record count.
 - Export diagnostic data as JSON without the gateway sender address.

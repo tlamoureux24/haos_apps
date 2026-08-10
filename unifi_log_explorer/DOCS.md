@@ -1,28 +1,32 @@
 # UniFi Log Explorer
 
-Consultez le [guide français](README.fr.md) ou le [résumé anglais](README.md).
+Collectez et explorez localement les Traffic Flows et événements CEF/Syslog
+d’un environnement UniFi.
 
-Au premier démarrage, ouvrez l'interface web et créez le compte administrateur.
-Configurez ensuite l'UCG pour envoyer SIEM/CEF en UDP `5514` vers l'adresse de
-Home Assistant. Par défaut, le collecteur n'accepte que les sources indiquées
-dans `allowed_source_ips`.
+## Mise en route
 
-Pour tester l'API Traffic Flows, renseignez l'URL HTTPS locale de l'UCG, le site
-`default` et une clé API dédiée dans les options, puis redémarrez l'App. La clé
-est chiffrée et le champ est automatiquement vidé. Lancez ensuite le test depuis
-l'interface web ; un flow au maximum est lu et aucune donnée n'est conservée.
+1. Configurez l’URL HTTPS locale, le site UniFi et une clé API.
+2. Ajoutez dans `allowed_source_ips` chaque équipement autorisé à envoyer des
+   événements.
+3. Vérifiez les ports publiés, puis démarrez l’App.
+4. Créez le compte administrateur local depuis l’interface web.
+5. Testez l’API depuis **Paramètres**, puis activez la collecte des Traffic Flows
+   dans les options Home Assistant.
+6. Configurez UniFi Network pour envoyer Syslog/CEF vers le port UDP publié.
 
-Après un test réussi, activez `flow_collection_enabled` pour archiver les flows
-toutes les deux minutes. La collecte utilise pagination, déduplication et
-une lecture rapide bornée à cinq pages. Une réparation initiale puis une
-réconciliation toutes les six heures des dernières 24 heures récupèrent les lots publiés en retard.
-Les données restent bornées par la durée de rétention et la limite
-d'enregistrements configurées.
+La clé API est chiffrée dans le volume privé puis retirée des options au
+redémarrage. La page Paramètres affiche la configuration en lecture seule : les
+modifications s’effectuent exclusivement dans les options de l’App.
 
-L'interface propose une vue d'ensemble, un explorateur filtrable des Traffic
-Flows, leur détail complet et un explorateur séparé CEF / Syslog avec recherche,
-filtres et pagination. Le thème clair
-est utilisé par défaut et peut être remplacé par le thème sombre depuis la barre
-de navigation avant connexion ou depuis la page Paramètres. Cette page regroupe
-aussi le test API, l’export diagnostic et un résumé en lecture seule de la
-configuration ; les modifications restent dans les options de l’App Home Assistant.
+## Interface
+
+- **Vue d’ensemble** : état de collecte et principaux indicateurs sur 24 heures.
+- **Traffic Flows** : recherche, filtres, pagination et détail complet.
+- **CEF / Syslog** : recherche par contenu, type, source et période.
+- **Paramètres** : thème, test API, export diagnostic et résumé de configuration.
+
+L’App utilise une authentification locale et n’active pas Ingress. Gardez les
+ports web et UDP sur un réseau de confiance. Consultez le
+[guide français complet](README.fr.md) ou la
+[documentation anglaise](README.md) pour la configuration, la sécurité, le
+stockage et les limites connues.

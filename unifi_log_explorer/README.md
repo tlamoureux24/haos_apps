@@ -1,16 +1,148 @@
 # UniFi Log Explorer
 
-UniFi Log Explorer is a standalone Home Assistant App that locally collects and
-explores UniFi Traffic Flows together with Syslog/CEF exports.
+UniFi Log Explorer is a standalone Home Assistant App for collecting, retaining,
+and locally exploring activity from a UniFi environment. It combines Traffic
+Flows retrieved from the local UniFi Network API with events received through
+Syslog/CEF.
 
-See [README.fr.md](README.fr.md) for the complete current documentation.
+The App does not use Ingress. It exposes a local web interface protected by its
+own administrator account and can be placed behind a reverse proxy when HTTPS
+access is required.
 
-The App has no Ingress. It publishes a local web interface with independent
-authentication and a UDP listener for Syslog/CEF (`5514`). Only exact
-addresses listed in `allowed_source_ips` are parsed or retained; the default is
-`192.168.1.1`.
+## Features
 
-It includes a 24-hour analytical overview, a searchable and paginated flow
-explorer, full flow details, a searchable and paginated CEF/Syslog explorer and
-a Settings page for appearance, API testing, diagnostics and read-only Home
-Assistant configuration. Traffic Flows are collected with a locally encrypted UniFi API key.
+- periodic Traffic Flows collection from a local UniFi console;
+- UDP Syslog/CEF receiver with a strict source-address allowlist;
+- flow deduplication and periodic recovery of late UniFi publications;
+- 24-hour overview of clients, services, destinations, and actions;
+- searchable, filterable, and paginated Traffic Flows explorer;
+- complete detail page for every archived flow;
+- searchable and paginated CEF / Syslog explorer;
+- persistent light and dark browser themes;
+- Settings page for API testing, diagnostic export, and a read-only Home
+  Assistant configuration summary;
+- configurable age and record-count retention limits.
+
+French documentation: [README.fr.md](README.fr.md).
+
+## Requirements
+
+- Home Assistant OS or Home Assistant Supervised;
+- a UniFi Network console reachable over HTTPS from the App;
+- a UniFi API key for Traffic Flows collection;
+- a UDP port reachable from UniFi devices for Syslog/CEF;
+- a TCP port reachable from the browser for the web interface.
+
+## Installation
+
+1. Add this repository to the Home Assistant App store.
+2. Install **UniFi Log Explorer**.
+3. Configure the options for the target network before starting the App.
+4. Review the published ports in the Network tab.
+5. Start the App and open its web interface.
+6. Create the local administrator account. Passwords must be at least 12
+   characters long.
+
+## Configuration
+
+| Option | Purpose |
+| --- | --- |
+| `allowed_source_ips` | Exact IPv4 or IPv6 addresses allowed to send Syslog/CEF datagrams. CIDR ranges are not accepted. |
+| `retention_hours` | Retention period for events and Traffic Flows. |
+| `max_records` | Maximum record limit enforced during storage maintenance. |
+| `session_timeout_minutes` | Idle time before a web session expires. |
+| `unifi_base_url` | Local HTTPS URL of the UniFi console or gateway. |
+| `unifi_site_slug` | Internal UniFi site identifier, commonly `default`. |
+| `unifi_api_key` | API key used to read Traffic Flows. |
+| `verify_ssl` | Verify the console TLS certificate chain when enabled. |
+| `flow_collection_enabled` | Enable periodic Traffic Flows collection. |
+| `flow_poll_interval_seconds` | Interval between fast collection cycles. |
+| `flow_initial_backfill_minutes` | Requested depth of the initial import. |
+| `log_level` | Application log verbosity. |
+
+The configuration displayed on the web **Settings** page is read-only. Change
+options in Home Assistant and restart the App to apply them.
+
+## Configuring Syslog/CEF in UniFi
+
+Enable log forwarding to a SIEM server in UniFi Network:
+
+- use the address of the Home Assistant host;
+- use the published UDP port for the Syslog/CEF receiver;
+- select the event categories that should be forwarded;
+- add every device that sends its own messages directly to
+  `allowed_source_ips`.
+
+Datagrams from any other source are rejected before parsing and are not stored.
+Only their count is retained.
+
+## Configuring the Traffic Flows API
+
+Set the local HTTPS URL, site identifier, and a UniFi API key, then enable
+`flow_collection_enabled`. After restart:
+
+1. the key is encrypted in the App private volume;
+2. its value is cleared from the Home Assistant options;
+3. **Test connection** on the Settings page verifies API access without keeping
+   the flow read by the test.
+
+UniFi API keys may not provide fine-grained permissions. A key used for
+read-only collection can therefore have broader rights than this App needs. The
+key is never displayed, and its encryption key is excluded from backups. Enter
+the API key again after restoring the App to another installation.
+
+Self-signed certificates generally require `verify_ssl` to remain disabled.
+Enable it whenever the certificate chain is trusted by the App.
+
+## Collection behavior
+
+On the first start with collection enabled, the App imports an initial period.
+It then:
+
+- polls the newest result pages at the configured interval;
+- limits fast collection to five pages per cycle;
+- deduplicates flows using the stable identifier supplied by UniFi;
+- reconciles the previous 24 hours every six hours to recover late publications;
+- splits large windows to stay below the UniFi result cap.
+
+The Traffic Flows endpoint used by the UniFi Network interface is not a
+documented public API. A UniFi Network update may therefore require an App
+adaptation.
+
+## Web interface
+
+- **Overview**: collection state, 24-hour volumes, and top clients, services,
+  destinations, and actions. Cards open the corresponding filtered explorer.
+- **Traffic Flows**: text, source, destination, service, direction, and period
+  filters with pagination and full flow details.
+- **CEF / Syslog**: search across retained events with type, source, and period
+  filters.
+- **Settings**: appearance, API test, diagnostic export, and read-only
+  configuration.
+
+## Storage and backups
+
+Events and Traffic Flows are stored in SQLite inside the App private volume.
+Periodic maintenance applies `retention_hours` and `max_records`.
+
+The database is included in cold Home Assistant backups. The key used to encrypt
+the UniFi API key is intentionally excluded. Diagnostic exports contain neither
+complete Traffic Flows nor the API key, and omit sender addresses from the
+recent-event section.
+
+## Network security
+
+- keep the web interface on a trusted LAN or behind a VPN;
+- never publish the web or Syslog/CEF ports directly to the Internet;
+- use a reverse proxy when HTTPS access is required;
+- choose a unique administrator password;
+- restrict the App network access to the UniFi console where possible;
+- rotate the API key whenever its confidentiality is uncertain.
+
+## Known limitations
+
+- web authentication is local and independent from Home Assistant;
+- UDP Syslog/CEF cannot guarantee delivery of every message;
+- UniFi API keys can have broader permissions than the required read access;
+- the internal Traffic Flows endpoint can change without notice;
+- the App is a local exploration tool, not a complete SIEM or alerting engine.
