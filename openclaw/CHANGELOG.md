@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.7.1-10 - 2026-08-11
+
+- Explicitly enable the bundled `device-pair` plugin when configuring mobile pairing.
+- Remove the misleading warning that the configured pairing plugin is disabled.
+
 ## 2026.7.1-9 - 2026-08-11
 
 - Replace the temporary cleartext browser mode with OpenClaw's native HTTPS/WSS

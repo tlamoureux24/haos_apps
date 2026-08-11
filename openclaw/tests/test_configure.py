@@ -40,6 +40,7 @@ class ConfigureTests(unittest.TestCase):
                 result["plugins"]["entries"]["device-pair"]["config"]["publicUrl"],
                 "wss://192.168.1.15:18789",
             )
+            self.assertTrue(result["plugins"]["entries"]["device-pair"]["enabled"])
             self.assertEqual(
                 result["mcp"]["servers"]["home-assistant"]["transport"],
                 "streamable-http",
