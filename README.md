@@ -148,6 +148,26 @@ Documentation détaillée :
 
 - [Documentation française](adguard_home/README.fr.md)
 
+#### OpenClaw
+
+App Home Assistant minimale basée sur l'image Docker officielle OpenClaw pour
+héberger un agent Codex permanent accessible depuis le LAN ou un VPN.
+
+Fonctionnalités principales :
+
+- image officielle OpenClaw épinglée sur une version stable ;
+- authentification ChatGPT/Codex par OAuth, sans clé API OpenAI ;
+- Gateway et interface de contrôle locales sur le port 18789 ;
+- connexion facultative au serveur HA-MCP existant ;
+- état, profils OAuth et espace de travail persistés dans `addon_config` ;
+- exécution OpenClaw non-root, sans terminal Web, navigateur ou socket Docker ;
+- profil AppArmor, watchdog et sauvegarde à froid ;
+- suivi et validation automatisés des nouvelles versions officielles.
+
+Documentation détaillée :
+
+- [Documentation française](openclaw/README.fr.md)
+
 ### Prérequis
 
 Ce dépôt est destiné aux installations Home Assistant avec Supervisor, notamment :
@@ -181,6 +201,7 @@ Pour comprendre le fonctionnement d’une App ou obtenir de l’aide, consulter 
 - [Nginx Proxy Manager](nginx_proxy_manager/README.fr.md)
 - [Gatus](gatus/README.fr.md)
 - [AdGuard Home](adguard_home/README.fr.md)
+- [OpenClaw](openclaw/README.fr.md)
 
 ---
 
@@ -330,6 +351,26 @@ Detailed documentation:
 
 - [English documentation](adguard_home/README.md)
 
+#### OpenClaw
+
+Minimal Home Assistant App based on the official OpenClaw Docker image for an
+always-on Codex agent reachable from the LAN or a VPN.
+
+Main features:
+
+- official OpenClaw image pinned to a stable version;
+- ChatGPT/Codex OAuth authentication with no OpenAI API key;
+- local Gateway and Control UI on port 18789;
+- optional connection to the existing HA-MCP server;
+- persistent state, OAuth profiles and workspace in `addon_config`;
+- non-root OpenClaw runtime without a web terminal, browser or Docker socket;
+- AppArmor profile, watchdog and cold backups;
+- automated tracking and validation of official releases.
+
+Detailed documentation:
+
+- [English documentation](openclaw/README.md)
+
 ### Requirements
 
 This repository is intended for Home Assistant installations with Supervisor, including:
@@ -363,3 +404,4 @@ For details or help with an App, consult its English documentation first:
 - [Nginx Proxy Manager](nginx_proxy_manager/README.md)
 - [Gatus](gatus/README.md)
 - [AdGuard Home](adguard_home/README.md)
+- [OpenClaw](openclaw/README.md)

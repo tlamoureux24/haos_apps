@@ -1,0 +1,37 @@
+name: "OpenClaw"
+slug: "openclaw"
+version: "2026.7.1-1"
+description: "Official OpenClaw gateway packaged as a Home Assistant app"
+url: "https://github.com/tlamoureux24/haos_apps/tree/main/openclaw"
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+apparmor: true
+backup: cold
+webui: "http://[HOST]:[PORT:18789]/"
+watchdog: "http://[HOST]:[PORT:18789]/healthz"
+
+ports:
+  18789/tcp: 18789
+
+ports_description:
+  18789/tcp: "OpenClaw Gateway and Control UI; keep restricted to the LAN or VPN"
+
+map:
+  - type: addon_config
+    read_only: false
+
+options:
+  timezone: "Europe/Paris"
+  gateway_token: ""
+  allowed_origins: "http://homeassistant.local:18789"
+  ha_mcp_url: ""
+
+schema:
+  timezone: str
+  gateway_token: password?
+  allowed_origins: str
+  ha_mcp_url: password?

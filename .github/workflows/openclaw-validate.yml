@@ -1,0 +1,114 @@
+name: Validate OpenClaw App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "openclaw/**"
+      - ".github/workflows/openclaw-*.yml"
+  pull_request:
+    paths:
+      - "openclaw/**"
+      - ".github/workflows/openclaw-*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate metadata, launcher and tests
+        run: |
+          set -euo pipefail
+          python3 openclaw/scripts/validate.py
+          bash -n openclaw/run.sh
+          python3 -m py_compile \
+            openclaw/configure.py \
+            openclaw/scripts/update_openclaw_version.py \
+            openclaw/scripts/validate.py
+          python3 -m unittest discover -s openclaw/tests -v
+
+      - name: Read pinned versions
+        id: versions
+        run: |
+          set -euo pipefail
+          upstream="$(<openclaw/upstream_version)"
+          package="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' openclaw/config.yaml)"
+          echo "upstream=${upstream}" >>"${GITHUB_OUTPUT}"
+          echo "package=${package}" >>"${GITHUB_OUTPUT}"
+
+      - name: Build wrapper
+        env:
+          OPENCLAW_VERSION: ${{ steps.versions.outputs.upstream }}
+          APP_VERSION: ${{ steps.versions.outputs.package }}
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --build-arg "BUILD_FROM=ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION}" \
+            --build-arg "OPENCLAW_VERSION=${OPENCLAW_VERSION}" \
+            --build-arg "BUILD_VERSION=${APP_VERSION}" \
+            --build-arg "BUILD_ARCH=amd64" \
+            --tag "ha-openclaw-smoke:${APP_VERSION}" \
+            openclaw
+
+      - name: Smoke-test Gateway startup
+        env:
+          APP_VERSION: ${{ steps.versions.outputs.package }}
+        run: |
+          set -euo pipefail
+          smoke_root="${RUNNER_TEMP}/openclaw-smoke"
+          mkdir -p "${smoke_root}/config" "${smoke_root}/data"
+          cat >"${smoke_root}/data/options.json" <<'JSON'
+          {
+            "timezone": "Europe/Paris",
+            "gateway_token": "smoke-test-gateway-token-1234567890",
+            "allowed_origins": "http://127.0.0.1:18789",
+            "ha_mcp_url": ""
+          }
+          JSON
+
+          cleanup() {
+            docker logs ha-openclaw-smoke 2>&1 || true
+            docker rm --force ha-openclaw-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name ha-openclaw-smoke \
+            --env OPENAI_API_KEY=must-not-reach-openclaw \
+            --publish 127.0.0.1:18789:18789 \
+            --volume "${smoke_root}/config:/config" \
+            --volume "${smoke_root}/data:/data:ro" \
+            "ha-openclaw-smoke:${APP_VERSION}"
+
+          for attempt in {1..90}; do
+            if curl --fail --silent --show-error http://127.0.0.1:18789/healthz >/dev/null \
+              && curl --fail --silent --show-error http://127.0.0.1:18789/readyz >/dev/null; then
+              docker exec ha-openclaw-smoke sh -c \
+                'test "$(stat -c %u /config/.openclaw)" = 1000'
+              docker exec ha-openclaw-smoke sh -c '
+                gateway_pid="$(pgrep -f "dist/index.js gateway" | head -n 1)"
+                test -n "${gateway_pid}"
+                ! tr "\0" "\n" <"/proc/${gateway_pid}/environ" | grep -q "^OPENAI_API_KEY="
+              '
+              grep -q '"mode": "local"' "${smoke_root}/config/.openclaw/openclaw.json"
+              echo "OpenClaw Gateway is healthy, ready and running with persistent state"
+              exit 0
+            fi
+            if [[ "$(docker inspect --format '{{.State.Running}}' ha-openclaw-smoke)" != "true" ]]; then
+              echo "OpenClaw container stopped during startup" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "OpenClaw Gateway did not become ready" >&2
+          exit 1

@@ -1,0 +1,172 @@
+name: Update OpenClaw
+
+on:
+  schedule:
+    - cron: "47 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: openclaw-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Read latest stable upstream release
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release="$(curl --fail --silent --show-error \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/openclaw/openclaw/releases/latest)"
+          version="$(jq -r '.tag_name' <<<"${release}")"
+          draft="$(jq -r '.draft' <<<"${release}")"
+          prerelease="$(jq -r '.prerelease' <<<"${release}")"
+          version="${version#v}"
+
+          if [[ "${draft}" != "false" || "${prerelease}" != "false" ]]; then
+            echo "Latest release is not stable" >&2
+            exit 1
+          fi
+          if [[ ! "${version}" =~ ^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+            echo "Unsupported upstream version: ${version}" >&2
+            exit 1
+          fi
+
+          current="$(<openclaw/upstream_version)"
+          echo "version=${version}" >>"${GITHUB_OUTPUT}"
+          if [[ "${version}" == "${current}" ]]; then
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
+            echo "OpenClaw ${version} is already current"
+          else
+            echo "changed=true" >>"${GITHUB_OUTPUT}"
+            echo "OpenClaw update detected: ${current} -> ${version}"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.upstream.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify official multi-architecture image
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          OPENCLAW_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          manifest="$(docker buildx imagetools inspect \
+            "ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION}")"
+          grep -q 'linux/amd64' <<<"${manifest}"
+          grep -q 'linux/arm64' <<<"${manifest}"
+
+      - name: Update package version
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          OPENCLAW_VERSION: ${{ steps.upstream.outputs.version }}
+        run: python3 openclaw/scripts/update_openclaw_version.py "${OPENCLAW_VERSION}"
+
+      - name: Validate metadata, launcher and tests
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python3 openclaw/scripts/validate.py
+          bash -n openclaw/run.sh
+          python3 -m py_compile \
+            openclaw/configure.py \
+            openclaw/scripts/update_openclaw_version.py \
+            openclaw/scripts/validate.py
+          python3 -m unittest discover -s openclaw/tests -v
+
+      - name: Build wrapper
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          OPENCLAW_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --build-arg "BUILD_FROM=ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION}" \
+            --build-arg "OPENCLAW_VERSION=${OPENCLAW_VERSION}" \
+            --build-arg "BUILD_VERSION=${OPENCLAW_VERSION}-1" \
+            --build-arg "BUILD_ARCH=amd64" \
+            --tag "ha-openclaw-smoke:${OPENCLAW_VERSION}" \
+            openclaw
+
+      - name: Smoke-test Gateway startup
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          OPENCLAW_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          smoke_root="${RUNNER_TEMP}/openclaw-update-smoke"
+          mkdir -p "${smoke_root}/config" "${smoke_root}/data"
+          cat >"${smoke_root}/data/options.json" <<'JSON'
+          {
+            "timezone": "Europe/Paris",
+            "gateway_token": "smoke-test-gateway-token-1234567890",
+            "allowed_origins": "http://127.0.0.1:18789",
+            "ha_mcp_url": ""
+          }
+          JSON
+
+          cleanup() {
+            docker logs ha-openclaw-update-smoke 2>&1 || true
+            docker rm --force ha-openclaw-update-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name ha-openclaw-update-smoke \
+            --env OPENAI_API_KEY=must-not-reach-openclaw \
+            --publish 127.0.0.1:18789:18789 \
+            --volume "${smoke_root}/config:/config" \
+            --volume "${smoke_root}/data:/data:ro" \
+            "ha-openclaw-smoke:${OPENCLAW_VERSION}"
+
+          for attempt in {1..90}; do
+            if curl --fail --silent --show-error http://127.0.0.1:18789/healthz >/dev/null \
+              && curl --fail --silent --show-error http://127.0.0.1:18789/readyz >/dev/null; then
+              docker exec ha-openclaw-update-smoke sh -c '
+                gateway_pid="$(pgrep -f "dist/index.js gateway" | head -n 1)"
+                test -n "${gateway_pid}"
+                ! tr "\0" "\n" <"/proc/${gateway_pid}/environ" | grep -q "^OPENAI_API_KEY="
+              '
+              echo "OpenClaw ${OPENCLAW_VERSION} is healthy, ready and API-key free"
+              exit 0
+            fi
+            if [[ "$(docker inspect --format '{{.State.Running}}' ha-openclaw-update-smoke)" != "true" ]]; then
+              echo "OpenClaw container stopped during startup" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "OpenClaw Gateway did not become ready" >&2
+          exit 1
+
+      - name: Commit validated update
+        if: steps.upstream.outputs.changed == 'true'
+        env:
+          OPENCLAW_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            openclaw/CHANGELOG.md \
+            openclaw/Dockerfile \
+            openclaw/build.yaml \
+            openclaw/config.yaml \
+            openclaw/upstream_version
+          git commit -m "Update OpenClaw to ${OPENCLAW_VERSION}"
+          git push

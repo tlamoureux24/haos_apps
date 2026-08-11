@@ -1,0 +1,15 @@
+configuration:
+  timezone:
+    name: "Timezone"
+    description: "IANA timezone used by OpenClaw, for example Europe/Paris."
+  gateway_token:
+    name: "Gateway token"
+    description: "At least 24 characters. Recommended. If empty, a random token is generated in private app storage."
+  allowed_origins:
+    name: "Allowed browser origins"
+    description: "Comma-separated exact HTTP(S) origins allowed to open Control UI, for example http://192.168.1.10:18789."
+  ha_mcp_url:
+    name: "HA-MCP private URL"
+    description: "Optional private Streamable HTTP URL printed by the existing HA-MCP app, ending in /private_<secret>."
+network:
+  18789/tcp: "Authenticated OpenClaw Gateway and Control UI; restrict to the LAN or VPN."
