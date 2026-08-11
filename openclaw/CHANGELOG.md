@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.7.1-3 - 2026-08-11
+
+- Allow the privileged startup wrapper to initialize OpenClaw's private `/config`
+  directories when the Home Assistant AppArmor profile is active.
+- OpenClaw itself still drops permanently to the unprivileged `node` user.
+
 ## 2026.7.1-2 - 2026-08-11
 
 - Fix the Docker smoke test to inspect protected persistent state from inside the container.
