@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.7.1-2 - 2026-08-11
+
+- Fix the Docker smoke test to inspect protected persistent state from inside the container.
+- Verify and report the subscription-only environment before dropping privileges.
+
 ## 2026.7.1-1 - 2026-08-11
 
 - Package the official OpenClaw 2026.7.1 container image for Home Assistant.

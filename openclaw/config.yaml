@@ -1,6 +1,6 @@
 name: "OpenClaw"
 slug: "openclaw"
-version: "2026.7.1-1"
+version: "2026.7.1-2"
 description: "Official OpenClaw gateway packaged as a Home Assistant app"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/openclaw"
 arch:

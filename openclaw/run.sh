@@ -30,6 +30,13 @@ install -d -m 0700 -o node -g node \
 # into metered OpenAI Platform usage. OAuth credentials remain in OpenClaw's
 # persistent auth profile store and are unaffected.
 unset OPENAI_API_KEY CODEX_API_KEY OPENAI_ADMIN_KEY OPENAI_PROJECT_ID
+for forbidden_key in OPENAI_API_KEY CODEX_API_KEY OPENAI_ADMIN_KEY OPENAI_PROJECT_ID; do
+  if [[ -v "${forbidden_key}" ]]; then
+    echo "FATAL: failed to remove forbidden OpenAI Platform variable ${forbidden_key}" >&2
+    exit 1
+  fi
+done
+echo "Verified subscription-only environment: OpenAI Platform API variables are absent."
 
 eval "$(python3 /usr/local/lib/ha-openclaw-configure.py shell-env "${OPTIONS_FILE}" "${APP_CONFIG_ROOT}")"
 export TZ OPENCLAW_GATEWAY_TOKEN
