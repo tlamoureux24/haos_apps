@@ -11,6 +11,9 @@ configuration:
   allow_insecure_http:
     name: "Temporarily allow Control UI over HTTP"
     description: "DANGEROUS: disables browser cryptographic device identity. Use only on a private LAN/VPN protected by the Gateway token."
+  openai_oauth_device_login:
+    name: "Start ChatGPT/Codex sign-in"
+    description: "Temporary: prints an OAuth URL and code in the App log. Disable it and restart the App after sign-in succeeds."
   ha_mcp_url:
     name: "HA-MCP private URL"
     description: "Optional private Streamable HTTP URL printed by the existing HA-MCP app, ending in /private_<secret>."

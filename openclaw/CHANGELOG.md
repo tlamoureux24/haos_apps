@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026.7.1-5 - 2026-08-11
+
+- Add an opt-in ChatGPT/Codex OAuth device-code login flow for headless Home
+  Assistant installations.
+- Keep the Gateway available while the temporary login process prints its URL
+  and short-lived code to the private App log.
+- Run both OAuth and Gateway processes as the unprivileged upstream `node` user
+  and persist the resulting OpenAI auth profile across App updates.
+
 ## 2026.7.1-4 - 2026-08-11
 
 - Add an explicit, opt-in LAN/VPN test mode for the Control UI over plain HTTP.

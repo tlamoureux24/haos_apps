@@ -11,6 +11,9 @@ configuration:
   allow_insecure_http:
     name: "Autoriser temporairement le Control UI en HTTP"
     description: "DANGEREUX : désactive l'identité cryptographique du navigateur. Uniquement pour un accès privé LAN/VPN protégé par le jeton Gateway."
+  openai_oauth_device_login:
+    name: "Démarrer la connexion ChatGPT/Codex"
+    description: "Temporaire : affiche dans le journal une URL et un code OAuth. Désactiver puis redémarrer l'App après la réussite de la connexion."
   ha_mcp_url:
     name: "URL privée HA-MCP"
     description: "URL Streamable HTTP facultative affichée par l'App HA-MCP existante et terminant par /private_<secret>."

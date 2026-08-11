@@ -32,6 +32,7 @@ jobs:
           bash -n openclaw/run.sh
           python3 -m py_compile \
             openclaw/configure.py \
+            openclaw/oauth_device_login.py \
             openclaw/scripts/update_openclaw_version.py \
             openclaw/scripts/validate.py
           python3 -m unittest discover -s openclaw/tests -v

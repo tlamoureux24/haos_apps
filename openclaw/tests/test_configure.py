@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 
@@ -87,6 +89,33 @@ class ConfigureTests(unittest.TestCase):
 
             with self.assertRaises(RuntimeError):
                 configure.apply(options, config, "/config/workspace")
+
+    def test_exports_oauth_device_login_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            options = root / "options.json"
+            options.write_text(json.dumps({
+                "gateway_token": "test-gateway-token-1234567890",
+                "openai_oauth_device_login": True,
+            }), encoding="utf-8")
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                configure.shell_env(options, root)
+
+            self.assertIn("HA_OPENCLAW_OAUTH_DEVICE_LOGIN=true", output.getvalue())
+
+    def test_rejects_non_boolean_oauth_device_login_option(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            options = root / "options.json"
+            options.write_text(json.dumps({
+                "gateway_token": "test-gateway-token-1234567890",
+                "openai_oauth_device_login": "true",
+            }), encoding="utf-8")
+
+            with self.assertRaises(RuntimeError):
+                configure.shell_env(options, root)
 
 
 if __name__ == "__main__":

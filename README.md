@@ -157,6 +157,7 @@ Fonctionnalités principales :
 
 - image officielle OpenClaw épinglée sur une version stable ;
 - authentification ChatGPT/Codex par OAuth, sans clé API OpenAI ;
+- assistant OAuth sans écran par URL et code dans le journal privé de l’App ;
 - Gateway et interface de contrôle locales sur le port 18789 ;
 - mode de test HTTP explicite pour le LAN/VPN, désactivé par défaut ;
 - connexion facultative au serveur HA-MCP existant ;
@@ -361,6 +362,7 @@ Main features:
 
 - official OpenClaw image pinned to a stable version;
 - ChatGPT/Codex OAuth authentication with no OpenAI API key;
+- headless OAuth setup through a URL and code in the private App log;
 - local Gateway and Control UI on port 18789;
 - explicit LAN/VPN HTTP test mode, disabled by default;
 - optional connection to the existing HA-MCP server;

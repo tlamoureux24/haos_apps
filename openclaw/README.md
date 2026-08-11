@@ -13,6 +13,7 @@ packaging and persistent-path preparation required by HAOS.
 - no browser, web terminal, Homebrew, Docker socket or host network;
 - no OpenAI Platform API key and no metered API fallback;
 - ChatGPT/Codex subscription authentication through OpenAI OAuth;
+- headless OAuth device-code setup from the private Home Assistant App log;
 - local/VPN Gateway access on port 18789 with token and device authentication
   by default, plus an explicit temporary HTTP test mode;
 - optional direct connection to an existing HA-MCP Streamable HTTP endpoint;

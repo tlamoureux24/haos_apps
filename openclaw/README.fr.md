@@ -13,6 +13,7 @@ et la préparation du stockage persistant.
 - aucun navigateur, terminal Web, Homebrew, socket Docker ou réseau hôte ;
 - aucune clé OpenAI Platform et aucun repli vers une API facturée ;
 - authentification de l'abonnement ChatGPT/Codex par OAuth OpenAI ;
+- connexion OAuth sans écran par URL et code dans le journal privé de l'App ;
 - accès local/VPN au Gateway sur le port 18789, protégé par jeton et appairage
   par défaut, avec un mode de test HTTP temporaire explicite ;
 - connexion facultative directe au serveur Streamable HTTP de HA-MCP existant ;

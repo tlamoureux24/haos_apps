@@ -2,7 +2,7 @@ ARG BUILD_FROM="ghcr.io/openclaw/openclaw:2026.7.1"
 FROM ${BUILD_FROM}
 
 ARG OPENCLAW_VERSION="2026.7.1"
-ARG BUILD_VERSION="2026.7.1-4"
+ARG BUILD_VERSION="2026.7.1-5"
 ARG BUILD_ARCH
 
 LABEL \
@@ -27,10 +27,12 @@ RUN apt-get update \
 
 COPY run.sh /usr/local/bin/ha-openclaw-entrypoint
 COPY configure.py /usr/local/lib/ha-openclaw-configure.py
+COPY oauth_device_login.py /usr/local/lib/ha-openclaw-oauth-device-login.py
 
 RUN chmod 755 \
   /usr/local/bin/ha-openclaw-entrypoint \
-  /usr/local/lib/ha-openclaw-configure.py
+  /usr/local/lib/ha-openclaw-configure.py \
+  /usr/local/lib/ha-openclaw-oauth-device-login.py
 
 ENV OPENCLAW_UPSTREAM_VERSION="${OPENCLAW_VERSION}"
 

@@ -52,7 +52,8 @@ def main() -> int:
         'slug: "openclaw"', "  - aarch64", "  - amd64", "init: false",
         "apparmor: true", "backup: cold", "  18789/tcp: 18789",
         "  - type: addon_config", "    read_only: false",
-        "gateway_token: password?", "allow_insecure_http: bool", "ha_mcp_url: password?",
+        "gateway_token: password?", "allow_insecure_http: bool",
+        "openai_oauth_device_login: bool", "ha_mcp_url: password?",
     )
     for item in required_config:
         if item not in config:
@@ -66,6 +67,8 @@ def main() -> int:
         raise RuntimeError("Launcher no longer strips OpenAI Platform API variables")
     if "exec gosu node" not in run:
         raise RuntimeError("Launcher no longer drops privileges to node")
+    if "gosu node python3 /usr/local/lib/ha-openclaw-oauth-device-login.py" not in run:
+        raise RuntimeError("Launcher no longer supports the private OAuth device-login flow")
     if ":latest" in dockerfile or ":latest" in build:
         raise RuntimeError("Mutable latest image tag is forbidden")
 
