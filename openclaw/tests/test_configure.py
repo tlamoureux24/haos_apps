@@ -22,6 +22,7 @@ class ConfigureTests(unittest.TestCase):
             config = root / "openclaw.json"
             options.write_text(json.dumps({
                 "allowed_origins": "http://ha.local:18789, https://claw.example.test",
+                "allow_insecure_http": True,
                 "ha_mcp_url": "http://ha.local:9583/private_abcDEF123_-",
             }), encoding="utf-8")
             config.write_text(json.dumps({"custom": {"keep": True}}), encoding="utf-8")
@@ -31,7 +32,7 @@ class ConfigureTests(unittest.TestCase):
 
             self.assertEqual(result["custom"], {"keep": True})
             self.assertEqual(result["gateway"]["auth"], {"mode": "token"})
-            self.assertFalse(result["gateway"]["controlUi"]["dangerouslyDisableDeviceAuth"])
+            self.assertTrue(result["gateway"]["controlUi"]["dangerouslyDisableDeviceAuth"])
             self.assertEqual(
                 result["mcp"]["servers"]["home-assistant"]["transport"],
                 "streamable-http",
@@ -60,6 +61,32 @@ class ConfigureTests(unittest.TestCase):
     def test_rejects_non_private_ha_mcp_url(self) -> None:
         with self.assertRaises(RuntimeError):
             configure.validate_mcp_url("http://ha.local:9583/mcp")
+
+    def test_insecure_http_is_disabled_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            options = root / "options.json"
+            config = root / "openclaw.json"
+            options.write_text(json.dumps({
+                "allowed_origins": "http://homeassistant.local:18789",
+            }), encoding="utf-8")
+
+            configure.apply(options, config, "/config/workspace")
+            result = json.loads(config.read_text(encoding="utf-8"))
+            self.assertFalse(result["gateway"]["controlUi"]["dangerouslyDisableDeviceAuth"])
+
+    def test_rejects_non_boolean_insecure_http_option(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            options = root / "options.json"
+            config = root / "openclaw.json"
+            options.write_text(json.dumps({
+                "allowed_origins": "http://homeassistant.local:18789",
+                "allow_insecure_http": "true",
+            }), encoding="utf-8")
+
+            with self.assertRaises(RuntimeError):
+                configure.apply(options, config, "/config/workspace")
 
 
 if __name__ == "__main__":

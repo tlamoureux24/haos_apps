@@ -137,6 +137,10 @@ def apply(options_path: Path, config_path: Path, workspace: str) -> None:
     options = read_json(options_path)
     config = read_json(config_path)
 
+    allow_insecure_http = options.get("allow_insecure_http", False)
+    if not isinstance(allow_insecure_http, bool):
+        raise RuntimeError("allow_insecure_http must be a boolean")
+
     gateway = require_mapping(config, "gateway")
     gateway["mode"] = "local"
     gateway["bind"] = "lan"
@@ -147,7 +151,13 @@ def apply(options_path: Path, config_path: Path, workspace: str) -> None:
     control_ui["allowedOrigins"] = parse_origins(
         options.get("allowed_origins", "http://homeassistant.local:18789")
     )
-    control_ui["dangerouslyDisableDeviceAuth"] = False
+    control_ui["dangerouslyDisableDeviceAuth"] = allow_insecure_http
+    if allow_insecure_http:
+        print(
+            "WARNING: insecure HTTP test mode enabled; Control UI browser device "
+            "identity is disabled. Keep port 18789 restricted to the LAN/VPN.",
+            file=sys.stderr,
+        )
 
     agents = require_mapping(config, "agents")
     defaults = require_mapping(agents, "defaults")

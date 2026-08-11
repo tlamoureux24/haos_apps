@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026.7.1-4 - 2026-08-11
+
+- Add an explicit, opt-in LAN/VPN test mode for the Control UI over plain HTTP.
+- Keep Gateway token authentication and exact browser-origin checks enabled in
+  that mode while disabling only Control UI browser device identity.
+- Document the security tradeoff in English and French; secure device identity
+  remains the default.
+
 ## 2026.7.1-3 - 2026-08-11
 
 - Allow the privileged startup wrapper to initialize OpenClaw's private `/config`

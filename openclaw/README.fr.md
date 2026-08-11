@@ -13,7 +13,8 @@ et la préparation du stockage persistant.
 - aucun navigateur, terminal Web, Homebrew, socket Docker ou réseau hôte ;
 - aucune clé OpenAI Platform et aucun repli vers une API facturée ;
 - authentification de l'abonnement ChatGPT/Codex par OAuth OpenAI ;
-- accès local/VPN au Gateway sur le port 18789, protégé par jeton et appairage ;
+- accès local/VPN au Gateway sur le port 18789, protégé par jeton et appairage
+  par défaut, avec un mode de test HTTP temporaire explicite ;
 - connexion facultative directe au serveur Streamable HTTP de HA-MCP existant ;
 - sauvegardes HA à froid et profil AppArmor personnalisé ;
 - mises à jour amont stables automatisées avec validation et test de démarrage.

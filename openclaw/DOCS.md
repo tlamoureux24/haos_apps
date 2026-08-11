@@ -17,6 +17,7 @@ Internet.
 | `timezone` | `Europe/Paris` | IANA timezone used by the Gateway. |
 | `gateway_token` | empty | Gateway secret, minimum 24 characters. Set this before first start. |
 | `allowed_origins` | `http://homeassistant.local:18789` | Comma-separated exact browser origins accepted by Control UI. |
+| `allow_insecure_http` | `false` | Temporarily disable Control UI browser device identity for private LAN/VPN HTTP testing. |
 | `ha_mcp_url` | empty | Existing HA-MCP private Streamable HTTP URL. |
 
 If `gateway_token` is empty, the App generates one at
@@ -33,6 +34,14 @@ proxy is also supported:
 
     https://openclaw.example.lan
 
+Browsers cannot create OpenClaw device identity when the Control UI is opened
+over plain HTTP on a non-localhost address. For a temporary test restricted to
+the trusted LAN/VPN, set `allow_insecure_http: true`. Gateway token auth and
+the exact-origin allowlist remain enforced, but browser pairing, per-device
+identity and per-device revocation are disabled. HTTP traffic, including the
+token and conversations, is not encrypted. Never enable this option on a port
+reachable from the public Internet; turn it off again when HTTPS is available.
+
 The Android app can pair to the Gateway over the LAN or VPN. Current mobile
 clients may require HTTPS for non-loopback addresses unless their trusted
 private-network cleartext option is explicitly enabled. Prefer an internal TLS
@@ -42,7 +51,8 @@ reverse proxy for routine mobile use.
 
 1. Set a strong `gateway_token` and the exact `allowed_origins`.
 2. Start the App and open `http://HOME_ASSISTANT_IP:18789`.
-3. Enter the Gateway token and approve the new browser/device when requested.
+3. Enter the Gateway token. Approve the browser when requested unless
+   `allow_insecure_http` is enabled.
 4. Complete OpenClaw onboarding and select OpenAI ChatGPT/Codex OAuth.
 5. Sign in with the ChatGPT account that owns the Plus subscription.
 6. Confirm in OpenClaw that the active OpenAI profile is OAuth/subscription
@@ -98,8 +108,9 @@ to `main`, releases, secrets or workflows remain recommended.
 - HA-MCP is reached over its existing local port.
 - The container does not use `host_network`, Supervisor APIs, Home Assistant
   APIs, Docker APIs, privileged mode or extra data mounts.
-- Device authentication stays enabled; the wrapper never sets
-  `dangerouslyDisableDeviceAuth`.
+- Device authentication stays enabled by default. The explicit
+  `allow_insecure_http` test option disables it only for Control UI operator
+  sessions; Gateway token authentication and allowed origins remain active.
 - OpenClaw runs as UID/GID 1000 after a short root-owned mount preparation.
 
 ## Updates

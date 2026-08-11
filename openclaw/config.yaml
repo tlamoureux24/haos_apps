@@ -1,6 +1,6 @@
 name: "OpenClaw"
 slug: "openclaw"
-version: "2026.7.1-3"
+version: "2026.7.1-4"
 description: "Official OpenClaw gateway packaged as a Home Assistant app"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/openclaw"
 arch:
@@ -28,10 +28,12 @@ options:
   timezone: "Europe/Paris"
   gateway_token: ""
   allowed_origins: "http://homeassistant.local:18789"
+  allow_insecure_http: false
   ha_mcp_url: ""
 
 schema:
   timezone: str
   gateway_token: password?
   allowed_origins: str
+  allow_insecure_http: bool
   ha_mcp_url: password?

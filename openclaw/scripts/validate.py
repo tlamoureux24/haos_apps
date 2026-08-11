@@ -52,7 +52,7 @@ def main() -> int:
         'slug: "openclaw"', "  - aarch64", "  - amd64", "init: false",
         "apparmor: true", "backup: cold", "  18789/tcp: 18789",
         "  - type: addon_config", "    read_only: false",
-        "gateway_token: password?", "ha_mcp_url: password?",
+        "gateway_token: password?", "allow_insecure_http: bool", "ha_mcp_url: password?",
     )
     for item in required_config:
         if item not in config:
