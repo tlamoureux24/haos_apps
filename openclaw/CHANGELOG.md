@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.7.1-6 - 2026-08-11
+
+- Give the internal OAuth pseudo-terminal a fixed 120-column size so the
+  device URL and code remain readable in Home Assistant logs.
+- Disable unnecessary terminal colors in the headless OAuth helper.
+
 ## 2026.7.1-5 - 2026-08-11
 
 - Add an opt-in ChatGPT/Codex OAuth device-code login flow for headless Home

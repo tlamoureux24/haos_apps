@@ -3,9 +3,13 @@
 
 from __future__ import annotations
 
+import errno
+import fcntl
 import os
 import pty
+import struct
 import sys
+import termios
 
 
 COMMAND = [
@@ -23,7 +27,30 @@ COMMAND = [
 def main() -> int:
     print("=== ChatGPT/Codex OAuth device login ===", flush=True)
     print("The following code is short-lived; do not publish the App log.", flush=True)
-    status = pty.spawn(COMMAND)
+    os.environ.setdefault("TERM", "xterm")
+    os.environ["NO_COLOR"] = "1"
+    os.environ["FORCE_COLOR"] = "0"
+
+    child_pid, master_fd = pty.fork()
+    if child_pid == 0:
+        os.execvp(COMMAND[0], COMMAND)
+
+    fcntl.ioctl(master_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+    try:
+        while True:
+            try:
+                output = os.read(master_fd, 4096)
+            except OSError as err:
+                if err.errno == errno.EIO:
+                    break
+                raise
+            if not output:
+                break
+            os.write(sys.stdout.fileno(), output)
+    finally:
+        os.close(master_fd)
+
+    _, status = os.waitpid(child_pid, 0)
     exit_code = os.waitstatus_to_exitcode(status)
     if exit_code == 0:
         print("=== ChatGPT/Codex OAuth login succeeded ===", flush=True)
