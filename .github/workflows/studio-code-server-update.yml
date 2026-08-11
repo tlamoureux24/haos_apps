@@ -68,6 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 studio_code_server/scripts/validate.py
+          bash -n studio_code_server/install-codex-extension.sh
           bash -n studio_code_server/run.sh
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' studio_code_server/config.yaml)"
           docker build --pull \

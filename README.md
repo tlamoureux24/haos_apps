@@ -37,7 +37,7 @@ Fonctionnalités principales :
 - code-server récent avec terminal intégré ;
 - Git, SSH, Home Assistant CLI, Python et Node.js ;
 - Codex CLI avec connexion OAuth à l’abonnement ChatGPT, sans clé OpenAI Platform imposée ;
-- extension Codex incluse à titre expérimental, car sa compatibilité avec code-server doit être validée ;
+- installateur facultatif de l’extension Codex expérimentale, car sa compatibilité avec code-server doit être validée ;
 - persistance des dépôts, clés SSH, réglages Git, sessions Codex, paramètres et extensions ;
 - accès administratif à la configuration Home Assistant et aux configurations des Apps ;
 - aucun port direct : accès uniquement par Home Assistant et le VPN utilisé pour joindre Home Assistant.
@@ -238,7 +238,7 @@ Main features:
 - current code-server with an integrated terminal;
 - Git, SSH, Home Assistant CLI, Python, and Node.js;
 - Codex CLI with ChatGPT subscription OAuth and no required OpenAI Platform API key;
-- bundled experimental Codex extension, pending real code-server compatibility validation;
+- optional installer for the experimental Codex extension, pending real code-server compatibility validation;
 - persistent repositories, SSH keys, Git settings, Codex sessions, editor settings, and extensions;
 - administrative access to Home Assistant and App configuration;
 - no direct port: access only through Home Assistant and the VPN used to reach it.

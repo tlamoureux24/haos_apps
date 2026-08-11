@@ -2,11 +2,10 @@ ARG BUILD_FROM="ghcr.io/hassio-addons/debian-base:9.3.0"
 FROM ${BUILD_FROM}
 
 ARG BUILD_ARCH="amd64"
-ARG BUILD_VERSION="0.1.0"
+ARG BUILD_VERSION="0.1.1"
 ARG CODE_SERVER_VERSION="4.132.0"
 ARG CODEX_VERSION="0.147.0"
 ARG HA_CLI_VERSION="5.3.0"
-ARG CODEX_EXTENSION_VERSION="26.727.40816"
 ARG HOME_ASSISTANT_EXTENSION_VERSION="2.2.0"
 ARG YAML_EXTENSION_VERSION="1.22.0"
 
@@ -56,14 +55,6 @@ RUN apt-get update \
         --output /usr/local/bin/ha \
         "https://github.com/home-assistant/cli/releases/download/${HA_CLI_VERSION}/ha_${BUILD_ARCH}" \
     && chmod 0755 /usr/local/bin/ha \
-    && mkdir -p /usr/local/lib/code-server/lib/vscode/extensions/openai.chatgpt-${CODEX_EXTENSION_VERSION} \
-    && curl --fail --location --retry 5 \
-        --header "User-Agent: Mozilla/5.0" \
-        --output /tmp/codex.vsix \
-        "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/openai/vsextensions/chatgpt/${CODEX_EXTENSION_VERSION}/vspackage" \
-    && unzip -q /tmp/codex.vsix 'extension/*' -d /tmp/codex-extension \
-    && cp -a /tmp/codex-extension/extension/. \
-        "/usr/local/lib/code-server/lib/vscode/extensions/openai.chatgpt-${CODEX_EXTENSION_VERSION}/" \
     && mkdir -p \
         "/usr/local/lib/code-server/lib/vscode/extensions/keesschollaart.vscode-home-assistant-${HOME_ASSISTANT_EXTENSION_VERSION}" \
         "/usr/local/lib/code-server/lib/vscode/extensions/redhat.vscode-yaml-${YAML_EXTENSION_VERSION}" \
@@ -82,11 +73,14 @@ RUN apt-get update \
     && rm -rf /tmp/* /root/.npm /var/lib/apt/lists/*
 
 COPY run.sh /usr/local/bin/studio-code-server
+COPY install-codex-extension.sh /usr/local/bin/install-codex-extension
 COPY settings.json /usr/local/share/studio-code-server/settings.json
 COPY LICENSE.upstream.md /usr/share/licenses/studio-code-server/LICENSE.upstream.md
 COPY THIRD_PARTY.md /usr/share/doc/studio-code-server/THIRD_PARTY.md
 
-RUN chmod 0755 /usr/local/bin/studio-code-server
+RUN chmod 0755 \
+    /usr/local/bin/install-codex-extension \
+    /usr/local/bin/studio-code-server
 
 HEALTHCHECK CMD curl --fail --silent http://127.0.0.1:1337/healthz >/dev/null || exit 1
 

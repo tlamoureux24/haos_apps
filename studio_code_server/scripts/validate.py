@@ -35,7 +35,6 @@ def main() -> int:
         "code-server": "CODE_SERVER_VERSION",
         "codex": "CODEX_VERSION",
         "ha-cli": "HA_CLI_VERSION",
-        "codex-extension": "CODEX_EXTENSION_VERSION",
         "home-assistant-extension": "HOME_ASSISTANT_EXTENSION_VERSION",
         "yaml-extension": "YAML_EXTENSION_VERSION",
     }
@@ -48,6 +47,15 @@ def main() -> int:
         )
         if docker_value != value:
             raise RuntimeError(f"{arg}={docker_value} does not match {key}={value}")
+
+    installer = (ROOT / "install-codex-extension.sh").read_text(encoding="utf-8")
+    installer_extension = one(
+        r'^readonly CODEX_EXTENSION_VERSION="([^"]+)"$',
+        installer,
+        "Codex extension installer version",
+    )
+    if installer_extension != versions.get("codex-extension"):
+        raise RuntimeError("Codex extension installer version does not match upstream_versions")
 
     app_version = one(r'^version: "([^"]+)"$', config, "App version")
     build_version = one(
@@ -90,6 +98,7 @@ def main() -> int:
         '--disable-telemetry',
         '--disable-update-check',
         'codex login --device-auth',
+        'install-codex-extension',
     )
     for item in required_launcher:
         if item not in launcher:
@@ -112,6 +121,7 @@ def main() -> int:
         "README.md",
         "THIRD_PARTY.md",
         "UPSTREAM.md",
+        "install-codex-extension.sh",
         "translations/en.yaml",
         "translations/fr.yaml",
     )

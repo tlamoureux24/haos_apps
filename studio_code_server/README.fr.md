@@ -14,7 +14,7 @@ Home Assistant OS et Codex. Ne pas l’utiliser comme unique copie d’un dépô
 d’une clé SSH importante.
 
 Codex CLI est le mode d’utilisation de référence. L’extension IDE officielle
-Codex est incluse pour évaluation, mais OpenAI ne documente pas officiellement
+Codex peut être installée séparément pour évaluation, mais OpenAI ne documente pas officiellement
 code-server parmi ses éditeurs compatibles. Elle peut donc ne pas se charger ou
 perdre certaines fonctions.
 
@@ -25,7 +25,8 @@ perdre certaines fonctions.
 - Git, client OpenSSH, Home Assistant CLI, Python, Node.js, rsync et outils usuels ;
 - Codex CLI 0.147.0, sans clé OpenAI Platform imposée ;
 - connexion à l’abonnement ChatGPT par OAuth Device Code ;
-- extensions Codex, Home Assistant Config Helper et YAML préinstallées ;
+- extensions Home Assistant Config Helper et YAML préinstallées ;
+- installateur manuel facultatif de l’extension Codex expérimentale ;
 - persistance des réglages VS Code, extensions, dépôts, clés SSH, configuration Git, historique et données Codex ;
 - accès en écriture à la configuration Home Assistant et aux configurations des Apps.
 
@@ -51,6 +52,20 @@ codex
 
 Les jetons OAuth sont conservés dans le stockage privé de l’App. Ils ne doivent
 jamais être copiés dans un dépôt Git, un ticket ou une conversation.
+
+## Essai facultatif de l’extension Codex
+
+Le CLI doit d’abord être validé. Pour tester ensuite l’interface Codex intégrée
+à l’éditeur, exécuter volontairement :
+
+```bash
+install-codex-extension
+```
+
+Le téléchargement compressé représente environ 200 Mo et l’extension occupe
+environ 550 Mo. Elle est installée dans le stockage persistant, sans alourdir la
+construction de l’App ni son démarrage. Recharger ensuite la fenêtre du
+navigateur. Son fonctionnement sous code-server n’est pas garanti.
 
 ## Git et SSH
 
@@ -100,7 +115,7 @@ y placer de commande provenant d’une source non vérifiée.
 ## Limites du test initial
 
 - ergonomie smartphone à évaluer réellement ;
-- extension Codex non garantie dans code-server ;
+- extension Codex facultative et non garantie dans code-server ;
 - image disponible uniquement pour `amd64` et `aarch64` ;
 - consommation mémoire potentiellement importante ;
 - mises à jour automatiques internes désactivées : toute mise à jour passe par une nouvelle version de l’App.

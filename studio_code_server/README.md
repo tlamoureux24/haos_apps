@@ -14,7 +14,7 @@ Assistant OS, and Codex. Do not use it as the only copy of an important Git
 repository or SSH key.
 
 Codex CLI is the supported reference interface. The official Codex IDE
-extension is bundled for evaluation, but OpenAI does not explicitly document
+extension can be installed separately for evaluation, but OpenAI does not explicitly document
 code-server as a supported editor. The extension may fail to load or have
 reduced functionality.
 
@@ -25,7 +25,8 @@ reduced functionality.
 - Git, OpenSSH client, Home Assistant CLI, Python, Node.js, rsync, and common tools;
 - pinned Codex CLI 0.147.0 without requiring an OpenAI Platform API key;
 - ChatGPT subscription sign-in through OAuth Device Code;
-- bundled Codex, Home Assistant Config Helper, and YAML extensions;
+- bundled Home Assistant Config Helper and YAML extensions;
+- optional manual installer for the experimental Codex extension;
 - persistent editor settings, extensions, repositories, SSH keys, Git configuration, shell history, and Codex data;
 - writable access to Home Assistant and App configuration.
 
@@ -46,6 +47,14 @@ codex login --device-auth
 
 OAuth tokens are stored in private App storage. Never commit, paste, or share
 the contents of `/data/home/.codex`.
+
+## Optional Codex extension experiment
+
+Validate the CLI first. To deliberately test the editor-integrated Codex UI,
+run `install-codex-extension` in the terminal and then reload the browser
+window. The compressed download is about 200 MB and consumes about 550 MB in
+persistent storage. It is kept out of the App build and startup path, and its
+operation under code-server is not guaranteed.
 
 ## Git and SSH persistence
 

@@ -64,7 +64,7 @@ bashio::log.info "Starting Studio Code Server on the Home Assistant Ingress"
 bashio::log.info "Workspace: ${workspace_path}"
 bashio::log.info "Codex CLI: $(codex --version)"
 bashio::log.info "Run 'codex login --device-auth' once from the integrated terminal"
-bashio::log.warning "The bundled Codex IDE extension is experimental under code-server; use the Codex CLI if it does not load"
+bashio::log.info "Optional experiment: run 'install-codex-extension' to test the Codex IDE extension"
 
 cd "${workspace_path}"
 exec code-server \
