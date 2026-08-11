@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.7.1-11 - 2026-08-11
+
+- Revert explicit `device-pair` activation after Android clients with bounded
+  operator tokens repeatedly called admin-only endpoints.
+- Preserve the previously working pairing configuration and existing device data.
+
 ## 2026.7.1-10 - 2026-08-11
 
 - Explicitly enable the bundled `device-pair` plugin when configuring mobile pairing.

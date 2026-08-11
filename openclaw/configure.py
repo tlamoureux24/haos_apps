@@ -173,7 +173,6 @@ def apply(options_path: Path, config_path: Path, workspace: str) -> None:
     plugins = require_mapping(config, "plugins")
     entries = require_mapping(plugins, "entries")
     device_pair = require_mapping(entries, "device-pair")
-    device_pair["enabled"] = True
     device_pair_config = require_mapping(device_pair, "config")
     mobile_pairing_url = validate_mobile_pairing_url(
         options.get("mobile_pairing_url", "")
