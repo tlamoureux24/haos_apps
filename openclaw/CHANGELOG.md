@@ -7,6 +7,7 @@
 - Require secure HTTPS origins and a secure `wss://` mobile pairing URL.
 - Add an unprivileged OpenClaw administrative CLI through admin-only Home
   Assistant Ingress; no terminal port is published on the LAN.
+- Pin and verify the upstream ttyd binary independently for amd64 and aarch64.
 
 ## 2026.7.1-8 - 2026-08-11
 

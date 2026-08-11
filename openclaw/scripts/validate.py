@@ -74,6 +74,8 @@ def main() -> int:
         raise RuntimeError("Launcher no longer supports the private OAuth device-login flow")
     if ":latest" in dockerfile or ":latest" in build:
         raise RuntimeError("Mutable latest image tag is forbidden")
+    if "TTYD_VERSION=\"1.7.7\"" not in dockerfile or "sha256sum --check --strict" not in dockerfile:
+        raise RuntimeError("Pinned and checksummed ttyd installation is missing")
 
     for filename, expected in EXPECTED_ASSETS.items():
         actual = hashlib.sha256((ROOT / filename).read_bytes()).hexdigest()
