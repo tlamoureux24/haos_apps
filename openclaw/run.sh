@@ -55,7 +55,25 @@ if [[ "${HA_OPENCLAW_OAUTH_DEVICE_LOGIN}" == "true" ]]; then
   gosu node python3 /usr/local/lib/ha-openclaw-oauth-device-login.py &
 fi
 
-echo "Starting OpenClaw ${OPENCLAW_UPSTREAM_VERSION} on port 18789 (LAN/VPN only)."
+echo "Starting admin-only OpenClaw CLI on the Home Assistant Ingress."
+gosu node ttyd -W -p 7681 -i 0.0.0.0 /usr/local/bin/ha-openclaw-shell &
+terminal_pid=$!
+
+echo "Starting OpenClaw ${OPENCLAW_UPSTREAM_VERSION} with HTTPS/WSS on port 18789."
 echo "OpenAI Platform API keys are disabled; configure OpenAI with ChatGPT/Codex OAuth."
 
-exec gosu node node /app/dist/index.js gateway --bind lan --port 18789
+gosu node node /app/dist/index.js gateway --bind lan --port 18789 &
+gateway_pid=$!
+
+terminate() {
+  kill -TERM "${gateway_pid}" "${terminal_pid}" 2>/dev/null || true
+}
+trap terminate INT TERM
+
+set +e
+wait -n "${gateway_pid}" "${terminal_pid}"
+status=$?
+set -e
+terminate
+wait "${gateway_pid}" "${terminal_pid}" 2>/dev/null || true
+exit "${status}"

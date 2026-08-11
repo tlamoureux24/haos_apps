@@ -2,9 +2,10 @@
 
 ## Scope
 
-This is a thin wrapper around the official OpenClaw image. It deliberately does
-not include the third-party HA add-on's web terminal, Homebrew, browser image,
-router SSH options or automatic Home Assistant long-lived token handling.
+This wrapper uses the official OpenClaw image and adds native Gateway TLS plus
+an unprivileged administrative CLI protected by Home Assistant Ingress. It does
+not include Homebrew, a browser image, router SSH options or automatic Home
+Assistant long-lived token handling.
 
 OpenClaw is reachable only through the published Home Assistant host port. Keep
 that port on the trusted LAN or VPN. Do not forward it directly from the public
@@ -16,9 +17,8 @@ Internet.
 |---|---|---|
 | `timezone` | `Europe/Paris` | IANA timezone used by the Gateway. |
 | `gateway_token` | empty | Gateway secret, minimum 24 characters. Set this before first start. |
-| `allowed_origins` | `http://homeassistant.local:18789` | Comma-separated exact browser origins accepted by Control UI. |
+| `allowed_origins` | `https://homeassistant.local:18789` | Comma-separated exact HTTPS browser origins accepted by Control UI. |
 | `mobile_pairing_url` | empty | WebSocket URL reachable from the phone and encoded in mobile pairing QR codes. |
-| `allow_insecure_http` | `false` | Temporarily disable Control UI browser device identity for private LAN/VPN HTTP testing. |
 | `openai_oauth_device_login` | `false` | Temporarily start the headless ChatGPT/Codex OAuth device-code flow. |
 | `ha_mcp_url` | empty | Existing HA-MCP private Streamable HTTP URL. |
 
@@ -29,20 +29,17 @@ explicitly is easier and avoids needing filesystem access to retrieve it.
 For access by IP, `allowed_origins` must include the exact URL used by the
 browser, for example:
 
-    http://192.168.1.10:18789
+    https://192.168.1.10:18789
 
 Multiple origins are separated by commas. HTTPS through an internal reverse
 proxy is also supported:
 
     https://openclaw.example.lan
 
-Browsers cannot create OpenClaw device identity when the Control UI is opened
-over plain HTTP on a non-localhost address. For a temporary test restricted to
-the trusted LAN/VPN, set `allow_insecure_http: true`. Gateway token auth and
-the exact-origin allowlist remain enforced, but browser pairing, per-device
-identity and per-device revocation are disabled. HTTP traffic, including the
-token and conversations, is not encrypted. Never enable this option on a port
-reachable from the public Internet; turn it off again when HTTPS is available.
+OpenClaw terminates HTTPS/WSS itself and generates a persistent self-signed
+certificate on first start. Android pins its fingerprint during pairing. A
+browser may show a certificate warning until the local certificate is trusted;
+this does not require disabling OpenClaw device identity.
 
 The Android app can pair to the Gateway over the LAN or VPN. Current mobile
 clients may require HTTPS for non-loopback addresses unless their trusted
@@ -52,7 +49,7 @@ reverse proxy for routine mobile use.
 For Docker/HAOS installations, set `mobile_pairing_url` explicitly so QR codes
 do not contain the container address. For example:
 
-    ws://192.168.1.15:18789
+    wss://192.168.1.15:18789
 
 Use the same private address through a routed VPN, or a `wss://` URL when an
 internal TLS reverse proxy is available. The QR carries the temporary bootstrap
@@ -67,9 +64,7 @@ credential automatically; the long Gateway token does not need to be typed.
 4. Wait for `ChatGPT/Codex OAuth login succeeded` in the log.
 5. Disable `openai_oauth_device_login`, save and restart the App once so the
    Gateway loads the completed OAuth profile cleanly.
-6. Open `http://HOME_ASSISTANT_IP:18789` and enter the Gateway token. Approve
-   the browser when requested unless
-   `allow_insecure_http` is enabled.
+6. Open `https://HOME_ASSISTANT_IP:18789` and enter the Gateway token.
 7. Confirm in OpenClaw that the active OpenAI profile is OAuth/subscription
    based before running agent work.
 
@@ -102,6 +97,17 @@ entry. Other MCP servers configured inside OpenClaw are preserved.
 The private URL is a credential. It is stored in private App options and in
 OpenClaw's private configuration, both included in Home Assistant backups.
 
+## Administrative CLI
+
+Open the App from the Home Assistant sidebar or press **Open Web UI** on its
+Info page. Home Assistant opens an admin-only Ingress terminal running as the
+unprivileged `node` user. Run the official commands printed by Android there:
+
+    openclaw devices list
+    openclaw devices approve <requestId>
+
+The terminal has no published LAN port and has no root or Docker access.
+
 ## Persistent data
 
 All mutable data lives below the App's private `addon_config` mount:
@@ -125,14 +131,12 @@ to `main`, releases, secrets or workflows remain recommended.
 
 ## Network and security
 
-- Port 18789 is the only published port.
+- Port 18789 is the only published LAN port; terminal port 7681 is Ingress-only.
 - Internet egress is required for OpenAI OAuth and model requests.
 - HA-MCP is reached over its existing local port.
 - The container does not use `host_network`, Supervisor APIs, Home Assistant
   APIs, Docker APIs, privileged mode or extra data mounts.
-- Device authentication stays enabled by default. The explicit
-  `allow_insecure_http` test option disables it only for Control UI operator
-  sessions; Gateway token authentication and allowed origins remain active.
+- Device authentication stays enabled over native HTTPS/WSS.
 - OpenClaw runs as UID/GID 1000 after a short root-owned mount preparation.
 
 ## Updates

@@ -59,8 +59,8 @@ def require_mapping(value: dict, key: str) -> dict:
 
 def validate_origin(origin: str) -> str:
     parsed = urlsplit(origin)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise RuntimeError(f"invalid allowed origin: {origin!r}")
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise RuntimeError(f"allowed origin must use HTTPS: {origin!r}")
     if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
         raise RuntimeError(f"allowed origin must not contain a path: {origin!r}")
     return f"{parsed.scheme}://{parsed.netloc}"
@@ -103,8 +103,8 @@ def validate_mobile_pairing_url(raw: object) -> str:
         raise RuntimeError("mobile_pairing_url must be a string")
     value = raw.strip()
     parsed = urlsplit(value)
-    if parsed.scheme not in {"ws", "wss"} or not parsed.hostname:
-        raise RuntimeError("mobile_pairing_url must be a ws:// or wss:// URL")
+    if parsed.scheme != "wss" or not parsed.hostname:
+        raise RuntimeError("mobile_pairing_url must be a wss:// URL")
     if parsed.username or parsed.password:
         raise RuntimeError("mobile_pairing_url must not contain credentials")
     if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
@@ -157,27 +157,18 @@ def apply(options_path: Path, config_path: Path, workspace: str) -> None:
     options = read_json(options_path)
     config = read_json(config_path)
 
-    allow_insecure_http = options.get("allow_insecure_http", False)
-    if not isinstance(allow_insecure_http, bool):
-        raise RuntimeError("allow_insecure_http must be a boolean")
-
     gateway = require_mapping(config, "gateway")
     gateway["mode"] = "local"
     gateway["bind"] = "lan"
     gateway["port"] = 18789
     gateway["auth"] = {"mode": "token"}
+    gateway["tls"] = {"enabled": True, "autoGenerate": True}
 
     control_ui = require_mapping(gateway, "controlUi")
     control_ui["allowedOrigins"] = parse_origins(
-        options.get("allowed_origins", "http://homeassistant.local:18789")
+        options.get("allowed_origins", "https://homeassistant.local:18789")
     )
-    control_ui["dangerouslyDisableDeviceAuth"] = allow_insecure_http
-    if allow_insecure_http:
-        print(
-            "WARNING: insecure HTTP test mode enabled; Control UI browser device "
-            "identity is disabled. Keep port 18789 restricted to the LAN/VPN.",
-            file=sys.stderr,
-        )
+    control_ui.pop("dangerouslyDisableDeviceAuth", None)
 
     plugins = require_mapping(config, "plugins")
     entries = require_mapping(plugins, "entries")

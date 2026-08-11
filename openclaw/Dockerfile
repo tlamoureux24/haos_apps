@@ -2,7 +2,7 @@ ARG BUILD_FROM="ghcr.io/openclaw/openclaw:2026.7.1"
 FROM ${BUILD_FROM}
 
 ARG OPENCLAW_VERSION="2026.7.1"
-ARG BUILD_VERSION="2026.7.1-8"
+ARG BUILD_VERSION="2026.7.1-9"
 ARG BUILD_ARCH
 
 LABEL \
@@ -17,20 +17,21 @@ LABEL \
 
 USER root
 
-# gosu is the only runtime addition. The launcher needs root briefly to prepare
-# Home Assistant's persistent mount, then drops permanently to upstream's node
-# user before OpenClaw starts.
+# The launcher needs root briefly to prepare Home Assistant's persistent mount,
+# then both OpenClaw and the HA-Ingress terminal run as the upstream node user.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends gosu \
+  && apt-get install -y --no-install-recommends gosu ttyd \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
 COPY run.sh /usr/local/bin/ha-openclaw-entrypoint
 COPY configure.py /usr/local/lib/ha-openclaw-configure.py
 COPY oauth_device_login.py /usr/local/lib/ha-openclaw-oauth-device-login.py
+COPY terminal.sh /usr/local/bin/ha-openclaw-shell
 
 RUN chmod 755 \
   /usr/local/bin/ha-openclaw-entrypoint \
+  /usr/local/bin/ha-openclaw-shell \
   /usr/local/lib/ha-openclaw-configure.py \
   /usr/local/lib/ha-openclaw-oauth-device-login.py
 

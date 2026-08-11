@@ -7,13 +7,10 @@ configuration:
     description: "At least 24 characters. Recommended. If empty, a random token is generated in private app storage."
   allowed_origins:
     name: "Allowed browser origins"
-    description: "Comma-separated exact HTTP(S) origins allowed to open Control UI, for example http://192.168.1.10:18789."
+    description: "Comma-separated exact HTTPS origins allowed to open Control UI, for example https://192.168.1.10:18789."
   mobile_pairing_url:
     name: "Mobile pairing URL"
-    description: "WebSocket address reachable by the phone and encoded in the QR, for example ws://192.168.1.10:18789."
-  allow_insecure_http:
-    name: "Temporarily allow Control UI over HTTP"
-    description: "DANGEROUS: disables browser cryptographic device identity. Use only on a private LAN/VPN protected by the Gateway token."
+    description: "TLS WebSocket address reachable by the phone and encoded in the QR, for example wss://192.168.1.10:18789."
   openai_oauth_device_login:
     name: "Start ChatGPT/Codex sign-in"
     description: "Temporary: prints an OAuth URL and code in the App log. Disable it and restart the App after sign-in succeeds."
@@ -21,4 +18,4 @@ configuration:
     name: "HA-MCP private URL"
     description: "Optional private Streamable HTTP URL printed by the existing HA-MCP app, ending in /private_<secret>."
 network:
-  18789/tcp: "Authenticated OpenClaw Gateway and Control UI; restrict to the LAN or VPN."
+  18789/tcp: "Authenticated OpenClaw HTTPS/WSS Gateway and Control UI; restrict to the LAN or VPN."

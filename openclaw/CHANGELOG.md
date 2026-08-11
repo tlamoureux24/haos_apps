@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026.7.1-9 - 2026-08-11
+
+- Replace the temporary cleartext browser mode with OpenClaw's native HTTPS/WSS
+  listener and a persistent auto-generated TLS certificate.
+- Require secure HTTPS origins and a secure `wss://` mobile pairing URL.
+- Add an unprivileged OpenClaw administrative CLI through admin-only Home
+  Assistant Ingress; no terminal port is published on the LAN.
+
 ## 2026.7.1-8 - 2026-08-11
 
 - Add an explicit mobile pairing WebSocket URL so QR codes advertise the HAOS

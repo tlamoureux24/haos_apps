@@ -23,9 +23,8 @@ class ConfigureTests(unittest.TestCase):
             options = root / "options.json"
             config = root / "openclaw.json"
             options.write_text(json.dumps({
-                "allowed_origins": "http://ha.local:18789, https://claw.example.test",
-                "mobile_pairing_url": "ws://192.168.1.15:18789",
-                "allow_insecure_http": True,
+                "allowed_origins": "https://ha.local:18789, https://claw.example.test",
+                "mobile_pairing_url": "wss://192.168.1.15:18789",
                 "ha_mcp_url": "http://ha.local:9583/private_abcDEF123_-",
             }), encoding="utf-8")
             config.write_text(json.dumps({"custom": {"keep": True}}), encoding="utf-8")
@@ -35,10 +34,11 @@ class ConfigureTests(unittest.TestCase):
 
             self.assertEqual(result["custom"], {"keep": True})
             self.assertEqual(result["gateway"]["auth"], {"mode": "token"})
-            self.assertTrue(result["gateway"]["controlUi"]["dangerouslyDisableDeviceAuth"])
+            self.assertEqual(result["gateway"]["tls"], {"enabled": True, "autoGenerate": True})
+            self.assertNotIn("dangerouslyDisableDeviceAuth", result["gateway"]["controlUi"])
             self.assertEqual(
                 result["plugins"]["entries"]["device-pair"]["config"]["publicUrl"],
-                "ws://192.168.1.15:18789",
+                "wss://192.168.1.15:18789",
             )
             self.assertEqual(
                 result["mcp"]["servers"]["home-assistant"]["transport"],
@@ -52,7 +52,7 @@ class ConfigureTests(unittest.TestCase):
             options = root / "options.json"
             config = root / "openclaw.json"
             options.write_text(json.dumps({
-                "allowed_origins": "http://homeassistant.local:18789",
+                "allowed_origins": "https://homeassistant.local:18789",
                 "ha_mcp_url": "",
             }), encoding="utf-8")
             config.write_text(json.dumps({"mcp": {"servers": {
@@ -69,31 +69,17 @@ class ConfigureTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             configure.validate_mcp_url("http://ha.local:9583/mcp")
 
-    def test_rejects_http_mobile_pairing_url(self) -> None:
+    def test_rejects_cleartext_mobile_pairing_url(self) -> None:
         with self.assertRaises(RuntimeError):
-            configure.validate_mobile_pairing_url("http://192.168.1.15:18789")
+            configure.validate_mobile_pairing_url("ws://192.168.1.15:18789")
 
-    def test_insecure_http_is_disabled_by_default(self) -> None:
+    def test_rejects_cleartext_browser_origin(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             options = root / "options.json"
             config = root / "openclaw.json"
             options.write_text(json.dumps({
                 "allowed_origins": "http://homeassistant.local:18789",
-            }), encoding="utf-8")
-
-            configure.apply(options, config, "/config/workspace")
-            result = json.loads(config.read_text(encoding="utf-8"))
-            self.assertFalse(result["gateway"]["controlUi"]["dangerouslyDisableDeviceAuth"])
-
-    def test_rejects_non_boolean_insecure_http_option(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            options = root / "options.json"
-            config = root / "openclaw.json"
-            options.write_text(json.dumps({
-                "allowed_origins": "http://homeassistant.local:18789",
-                "allow_insecure_http": "true",
             }), encoding="utf-8")
 
             with self.assertRaises(RuntimeError):

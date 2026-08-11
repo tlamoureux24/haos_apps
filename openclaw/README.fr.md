@@ -10,12 +10,13 @@ et la préparation du stockage persistant.
 
 - image officielle `ghcr.io/openclaw/openclaw` épinglée par version ;
 - exécution amont sous l'utilisateur non privilégié `node` ;
-- aucun navigateur, terminal Web, Homebrew, socket Docker ou réseau hôte ;
+- aucun navigateur, Homebrew, socket Docker ou réseau hôte ;
+- CLI OpenClaw non privilégiée via l’Ingress HA réservé aux administrateurs ;
 - aucune clé OpenAI Platform et aucun repli vers une API facturée ;
 - authentification de l'abonnement ChatGPT/Codex par OAuth OpenAI ;
 - connexion OAuth sans écran par URL et code dans le journal privé de l'App ;
-- accès local/VPN au Gateway sur le port 18789, protégé par jeton et appairage
-  par défaut, avec un mode de test HTTP temporaire explicite ;
+- accès local/VPN HTTPS/WSS au Gateway sur le port 18789, protégé par jeton,
+  certificat persistant et appairage ;
 - connexion facultative directe au serveur Streamable HTTP de HA-MCP existant ;
 - URL d’appairage mobile explicite pour générer un QR utilisable hors du réseau Docker ;
 - sauvegardes HA à froid et profil AppArmor personnalisé ;

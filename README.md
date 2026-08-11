@@ -158,12 +158,11 @@ Fonctionnalités principales :
 - image officielle OpenClaw épinglée sur une version stable ;
 - authentification ChatGPT/Codex par OAuth, sans clé API OpenAI ;
 - assistant OAuth sans écran par URL et code dans le journal privé de l’App ;
-- Gateway et interface de contrôle locales sur le port 18789 ;
-- mode de test HTTP explicite pour le LAN/VPN, désactivé par défaut ;
+- Gateway et interface de contrôle HTTPS/WSS sur le port 18789 ;
 - connexion facultative au serveur HA-MCP existant ;
 - état, profils OAuth et espace de travail persistés dans `addon_config` ;
-- exécution OpenClaw non-root, sans terminal Web, navigateur ou socket Docker ;
-- profil AppArmor, watchdog et sauvegarde à froid ;
+- exécution OpenClaw non-root avec CLI via Ingress HA administrateur, sans navigateur ni socket Docker ;
+- profil AppArmor et sauvegarde à froid ;
 - suivi et validation automatisés des nouvelles versions officielles.
 
 Documentation détaillée :
@@ -363,12 +362,11 @@ Main features:
 - official OpenClaw image pinned to a stable version;
 - ChatGPT/Codex OAuth authentication with no OpenAI API key;
 - headless OAuth setup through a URL and code in the private App log;
-- local Gateway and Control UI on port 18789;
-- explicit LAN/VPN HTTP test mode, disabled by default;
+- HTTPS/WSS Gateway and Control UI on port 18789;
 - optional connection to the existing HA-MCP server;
 - persistent state, OAuth profiles and workspace in `addon_config`;
-- non-root OpenClaw runtime without a web terminal, browser or Docker socket;
-- AppArmor profile, watchdog and cold backups;
+- non-root OpenClaw runtime with an admin-only HA Ingress CLI, without a browser or Docker socket;
+- AppArmor profile and cold backups;
 - automated tracking and validation of official releases.
 
 Detailed documentation:

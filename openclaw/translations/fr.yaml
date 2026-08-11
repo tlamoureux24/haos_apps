@@ -7,13 +7,10 @@ configuration:
     description: "Au moins 24 caractères. Recommandé. Si vide, un jeton aléatoire est généré dans le stockage privé de l'App."
   allowed_origins:
     name: "Origines navigateur autorisées"
-    description: "Origines HTTP(S) exactes séparées par des virgules, par exemple http://192.168.1.10:18789."
+    description: "Origines HTTPS exactes séparées par des virgules, par exemple https://192.168.1.10:18789."
   mobile_pairing_url:
     name: "URL d’appairage mobile"
-    description: "Adresse WebSocket joignable depuis le téléphone et encodée dans le QR, par exemple ws://192.168.1.10:18789."
-  allow_insecure_http:
-    name: "Autoriser temporairement le Control UI en HTTP"
-    description: "DANGEREUX : désactive l'identité cryptographique du navigateur. Uniquement pour un accès privé LAN/VPN protégé par le jeton Gateway."
+    description: "Adresse WebSocket TLS joignable depuis le téléphone et encodée dans le QR, par exemple wss://192.168.1.10:18789."
   openai_oauth_device_login:
     name: "Démarrer la connexion ChatGPT/Codex"
     description: "Temporaire : affiche dans le journal une URL et un code OAuth. Désactiver puis redémarrer l'App après la réussite de la connexion."
@@ -21,4 +18,4 @@ configuration:
     name: "URL privée HA-MCP"
     description: "URL Streamable HTTP facultative affichée par l'App HA-MCP existante et terminant par /private_<secret>."
 network:
-  18789/tcp: "Gateway et interface OpenClaw authentifiés ; limiter au LAN ou au VPN."
+  18789/tcp: "Gateway HTTPS/WSS et interface OpenClaw authentifiés ; limiter au LAN ou au VPN."

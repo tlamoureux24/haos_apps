@@ -10,12 +10,13 @@ packaging and persistent-path preparation required by HAOS.
 
 - official version-pinned `ghcr.io/openclaw/openclaw` image;
 - upstream non-root `node` runtime;
-- no browser, web terminal, Homebrew, Docker socket or host network;
+- no browser, Homebrew, Docker socket or host network;
+- unprivileged OpenClaw CLI through admin-only Home Assistant Ingress;
 - no OpenAI Platform API key and no metered API fallback;
 - ChatGPT/Codex subscription authentication through OpenAI OAuth;
 - headless OAuth device-code setup from the private Home Assistant App log;
-- local/VPN Gateway access on port 18789 with token and device authentication
-  by default, plus an explicit temporary HTTP test mode;
+- local/VPN HTTPS/WSS Gateway access on port 18789 with token, persistent
+  certificate and device authentication;
 - optional direct connection to an existing HA-MCP Streamable HTTP endpoint;
 - explicit mobile pairing URL so QR codes advertise the reachable host instead of Docker networking;
 - cold Home Assistant backups and a custom AppArmor profile;
