@@ -41,8 +41,8 @@ def main() -> int:
 
     if docker_image != upstream or docker_upstream != upstream:
         raise RuntimeError("Docker image/version does not match upstream_version")
-    if docker_package != config_package or not re.fullmatch(rf"{re.escape(upstream)}-\d+", config_package):
-        raise RuntimeError("Docker and config package versions must match upstream-REVISION")
+    if docker_package != config_package or not re.fullmatch(rf"{re.escape(upstream)}\.\d+", config_package):
+        raise RuntimeError("Docker and config package versions must match upstream.REVISION")
     for arch in ("amd64", "aarch64"):
         expected = f"  {arch}: ghcr.io/openclaw/openclaw:{upstream}"
         if expected not in build:

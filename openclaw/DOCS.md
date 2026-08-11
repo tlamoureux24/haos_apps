@@ -150,5 +150,7 @@ drafts, prereleases and downgrades, checks the official GHCR manifest for amd64
 and arm64, updates the pinned image and App metadata, validates the package,
 builds it and probes `/healthz` plus `/readyz`.
 
-The App version follows `OPENCLAW_VERSION-APP_REVISION`. Wrapper-only changes
-increment the final revision. A new upstream release resets it to `1`.
+The App version follows `OPENCLAW_VERSION.APP_REVISION`, for example
+`2026.7.1.12`. The fourth numeric component is intentionally used so Home
+Assistant Core orders wrapper revisions correctly. Wrapper-only changes
+increment that component; a new upstream release resets it to `1`.

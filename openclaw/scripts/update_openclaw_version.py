@@ -53,7 +53,7 @@ def main() -> int:
         print(f"Refusing to downgrade OpenClaw {current} -> {upstream}", file=sys.stderr)
         return 2
 
-    package = f"{upstream}-1"
+    package = f"{upstream}.1"
     replace_once(ROOT / "Dockerfile", r'^ARG BUILD_FROM="[^\"]+"$', f'ARG BUILD_FROM="ghcr.io/openclaw/openclaw:{upstream}"')
     replace_once(ROOT / "Dockerfile", r'^ARG OPENCLAW_VERSION="[^\"]+"$', f'ARG OPENCLAW_VERSION="{upstream}"')
     replace_once(ROOT / "Dockerfile", r'^ARG BUILD_VERSION="[^\"]+"$', f'ARG BUILD_VERSION="{package}"')

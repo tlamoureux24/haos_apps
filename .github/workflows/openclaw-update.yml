@@ -98,7 +98,7 @@ jobs:
           docker build --pull \
             --build-arg "BUILD_FROM=ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION}" \
             --build-arg "OPENCLAW_VERSION=${OPENCLAW_VERSION}" \
-            --build-arg "BUILD_VERSION=${OPENCLAW_VERSION}-1" \
+            --build-arg "BUILD_VERSION=${OPENCLAW_VERSION}.1" \
             --build-arg "BUILD_ARCH=amd64" \
             --tag "ha-openclaw-smoke:${OPENCLAW_VERSION}" \
             openclaw
