@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026.7.1-12 - 2026-08-11
+
+- Remove the obsolete log-based OAuth helper and its Home Assistant option now
+  that the admin-only Ingress CLI provides the required interactive terminal.
+- Consolidate ChatGPT/Codex OAuth setup in the Ingress CLI and update the
+  English, French and repository-level documentation.
+- Preserve existing OAuth profiles and all persistent OpenClaw data.
+
 ## 2026.7.1-11 - 2026-08-11
 
 - Revert explicit `device-pair` activation after Android clients with bounded

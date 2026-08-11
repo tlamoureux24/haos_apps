@@ -19,7 +19,6 @@ Internet.
 | `gateway_token` | empty | Gateway secret, minimum 24 characters. Set this before first start. |
 | `allowed_origins` | `https://homeassistant.local:18789` | Comma-separated exact HTTPS browser origins accepted by Control UI. |
 | `mobile_pairing_url` | empty | WebSocket URL reachable from the phone and encoded in mobile pairing QR codes. |
-| `openai_oauth_device_login` | `false` | Temporarily start the headless ChatGPT/Codex OAuth device-code flow. |
 | `ha_mcp_url` | empty | Existing HA-MCP private Streamable HTTP URL. |
 
 If `gateway_token` is empty, the App generates one at
@@ -58,22 +57,25 @@ credential automatically; the long Gateway token does not need to be typed.
 ## First start and OpenAI OAuth
 
 1. Set a strong `gateway_token` and the exact `allowed_origins`.
-2. Enable `openai_oauth_device_login`, save and restart the App.
-3. Open the App log. Follow the printed OpenAI URL and enter the short-lived
-   device code with the ChatGPT account that owns the Plus subscription.
-4. Wait for `ChatGPT/Codex OAuth login succeeded` in the log.
-5. Disable `openai_oauth_device_login`, save and restart the App once so the
-   Gateway loads the completed OAuth profile cleanly.
+2. Start the App, then open **OpenClaw CLI** from the Home Assistant sidebar or
+   use **Open Web UI** on the App Info page.
+3. Run:
+
+       openclaw models auth login --provider openai --device-code
+
+4. Follow the printed OpenAI URL and enter the short-lived device code with the
+   ChatGPT account that owns the Plus subscription.
+5. Wait for the CLI to confirm that login succeeded, then restart the App once
+   so the Gateway loads the completed OAuth profile cleanly.
 6. Open `https://HOME_ASSISTANT_IP:18789` and enter the Gateway token.
 7. Confirm in OpenClaw that the active OpenAI profile is OAuth/subscription
    based before running agent work.
 
-The temporary OAuth helper runs in a private pseudo-terminal because upstream
-OpenClaw refuses provider login without an interactive TTY. It runs as the
-unprivileged `node` user alongside the Gateway; no shell or terminal is exposed
-over the network. The verification code is a short-lived credential, so do not
-publish or share the App log while login is active. If the code expires, restart
-the App with the option still enabled to request a fresh one.
+The Ingress terminal supplies the interactive TTY required by upstream
+OpenClaw. It runs as the unprivileged `node` user, has no published LAN port and
+is restricted to Home Assistant administrators. The verification code is a
+short-lived credential; do not share the terminal while login is active. If the
+code expires, run the same command again.
 
 The launcher always removes `OPENAI_API_KEY`, `CODEX_API_KEY`,
 `OPENAI_ADMIN_KEY` and `OPENAI_PROJECT_ID` from the Gateway environment. It
@@ -101,8 +103,10 @@ OpenClaw's private configuration, both included in Home Assistant backups.
 
 Open the App from the Home Assistant sidebar or press **Open Web UI** on its
 Info page. Home Assistant opens an admin-only Ingress terminal running as the
-unprivileged `node` user. Run the official commands printed by Android there:
+unprivileged `node` user. Use it for OAuth setup and the official administrative
+commands printed by Android:
 
+    openclaw models auth login --provider openai --device-code
     openclaw devices list
     openclaw devices approve <requestId>
 

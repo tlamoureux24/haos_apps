@@ -2,7 +2,7 @@ ARG BUILD_FROM="ghcr.io/openclaw/openclaw:2026.7.1"
 FROM ${BUILD_FROM}
 
 ARG OPENCLAW_VERSION="2026.7.1"
-ARG BUILD_VERSION="2026.7.1-11"
+ARG BUILD_VERSION="2026.7.1-12"
 ARG BUILD_ARCH
 ARG TTYD_VERSION="1.7.7"
 
@@ -40,14 +40,12 @@ RUN case "${BUILD_ARCH}" in \
 
 COPY run.sh /usr/local/bin/ha-openclaw-entrypoint
 COPY configure.py /usr/local/lib/ha-openclaw-configure.py
-COPY oauth_device_login.py /usr/local/lib/ha-openclaw-oauth-device-login.py
 COPY terminal.sh /usr/local/bin/ha-openclaw-shell
 
 RUN chmod 755 \
   /usr/local/bin/ha-openclaw-entrypoint \
   /usr/local/bin/ha-openclaw-shell \
-  /usr/local/lib/ha-openclaw-configure.py \
-  /usr/local/lib/ha-openclaw-oauth-device-login.py
+  /usr/local/lib/ha-openclaw-configure.py
 
 ENV OPENCLAW_UPSTREAM_VERSION="${OPENCLAW_VERSION}"
 

@@ -11,9 +11,6 @@ configuration:
   mobile_pairing_url:
     name: "Mobile pairing URL"
     description: "TLS WebSocket address reachable by the phone and encoded in the QR, for example wss://192.168.1.10:18789."
-  openai_oauth_device_login:
-    name: "Start ChatGPT/Codex sign-in"
-    description: "Temporary: prints an OAuth URL and code in the App log. Disable it and restart the App after sign-in succeeds."
   ha_mcp_url:
     name: "HA-MCP private URL"
     description: "Optional private Streamable HTTP URL printed by the existing HA-MCP app, ending in /private_<secret>."

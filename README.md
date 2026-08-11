@@ -157,7 +157,7 @@ Fonctionnalités principales :
 
 - image officielle OpenClaw épinglée sur une version stable ;
 - authentification ChatGPT/Codex par OAuth, sans clé API OpenAI ;
-- assistant OAuth sans écran par URL et code dans le journal privé de l’App ;
+- connexion OAuth par code depuis la CLI Ingress réservée aux administrateurs ;
 - Gateway et interface de contrôle HTTPS/WSS sur le port 18789 ;
 - connexion facultative au serveur HA-MCP existant ;
 - état, profils OAuth et espace de travail persistés dans `addon_config` ;
@@ -361,7 +361,7 @@ Main features:
 
 - official OpenClaw image pinned to a stable version;
 - ChatGPT/Codex OAuth authentication with no OpenAI API key;
-- headless OAuth setup through a URL and code in the private App log;
+- OAuth device-code setup through the admin-only Ingress CLI;
 - HTTPS/WSS Gateway and Control UI on port 18789;
 - optional connection to the existing HA-MCP server;
 - persistent state, OAuth profiles and workspace in `addon_config`;

@@ -140,12 +140,8 @@ def shell_env(options_path: Path, config_root: Path) -> None:
     if not isinstance(timezone, str) or not re.fullmatch(r"[A-Za-z0-9_+.-]+(?:/[A-Za-z0-9_+.-]+)+", timezone):
         raise RuntimeError("timezone must be an IANA timezone such as Europe/Paris")
     token, generated = gateway_token(options, config_root)
-    oauth_device_login = options.get("openai_oauth_device_login", False)
-    if not isinstance(oauth_device_login, bool):
-        raise RuntimeError("openai_oauth_device_login must be a boolean")
     print(f"TZ={shlex.quote(timezone)}")
     print(f"OPENCLAW_GATEWAY_TOKEN={shlex.quote(token)}")
-    print(f"HA_OPENCLAW_OAUTH_DEVICE_LOGIN={'true' if oauth_device_login else 'false'}")
     if generated:
         print(
             f"INFO: generated Gateway token; retrieve it from {config_root / 'gateway_token'}",

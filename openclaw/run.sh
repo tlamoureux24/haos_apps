@@ -39,7 +39,7 @@ done
 echo "Verified subscription-only environment: OpenAI Platform API variables are absent."
 
 eval "$(python3 /usr/local/lib/ha-openclaw-configure.py shell-env "${OPTIONS_FILE}" "${APP_CONFIG_ROOT}")"
-export TZ OPENCLAW_GATEWAY_TOKEN HA_OPENCLAW_OAUTH_DEVICE_LOGIN
+export TZ OPENCLAW_GATEWAY_TOKEN
 
 python3 /usr/local/lib/ha-openclaw-configure.py apply \
   "${OPTIONS_FILE}" "${OPENCLAW_CONFIG_PATH}" "${OPENCLAW_WORKSPACE_DIR}"
@@ -48,12 +48,6 @@ chown -R node:node \
   "${OPENCLAW_STATE_DIR}" \
   "${OPENCLAW_WORKSPACE_DIR}" \
   "${XDG_CONFIG_HOME}"
-
-if [[ "${HA_OPENCLAW_OAUTH_DEVICE_LOGIN}" == "true" ]]; then
-  echo "Starting temporary ChatGPT/Codex device login; follow the URL and code printed below."
-  echo "After OAuth succeeds, disable the device-login option and restart the App once."
-  gosu node python3 /usr/local/lib/ha-openclaw-oauth-device-login.py &
-fi
 
 echo "Starting admin-only OpenClaw CLI on the Home Assistant Ingress."
 gosu node ttyd -W -p 7681 -i 0.0.0.0 /usr/local/bin/ha-openclaw-shell &
