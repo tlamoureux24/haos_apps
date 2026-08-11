@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.7.1-8 - 2026-08-11
+
+- Add an explicit mobile pairing WebSocket URL so QR codes advertise the HAOS
+  host or VPN-reachable address instead of the internal Docker address.
+- Preserve automatic bootstrap-token transfer: mobile users no longer need to
+  type the long Gateway token during QR pairing.
+
 ## 2026.7.1-7 - 2026-08-11
 
 - Make the Docker smoke-test log assertion immune to an expected SIGPIPE when

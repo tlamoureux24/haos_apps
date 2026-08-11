@@ -8,6 +8,9 @@ configuration:
   allowed_origins:
     name: "Allowed browser origins"
     description: "Comma-separated exact HTTP(S) origins allowed to open Control UI, for example http://192.168.1.10:18789."
+  mobile_pairing_url:
+    name: "Mobile pairing URL"
+    description: "WebSocket address reachable by the phone and encoded in the QR, for example ws://192.168.1.10:18789."
   allow_insecure_http:
     name: "Temporarily allow Control UI over HTTP"
     description: "DANGEROUS: disables browser cryptographic device identity. Use only on a private LAN/VPN protected by the Gateway token."

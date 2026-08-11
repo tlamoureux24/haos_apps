@@ -24,6 +24,7 @@ class ConfigureTests(unittest.TestCase):
             config = root / "openclaw.json"
             options.write_text(json.dumps({
                 "allowed_origins": "http://ha.local:18789, https://claw.example.test",
+                "mobile_pairing_url": "ws://192.168.1.15:18789",
                 "allow_insecure_http": True,
                 "ha_mcp_url": "http://ha.local:9583/private_abcDEF123_-",
             }), encoding="utf-8")
@@ -35,6 +36,10 @@ class ConfigureTests(unittest.TestCase):
             self.assertEqual(result["custom"], {"keep": True})
             self.assertEqual(result["gateway"]["auth"], {"mode": "token"})
             self.assertTrue(result["gateway"]["controlUi"]["dangerouslyDisableDeviceAuth"])
+            self.assertEqual(
+                result["plugins"]["entries"]["device-pair"]["config"]["publicUrl"],
+                "ws://192.168.1.15:18789",
+            )
             self.assertEqual(
                 result["mcp"]["servers"]["home-assistant"]["transport"],
                 "streamable-http",
@@ -63,6 +68,10 @@ class ConfigureTests(unittest.TestCase):
     def test_rejects_non_private_ha_mcp_url(self) -> None:
         with self.assertRaises(RuntimeError):
             configure.validate_mcp_url("http://ha.local:9583/mcp")
+
+    def test_rejects_http_mobile_pairing_url(self) -> None:
+        with self.assertRaises(RuntimeError):
+            configure.validate_mobile_pairing_url("http://192.168.1.15:18789")
 
     def test_insecure_http_is_disabled_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

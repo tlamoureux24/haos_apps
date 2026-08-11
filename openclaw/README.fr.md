@@ -17,6 +17,7 @@ et la préparation du stockage persistant.
 - accès local/VPN au Gateway sur le port 18789, protégé par jeton et appairage
   par défaut, avec un mode de test HTTP temporaire explicite ;
 - connexion facultative directe au serveur Streamable HTTP de HA-MCP existant ;
+- URL d’appairage mobile explicite pour générer un QR utilisable hors du réseau Docker ;
 - sauvegardes HA à froid et profil AppArmor personnalisé ;
 - mises à jour amont stables automatisées avec validation et test de démarrage.
 

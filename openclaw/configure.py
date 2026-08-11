@@ -96,6 +96,22 @@ def validate_mcp_url(raw: object) -> str:
     return value
 
 
+def validate_mobile_pairing_url(raw: object) -> str:
+    if raw in {None, ""}:
+        return ""
+    if not isinstance(raw, str):
+        raise RuntimeError("mobile_pairing_url must be a string")
+    value = raw.strip()
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"ws", "wss"} or not parsed.hostname:
+        raise RuntimeError("mobile_pairing_url must be a ws:// or wss:// URL")
+    if parsed.username or parsed.password:
+        raise RuntimeError("mobile_pairing_url must not contain credentials")
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise RuntimeError("mobile_pairing_url must not contain a path, query or fragment")
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
 def gateway_token(options: dict, config_root: Path) -> tuple[str, bool]:
     configured = options.get("gateway_token", "")
     if configured is not None and not isinstance(configured, str):
@@ -162,6 +178,18 @@ def apply(options_path: Path, config_path: Path, workspace: str) -> None:
             "identity is disabled. Keep port 18789 restricted to the LAN/VPN.",
             file=sys.stderr,
         )
+
+    plugins = require_mapping(config, "plugins")
+    entries = require_mapping(plugins, "entries")
+    device_pair = require_mapping(entries, "device-pair")
+    device_pair_config = require_mapping(device_pair, "config")
+    mobile_pairing_url = validate_mobile_pairing_url(
+        options.get("mobile_pairing_url", "")
+    )
+    if mobile_pairing_url:
+        device_pair_config["publicUrl"] = mobile_pairing_url
+    else:
+        device_pair_config.pop("publicUrl", None)
 
     agents = require_mapping(config, "agents")
     defaults = require_mapping(agents, "defaults")

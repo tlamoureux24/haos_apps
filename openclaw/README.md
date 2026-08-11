@@ -17,6 +17,7 @@ packaging and persistent-path preparation required by HAOS.
 - local/VPN Gateway access on port 18789 with token and device authentication
   by default, plus an explicit temporary HTTP test mode;
 - optional direct connection to an existing HA-MCP Streamable HTTP endpoint;
+- explicit mobile pairing URL so QR codes advertise the reachable host instead of Docker networking;
 - cold Home Assistant backups and a custom AppArmor profile;
 - automated stable upstream updates with validation and smoke tests.
 

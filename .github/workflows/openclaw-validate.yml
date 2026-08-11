@@ -72,6 +72,7 @@ jobs:
             "timezone": "Europe/Paris",
             "gateway_token": "smoke-test-gateway-token-1234567890",
             "allowed_origins": "http://127.0.0.1:18789",
+            "mobile_pairing_url": "ws://127.0.0.1:18789",
             "allow_insecure_http": true,
             "ha_mcp_url": ""
           }
@@ -104,6 +105,8 @@ jobs:
                 '"mode": "local"' /config/.openclaw/openclaw.json
               docker exec ha-openclaw-smoke grep -q \
                 '"dangerouslyDisableDeviceAuth": true' /config/.openclaw/openclaw.json
+              docker exec ha-openclaw-smoke grep -q \
+                '"publicUrl": "ws://127.0.0.1:18789"' /config/.openclaw/openclaw.json
               echo "OpenClaw Gateway is healthy, ready and running with persistent state"
               exit 0
             fi

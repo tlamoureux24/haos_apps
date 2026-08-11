@@ -17,6 +17,7 @@ Internet.
 | `timezone` | `Europe/Paris` | IANA timezone used by the Gateway. |
 | `gateway_token` | empty | Gateway secret, minimum 24 characters. Set this before first start. |
 | `allowed_origins` | `http://homeassistant.local:18789` | Comma-separated exact browser origins accepted by Control UI. |
+| `mobile_pairing_url` | empty | WebSocket URL reachable from the phone and encoded in mobile pairing QR codes. |
 | `allow_insecure_http` | `false` | Temporarily disable Control UI browser device identity for private LAN/VPN HTTP testing. |
 | `openai_oauth_device_login` | `false` | Temporarily start the headless ChatGPT/Codex OAuth device-code flow. |
 | `ha_mcp_url` | empty | Existing HA-MCP private Streamable HTTP URL. |
@@ -47,6 +48,15 @@ The Android app can pair to the Gateway over the LAN or VPN. Current mobile
 clients may require HTTPS for non-loopback addresses unless their trusted
 private-network cleartext option is explicitly enabled. Prefer an internal TLS
 reverse proxy for routine mobile use.
+
+For Docker/HAOS installations, set `mobile_pairing_url` explicitly so QR codes
+do not contain the container address. For example:
+
+    ws://192.168.1.15:18789
+
+Use the same private address through a routed VPN, or a `wss://` URL when an
+internal TLS reverse proxy is available. The QR carries the temporary bootstrap
+credential automatically; the long Gateway token does not need to be typed.
 
 ## First start and OpenAI OAuth
 

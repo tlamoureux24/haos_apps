@@ -8,6 +8,9 @@ configuration:
   allowed_origins:
     name: "Origines navigateur autorisées"
     description: "Origines HTTP(S) exactes séparées par des virgules, par exemple http://192.168.1.10:18789."
+  mobile_pairing_url:
+    name: "URL d’appairage mobile"
+    description: "Adresse WebSocket joignable depuis le téléphone et encodée dans le QR, par exemple ws://192.168.1.10:18789."
   allow_insecure_http:
     name: "Autoriser temporairement le Control UI en HTTP"
     description: "DANGEREUX : désactive l'identité cryptographique du navigateur. Uniquement pour un accès privé LAN/VPN protégé par le jeton Gateway."
