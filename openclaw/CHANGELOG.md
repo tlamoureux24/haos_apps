@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.7.1-7 - 2026-08-11
+
+- Make the Docker smoke-test log assertion immune to an expected SIGPIPE when
+  the searched startup line is followed by additional Gateway output.
+
 ## 2026.7.1-6 - 2026-08-11
 
 - Give the internal OAuth pseudo-terminal a fixed 120-column size so the

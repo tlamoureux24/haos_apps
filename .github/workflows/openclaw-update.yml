@@ -138,8 +138,10 @@ jobs:
           for attempt in {1..90}; do
             if curl --fail --silent --show-error http://127.0.0.1:18789/healthz >/dev/null \
               && curl --fail --silent --show-error http://127.0.0.1:18789/readyz >/dev/null; then
-              docker logs ha-openclaw-update-smoke 2>&1 | grep -q \
-                'Verified subscription-only environment: OpenAI Platform API variables are absent.'
+              smoke_logs="$(docker logs ha-openclaw-update-smoke 2>&1)"
+              grep -q \
+                'Verified subscription-only environment: OpenAI Platform API variables are absent.' \
+                <<<"${smoke_logs}"
               echo "OpenClaw ${OPENCLAW_VERSION} is healthy, ready and API-key free"
               exit 0
             fi

@@ -96,8 +96,10 @@ jobs:
               && curl --fail --silent --show-error http://127.0.0.1:18789/readyz >/dev/null; then
               docker exec ha-openclaw-smoke sh -c \
                 'test "$(stat -c %u /config/.openclaw)" = 1000'
-              docker logs ha-openclaw-smoke 2>&1 | grep -q \
-                'Verified subscription-only environment: OpenAI Platform API variables are absent.'
+              smoke_logs="$(docker logs ha-openclaw-smoke 2>&1)"
+              grep -q \
+                'Verified subscription-only environment: OpenAI Platform API variables are absent.' \
+                <<<"${smoke_logs}"
               docker exec ha-openclaw-smoke grep -q \
                 '"mode": "local"' /config/.openclaw/openclaw.json
               docker exec ha-openclaw-smoke grep -q \
