@@ -28,6 +28,24 @@ https://github.com/tlamoureux24/haos_apps
 
 ### Apps disponibles
 
+#### Studio Code Server + Codex
+
+App Home Assistant expérimentale fournissant un espace de développement persistant accessible exclusivement par l’Ingress authentifié de Home Assistant.
+
+Fonctionnalités principales :
+
+- code-server récent avec terminal intégré ;
+- Git, SSH, Home Assistant CLI, Python et Node.js ;
+- Codex CLI avec connexion OAuth à l’abonnement ChatGPT, sans clé OpenAI Platform imposée ;
+- extension Codex incluse à titre expérimental, car sa compatibilité avec code-server doit être validée ;
+- persistance des dépôts, clés SSH, réglages Git, sessions Codex, paramètres et extensions ;
+- accès administratif à la configuration Home Assistant et aux configurations des Apps ;
+- aucun port direct : accès uniquement par Home Assistant et le VPN utilisé pour joindre Home Assistant.
+
+Documentation détaillée :
+
+- [Documentation française](studio_code_server/README.fr.md)
+
 #### Rsync Manager
 
 App Home Assistant avec interface Ingress pour configurer, planifier, tester et lancer des synchronisations `rsync`.
@@ -176,6 +194,7 @@ Si la nouvelle version n’apparaît pas :
 Pour comprendre le fonctionnement d’une App ou obtenir de l’aide, consulter d’abord sa documentation française :
 
 - [Rsync Manager](rsync_manager/README.fr.md)
+- [Studio Code Server + Codex](studio_code_server/README.fr.md)
 - [UniFi Autoblock](unifi_autoblock/README.fr.md)
 - [UniFi Log Explorer](unifi_log_explorer/README.fr.md) — exploration locale des Traffic Flows et événements CEF/Syslog
 - [Nginx Proxy Manager](nginx_proxy_manager/README.fr.md)
@@ -209,6 +228,24 @@ https://github.com/tlamoureux24/haos_apps
 6. Install the desired App from the store.
 
 ### Available Apps
+
+#### Studio Code Server + Codex
+
+Experimental Home Assistant App providing a persistent development workspace exclusively through authenticated Home Assistant Ingress.
+
+Main features:
+
+- current code-server with an integrated terminal;
+- Git, SSH, Home Assistant CLI, Python, and Node.js;
+- Codex CLI with ChatGPT subscription OAuth and no required OpenAI Platform API key;
+- bundled experimental Codex extension, pending real code-server compatibility validation;
+- persistent repositories, SSH keys, Git settings, Codex sessions, editor settings, and extensions;
+- administrative access to Home Assistant and App configuration;
+- no direct port: access only through Home Assistant and the VPN used to reach it.
+
+Detailed documentation:
+
+- [English documentation](studio_code_server/README.md)
 
 #### Rsync Manager
 
@@ -358,6 +395,7 @@ If the new version does not appear:
 For details or help with an App, consult its English documentation first:
 
 - [Rsync Manager](rsync_manager/README.md)
+- [Studio Code Server + Codex](studio_code_server/README.md)
 - [UniFi Autoblock](unifi_autoblock/README.md)
 - [UniFi Log Explorer](unifi_log_explorer/README.md)
 - [Nginx Proxy Manager](nginx_proxy_manager/README.md)

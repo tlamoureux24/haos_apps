@@ -1,0 +1,13 @@
+configuration:
+  log_level:
+    name: Niveau de journalisation
+    description: Contrôle le niveau de détail du journal de démarrage de l’App.
+  workspace_path:
+    name: Espace de travail initial
+    description: Dossier persistant ouvert par code-server. Conserver /data/workspace sauf besoin d’un autre dossier Home Assistant monté.
+  packages:
+    name: Paquets Debian supplémentaires
+    description: Noms de paquets facultatifs installés à chaque démarrage. De nombreux paquets ralentissent le démarrage.
+  init_commands:
+    name: Commandes d’initialisation
+    description: Commandes shell avancées exécutées comme root à chaque démarrage. Utiliser uniquement des commandes de confiance.

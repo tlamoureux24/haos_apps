@@ -1,0 +1,107 @@
+name: Validate Studio Code Server + Codex App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "studio_code_server/**"
+      - ".github/workflows/studio-code-server-*.yml"
+  pull_request:
+    paths:
+      - "studio_code_server/**"
+      - ".github/workflows/studio-code-server-*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate metadata and scripts
+        run: |
+          set -euo pipefail
+          python3 studio_code_server/scripts/validate.py
+          bash -n studio_code_server/run.sh
+          python3 -m py_compile \
+            studio_code_server/scripts/update_versions.py \
+            studio_code_server/scripts/validate.py
+
+      - name: Build amd64 image
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' studio_code_server/config.yaml)"
+          docker build --pull \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg "BUILD_VERSION=${version}" \
+            --tag "studio-code-server-codex:${version}" \
+            studio_code_server
+
+      - name: Smoke-test startup and bundled tools
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' studio_code_server/config.yaml)"
+          root="${RUNNER_TEMP}/studio-code-smoke"
+          mkdir -p \
+            "${root}/config" \
+            "${root}/data" \
+            "${root}/addon_configs" \
+            "${root}/addons" \
+            "${root}/share" \
+            "${root}/supervisor/addons/self/options"
+          jq --null-input '{result:"ok",data:{log_level:"info",workspace_path:"/data/workspace",packages:[],init_commands:[]}}' \
+            >"${root}/supervisor/addons/self/options/config"
+
+          cleanup() {
+            docker logs studio-code-smoke 2>&1 || true
+            docker logs studio-code-supervisor 2>&1 || true
+            docker rm --force studio-code-smoke >/dev/null 2>&1 || true
+            docker rm --force studio-code-supervisor >/dev/null 2>&1 || true
+            docker network rm studio-code-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker network create studio-code-smoke >/dev/null
+          docker run --detach \
+            --name studio-code-supervisor \
+            --network studio-code-smoke \
+            --network-alias supervisor \
+            --volume "${root}/supervisor:/www:ro" \
+            python:3.14-alpine \
+            python -m http.server 80 --directory /www
+          supervisor_ip="$(docker inspect --format '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' studio-code-supervisor)"
+
+          docker run --detach \
+            --name studio-code-smoke \
+            --network studio-code-smoke \
+            --add-host "supervisor:${supervisor_ip}" \
+            --env SUPERVISOR_TOKEN=test \
+            --publish 127.0.0.1:11337:1337 \
+            --volume "${root}/config:/config" \
+            --volume "${root}/data:/data" \
+            --volume "${root}/addon_configs:/addon_configs" \
+            --volume "${root}/addons:/addons" \
+            --volume "${root}/share:/share" \
+            "studio-code-server-codex:${version}"
+
+          for attempt in {1..120}; do
+            if curl --fail --silent http://127.0.0.1:11337/healthz >/dev/null; then
+              docker exec studio-code-smoke codex --version
+              docker exec studio-code-smoke ha --version
+              docker exec studio-code-smoke git --version
+              test -d "${root}/data/home/.codex"
+              test -f "${root}/data/home/.gitconfig"
+              test -d "${root}/data/workspace"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "code-server did not become healthy" >&2
+          exit 1

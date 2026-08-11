@@ -1,0 +1,44 @@
+{
+  "files.associations": {
+    "*.yaml": "home-assistant",
+    "*.yml": "home-assistant",
+    "**/esphome/*.yaml": "esphome"
+  },
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.storage/**": true,
+    "**/__pycache__/**": true,
+    "**/*.db": true,
+    "**/*.db-shm": true,
+    "**/*.db-wal": true,
+    "**/node_modules/**": true
+  },
+  "search.exclude": {
+    "**/.git/**": true,
+    "**/.storage/**": true,
+    "**/__pycache__/**": true,
+    "**/*.db": true,
+    "**/node_modules/**": true
+  },
+  "terminal.integrated.defaultProfile.linux": "zsh",
+  "terminal.integrated.profiles.linux": {
+    "zsh": { "path": "/bin/zsh" },
+    "bash": { "path": "/bin/bash" }
+  },
+  "terminal.integrated.copyOnSelection": true,
+  "telemetry.telemetryLevel": "off",
+  "update.mode": "none",
+  "yaml.customTags": [
+    "!env_var scalar",
+    "!include_dir_list scalar",
+    "!include_dir_merge_list scalar",
+    "!include_dir_merge_named scalar",
+    "!include_dir_named scalar",
+    "!include scalar",
+    "!secret scalar"
+  ],
+  "[yaml]": {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  }
+}

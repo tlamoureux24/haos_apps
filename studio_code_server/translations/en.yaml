@@ -1,0 +1,13 @@
+configuration:
+  log_level:
+    name: Log level
+    description: Controls the verbosity of the App startup log.
+  workspace_path:
+    name: Initial workspace
+    description: Persistent directory opened by code-server. Keep /data/workspace unless another mapped Home Assistant directory is required.
+  packages:
+    name: Additional Debian packages
+    description: Optional package names installed at each App start. Installing many packages increases startup time.
+  init_commands:
+    name: Initialization commands
+    description: Advanced shell commands executed as root at each App start. Use only trusted commands.

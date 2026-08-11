@@ -1,0 +1,145 @@
+name: Update Studio Code Server + Codex runtimes
+
+on:
+  schedule:
+    - cron: "19 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: studio-code-server-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Resolve stable upstream versions
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          github_release() {
+            curl --fail --silent --show-error \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$1/releases/latest"
+          }
+          code_server="$(github_release coder/code-server | jq -r '.tag_name | ltrimstr("v")')"
+          ha_cli="$(github_release home-assistant/cli | jq -r '.tag_name | ltrimstr("v")')"
+          codex="$(curl --fail --silent --show-error https://registry.npmjs.org/@openai%2fcodex/latest | jq -r '.version')"
+          for version in "${code_server}" "${ha_cli}" "${codex}"; do
+            [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          done
+          echo "code_server=${code_server}" >>"${GITHUB_OUTPUT}"
+          echo "ha_cli=${ha_cli}" >>"${GITHUB_OUTPUT}"
+          echo "codex=${codex}" >>"${GITHUB_OUTPUT}"
+
+          current_code_server="$(sed -n 's/^code-server=//p' studio_code_server/upstream_versions)"
+          current_ha_cli="$(sed -n 's/^ha-cli=//p' studio_code_server/upstream_versions)"
+          current_codex="$(sed -n 's/^codex=//p' studio_code_server/upstream_versions)"
+          if [[ "${code_server}" == "${current_code_server}" \
+             && "${ha_cli}" == "${current_ha_cli}" \
+             && "${codex}" == "${current_codex}" ]]; then
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
+          else
+            echo "changed=true" >>"${GITHUB_OUTPUT}"
+          fi
+
+      - name: Update pinned versions
+        if: steps.versions.outputs.changed == 'true'
+        run: |
+          python3 studio_code_server/scripts/update_versions.py \
+            --code-server "${{ steps.versions.outputs.code_server }}" \
+            --codex "${{ steps.versions.outputs.codex }}" \
+            --ha-cli "${{ steps.versions.outputs.ha_cli }}"
+
+      - name: Validate and build candidate
+        if: steps.versions.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python3 studio_code_server/scripts/validate.py
+          bash -n studio_code_server/run.sh
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' studio_code_server/config.yaml)"
+          docker build --pull \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg "BUILD_VERSION=${version}" \
+            --tag "studio-code-server-codex:${version}" \
+            studio_code_server
+
+      - name: Smoke-test candidate
+        if: steps.versions.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' studio_code_server/config.yaml)"
+          root="${RUNNER_TEMP}/studio-code-update-smoke"
+          mkdir -p \
+            "${root}/config" \
+            "${root}/data" \
+            "${root}/addon_configs" \
+            "${root}/addons" \
+            "${root}/share" \
+            "${root}/supervisor/addons/self/options"
+          jq --null-input '{result:"ok",data:{log_level:"info",workspace_path:"/data/workspace",packages:[],init_commands:[]}}' \
+            >"${root}/supervisor/addons/self/options/config"
+
+          cleanup() {
+            docker logs studio-code-update-smoke 2>&1 || true
+            docker logs studio-code-update-supervisor 2>&1 || true
+            docker rm --force studio-code-update-smoke >/dev/null 2>&1 || true
+            docker rm --force studio-code-update-supervisor >/dev/null 2>&1 || true
+            docker network rm studio-code-update-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker network create studio-code-update-smoke >/dev/null
+          docker run --detach \
+            --name studio-code-update-supervisor \
+            --network studio-code-update-smoke \
+            --network-alias supervisor \
+            --volume "${root}/supervisor:/www:ro" \
+            python:3.14-alpine \
+            python -m http.server 80 --directory /www
+          supervisor_ip="$(docker inspect --format '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' studio-code-update-supervisor)"
+          docker run --detach \
+            --name studio-code-update-smoke \
+            --network studio-code-update-smoke \
+            --add-host "supervisor:${supervisor_ip}" \
+            --env SUPERVISOR_TOKEN=test \
+            --publish 127.0.0.1:11337:1337 \
+            --volume "${root}/config:/config" \
+            --volume "${root}/data:/data" \
+            --volume "${root}/addon_configs:/addon_configs" \
+            --volume "${root}/addons:/addons" \
+            --volume "${root}/share:/share" \
+            "studio-code-server-codex:${version}"
+          for attempt in {1..120}; do
+            if curl --fail --silent http://127.0.0.1:11337/healthz >/dev/null; then
+              docker exec studio-code-update-smoke codex --version
+              docker exec studio-code-update-smoke git --version
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "candidate did not become healthy" >&2
+          exit 1
+
+      - name: Commit validated update
+        if: steps.versions.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' studio_code_server/config.yaml)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add studio_code_server
+          git commit -m "Update Studio Code Server + Codex to ${version}"
+          git push
