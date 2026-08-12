@@ -81,7 +81,7 @@ jobs:
           docker exec agent-gateway-smoke test -f /data/agent_gateway.db
           docker cp agent_gateway/tests/control_plane_smoke.py \
             agent-gateway-smoke:/tmp/control_plane_smoke.py
-          docker exec agent-gateway-smoke \
+          docker exec --env PYTHONPATH=/app/src agent-gateway-smoke \
             su-exec agent-gateway:agent-gateway \
             python3 /tmp/control_plane_smoke.py
 
