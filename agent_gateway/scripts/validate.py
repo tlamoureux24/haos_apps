@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.29"',
+        'version: "0.1.30"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -114,6 +114,10 @@ def main() -> int:
         raise RuntimeError("Private data setup must not require the broad dac_override capability")
     if "/data/ rw," not in apparmor or "/data/private/ rw," not in apparmor:
         raise RuntimeError("AppArmor must allow the exact persistent data directories")
+    if "/data/private/credential-pepper rwlk," not in apparmor:
+        raise RuntimeError("AppArmor must allow the exact persistent credential pepper")
+    if "/data/private/.credential-pepper.*.tmp rwlk," not in apparmor:
+        raise RuntimeError("AppArmor must allow exact atomic pepper temporary files")
     if "/init rix," not in apparmor:
         raise RuntimeError("AppArmor must allow the shell to read and execute /init")
     if "/sbin/su-exec ix," not in apparmor:

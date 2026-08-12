@@ -81,6 +81,8 @@ profile agent_gateway flags=(attach_disconnected,mediate_deleted) {
   /usr/lib/python3*/** r,
   /data/ rw,
   /data/private/ rw,
+  /data/private/credential-pepper rwlk,
+  /data/private/.credential-pepper.*.tmp rwlk,
   /data/{,**} rwk,
   /tmp/{,**} rwk,
   /etc/ssl/** r,

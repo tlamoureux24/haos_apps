@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.30
+
+- Add explicit AppArmor access for the persisted `credential-pepper` and its
+  narrowly named atomic temporary files after HAOS showed that the generic data
+  rule did not authorize reads of the protected secret.
+- Include link permission required by atomic first-writer-wins pepper creation.
+
 ## 0.1.29
 
 - Run CI ownership/mode assertions as the UID-1000 secret owner, preserving the
