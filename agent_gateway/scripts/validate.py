@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.32"',
+        'version: "0.1.33"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -81,14 +81,14 @@ def main() -> int:
         raise RuntimeError("Launcher must preserve the s6 environment with a POSIX shell")
     if "bashio" in launcher:
         raise RuntimeError("Launcher must not require the broad bashio runtime")
-    if 'chown "${runtime_uid}:${runtime_gid}" /data' not in launcher:
-        raise RuntimeError("Persistent data mount must be writable by the runtime user")
+    if 'chown "${runtime_uid}:0" /data' not in launcher or "chmod 0710 /data" not in launcher:
+        raise RuntimeError("Persistent data must remain traversable by the bootstrap group")
     if 'chown "${runtime_uid}:0" /data/private' not in launcher:
         raise RuntimeError("Existing private data must be migrated to the runtime user")
     if "install -d -m 0710 /data/private" not in launcher:
         raise RuntimeError("Private data must be initialized before ownership transfer")
     private_chown = launcher.index('chown "${runtime_uid}:0" /data/private\n')
-    data_chown = launcher.index('chown "${runtime_uid}:${runtime_gid}" /data\n')
+    data_chown = launcher.index('chown "${runtime_uid}:0" /data\n')
     if private_chown > data_chown:
         raise RuntimeError("Private data must be migrated before root loses parent traversal access")
     pepper_chown = launcher.index('chown "${runtime_uid}:0" /data/private/credential-pepper')

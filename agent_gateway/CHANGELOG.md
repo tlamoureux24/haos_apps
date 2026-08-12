@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.33
+
+- Apply the same owner/bootstrap-group traversal model to the `/data` parent
+  (`1000:0:710`), completing restart access to the protected pepper chain
+  without `DAC_OVERRIDE`.
+
 ## 0.1.32
 
 - Permit only the runtime owner and root bootstrap group to traverse private

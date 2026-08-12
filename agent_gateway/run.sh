@@ -10,7 +10,8 @@ chown "${runtime_uid}:0" /data/private/credential-pepper
 chmod 0640 /data/private/credential-pepper
 chown "${runtime_uid}:0" /data/private
 chmod 0710 /data/private
-chown "${runtime_uid}:${runtime_gid}" /data
+chown "${runtime_uid}:0" /data
+chmod 0710 /data
 
 if [ -f /data/options.json ]; then
   log_level="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("log_level", "info"))')"
