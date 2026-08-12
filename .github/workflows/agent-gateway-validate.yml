@@ -139,9 +139,10 @@ jobs:
             "agent-gateway:${version}"
 
           wait_ready
-          curl --fail --silent \
+          ingress_page="$(curl --fail --silent \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
-            http://127.0.0.1:18099/ | grep -q "Agent Gateway"
+            http://127.0.0.1:18099/)"
+          [[ "${ingress_page}" == *"Agent Gateway"* ]]
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)" = "404"
           docker exec agent-gateway-smoke \
             su-exec agent-gateway:agent-gateway \
