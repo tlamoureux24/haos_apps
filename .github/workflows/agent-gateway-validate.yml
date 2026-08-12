@@ -49,20 +49,15 @@ jobs:
             --tag "agent-gateway:${version}" \
             agent_gateway
 
-      - name: Inspect s6 paths used by AppArmor
+      - name: Validate expected s6 service-definition inventory
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
           docker run --rm --entrypoint /bin/sh "agent-gateway:${version}" -c '
-            find /etc/s6-overlay/s6-rc.d -print | sort | while read -r entry; do
-              type="$(stat -c "%F" "${entry}")"
-              target="$(readlink -f "${entry}")"
-              printf "S6_INVENTORY|%s|%s|%s\n" "${type}" "${entry}" "${target}"
-            done
-            for entry in /command/*; do
-              test -L "${entry}" || continue
-              printf "COMMAND_LINK|%s|%s\n" "${entry}" "$(readlink -f "${entry}")"
-            done
+            test "$(find /etc/s6-overlay/s6-rc.d -print | wc -l)" = 7
+            test "$(find /etc/s6-overlay/s6-rc.d/user/contents.d -print | wc -l)" = 1
+            test "$(find /etc/s6-overlay/s6-rc.d/user2/contents.d -print | wc -l)" = 1
+            test "$(readlink -f /command/printcontenv)" = "/package/admin/s6-overlay-3.2.2.0/command/printcontenv"
           '
 
       - name: Smoke-test listener isolation and persistence

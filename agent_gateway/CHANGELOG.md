@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.12
+
+- Complete the exact seven-entry s6 service-definition allowlist by permitting
+  enumeration of the empty `user2/contents.d` directory.
+
 ## 0.1.11
 
 - Allow read-only access to the s6 `user2/type` service definition file.
