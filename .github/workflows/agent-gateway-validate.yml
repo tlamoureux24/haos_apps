@@ -49,6 +49,22 @@ jobs:
             --tag "agent-gateway:${version}" \
             agent_gateway
 
+      - name: Inspect s6 paths used by AppArmor
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
+          docker run --rm --entrypoint /bin/sh "agent-gateway:${version}" -c '
+            for path in \
+              /command/printcontenv \
+              /etc/s6-overlay/s6-rc.d/user; do
+              printf "PATH %s TYPE " "${path}"
+              stat -c "%F" "${path}"
+              printf "TARGET "
+              readlink -f "${path}"
+            done
+            find -L /etc/s6-overlay/s6-rc.d/user -maxdepth 2 -printf "USER %y %p -> %l\n" | sort
+          '
+
       - name: Smoke-test listener isolation and persistence
         run: |
           set -euo pipefail
