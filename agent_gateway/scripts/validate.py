@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.12"',
+        'version: "0.1.13"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -91,6 +91,17 @@ def main() -> int:
         raise RuntimeError("AppArmor must allow reading the s6-overlay rc.init template")
     if "/package/admin/s6-overlay-*/etc/s6-linux-init/skel/rc.shutdown r," not in apparmor:
         raise RuntimeError("AppArmor must allow reading the s6-overlay rc.shutdown template")
+    packaged_s6_sources = (
+        "/package/admin/s6-overlay-*/etc/s6-rc/sources/ r,",
+        "/package/admin/s6-overlay-*/etc/s6-rc/sources/base/type r,",
+        "/package/admin/s6-overlay-*/etc/s6-rc/sources/fix-attrs/up r,",
+        "/package/admin/s6-overlay-*/etc/s6-rc/sources/legacy-cont-init/up r,",
+        "/package/admin/s6-overlay-*/etc/s6-rc/sources/legacy-services/up r,",
+        "/package/admin/s6-overlay-*/etc/s6-rc/sources/top/contents.d/user2 r,",
+    )
+    for source_rule in packaged_s6_sources:
+        if source_rule not in apparmor:
+            raise RuntimeError(f"Missing exact packaged s6 source rule: {source_rule}")
     if "/command/printcontenv rix," not in apparmor:
         raise RuntimeError("AppArmor must allow the shell to read printcontenv")
     if "/package/admin/s6-overlay-*/command/printcontenv rix," not in apparmor:
@@ -109,7 +120,7 @@ def main() -> int:
         raise RuntimeError("AppArmor must allow reading the s6 user2 bundle type")
     if "/etc/s6-overlay/s6-rc.d/user2/contents.d/ r," not in apparmor:
         raise RuntimeError("AppArmor must allow enumerating the s6 user2 bundle contents directory")
-    if "/package/** rix," in apparmor or "/package/admin/s6-overlay-*/libexec/** rix," in apparmor:
+    if "/package/** rix," in apparmor or "/package/admin/s6-overlay-*/libexec/** rix," in apparmor or "/package/admin/s6-overlay-*/etc/s6-rc/sources/** r," in apparmor:
         raise RuntimeError("AppArmor must grant read access to s6-overlay scripts file by file")
     if "/command/** rix," in apparmor or "/etc/s6-overlay/** r" in apparmor or "/etc/s6-overlay/s6-rc.d/user/** r" in apparmor:
         raise RuntimeError("AppArmor must not grant broad read access to command or s6-overlay trees")

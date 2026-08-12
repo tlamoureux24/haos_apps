@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.13
+
+- Allow read-only access to all 29 inventoried entries in the packaged s6-rc
+  source tree, using exact file and directory rules rather than recursive access.
+- Lock the expected packaged s6-rc inventory in CI so upstream changes fail
+  validation instead of silently widening the AppArmor policy.
+
 ## 0.1.12
 
 - Complete the exact seven-entry s6 service-definition allowlist by permitting
