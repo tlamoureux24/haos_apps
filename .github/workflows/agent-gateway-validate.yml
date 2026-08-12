@@ -199,7 +199,16 @@ jobs:
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             http://127.0.0.1:18099/admin/api/v1/status)" = "403"
 
+          initial_pid="$(docker inspect agent-gateway-smoke --format '{{.State.Pid}}')"
           docker restart agent-gateway-smoke >/dev/null
+          for attempt in {1..30}; do
+            restarted_pid="$(docker inspect agent-gateway-smoke --format '{{.State.Pid}}')"
+            if [[ "${restarted_pid}" != "0" && "${restarted_pid}" != "${initial_pid}" ]]; then
+              break
+            fi
+            sleep 1
+          done
+          test "${restarted_pid}" != "${initial_pid}"
           wait_ready
           curl --fail --silent \
             --header "Authorization: Bearer ${credential}" \
