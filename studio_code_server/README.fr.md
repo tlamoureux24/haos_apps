@@ -29,6 +29,7 @@ perdre certaines fonctions.
 - installateur manuel facultatif de l’extension Codex expérimentale ;
 - persistance des réglages VS Code, extensions, dépôts, clés SSH, configuration Git, historique et données Codex ;
 - accès en écriture à la configuration Home Assistant et aux configurations des Apps.
+- exécution de Codex et de ses commandes sous un utilisateur dédié non privilégié, sans jeton Supervisor dans son environnement.
 
 ## Premier démarrage
 
@@ -96,6 +97,18 @@ Cette App est une console d’administration et non un simple éditeur :
 - écriture dans `/config`, `/addon_configs`, `/addons` et `/share` ;
 - terminal root dans le conteneur ;
 - accès sortant à Internet.
+
+Le terminal intégré reste administratif afin de pouvoir maintenir explicitement
+Home Assistant. En revanche, la commande `codex` change d’utilisateur avant de
+lancer l’agent : Codex et tous ses sous-processus utilisent le compte `codex`
+(UID 1000), et les variables `SUPERVISOR_TOKEN` et `HASS_TOKEN` leur sont
+retirées. Le workspace et les données OAuth/Git/SSH lui appartiennent.
+
+HAOS peut toujours refuser l’isolation Linux `bubblewrap`. Dans ce cas, Codex
+continue à demander les approbations prévues, mais celles-ci ne remplacent pas
+un véritable bac à sable système. Ne pas approuver une commande dont la portée
+n’est pas comprise. Donner des privilèges Docker supplémentaires pour forcer
+`bubblewrap` est volontairement exclu.
 
 L’App n’expose aucun port direct. code-server désactive son authentification
 interne parce que l’authentification et le routage sont assurés par l’Ingress

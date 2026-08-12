@@ -39,6 +39,7 @@ Fonctionnalités principales :
 - Codex CLI avec connexion OAuth à l’abonnement ChatGPT, sans clé OpenAI Platform imposée ;
 - installateur facultatif de l’extension Codex expérimentale, car sa compatibilité avec code-server doit être validée ;
 - persistance des dépôts, clés SSH, réglages Git, sessions Codex, paramètres et extensions ;
+- exécution de Codex sous un compte non privilégié sans jeton Supervisor hérité ;
 - accès administratif à la configuration Home Assistant et aux configurations des Apps ;
 - aucun port direct : accès uniquement par Home Assistant et le VPN utilisé pour joindre Home Assistant.
 
@@ -240,6 +241,7 @@ Main features:
 - Codex CLI with ChatGPT subscription OAuth and no required OpenAI Platform API key;
 - optional installer for the experimental Codex extension, pending real code-server compatibility validation;
 - persistent repositories, SSH keys, Git settings, Codex sessions, editor settings, and extensions;
+- Codex execution under an unprivileged account without an inherited Supervisor token;
 - administrative access to Home Assistant and App configuration;
 - no direct port: access only through Home Assistant and the VPN used to reach it.
 

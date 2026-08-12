@@ -29,12 +29,20 @@ mkdir -p \
   "${workspace_path}"
 chmod 0700 "${DATA_HOME}/.codex" "${DATA_HOME}/.ssh"
 
+# OAuth state and the normal workspace belong to the unprivileged Codex
+# runtime. Existing files from 0.1.0/0.1.1 are migrated on first start.
+chown -R codex:codex \
+  "${DATA_HOME}/.codex" \
+  "${DATA_HOME}/.ssh" \
+  "${workspace_path}"
+
 if [[ ! -e "${USER_DATA}/User/settings.json" ]]; then
   cp /usr/local/share/studio-code-server/settings.json "${USER_DATA}/User/settings.json"
 fi
 
 touch "${DATA_HOME}/.gitconfig" "${DATA_HOME}/.zsh_history"
 chmod 0600 "${DATA_HOME}/.zsh_history"
+chown codex:codex "${DATA_HOME}/.gitconfig" "${DATA_HOME}/.zsh_history"
 
 if bashio::config.has_value 'packages'; then
   mapfile -t packages < <(bashio::config 'packages')
@@ -63,6 +71,7 @@ export HASS_TOKEN="${SUPERVISOR_TOKEN:-}"
 bashio::log.info "Starting Studio Code Server on the Home Assistant Ingress"
 bashio::log.info "Workspace: ${workspace_path}"
 bashio::log.info "Codex CLI: $(codex --version)"
+bashio::log.info "Codex runtime: unprivileged user codex (uid 1000), Supervisor token removed"
 bashio::log.info "Run 'codex login --device-auth' once from the integrated terminal"
 bashio::log.info "Optional experiment: run 'install-codex-extension' to test the Codex IDE extension"
 

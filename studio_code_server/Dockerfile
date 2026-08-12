@@ -2,7 +2,7 @@ ARG BUILD_FROM="ghcr.io/hassio-addons/debian-base:9.3.0"
 FROM ${BUILD_FROM}
 
 ARG BUILD_ARCH="amd64"
-ARG BUILD_VERSION="0.1.1"
+ARG BUILD_VERSION="0.1.2"
 ARG CODE_SERVER_VERSION="4.132.0"
 ARG CODEX_VERSION="0.147.0"
 ARG HA_CLI_VERSION="5.3.0"
@@ -51,6 +51,9 @@ RUN apt-get update \
         --directory /usr/local/lib/code-server \
     && ln -s /usr/local/lib/code-server/bin/code-server /usr/local/bin/code-server \
     && npm install --global --omit=dev "@openai/codex@${CODEX_VERSION}" \
+    && mv /usr/local/bin/codex /usr/local/bin/codex-real \
+    && groupadd --gid 1000 codex \
+    && useradd --uid 1000 --gid codex --home-dir /data/home --shell /bin/zsh codex \
     && curl --fail --location --retry 5 \
         --output /usr/local/bin/ha \
         "https://github.com/home-assistant/cli/releases/download/${HA_CLI_VERSION}/ha_${BUILD_ARCH}" \
@@ -73,12 +76,14 @@ RUN apt-get update \
     && rm -rf /tmp/* /root/.npm /var/lib/apt/lists/*
 
 COPY run.sh /usr/local/bin/studio-code-server
+COPY codex-unprivileged.sh /usr/local/bin/codex
 COPY install-codex-extension.sh /usr/local/bin/install-codex-extension
 COPY settings.json /usr/local/share/studio-code-server/settings.json
 COPY LICENSE.upstream.md /usr/share/licenses/studio-code-server/LICENSE.upstream.md
 COPY THIRD_PARTY.md /usr/share/doc/studio-code-server/THIRD_PARTY.md
 
 RUN chmod 0755 \
+    /usr/local/bin/codex \
     /usr/local/bin/install-codex-extension \
     /usr/local/bin/studio-code-server
 

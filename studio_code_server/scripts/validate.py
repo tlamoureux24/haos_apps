@@ -24,6 +24,7 @@ def main() -> int:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     config = (ROOT / "config.yaml").read_text(encoding="utf-8")
     launcher = (ROOT / "run.sh").read_text(encoding="utf-8")
+    codex_wrapper = (ROOT / "codex-unprivileged.sh").read_text(encoding="utf-8")
     versions_text = (ROOT / "upstream_versions").read_text(encoding="utf-8")
     versions = dict(
         line.split("=", 1)
@@ -104,6 +105,16 @@ def main() -> int:
         if item not in launcher:
             raise RuntimeError(f"Missing launcher invariant: {item}")
 
+    required_wrapper = (
+        "s6-setuidgid codex",
+        "-u HASS_TOKEN",
+        "-u SUPERVISOR_TOKEN",
+        "/usr/local/bin/codex-real",
+    )
+    for item in required_wrapper:
+        if item not in codex_wrapper:
+            raise RuntimeError(f"Missing Codex wrapper invariant: {item}")
+
     if "OPENAI_API_KEY" in dockerfile or "OPENAI_API_KEY" in launcher:
         raise RuntimeError("The App must not configure OpenAI Platform API keys")
     if "eval " in launcher:
@@ -121,6 +132,7 @@ def main() -> int:
         "README.md",
         "THIRD_PARTY.md",
         "UPSTREAM.md",
+        "codex-unprivileged.sh",
         "install-codex-extension.sh",
         "translations/en.yaml",
         "translations/fr.yaml",

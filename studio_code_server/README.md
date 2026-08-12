@@ -29,6 +29,7 @@ reduced functionality.
 - optional manual installer for the experimental Codex extension;
 - persistent editor settings, extensions, repositories, SSH keys, Git configuration, shell history, and Codex data;
 - writable access to Home Assistant and App configuration.
+- a dedicated unprivileged Codex runtime with no Supervisor token in its environment.
 
 ## First start
 
@@ -74,6 +75,16 @@ workspace is included in cold App backups.
 This is an administrative console. It has Supervisor `manager` access, the
 Home Assistant API, writable configuration mounts, a root shell inside the
 container, and outbound Internet access.
+
+The integrated terminal remains administrative for deliberate Home Assistant
+maintenance. The `codex` command changes user before starting the agent: Codex
+and all child processes run as the dedicated `codex` account (UID 1000), with
+`SUPERVISOR_TOKEN` and `HASS_TOKEN` removed from their environment. The normal
+workspace and persisted OAuth/Git/SSH data are owned by that account.
+
+HAOS may still reject Linux `bubblewrap` isolation. Codex approvals remain in
+effect, but they are not equivalent to an operating-system sandbox. Additional
+Docker privileges are deliberately not granted to bypass that restriction.
 
 No direct network port is published. code-server internal authentication is
 disabled because Home Assistant Ingress handles authentication and routing.

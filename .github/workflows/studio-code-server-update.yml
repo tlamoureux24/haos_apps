@@ -135,6 +135,7 @@ jobs:
           for attempt in {1..120}; do
             if curl --fail --silent http://127.0.0.1:11337/healthz >/dev/null; then
               docker exec studio-code-update-smoke codex --version
+              test "$(docker exec studio-code-update-smoke s6-setuidgid codex id -u)" = "1000"
               docker exec studio-code-update-smoke git --version
               exit 0
             fi

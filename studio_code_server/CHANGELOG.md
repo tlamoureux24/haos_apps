@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 - 2026-08-12
+
+- Run Codex and every child process as a dedicated unprivileged user.
+- Remove the Home Assistant Supervisor token from the Codex runtime environment.
+- Migrate persisted OAuth, SSH, Git, and workspace ownership automatically.
+- Keep the administrative code-server terminal available for deliberate Home Assistant maintenance.
+
 ## 0.1.1 - 2026-08-12
 
 - Move the 550 MB experimental Codex IDE extension out of the App image.
