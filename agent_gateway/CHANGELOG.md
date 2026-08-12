@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.16
+
+- Replace the `bashio` launcher dependency with a small POSIX shell launcher
+  while retaining `with-contenv` environment import.
+- Keep option loading, structured startup messages, signal handling, listener
+  supervision, and unprivileged execution without widening AppArmor access.
+
 ## 0.1.15
 
 - Allow read/execute access to the exact `/usr/bin/with-contenv` link and its

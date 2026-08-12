@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.15"',
+        'version: "0.1.16"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -73,6 +73,10 @@ def main() -> int:
         raise RuntimeError("Container must create an unprivileged runtime user")
     if launcher.count("su-exec agent-gateway:agent-gateway") != 3:
         raise RuntimeError("Migrations and both listeners must run unprivileged")
+    if not launcher.startswith("#!/usr/bin/with-contenv /bin/sh\n"):
+        raise RuntimeError("Launcher must preserve the s6 environment with a POSIX shell")
+    if "bashio" in launcher:
+        raise RuntimeError("Launcher must not require the broad bashio runtime")
     if "os.geteuid() != 1000" not in application:
         raise RuntimeError("Application must refuse to run under an unexpected UID")
     if "AGENT_GATEWAY_SURFACE=admin" not in launcher:
