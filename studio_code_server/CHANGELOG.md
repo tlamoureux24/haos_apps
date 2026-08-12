@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 - 2026-08-12
+
+- Make an unprivileged `Codex workspace` shell the default integrated terminal.
+- Keep a separate `Home Assistant Admin (root)` terminal profile for deliberate maintenance.
+- Apply the safer profiles to existing editor settings without removing language packs or other preferences.
+
 ## 0.1.2 - 2026-08-12
 
 - Run Codex and every child process as a dedicated unprivileged user.

@@ -20,10 +20,10 @@
     "**/*.db": true,
     "**/node_modules/**": true
   },
-  "terminal.integrated.defaultProfile.linux": "zsh",
+  "terminal.integrated.defaultProfile.linux": "Codex workspace",
   "terminal.integrated.profiles.linux": {
-    "zsh": { "path": "/bin/zsh" },
-    "bash": { "path": "/bin/bash" }
+    "Codex workspace": { "path": "/usr/local/bin/codex-shell" },
+    "Home Assistant Admin (root)": { "path": "/bin/zsh" }
   },
   "terminal.integrated.copyOnSelection": true,
   "telemetry.telemetryLevel": "off",

@@ -40,6 +40,18 @@ if [[ ! -e "${USER_DATA}/User/settings.json" ]]; then
   cp /usr/local/share/studio-code-server/settings.json "${USER_DATA}/User/settings.json"
 fi
 
+# Add the safer development shell to existing installations without removing
+# unrelated user settings or installed language-pack preferences.
+settings_tmp="$(mktemp)"
+jq \
+  '.["terminal.integrated.defaultProfile.linux"] = "Codex workspace"
+   | .["terminal.integrated.profiles.linux"] = ((.["terminal.integrated.profiles.linux"] // {}) + {
+       "Codex workspace": {"path": "/usr/local/bin/codex-shell"},
+       "Home Assistant Admin (root)": {"path": "/bin/zsh"}
+     })' \
+  "${USER_DATA}/User/settings.json" > "${settings_tmp}"
+mv "${settings_tmp}" "${USER_DATA}/User/settings.json"
+
 touch "${DATA_HOME}/.gitconfig" "${DATA_HOME}/.zsh_history"
 chmod 0600 "${DATA_HOME}/.zsh_history"
 chown codex:codex "${DATA_HOME}/.gitconfig" "${DATA_HOME}/.zsh_history"
@@ -72,6 +84,7 @@ bashio::log.info "Starting Studio Code Server on the Home Assistant Ingress"
 bashio::log.info "Workspace: ${workspace_path}"
 bashio::log.info "Codex CLI: $(codex --version)"
 bashio::log.info "Codex runtime: unprivileged user codex (uid 1000), Supervisor token removed"
+bashio::log.info "Default terminal: Codex workspace; root remains an explicit administrative profile"
 bashio::log.info "Run 'codex login --device-auth' once from the integrated terminal"
 bashio::log.info "Optional experiment: run 'install-codex-extension' to test the Codex IDE extension"
 

@@ -36,7 +36,10 @@ perdre certaines fonctions.
 1. Installer et démarrer l’App.
 2. Activer **Afficher dans la barre latérale**.
 3. Ouvrir **Code + Codex** depuis Home Assistant.
-4. Dans le menu `Terminal`, créer un terminal.
+4. Dans le menu `Terminal`, créer un terminal. Le profil par défaut **Codex
+   workspace** utilise l’utilisateur non privilégié adapté à Git et Codex. Le
+   profil **Home Assistant Admin (root)** reste disponible dans la liste des
+   terminaux pour la maintenance explicite.
 5. Exécuter :
 
 ```bash
@@ -98,11 +101,11 @@ Cette App est une console d’administration et non un simple éditeur :
 - terminal root dans le conteneur ;
 - accès sortant à Internet.
 
-Le terminal intégré reste administratif afin de pouvoir maintenir explicitement
-Home Assistant. En revanche, la commande `codex` change d’utilisateur avant de
-lancer l’agent : Codex et tous ses sous-processus utilisent le compte `codex`
-(UID 1000), et les variables `SUPERVISOR_TOKEN` et `HASS_TOKEN` leur sont
-retirées. Le workspace et les données OAuth/Git/SSH lui appartiennent.
+Le terminal par défaut **Codex workspace** et la commande `codex` utilisent le
+compte `codex` (UID 1000), sans les variables `SUPERVISOR_TOKEN` et
+`HASS_TOKEN`. Le workspace et les données OAuth/Git/SSH lui appartiennent. Un
+profil distinct **Home Assistant Admin (root)** permet de maintenir
+explicitement Home Assistant lorsque cela est nécessaire.
 
 HAOS peut toujours refuser l’isolation Linux `bubblewrap`. Dans ce cas, Codex
 continue à demander les approbations prévues, mais celles-ci ne remplacent pas
