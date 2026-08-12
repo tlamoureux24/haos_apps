@@ -4,16 +4,13 @@ set -eu
 runtime_uid=1000
 runtime_gid=1000
 
-if [ -d /data/private ]; then
-  if [ -f /data/private/credential-pepper ]; then
-    chown "${runtime_uid}:${runtime_gid}" /data/private/credential-pepper
-    chmod 0600 /data/private/credential-pepper
-  fi
-  chown "${runtime_uid}:${runtime_gid}" /data/private
-  chmod 0700 /data/private
-fi
+install -d -m 0700 /data/private
+pepper_hex="$(PYTHONPATH=/app/src python3 -c 'from pathlib import Path; from agent_gateway.security import load_or_create_pepper; print(load_or_create_pepper(Path("/data/private/credential-pepper")).hex())')"
+chown "${runtime_uid}:${runtime_gid}" /data/private/credential-pepper
+chmod 0600 /data/private/credential-pepper
+chown "${runtime_uid}:${runtime_gid}" /data/private
+chmod 0700 /data/private
 chown "${runtime_uid}:${runtime_gid}" /data
-su-exec agent-gateway:agent-gateway mkdir -p -m 0700 /data/private
 
 if [ -f /data/options.json ]; then
   log_level="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("log_level", "info"))')"
@@ -23,6 +20,7 @@ fi
 
 export AGENT_GATEWAY_DATA_DIR="${AGENT_GATEWAY_DATA_DIR:-/data}"
 export AGENT_GATEWAY_LOG_LEVEL="${log_level}"
+export AGENT_GATEWAY_CREDENTIAL_PEPPER_HEX="${pepper_hex}"
 export PYTHONPATH=/app/src
 
 log_info() {

@@ -91,6 +91,14 @@ class PublicSurfaceTests(unittest.TestCase):
 
 
 class CredentialTests(unittest.TestCase):
+    def test_configured_pepper_avoids_persistent_file_access(self) -> None:
+        expected = bytes(range(32))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "inaccessible" / "credential-pepper"
+            with patch.dict(os.environ, {"AGENT_GATEWAY_CREDENTIAL_PEPPER_HEX": expected.hex()}):
+                self.assertEqual(load_or_create_pepper(path), expected)
+            self.assertFalse(path.exists())
+
     def test_token_round_trip_and_wrong_pepper_denial(self) -> None:
         issued = issue_credential(b"a" * 32)
         self.assertEqual(

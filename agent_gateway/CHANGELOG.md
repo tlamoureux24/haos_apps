@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.31
+
+- Bootstrap the persistent credential pepper once, before transferring the
+  protected data tree, and pass it in memory to both runtime listeners.
+- Prevent both concurrent Uvicorn processes from reopening the protected pepper
+  file during application import while retaining persistence at mode `0600`.
+
 ## 0.1.30
 
 - Add explicit AppArmor access for the persisted `credential-pepper` and its

@@ -22,6 +22,15 @@ class IssuedCredential:
 
 
 def load_or_create_pepper(path: Path) -> bytes:
+    configured = os.environ.get("AGENT_GATEWAY_CREDENTIAL_PEPPER_HEX")
+    if configured is not None:
+        try:
+            pepper = bytes.fromhex(configured)
+        except ValueError as err:
+            raise RuntimeError("Configured credential pepper is invalid") from err
+        if len(pepper) != 32:
+            raise RuntimeError("Configured credential pepper has an invalid length")
+        return pepper
     try:
         pepper = path.read_bytes()
     except FileNotFoundError:

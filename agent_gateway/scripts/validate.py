@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.30"',
+        'version: "0.1.31"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -71,8 +71,8 @@ def main() -> int:
 
     if "adduser -S -D -H" not in dockerfile:
         raise RuntimeError("Container must create an unprivileged runtime user")
-    if launcher.count("su-exec agent-gateway:agent-gateway") != 4:
-        raise RuntimeError("Private data setup, migrations, and both listeners must run unprivileged")
+    if launcher.count("su-exec agent-gateway:agent-gateway") != 3:
+        raise RuntimeError("Migrations and both listeners must run unprivileged")
     if "python3 -m alembic" not in launcher or launcher.count("python3 -m uvicorn") != 2:
         raise RuntimeError("Python tools must run as modules without readable /usr/bin wrappers")
     if re.search(r"agent-gateway:agent-gateway (alembic|uvicorn)\b", launcher):
@@ -85,9 +85,9 @@ def main() -> int:
         raise RuntimeError("Persistent data mount must be writable by the runtime user")
     if 'chown "${runtime_uid}:${runtime_gid}" /data/private' not in launcher:
         raise RuntimeError("Existing private data must be migrated to the runtime user")
-    if "su-exec agent-gateway:agent-gateway mkdir -p -m 0700 /data/private" not in launcher:
-        raise RuntimeError("Private data directory setup must be idempotent under the runtime user")
-    private_chown = launcher.index('chown "${runtime_uid}:${runtime_gid}" /data/private')
+    if "install -d -m 0700 /data/private" not in launcher:
+        raise RuntimeError("Private data must be initialized before ownership transfer")
+    private_chown = launcher.index('chown "${runtime_uid}:${runtime_gid}" /data/private\n')
     data_chown = launcher.index('chown "${runtime_uid}:${runtime_gid}" /data\n')
     if private_chown > data_chown:
         raise RuntimeError("Private data must be migrated before root loses parent traversal access")
@@ -96,6 +96,8 @@ def main() -> int:
         raise RuntimeError("Credential pepper must be migrated before its private parent")
     if "chmod 0600 /data/private/credential-pepper" not in launcher:
         raise RuntimeError("Existing credential pepper must retain owner-only access")
+    if 'export AGENT_GATEWAY_CREDENTIAL_PEPPER_HEX="${pepper_hex}"' not in launcher:
+        raise RuntimeError("Runtime processes must receive the bootstrapped pepper in memory")
     if "chmod 0700 /data/private" not in launcher:
         raise RuntimeError("Existing private data directory must be restricted during migration")
     if "os.geteuid() != 1000" not in application:
