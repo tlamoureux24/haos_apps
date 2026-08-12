@@ -15,4 +15,10 @@ The App downloads and packages pinned releases of:
 - Codex IDE extension from the Microsoft Visual Studio Marketplace
 - Home Assistant Config Helper and YAML extensions from Open VSX
 
+The Home Assistant App `icon.png` and `logo.png` are resized, otherwise
+unmodified copies of the official Visual Studio Code stable icon downloaded
+from <https://code.visualstudio.com/brand>. Visual Studio Code, VS Code, and the
+Visual Studio Code icon are trademarks of Microsoft Corporation. All rights
+reserved. Their inclusion does not imply endorsement by Microsoft.
+
 Each component remains governed by its own license and terms.

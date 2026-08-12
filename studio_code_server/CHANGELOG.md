@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.10 - 2026-08-12
+
+- Replace the custom Home Assistant App artwork with the official Visual Studio Code stable icon selected by the repository owner.
+- Record the Microsoft source and trademark notice in the third-party documentation.
+
 ## 0.1.9 - 2026-08-12
 
 - Remove the obsolete privileged-to-unprivileged terminal helper.
