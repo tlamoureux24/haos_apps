@@ -78,7 +78,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:18098/health/ready | jq -e '.status == "ready"'
           curl --fail --silent http://127.0.0.1:18099/ | grep -q "Agent Gateway"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)" = "404"
-          test -f "${root}/data/agent_gateway.db"
+          docker exec agent-gateway-smoke test -f /data/agent_gateway.db
 
           docker restart agent-gateway-smoke >/dev/null
           for attempt in {1..60}; do
