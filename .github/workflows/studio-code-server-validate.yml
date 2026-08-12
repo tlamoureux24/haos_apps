@@ -112,7 +112,7 @@ jobs:
               docker exec studio-code-smoke codex-shell -c 'codex --version'
               docker exec studio-code-smoke codex-shell -c 'git config --global user.name "CI Codex User"'
               test "$(docker exec studio-code-smoke codex-shell -c 'git config --global user.name')" = "CI Codex User"
-              docker exec studio-code-smoke codex-shell -c '! codex mcp list --json | jq -e '\''.[] | select(.name == "home-assistant")'\'' >/dev/null'
+              docker exec studio-code-smoke codex-shell -c 'codex mcp list --json | jq -e '\''all(.[]; .name != "home-assistant")'\'' >/dev/null'
               docker exec studio-code-smoke s6-setuidgid codex touch /data/workspace/.codex-write-test
               test -f "${root}/data/workspace/.codex-write-test"
               docker exec studio-code-smoke ha --help >/dev/null
