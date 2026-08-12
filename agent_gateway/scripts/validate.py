@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.0"',
+        'version: "0.1.1"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -81,6 +81,8 @@ def main() -> int:
         raise RuntimeError("Missing isolated public listener")
     if "capability sys_admin" in apparmor or "network raw" in apparmor:
         raise RuntimeError("AppArmor grants an excessive capability")
+    if "/init rix," not in apparmor:
+        raise RuntimeError("AppArmor must allow the shell to read and execute /init")
 
     ignored_documents = (
         "/agent_gateway/PROJECT_BRIEF.md",

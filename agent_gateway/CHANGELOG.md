@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Allow the Home Assistant base image shell to read and execute `/init` under
+  AppArmor.
+
 ## 0.1.0
 
 - Add the initial non-root Agent Gateway runtime.

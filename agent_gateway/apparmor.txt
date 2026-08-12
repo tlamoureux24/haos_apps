@@ -12,7 +12,7 @@ profile agent_gateway flags=(attach_disconnected,mediate_deleted) {
   network inet6 stream,
   signal,
 
-  /init ix,
+  /init rix,
   /bin/** ix,
   /usr/bin/** ix,
   /usr/local/bin/** ix,
