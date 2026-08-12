@@ -4,7 +4,7 @@ set -eu
 runtime_uid=1000
 runtime_gid=1000
 
-install -d -m 0700 -o "${runtime_uid}" -g "${runtime_gid}" /data /data/private
+install -d -m 0700 -o "${runtime_uid}" -g "${runtime_gid}" /data/private
 
 if [ -f /data/options.json ]; then
   log_level="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("log_level", "info"))')"

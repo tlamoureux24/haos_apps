@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.18
+
+- Stop changing the ownership and mode of the Home Assistant-managed `/data`
+  mount itself; initialize only `/data/private`.
+- Allow the exact `/data/` and `/data/private/` directory operations and the
+  narrowly scoped `fowner` capability required to set private mode `0700`.
+
 ## 0.1.17
 
 - Allow the narrowly scoped `chown` capability required to transfer the

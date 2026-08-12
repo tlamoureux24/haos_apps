@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.17"',
+        'version: "0.1.18"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -87,6 +87,10 @@ def main() -> int:
         raise RuntimeError("AppArmor grants an excessive capability")
     if "capability chown," not in apparmor:
         raise RuntimeError("AppArmor must allow ownership transfer of persistent data")
+    if "capability fowner," not in apparmor:
+        raise RuntimeError("AppArmor must allow setting the private data directory mode")
+    if "/data/ rw," not in apparmor or "/data/private/ rw," not in apparmor:
+        raise RuntimeError("AppArmor must allow the exact persistent data directories")
     if "/init rix," not in apparmor:
         raise RuntimeError("AppArmor must allow the shell to read and execute /init")
     if "/package/admin/s6-overlay-*/libexec/preinit rix," not in apparmor:
