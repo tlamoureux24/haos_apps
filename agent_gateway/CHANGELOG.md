@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9
+
+- Allow `s6-rc-compile` to enumerate the `user/contents.d` bundle directory
+  without granting read access to its entries.
+
 ## 0.1.8
 
 - Allow read-only access to the s6 `user/type` service definition file.
