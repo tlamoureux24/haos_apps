@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.28
+
+- Verify the secured private directory and pepper from inside the container so
+  CI does not require host traversal of the intentionally protected `0700`
+  directory introduced by 0.1.27.
+
 ## 0.1.27
 
 - Migrate the exact persisted `credential-pepper` file from earlier attempts to
