@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Allow the shell to read only the s6-overlay `stage0` script required after
+  `preinit`, keeping file-by-file AppArmor permissions.
+
 ## 0.1.2
 
 - Allow the shell to read the s6-overlay `preinit` script while retaining narrow

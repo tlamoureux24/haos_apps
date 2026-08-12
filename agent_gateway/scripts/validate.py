@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.2"',
+        'version: "0.1.3"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -85,6 +85,10 @@ def main() -> int:
         raise RuntimeError("AppArmor must allow the shell to read and execute /init")
     if "/package/admin/s6-overlay-*/libexec/preinit rix," not in apparmor:
         raise RuntimeError("AppArmor must allow the shell to read the s6-overlay preinit script")
+    if "/package/admin/s6-overlay-*/libexec/stage0 rix," not in apparmor:
+        raise RuntimeError("AppArmor must allow the shell to read the s6-overlay stage0 script")
+    if "/package/** rix," in apparmor or "/package/admin/s6-overlay-*/libexec/** rix," in apparmor:
+        raise RuntimeError("AppArmor must grant read access to s6-overlay scripts file by file")
 
     ignored_documents = (
         "/agent_gateway/PROJECT_BRIEF.md",
