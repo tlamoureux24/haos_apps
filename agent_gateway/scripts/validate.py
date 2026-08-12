@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.22"',
+        'version: "0.1.23"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -81,8 +81,10 @@ def main() -> int:
         raise RuntimeError("Persistent data mount must be writable by the runtime user")
     if 'chown "${runtime_uid}:${runtime_gid}" /data/private' not in launcher:
         raise RuntimeError("Existing private data must be migrated to the runtime user")
-    if "su-exec agent-gateway:agent-gateway install -d -m 0700 /data/private" not in launcher:
-        raise RuntimeError("Private data directory must be initialized by the runtime user")
+    if "su-exec agent-gateway:agent-gateway mkdir -m 0700 /data/private" not in launcher:
+        raise RuntimeError("New private data directory must be created by the runtime user")
+    if "chmod 0700 /data/private" not in launcher:
+        raise RuntimeError("Existing private data directory must be restricted during migration")
     if "os.geteuid() != 1000" not in application:
         raise RuntimeError("Application must refuse to run under an unexpected UID")
     if "AGENT_GATEWAY_SURFACE=admin" not in launcher:
@@ -93,8 +95,10 @@ def main() -> int:
         raise RuntimeError("AppArmor grants an excessive capability")
     if "capability chown," not in apparmor:
         raise RuntimeError("AppArmor must allow ownership transfer of persistent data")
-    if "capability fowner," in apparmor or "capability dac_override," in apparmor:
-        raise RuntimeError("Runtime-user directory setup must not require ownership bypass capabilities")
+    if "capability fowner," not in apparmor:
+        raise RuntimeError("Existing private data migration requires the narrow fowner capability")
+    if "capability dac_override," in apparmor:
+        raise RuntimeError("Private data setup must not require the broad dac_override capability")
     if "/data/ rw," not in apparmor or "/data/private/ rw," not in apparmor:
         raise RuntimeError("AppArmor must allow the exact persistent data directories")
     if "/init rix," not in apparmor:

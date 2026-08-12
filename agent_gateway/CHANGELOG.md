@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.23
+
+- Split private-directory setup into a new-install path created directly as UID
+  1000 and a legacy migration path using root `chown` plus `chmod 0700`.
+- Restore only the narrow `fowner` capability required by HAOS for the legacy
+  mode correction; continue to forbid `dac_override`.
+
 ## 0.1.22
 
 - Migrate an existing root-owned `/data/private` directory from earlier app
