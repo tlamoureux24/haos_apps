@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6 - 2026-08-12
+
+- Run code-server itself, its extension host, all integrated terminals, and Codex as UID 1000.
+- Remove Home Assistant Supervisor credentials from the entire interactive editor environment.
+- Remove the root terminal profile; trusted root initialization remains available through App startup options.
+- Migrate persisted editor extensions and settings to the unprivileged account.
+
 ## 0.1.5 - 2026-08-12
 
 - Start Codex directly when invoked from the already-unprivileged default terminal.

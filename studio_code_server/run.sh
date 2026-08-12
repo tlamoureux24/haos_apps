@@ -33,8 +33,8 @@ chmod 0700 "${DATA_HOME}/.codex" "${DATA_HOME}/.ssh"
 # runtime. Existing files from 0.1.0/0.1.1 are migrated on first start.
 chown codex:codex "${DATA_HOME}"
 chown -R codex:codex \
-  "${DATA_HOME}/.codex" \
-  "${DATA_HOME}/.ssh" \
+  "${DATA_HOME}" \
+  "${USER_DATA}" \
   "${workspace_path}"
 
 if [[ ! -e "${USER_DATA}/User/settings.json" ]]; then
@@ -46,12 +46,12 @@ fi
 settings_tmp="$(mktemp)"
 jq \
   '.["terminal.integrated.defaultProfile.linux"] = "Codex workspace"
-   | .["terminal.integrated.profiles.linux"] = ((.["terminal.integrated.profiles.linux"] // {}) + {
-       "Codex workspace": {"path": "/usr/local/bin/codex-shell"},
-       "Home Assistant Admin (root)": {"path": "/bin/zsh"}
-     })' \
+   | .["terminal.integrated.profiles.linux"] = {
+       "Codex workspace": {"path": "/bin/zsh"}
+     }' \
   "${USER_DATA}/User/settings.json" > "${settings_tmp}"
 mv "${settings_tmp}" "${USER_DATA}/User/settings.json"
+chown codex:codex "${USER_DATA}/User/settings.json"
 
 touch "${DATA_HOME}/.gitconfig" "${DATA_HOME}/.zsh_history"
 chmod 0600 "${DATA_HOME}/.zsh_history"
@@ -79,18 +79,24 @@ export HOME="${DATA_HOME}"
 export SHELL="/bin/zsh"
 export HISTFILE="${DATA_HOME}/.zsh_history"
 export HASS_SERVER="http://supervisor/core"
-export HASS_TOKEN="${SUPERVISOR_TOKEN:-}"
 
-bashio::log.info "Starting Studio Code Server on the Home Assistant Ingress"
+bashio::log.info "Starting Studio Code Server on the Home Assistant Ingress as unprivileged user codex"
 bashio::log.info "Workspace: ${workspace_path}"
 bashio::log.info "Codex CLI: $(codex --version)"
 bashio::log.info "Codex runtime: unprivileged user codex (uid 1000), Supervisor token removed"
-bashio::log.info "Default terminal: Codex workspace; root remains an explicit administrative profile"
+bashio::log.info "Editor, extensions, terminals, and Codex run as uid 1000 without Supervisor credentials"
 bashio::log.info "Run 'codex login --device-auth' once from the integrated terminal"
 bashio::log.info "Optional experiment: run 'install-codex-extension' to test the Codex IDE extension"
 
 cd "${workspace_path}"
-exec code-server \
+exec s6-setuidgid codex \
+  env \
+  -u HASS_TOKEN \
+  -u SUPERVISOR_TOKEN \
+  HOME="${DATA_HOME}" \
+  SHELL=/bin/zsh \
+  HISTFILE="${DATA_HOME}/.zsh_history" \
+  code-server \
   --host 0.0.0.0 \
   --port 1337 \
   --auth none \

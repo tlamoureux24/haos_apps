@@ -36,10 +36,8 @@ reduced functionality.
 1. Install and start the App.
 2. Enable **Show in sidebar**.
 3. Open **Code + Codex** from Home Assistant.
-4. Create a terminal from the `Terminal` menu. The default **Codex workspace**
-   profile uses the unprivileged account for Git and Codex. **Home Assistant
-   Admin (root)** remains available in the terminal profile list for deliberate
-   maintenance.
+4. Create a terminal from the `Terminal` menu. The editor and all its terminals
+   use the unprivileged `codex` account.
 5. Run:
 
 ```bash
@@ -75,15 +73,15 @@ workspace is included in cold App backups.
 
 ## Permissions and exposure
 
-This is an administrative console. It has Supervisor `manager` access, the
-Home Assistant API, writable configuration mounts, a root shell inside the
-container, and outbound Internet access.
+The startup container has Supervisor `manager` access, the Home Assistant API,
+writable configuration mounts, and outbound Internet access.
 
-The default **Codex workspace** terminal and the `codex` command use the
+code-server, its extension host, every terminal, and the `codex` command use the
 dedicated `codex` account (UID 1000), with `SUPERVISOR_TOKEN` and `HASS_TOKEN`
 removed from their environment. The normal workspace and persisted
-OAuth/Git/SSH data are owned by that account. A distinct **Home Assistant Admin
-(root)** profile remains available for deliberate Home Assistant maintenance.
+OAuth/Git/SSH data are owned by that account. Extra packages and
+`init_commands` run as root only during startup, before the interactive editor
+is launched.
 
 HAOS may still reject Linux `bubblewrap` isolation. Codex approvals remain in
 effect, but they are not equivalent to an operating-system sandbox. Additional

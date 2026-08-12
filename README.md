@@ -37,7 +37,7 @@ Fonctionnalités principales :
 - code-server récent avec terminal intégré ;
 - Git, SSH, Home Assistant CLI, Python et Node.js ;
 - Codex CLI avec connexion OAuth à l’abonnement ChatGPT, sans clé OpenAI Platform imposée ;
-- terminal de travail non privilégié par défaut et profil administrateur root séparé ;
+- éditeur, extensions et terminaux exécutés sous un compte non privilégié ;
 - installateur facultatif de l’extension Codex expérimentale, car sa compatibilité avec code-server doit être validée ;
 - persistance des dépôts, clés SSH, réglages Git, sessions Codex, paramètres et extensions ;
 - exécution de Codex sous un compte non privilégié sans jeton Supervisor hérité ;
@@ -240,7 +240,7 @@ Main features:
 - current code-server with an integrated terminal;
 - Git, SSH, Home Assistant CLI, Python, and Node.js;
 - Codex CLI with ChatGPT subscription OAuth and no required OpenAI Platform API key;
-- unprivileged workspace terminal by default with a separate root administrator profile;
+- editor, extensions, and terminals running under an unprivileged account;
 - optional installer for the experimental Codex extension, pending real code-server compatibility validation;
 - persistent repositories, SSH keys, Git settings, Codex sessions, editor settings, and extensions;
 - Codex execution under an unprivileged account without an inherited Supervisor token;

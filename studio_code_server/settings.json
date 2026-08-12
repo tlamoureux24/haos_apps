@@ -22,8 +22,7 @@
   },
   "terminal.integrated.defaultProfile.linux": "Codex workspace",
   "terminal.integrated.profiles.linux": {
-    "Codex workspace": { "path": "/usr/local/bin/codex-shell" },
-    "Home Assistant Admin (root)": { "path": "/bin/zsh" }
+    "Codex workspace": { "path": "/bin/zsh" }
   },
   "terminal.integrated.copyOnSelection": true,
   "telemetry.telemetryLevel": "off",
