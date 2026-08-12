@@ -198,6 +198,10 @@ jobs:
             if curl --fail --silent http://127.0.0.1:18098/health/ready >/dev/null; then
               exit 0
             fi
+            if (( attempt % 10 == 0 )); then
+              docker inspect agent-gateway-smoke --format 'RESTART_DIAGNOSTIC|status={{.State.Status}}|running={{.State.Running}}|exit={{.State.ExitCode}}|restarts={{.RestartCount}}|ports={{json .NetworkSettings.Ports}}'
+              curl --verbose --max-time 2 http://127.0.0.1:18098/health/ready || true
+            fi
             sleep 1
           done
           exit 1
