@@ -30,7 +30,7 @@ log_error() {
 }
 
 log_info "Applying Agent Gateway database migrations"
-su-exec agent-gateway:agent-gateway alembic -c /app/alembic.ini upgrade head
+su-exec agent-gateway:agent-gateway python3 -m alembic -c /app/alembic.ini upgrade head
 
 admin_pid=""
 public_pid=""
@@ -47,13 +47,13 @@ trap stop_servers TERM INT EXIT
 
 log_info "Starting private Ingress administration listener"
 su-exec agent-gateway:agent-gateway env AGENT_GATEWAY_SURFACE=admin \
-  uvicorn agent_gateway.main:app --host 0.0.0.0 --port 8099 \
+  python3 -m uvicorn agent_gateway.main:app --host 0.0.0.0 --port 8099 \
   --no-access-log --log-level "${log_level}" &
 admin_pid=$!
 
 log_info "Starting authenticated MCP and event listener"
 su-exec agent-gateway:agent-gateway env AGENT_GATEWAY_SURFACE=public \
-  uvicorn agent_gateway.main:app --host 0.0.0.0 --port 8098 \
+  python3 -m uvicorn agent_gateway.main:app --host 0.0.0.0 --port 8098 \
   --no-access-log --log-level "${log_level}" &
 public_pid=$!
 

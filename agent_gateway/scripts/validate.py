@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.25"',
+        'version: "0.1.26"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -73,6 +73,10 @@ def main() -> int:
         raise RuntimeError("Container must create an unprivileged runtime user")
     if launcher.count("su-exec agent-gateway:agent-gateway") != 4:
         raise RuntimeError("Private data setup, migrations, and both listeners must run unprivileged")
+    if "python3 -m alembic" not in launcher or launcher.count("python3 -m uvicorn") != 2:
+        raise RuntimeError("Python tools must run as modules without readable /usr/bin wrappers")
+    if re.search(r"agent-gateway:agent-gateway (alembic|uvicorn)\b", launcher):
+        raise RuntimeError("Launcher must not invoke Python console-script wrappers")
     if not launcher.startswith("#!/usr/bin/with-contenv /bin/sh\n"):
         raise RuntimeError("Launcher must preserve the s6 environment with a POSIX shell")
     if "bashio" in launcher:

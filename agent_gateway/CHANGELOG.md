@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.26
+
+- Invoke Alembic and Uvicorn as Python modules instead of `/usr/bin` console
+  scripts, avoiding any need to grant AppArmor read access to those wrappers.
+- Prevent future launcher changes from reintroducing Python console-script
+  wrappers under `/usr/bin`.
+
 ## 0.1.25
 
 - Migrate an existing `/data/private` before transferring ownership of its
