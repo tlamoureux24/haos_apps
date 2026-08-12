@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import os
 from uuid import uuid4
 
 from starlette.applications import Starlette
@@ -17,6 +18,9 @@ from agent_gateway.database import database_ready
 from agent_gateway.settings import load_settings
 from agent_gateway.surfaces import exposed_paths
 
+
+if os.geteuid() != 1000:
+    raise RuntimeError("Agent Gateway application listeners must run with UID 1000")
 
 settings = load_settings()
 

@@ -32,6 +32,7 @@ def main() -> int:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     launcher = (ROOT / "run.sh").read_text(encoding="utf-8")
     apparmor = (ROOT / "apparmor.txt").read_text(encoding="utf-8")
+    application = (ROOT / "src/agent_gateway/main.py").read_text(encoding="utf-8")
 
     required_config = (
         'slug: "agent_gateway"',
@@ -72,6 +73,8 @@ def main() -> int:
         raise RuntimeError("Container must create an unprivileged runtime user")
     if launcher.count("su-exec agent-gateway:agent-gateway") != 3:
         raise RuntimeError("Migrations and both listeners must run unprivileged")
+    if "os.geteuid() != 1000" not in application:
+        raise RuntimeError("Application must refuse to run under an unexpected UID")
     if "AGENT_GATEWAY_SURFACE=admin" not in launcher:
         raise RuntimeError("Missing isolated admin listener")
     if "AGENT_GATEWAY_SURFACE=public" not in launcher:
