@@ -31,6 +31,7 @@ chmod 0700 "${DATA_HOME}/.codex" "${DATA_HOME}/.ssh"
 
 # OAuth state and the normal workspace belong to the unprivileged Codex
 # runtime. Existing files from 0.1.0/0.1.1 are migrated on first start.
+chown codex:codex "${DATA_HOME}"
 chown -R codex:codex \
   "${DATA_HOME}/.codex" \
   "${DATA_HOME}/.ssh" \

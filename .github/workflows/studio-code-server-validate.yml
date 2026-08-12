@@ -107,6 +107,8 @@ jobs:
               test "$(docker exec studio-code-smoke s6-setuidgid codex id -u)" = "1000"
               test "$(docker exec studio-code-smoke codex-shell -c 'id -u')" = "1000"
               docker exec studio-code-smoke codex-shell -c 'test -z "${SUPERVISOR_TOKEN+x}" && test -z "${HASS_TOKEN+x}"'
+              docker exec studio-code-smoke codex-shell -c 'git config --global user.name "CI Codex User"'
+              test "$(docker exec studio-code-smoke codex-shell -c 'git config --global user.name')" = "CI Codex User"
               docker exec studio-code-smoke s6-setuidgid codex touch /data/workspace/.codex-write-test
               test -f "${root}/data/workspace/.codex-write-test"
               docker exec studio-code-smoke ha --help >/dev/null

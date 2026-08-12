@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 - 2026-08-12
+
+- Give the unprivileged development user ownership of its persistent home directory.
+- Fix Git lock-file creation for global configuration and future user-level tools.
+- Exercise a real `git config --global` write in smoke tests.
+
 ## 0.1.3 - 2026-08-12
 
 - Make an unprivileged `Codex workspace` shell the default integrated terminal.
