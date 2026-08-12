@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.20"',
+        'version: "0.1.21"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -97,6 +97,10 @@ def main() -> int:
         raise RuntimeError("AppArmor must allow the exact persistent data directories")
     if "/init rix," not in apparmor:
         raise RuntimeError("AppArmor must allow the shell to read and execute /init")
+    if "/sbin/su-exec ix," not in apparmor:
+        raise RuntimeError("AppArmor must allow the exact privilege-drop executable")
+    if "/sbin/**" in apparmor:
+        raise RuntimeError("AppArmor must not grant broad access to /sbin")
     if "/package/admin/s6-overlay-*/libexec/preinit rix," not in apparmor:
         raise RuntimeError("AppArmor must allow the shell to read the s6-overlay preinit script")
     if "/package/admin/s6-overlay-*/libexec/stage0 rix," not in apparmor:

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.21
+
+- Allow inherited execution of the exact `/sbin/su-exec` binary required to
+  create private state and launch migrations/listeners as UID 1000.
+
 ## 0.1.20
 
 - Create `/data/private` directly as the unprivileged runtime user after the

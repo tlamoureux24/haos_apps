@@ -91,14 +91,14 @@ jobs:
             test "$(readlink -f /usr/bin/with-contenv)" = "/package/admin/s6-overlay-3.2.2.0/command/with-contenv"
           '
 
-      - name: Inspect su-exec path used by AppArmor
+      - name: Validate su-exec path used by AppArmor
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
           docker run --rm --entrypoint /bin/sh "agent-gateway:${version}" -c '
-            path="$(command -v su-exec)"
-            stat -c "SU_EXEC|%F|%N" "${path}"
-            printf "SU_EXEC_TARGET|%s\n" "$(readlink -f "${path}")"
+            test "$(command -v su-exec)" = "/sbin/su-exec"
+            test -f /sbin/su-exec
+            test ! -L /sbin/su-exec
           '
 
       - name: Smoke-test listener isolation and persistence
