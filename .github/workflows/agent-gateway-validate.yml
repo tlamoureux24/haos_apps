@@ -201,6 +201,7 @@ jobs:
 
           docker restart agent-gateway-smoke >/dev/null
           wait_ready
-          docker exec agent-gateway-smoke \
-            su-exec agent-gateway:agent-gateway \
-            test -f /data/agent_gateway.db
+          curl --fail --silent \
+            --header "Authorization: Bearer ${credential}" \
+            http://127.0.0.1:18098/api/v1/permissions/effective | \
+            jq -e '.gateway_actions | index("events.create")'
