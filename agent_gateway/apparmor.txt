@@ -6,6 +6,7 @@ profile agent_gateway flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/nameservice>
   #include <abstractions/python>
 
+  capability chown,
   capability setgid,
   capability setuid,
   network inet stream,

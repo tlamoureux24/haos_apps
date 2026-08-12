@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.16"',
+        'version: "0.1.17"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -85,6 +85,8 @@ def main() -> int:
         raise RuntimeError("Missing isolated public listener")
     if "capability sys_admin" in apparmor or "network raw" in apparmor:
         raise RuntimeError("AppArmor grants an excessive capability")
+    if "capability chown," not in apparmor:
+        raise RuntimeError("AppArmor must allow ownership transfer of persistent data")
     if "/init rix," not in apparmor:
         raise RuntimeError("AppArmor must allow the shell to read and execute /init")
     if "/package/admin/s6-overlay-*/libexec/preinit rix," not in apparmor:

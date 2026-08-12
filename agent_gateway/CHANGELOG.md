@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.17
+
+- Allow the narrowly scoped `chown` capability required to transfer the
+  Home Assistant-mounted `/data` directories to the unprivileged runtime UID.
+
 ## 0.1.16
 
 - Replace the `bashio` launcher dependency with a small POSIX shell launcher
