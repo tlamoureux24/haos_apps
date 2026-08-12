@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.11
+
+- Allow read-only access to the s6 `user2/type` service definition file.
+
 ## 0.1.10
 
 - Allow `s6-rc-compile` to enumerate only the standard `user2` bundle directory.

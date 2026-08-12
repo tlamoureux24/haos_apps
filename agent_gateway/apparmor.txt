@@ -30,6 +30,7 @@ profile agent_gateway flags=(attach_disconnected,mediate_deleted) {
   /etc/s6-overlay/s6-rc.d/user/type r,
   /etc/s6-overlay/s6-rc.d/user/contents.d/ r,
   /etc/s6-overlay/s6-rc.d/user2/ r,
+  /etc/s6-overlay/s6-rc.d/user2/type r,
   /etc/services.d/** rwix,
   /etc/cont-init.d/** rwix,
   /etc/cont-finish.d/** rwix,
