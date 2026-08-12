@@ -139,10 +139,12 @@ jobs:
             "agent-gateway:${version}"
 
           wait_ready
+          echo "SMOKE_STAGE=initial-ready"
           ingress_page="$(curl --fail --silent \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/)"
           [[ "${ingress_page}" == *"Agent Gateway"* ]]
+          echo "SMOKE_STAGE=ingress-ready"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)" = "404"
           docker exec agent-gateway-smoke \
             su-exec agent-gateway:agent-gateway \
@@ -154,6 +156,7 @@ jobs:
           docker exec --env PYTHONPATH=/app/src agent-gateway-smoke \
             su-exec agent-gateway:agent-gateway \
             python3 /tmp/control_plane_smoke.py
+          echo "SMOKE_STAGE=database-api-ready"
 
           ingress_path="/api/hassio_ingress/ci"
           admin_page="$(curl --fail --silent \
@@ -170,6 +173,7 @@ jobs:
             --data '{"display_name":"CI API source","identity_type":"event_source","actions":["events.create","permissions.effective.read"]}' \
             http://127.0.0.1:18099/admin/api/v1/identities)"
           credential="$(printf '%s' "${identity_response}" | jq -er '.credential')"
+          echo "SMOKE_STAGE=identity-ready"
           occurred_at="$(date --utc +'%Y-%m-%dT%H:%M:%SZ')"
           event_payload="$(jq --null-input --compact-output \
             --arg occurred_at "${occurred_at}" \
@@ -200,6 +204,7 @@ jobs:
             python3 -c 'import sqlite3; connection=sqlite3.connect("/data/agent_gateway.db"); assert connection.execute("SELECT count(*) FROM audit_entries WHERE decision=\"denied\"").fetchone()[0] >= 1'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             http://127.0.0.1:18099/admin/api/v1/status)" = "403"
+          echo "SMOKE_STAGE=api-ready"
 
           initial_pid="$(docker inspect agent-gateway-smoke --format '{{.State.Pid}}')"
           docker restart agent-gateway-smoke >/dev/null
@@ -212,6 +217,7 @@ jobs:
           done
           test "${restarted_pid}" != "${initial_pid}"
           wait_ready
+          echo "SMOKE_STAGE=restart-ready"
           curl --fail --silent \
             --header "Authorization: Bearer ${credential}" \
             http://127.0.0.1:18098/api/v1/permissions/effective | \
