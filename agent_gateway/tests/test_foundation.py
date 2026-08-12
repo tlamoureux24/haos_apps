@@ -26,6 +26,15 @@ class SettingsTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 load_settings()
 
+    def test_rejects_invalid_ingress_proxy_ip(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"AGENT_GATEWAY_INGRESS_PROXY_IP": "not-an-ip"},
+            clear=True,
+        ):
+            with self.assertRaises(RuntimeError):
+                load_settings()
+
 
 class DatabaseReadinessTests(unittest.TestCase):
     def test_missing_database_is_not_ready(self) -> None:
@@ -66,7 +75,15 @@ class PublicSurfaceTests(unittest.TestCase):
     def test_public_root_is_not_exposed(self) -> None:
         paths = set(exposed_paths("public"))
         self.assertNotIn("/", paths)
-        self.assertEqual(paths, {"/health/live", "/health/ready"})
+        self.assertEqual(
+            paths,
+            {
+                "/api/v1/events",
+                "/api/v1/permissions/effective",
+                "/health/live",
+                "/health/ready",
+            },
+        )
 
     def test_admin_root_is_exposed(self) -> None:
         self.assertIn("/", exposed_paths("admin"))

@@ -59,11 +59,16 @@ jobs:
           cleanup() {
             docker logs agent-gateway-smoke 2>&1 || true
             docker rm --force agent-gateway-smoke >/dev/null 2>&1 || true
+            docker network rm agent-gateway-smoke >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
+          docker network create agent-gateway-smoke >/dev/null
+          ingress_proxy_ip="$(docker network inspect agent-gateway-smoke --format '{{(index .IPAM.Config 0).Gateway}}')"
           docker run --detach \
             --name agent-gateway-smoke \
+            --network agent-gateway-smoke \
+            --env "AGENT_GATEWAY_INGRESS_PROXY_IP=${ingress_proxy_ip}" \
             --publish 127.0.0.1:18098:8098 \
             --publish 127.0.0.1:18099:8099 \
             --volume "${root}/data:/data" \
@@ -76,7 +81,9 @@ jobs:
             sleep 1
           done
           curl --fail --silent http://127.0.0.1:18098/health/ready | jq -e '.status == "ready"'
-          curl --fail --silent http://127.0.0.1:18099/ | grep -q "Agent Gateway"
+          curl --fail --silent \
+            --header "X-Ingress-Path: /api/hassio_ingress/ci" \
+            http://127.0.0.1:18099/ | grep -q "Agent Gateway"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)" = "404"
           docker exec agent-gateway-smoke test -f /data/agent_gateway.db
           docker cp agent_gateway/tests/control_plane_smoke.py \
@@ -84,6 +91,52 @@ jobs:
           docker exec --env PYTHONPATH=/app/src agent-gateway-smoke \
             su-exec agent-gateway:agent-gateway \
             python3 /tmp/control_plane_smoke.py
+
+          ingress_path="/api/hassio_ingress/ci"
+          admin_page="$(curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/)"
+          csrf_token="$(printf '%s' "${admin_page}" | sed -n 's/.*data-csrf="\([^"]*\)".*/\1/p')"
+          test -n "${csrf_token}"
+          identity_response="$(curl --fail --silent \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data '{"display_name":"CI API source","identity_type":"event_source","actions":["events.create","permissions.effective.read"]}' \
+            http://127.0.0.1:18099/admin/api/v1/identities)"
+          credential="$(printf '%s' "${identity_response}" | jq -er '.credential')"
+          occurred_at="$(date --utc +'%Y-%m-%dT%H:%M:%SZ')"
+          event_payload="$(jq --null-input --compact-output \
+            --arg occurred_at "${occurred_at}" \
+            '{schema_version:1,event_type:"gatus.endpoint_unavailable",occurred_at:$occurred_at,source:"home_assistant",subject:{entity_id:"binary_sensor.ci_api_connectivity"},attributes:{state:"off"},requested_task:"gatus_readonly_diagnostic"}')"
+          test "$(curl --silent --output /tmp/event-first.json --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer ${credential}" \
+            --header "Idempotency-Key: ci-api-stable-key" \
+            --header "Content-Type: application/json" \
+            --data "${event_payload}" \
+            http://127.0.0.1:18098/api/v1/events)" = "202"
+          test "$(curl --silent --output /tmp/event-replay.json --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer ${credential}" \
+            --header "Idempotency-Key: ci-api-stable-key" \
+            --header "Content-Type: application/json" \
+            --data "${event_payload}" \
+            http://127.0.0.1:18098/api/v1/events)" = "200"
+          test "$(jq -r '.event_id' /tmp/event-first.json)" = "$(jq -r '.event_id' /tmp/event-replay.json)"
+          curl --fail --silent \
+            --header "Authorization: Bearer ${credential}" \
+            http://127.0.0.1:18098/api/v1/permissions/effective | \
+            jq -e '.gateway_actions | index("events.create")'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:18098/api/v1/permissions/effective)" = "401"
+          docker exec --env PYTHONPATH=/app/src agent-gateway-smoke \
+            su-exec agent-gateway:agent-gateway \
+            python3 -c 'import sqlite3; connection=sqlite3.connect("/data/agent_gateway.db"); assert connection.execute("SELECT count(*) FROM audit_entries WHERE decision=\"denied\"").fetchone()[0] >= 1'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:18099/admin/api/v1/status)" = "403"
 
           docker restart agent-gateway-smoke >/dev/null
           for attempt in {1..60}; do

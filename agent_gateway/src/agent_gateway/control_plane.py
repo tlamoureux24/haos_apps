@@ -184,6 +184,32 @@ class ControlPlane:
         if not decision.allowed:
             raise AuthorizationError(decision.reason_code)
 
+    def record_audit(
+        self,
+        *,
+        actor_identity_id: str | None,
+        credential_id: str | None,
+        action: str,
+        decision: str,
+        reason_code: str,
+        correlation_id: str,
+        metadata: object | None = None,
+    ) -> None:
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            self._append_audit(
+                connection,
+                actor_identity_id=actor_identity_id,
+                credential_id=credential_id,
+                action=action,
+                target_type=None,
+                target_id=None,
+                decision=decision,
+                reason_code=reason_code,
+                correlation_id=correlation_id,
+                metadata=metadata or {},
+            )
+
     def ingest_event(
         self,
         identity: AuthenticatedIdentity,

@@ -12,3 +12,7 @@
   policy revisions, events, jobs, reports, and chained audit entries.
 - Add deny-by-default policy primitives, HMAC-protected client credentials,
   recursive secret redaction, and atomic idempotent event/job creation.
+- Add strict authenticated HTTP contracts for effective permissions and
+  idempotent event intake.
+- Restrict administration to the Supervisor Ingress source and context, protect
+  credential creation with CSRF, and audit rejected public API requests.

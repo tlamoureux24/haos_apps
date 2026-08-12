@@ -8,7 +8,11 @@ HEALTH_PATHS = ("/health/live", "/health/ready")
 
 def exposed_paths(surface: str) -> tuple[str, ...]:
     if surface == "admin":
-        return ("/", *HEALTH_PATHS)
+        return ("/", "/admin/api/v1/status", "/admin/api/v1/identities", *HEALTH_PATHS)
     if surface == "public":
-        return HEALTH_PATHS
+        return (
+            "/api/v1/events",
+            "/api/v1/permissions/effective",
+            *HEALTH_PATHS,
+        )
     raise ValueError(f"Unknown surface: {surface}")
