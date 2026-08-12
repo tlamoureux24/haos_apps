@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.18"',
+        'version: "0.1.19"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -77,6 +77,10 @@ def main() -> int:
         raise RuntimeError("Launcher must preserve the s6 environment with a POSIX shell")
     if "bashio" in launcher:
         raise RuntimeError("Launcher must not require the broad bashio runtime")
+    if 'chown "${runtime_uid}:${runtime_gid}" /data' not in launcher:
+        raise RuntimeError("Persistent data mount must be writable by the runtime user")
+    if 'install -d -m 0700 -o "${runtime_uid}" -g "${runtime_gid}" /data/private' not in launcher:
+        raise RuntimeError("Private data directory must be initialized with restrictive permissions")
     if "os.geteuid() != 1000" not in application:
         raise RuntimeError("Application must refuse to run under an unexpected UID")
     if "AGENT_GATEWAY_SURFACE=admin" not in launcher:

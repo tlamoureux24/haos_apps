@@ -4,6 +4,7 @@ set -eu
 runtime_uid=1000
 runtime_gid=1000
 
+chown "${runtime_uid}:${runtime_gid}" /data
 install -d -m 0700 -o "${runtime_uid}" -g "${runtime_gid}" /data/private
 
 if [ -f /data/options.json ]; then

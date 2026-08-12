@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.19
+
+- Transfer ownership of the `/data` mount without changing its Home
+  Assistant-managed mode, allowing the unprivileged process to create SQLite
+  state while retaining the exact `/data/private` initialization from 0.1.18.
+
 ## 0.1.18
 
 - Stop changing the ownership and mode of the Home Assistant-managed `/data`
