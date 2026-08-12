@@ -4,12 +4,12 @@ import os
 import sqlite3
 import tempfile
 import unittest
-from importlib import import_module
 from pathlib import Path
 from unittest.mock import patch
 
 from agent_gateway.database import database_ready
 from agent_gateway.settings import load_settings
+from agent_gateway.surfaces import exposed_paths
 
 
 class SettingsTests(unittest.TestCase):
@@ -61,11 +61,12 @@ class DatabaseReadinessTests(unittest.TestCase):
 
 class PublicSurfaceTests(unittest.TestCase):
     def test_public_root_is_not_exposed(self) -> None:
-        with patch.dict(os.environ, {"AGENT_GATEWAY_SURFACE": "public"}):
-            module = import_module("agent_gateway.main")
-        exposed_paths = {route.path for route in module.app.routes}
-        self.assertNotIn("/", exposed_paths)
-        self.assertEqual(exposed_paths, {"/health/live", "/health/ready"})
+        paths = set(exposed_paths("public"))
+        self.assertNotIn("/", paths)
+        self.assertEqual(paths, {"/health/live", "/health/ready"})
+
+    def test_admin_root_is_exposed(self) -> None:
+        self.assertIn("/", exposed_paths("admin"))
 
 
 if __name__ == "__main__":

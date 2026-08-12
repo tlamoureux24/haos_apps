@@ -15,6 +15,7 @@ from starlette.routing import Route
 from agent_gateway import __version__
 from agent_gateway.database import database_ready
 from agent_gateway.settings import load_settings
+from agent_gateway.surfaces import exposed_paths
 
 
 settings = load_settings()
@@ -62,14 +63,15 @@ async def not_found(_: Request, __: Exception) -> Response:
     return JSONResponse({"error": {"code": "not_found"}}, status_code=404)
 
 
-common_routes = [
-    Route("/health/live", live, methods=["GET"]),
-    Route("/health/ready", ready, methods=["GET"]),
+route_handlers = {
+    "/": admin_index,
+    "/health/live": live,
+    "/health/ready": ready,
+}
+routes = [
+    Route(path, route_handlers[path], methods=["GET"])
+    for path in exposed_paths(settings.surface)
 ]
-if settings.surface == "admin":
-    routes = [Route("/", admin_index, methods=["GET"]), *common_routes]
-else:
-    routes = common_routes
 
 app = Starlette(
     debug=False,
