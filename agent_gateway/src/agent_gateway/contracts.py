@@ -22,6 +22,10 @@ class IdentityCreateRequest(StrictContract):
     actions: list[str] = Field(default_factory=list, max_length=32)
 
 
+class IdentityRevokeRequest(StrictContract):
+    identity_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+
+
 class EventSubject(StrictContract):
     entity_id: str = Field(min_length=3, max_length=255)
 

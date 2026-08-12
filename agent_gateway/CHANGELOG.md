@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0
+
+- Add the first operational Ingress dashboard with service and identity totals.
+- Add identity creation with composable gateway permissions and one-time-only
+  credential display.
+- Add identity inventory and immediate revocation of all associated credentials.
+- Serve the interface through a strict self-only Content Security Policy and
+  preserve the Home Assistant Ingress prefix for every asset and request.
+
 ## 0.1.35
 
 - Preserve the Home Assistant Ingress prefix in administration-page links.

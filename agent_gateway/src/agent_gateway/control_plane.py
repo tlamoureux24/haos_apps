@@ -140,6 +140,72 @@ class ControlPlane:
             )
         return CreatedIdentity(identity_id, revision_id, credential)
 
+    def list_identities(self) -> list[dict[str, object]]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT i.id,i.display_name,i.identity_type,i.status,i.created_at,
+                       p.document_json,
+                       count(c.id) AS credential_count,
+                       max(c.last_used_at) AS last_used_at
+                FROM identities i
+                JOIN policy_bindings b ON b.identity_id=i.id
+                JOIN policy_revisions p ON p.id=b.policy_revision_id
+                LEFT JOIN credentials c ON c.identity_id=i.id AND c.revoked_at IS NULL
+                GROUP BY i.id,p.id
+                ORDER BY i.created_at DESC
+                """
+            ).fetchall()
+        identities = []
+        for row in rows:
+            policy = json.loads(row["document_json"])
+            identities.append(
+                {
+                    "id": row["id"],
+                    "display_name": row["display_name"],
+                    "identity_type": row["identity_type"],
+                    "status": row["status"],
+                    "created_at": row["created_at"],
+                    "last_used_at": row["last_used_at"],
+                    "active_credentials": row["credential_count"],
+                    "gateway_actions": list(
+                        validate_actions(policy.get("allow", {}).get("gateway_actions", []))
+                    ),
+                }
+            )
+        return identities
+
+    def revoke_identity(self, identity_id: str, correlation_id: str) -> bool:
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT status FROM identities WHERE id=?", (identity_id,)
+            ).fetchone()
+            if row is None:
+                return False
+            if row["status"] != "revoked":
+                connection.execute(
+                    "UPDATE identities SET status='revoked' WHERE id=?", (identity_id,)
+                )
+                connection.execute(
+                    "UPDATE credentials SET revoked_at=? WHERE identity_id=? AND revoked_at IS NULL",
+                    (now, identity_id),
+                )
+                self._append_audit(
+                    connection,
+                    actor_identity_id=None,
+                    credential_id=None,
+                    action="identities.revoke",
+                    target_type="identity",
+                    target_id=identity_id,
+                    decision="allowed",
+                    reason_code="ingress_admin",
+                    correlation_id=correlation_id,
+                    metadata={},
+                )
+        return True
+
     def authenticate(self, token: str) -> AuthenticatedIdentity:
         credential_id = token_credential_id(token)
         if credential_id is None:

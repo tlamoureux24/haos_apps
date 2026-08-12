@@ -8,7 +8,15 @@ HEALTH_PATHS = ("/health/live", "/health/ready")
 
 def exposed_paths(surface: str) -> tuple[str, ...]:
     if surface == "admin":
-        return ("/", "/admin/api/v1/status", "/admin/api/v1/identities", *HEALTH_PATHS)
+        return (
+            "/",
+            "/admin/assets/admin.css",
+            "/admin/assets/admin.js",
+            "/admin/api/v1/status",
+            "/admin/api/v1/identities",
+            "/admin/api/v1/identities/revoke",
+            *HEALTH_PATHS,
+        )
     if surface == "public":
         return (
             "/api/v1/events",

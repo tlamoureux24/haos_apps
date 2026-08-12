@@ -10,7 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from agent_gateway.contracts import EventCreateRequest, IdentityCreateRequest
+from agent_gateway.contracts import EventCreateRequest, IdentityCreateRequest, IdentityRevokeRequest
 from agent_gateway.control_plane import (
     AuthenticatedIdentity,
     AuthenticationError,
@@ -74,7 +74,20 @@ async def audit_denial(
 
 
 async def admin_status(request: Request) -> JSONResponse:
-    return JSONResponse({"status": "ready", "surface": "admin"})
+    identities = await run_in_threadpool(request.app.state.control_plane.list_identities)
+    return JSONResponse(
+        {
+            "status": "ready",
+            "surface": "admin",
+            "identities": len(identities),
+            "active_identities": sum(item["status"] == "active" for item in identities),
+        }
+    )
+
+
+async def admin_list_identities(request: Request) -> JSONResponse:
+    identities = await run_in_threadpool(request.app.state.control_plane.list_identities)
+    return JSONResponse({"identities": identities})
 
 
 async def admin_create_identity(request: Request) -> JSONResponse:
@@ -107,6 +120,27 @@ async def admin_create_identity(request: Request) -> JSONResponse:
         },
         status_code=201,
     )
+
+
+async def admin_revoke_identity(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        await audit_denial(request, "identities.revoke", "csrf_failed")
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, IdentityRevokeRequest)
+        found = await run_in_threadpool(
+            request.app.state.control_plane.revoke_identity,
+            contract.identity_id,
+            correlation_id,
+        )
+    except OverflowError:
+        return error_response(413, "body_too_large", correlation_id)
+    except (ValueError, ValidationError):
+        return error_response(422, "invalid_request", correlation_id)
+    if not found:
+        return error_response(404, "identity_not_found", correlation_id)
+    return JSONResponse({"identity_id": contract.identity_id, "status": "revoked"})
 
 
 async def effective_permissions(request: Request) -> JSONResponse:

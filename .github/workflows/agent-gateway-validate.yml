@@ -145,6 +145,7 @@ jobs:
             http://127.0.0.1:18099/)"
           [[ "${ingress_page}" == *"Agent Gateway"* ]]
           [[ "${ingress_page}" == *'href="/api/hassio_ingress/ci/health/ready"'* ]]
+          [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/admin.js"'* ]]
           echo "SMOKE_STAGE=ingress-ready"
           public_root_status="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)"
           echo "SMOKE_CHECK=public-root:${public_root_status}"
@@ -181,6 +182,10 @@ jobs:
             http://127.0.0.1:18099/admin/api/v1/identities)"
           credential="$(printf '%s' "${identity_response}" | jq -er '.credential')"
           echo "SMOKE_STAGE=identity-ready"
+          curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/identities | \
+            jq -e '.identities | length == 2 and all(has("credential") | not)'
           occurred_at="$(date --utc +'%Y-%m-%dT%H:%M:%SZ')"
           event_payload="$(jq --null-input --compact-output \
             --arg occurred_at "${occurred_at}" \
@@ -229,3 +234,20 @@ jobs:
             --header "Authorization: Bearer ${credential}" \
             http://127.0.0.1:18098/api/v1/permissions/effective | \
             jq -e '.gateway_actions | index("events.create")'
+          identity_id="$(printf '%s' "${identity_response}" | jq -er '.identity_id')"
+          admin_page="$(curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/)"
+          csrf_token="$(printf '%s' "${admin_page}" | sed -n 's/.*data-csrf="\([^"]*\)".*/\1/p')"
+          curl --fail --silent \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data "{\"identity_id\":\"${identity_id}\"}" \
+            http://127.0.0.1:18099/admin/api/v1/identities/revoke | \
+            jq -e '.status == "revoked"'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${credential}" \
+            http://127.0.0.1:18098/api/v1/permissions/effective)" = "401"

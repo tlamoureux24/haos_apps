@@ -15,10 +15,13 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route
 
 from agent_gateway import __version__
+from agent_gateway.admin_ui import ADMIN_CSS, ADMIN_JS
 from agent_gateway.database import database_ready
 from agent_gateway.control_plane import ControlPlane
 from agent_gateway.http_api import (
     admin_create_identity,
+    admin_list_identities,
+    admin_revoke_identity,
     admin_status,
     create_event,
     effective_permissions,
@@ -52,7 +55,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Request-ID"] = request.state.correlation_id
         if settings.surface == "admin":
             response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+                "default-src 'self'; script-src 'self'; style-src 'self'; "
                 "img-src 'self' data:; frame-ancestors 'self'"
             )
             if request.method == "GET" and request.url.path == "/":
@@ -83,10 +86,21 @@ async def admin_index(request: Request) -> HTMLResponse:
     document = f"""<!doctype html>
 <html lang="fr">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Agent Gateway</title></head>
-<body><main data-csrf="{csrf_token}"><h1>Agent Gateway</h1><p>Plan de contrôle initialisé.</p>
-<p><a href="{safe_prefix}/health/ready">État de préparation</a></p></main></body></html>"""
+<title>Agent Gateway</title><link rel="stylesheet" href="{safe_prefix}/admin/assets/admin.css"></head>
+<body><header><h1>Agent Gateway</h1><p>Plan de contrôle des agents et automatisations</p></header>
+<main class="shell" data-base="{safe_prefix}" data-csrf="{csrf_token}">
+<section class="summary"><div class="metric"><strong id="total">–</strong><span>Identités</span></div><div class="metric"><strong id="active">–</strong><span>Actives</span></div><div class="metric"><strong>Prêt</strong><span><a href="{safe_prefix}/health/ready">État du service</a></span></div></section>
+<div class="grid"><section class="panel"><h2>Nouvelle identité</h2><p class="muted">L’identifiant secret ne sera affiché qu’une seule fois.</p><form id="create"><label>Nom<input name="display_name" maxlength="120" required></label><label>Type<select name="identity_type"><option value="client">Client MCP</option><option value="event_source">Source d’événements</option><option value="scheduler">Planificateur</option></select></label><fieldset><legend>Permissions</legend><label><input type="checkbox" name="actions" value="permissions.effective.read">Lire ses permissions</label><label><input type="checkbox" name="actions" value="events.create">Créer des événements</label><label><input type="checkbox" name="actions" value="events.read">Lire les événements</label><label><input type="checkbox" name="actions" value="jobs.read">Lire les tâches</label><label><input type="checkbox" name="actions" value="reports.read">Lire les rapports</label></fieldset><button type="submit">Créer l’identité</button><p id="message" class="error"></p></form><aside id="credential" class="credential"><strong>Copiez cet identifiant maintenant</strong><code></code><span>Il ne sera plus affiché ensuite.</span></aside></section><section class="panel"><h2>Identités</h2><div id="identities"><p class="muted">Chargement…</p></div></section></div>
+</main><script src="{safe_prefix}/admin/assets/admin.js" defer></script></body></html>"""
     return HTMLResponse(document)
+
+
+async def admin_css(_: Request) -> Response:
+    return Response(ADMIN_CSS, media_type="text/css")
+
+
+async def admin_js(_: Request) -> Response:
+    return Response(ADMIN_JS, media_type="application/javascript")
 
 
 async def not_found(_: Request, __: Exception) -> Response:
@@ -95,8 +109,11 @@ async def not_found(_: Request, __: Exception) -> Response:
 
 route_handlers = {
     "/": admin_index,
+    "/admin/assets/admin.css": admin_css,
+    "/admin/assets/admin.js": admin_js,
     "/admin/api/v1/status": admin_status,
     "/admin/api/v1/identities": admin_create_identity,
+    "/admin/api/v1/identities/revoke": admin_revoke_identity,
     "/api/v1/events": create_event,
     "/api/v1/permissions/effective": effective_permissions,
     "/health/live": live,
@@ -106,10 +123,12 @@ routes = [
     Route(
         path,
         route_handlers[path],
-        methods=["POST"] if path in {"/admin/api/v1/identities", "/api/v1/events"} else ["GET"],
+        methods=["POST"] if path in {"/admin/api/v1/identities", "/admin/api/v1/identities/revoke", "/api/v1/events"} else ["GET"],
     )
     for path in exposed_paths(settings.surface)
 ]
+if settings.surface == "admin":
+    routes.append(Route("/admin/api/v1/identities", admin_list_identities, methods=["GET"]))
 
 app = Starlette(
     debug=False,
