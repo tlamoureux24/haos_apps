@@ -134,7 +134,7 @@ jobs:
             "studio-code-server-codex:${version}"
           for attempt in {1..120}; do
             if curl --fail --silent http://127.0.0.1:11337/healthz >/dev/null; then
-              test "$(docker exec studio-code-update-smoke stat -c %u /proc/1)" = "1000"
+              docker exec studio-code-update-smoke sh -c 'ps -eo uid=,args= | grep "[c]ode-server" | grep -q "^ *1000 "'
               docker exec studio-code-update-smoke codex --version
               test "$(docker exec studio-code-update-smoke s6-setuidgid codex id -u)" = "1000"
               test "$(docker exec studio-code-update-smoke codex-shell -c 'id -u')" = "1000"
