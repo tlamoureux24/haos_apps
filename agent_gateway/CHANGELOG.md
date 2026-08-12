@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8
+
+- Allow read-only access to the s6 `user/type` service definition file.
+
 ## 0.1.7
 
 - Allow reading the canonical s6-overlay target behind the
