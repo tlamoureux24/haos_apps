@@ -1,6 +1,6 @@
 name: "Agent Gateway"
 slug: "agent_gateway"
-version: "0.1.5"
+version: "0.1.6"
 description: "Governed automation gateway for MCP-compatible agents"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/agent_gateway"
 arch:

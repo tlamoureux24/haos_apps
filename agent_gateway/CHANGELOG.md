@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6
+
+- Allow the shell to read and execute only `/command/printcontenv`.
+- Allow `s6-rc-compile` to enumerate `/etc/s6-overlay/s6-rc.d` without granting
+  broad read access to the directory contents.
+
 ## 0.1.5
 
 - Allow read-only access to the s6-overlay `rc.shutdown` template required to

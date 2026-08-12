@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.5"',
+        'version: "0.1.6"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -91,8 +91,14 @@ def main() -> int:
         raise RuntimeError("AppArmor must allow reading the s6-overlay rc.init template")
     if "/package/admin/s6-overlay-*/etc/s6-linux-init/skel/rc.shutdown r," not in apparmor:
         raise RuntimeError("AppArmor must allow reading the s6-overlay rc.shutdown template")
+    if "/command/printcontenv rix," not in apparmor:
+        raise RuntimeError("AppArmor must allow the shell to read printcontenv")
+    if "/etc/s6-overlay/s6-rc.d/ r," not in apparmor:
+        raise RuntimeError("AppArmor must allow s6-rc-compile to enumerate its source directory")
     if "/package/** rix," in apparmor or "/package/admin/s6-overlay-*/libexec/** rix," in apparmor:
         raise RuntimeError("AppArmor must grant read access to s6-overlay scripts file by file")
+    if "/command/** rix," in apparmor or "/etc/s6-overlay/** r" in apparmor:
+        raise RuntimeError("AppArmor must not grant broad read access to command or s6-overlay trees")
 
     ignored_documents = (
         "/agent_gateway/PROJECT_BRIEF.md",
