@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.25
+
+- Migrate an existing `/data/private` before transferring ownership of its
+  `0700` parent mount, preserving root traversal without `dac_override`.
+- Retain idempotent runtime-user creation after the parent ownership transfer
+  for fresh installations.
+
 ## 0.1.24
 
 - Replace the AppArmor-sensitive `/data/private` existence test with an
