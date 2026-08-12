@@ -92,7 +92,7 @@ def main() -> int:
         if document not in ignore:
             raise RuntimeError(f"Local design document is not ignored: {document}")
 
-    print("Validated Agent Gateway phase 0 repository invariants")
+    print("Validated Agent Gateway repository invariants")
     return 0
 
 

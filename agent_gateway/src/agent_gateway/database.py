@@ -6,7 +6,15 @@ import sqlite3
 from pathlib import Path
 
 
-EXPECTED_REVISION = "0001_foundation"
+EXPECTED_REVISION = "0002_control_plane"
+
+
+def connect(path: Path) -> sqlite3.Connection:
+    connection = sqlite3.connect(path, timeout=5)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys=ON")
+    connection.execute("PRAGMA busy_timeout=5000")
+    return connection
 
 
 def database_ready(path: Path) -> bool:
