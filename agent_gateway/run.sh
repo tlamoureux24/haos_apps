@@ -4,14 +4,9 @@ set -eu
 runtime_uid=1000
 runtime_gid=1000
 
-install -d -m 0710 /data/private
-pepper_hex="$(PYTHONPATH=/app/src python3 -c 'from pathlib import Path; from agent_gateway.security import load_or_create_pepper; print(load_or_create_pepper(Path("/data/private/credential-pepper")).hex())')"
-chown "${runtime_uid}:0" /data/private/credential-pepper
-chmod 0640 /data/private/credential-pepper
-chown "${runtime_uid}:0" /data/private
-chmod 0710 /data/private
-chown "${runtime_uid}:0" /data
-chmod 0710 /data
+chown "${runtime_uid}:${runtime_gid}" /data
+su-exec agent-gateway:agent-gateway install -d -m 0700 /data/private
+pepper_hex="$(su-exec agent-gateway:agent-gateway env PYTHONPATH=/app/src python3 -c 'from pathlib import Path; from agent_gateway.security import load_or_create_pepper; print(load_or_create_pepper(Path("/data/private/credential-pepper")).hex())')"
 
 if [ -f /data/options.json ]; then
   log_level="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("log_level", "info"))')"

@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.33"',
+        'version: "0.1.34"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -71,8 +71,8 @@ def main() -> int:
 
     if "adduser -S -D -H" not in dockerfile:
         raise RuntimeError("Container must create an unprivileged runtime user")
-    if launcher.count("su-exec agent-gateway:agent-gateway") != 3:
-        raise RuntimeError("Migrations and both listeners must run unprivileged")
+    if launcher.count("su-exec agent-gateway:agent-gateway") != 5:
+        raise RuntimeError("Private bootstrap, migrations, and both listeners must run unprivileged")
     if "python3 -m alembic" not in launcher or launcher.count("python3 -m uvicorn") != 2:
         raise RuntimeError("Python tools must run as modules without readable /usr/bin wrappers")
     if re.search(r"agent-gateway:agent-gateway (alembic|uvicorn)\b", launcher):
@@ -81,25 +81,14 @@ def main() -> int:
         raise RuntimeError("Launcher must preserve the s6 environment with a POSIX shell")
     if "bashio" in launcher:
         raise RuntimeError("Launcher must not require the broad bashio runtime")
-    if 'chown "${runtime_uid}:0" /data' not in launcher or "chmod 0710 /data" not in launcher:
-        raise RuntimeError("Persistent data must remain traversable by the bootstrap group")
-    if 'chown "${runtime_uid}:0" /data/private' not in launcher:
-        raise RuntimeError("Existing private data must be migrated to the runtime user")
-    if "install -d -m 0710 /data/private" not in launcher:
-        raise RuntimeError("Private data must be initialized before ownership transfer")
-    private_chown = launcher.index('chown "${runtime_uid}:0" /data/private\n')
-    data_chown = launcher.index('chown "${runtime_uid}:0" /data\n')
-    if private_chown > data_chown:
-        raise RuntimeError("Private data must be migrated before root loses parent traversal access")
-    pepper_chown = launcher.index('chown "${runtime_uid}:0" /data/private/credential-pepper')
-    if pepper_chown > private_chown:
-        raise RuntimeError("Credential pepper must be migrated before its private parent")
-    if 'chown "${runtime_uid}:0" /data/private/credential-pepper' not in launcher or "chmod 0640 /data/private/credential-pepper" not in launcher:
-        raise RuntimeError("Credential pepper must be limited to runtime owner and bootstrap group")
+    if 'chown "${runtime_uid}:${runtime_gid}" /data' not in launcher:
+        raise RuntimeError("Persistent data must belong to the runtime user")
+    if "su-exec agent-gateway:agent-gateway install -d -m 0700 /data/private" not in launcher:
+        raise RuntimeError("Private data must be initialized by the runtime user")
+    if "su-exec agent-gateway:agent-gateway env PYTHONPATH=/app/src python3" not in launcher:
+        raise RuntimeError("Credential pepper must be bootstrapped by the runtime user")
     if 'export AGENT_GATEWAY_CREDENTIAL_PEPPER_HEX="${pepper_hex}"' not in launcher:
         raise RuntimeError("Runtime processes must receive the bootstrapped pepper in memory")
-    if 'chown "${runtime_uid}:0" /data/private' not in launcher or "chmod 0710 /data/private" not in launcher:
-        raise RuntimeError("Existing private data directory must be restricted during migration")
     if "os.geteuid() != 1000" not in application:
         raise RuntimeError("Application must refuse to run under an unexpected UID")
     if "AGENT_GATEWAY_SURFACE=admin" not in launcher:
@@ -110,10 +99,8 @@ def main() -> int:
         raise RuntimeError("AppArmor grants an excessive capability")
     if "capability chown," not in apparmor:
         raise RuntimeError("AppArmor must allow ownership transfer of persistent data")
-    if "capability fowner," not in apparmor:
-        raise RuntimeError("Existing private data migration requires the narrow fowner capability")
-    if "capability dac_override," in apparmor:
-        raise RuntimeError("Private data setup must not require the broad dac_override capability")
+    if "capability fowner," in apparmor or "capability dac_override," in apparmor:
+        raise RuntimeError("Clean private bootstrap must not require ownership bypass capabilities")
     if "/data/ rw," not in apparmor or "/data/private/ rw," not in apparmor:
         raise RuntimeError("AppArmor must allow the exact persistent data directories")
     if "/data/private/credential-pepper rwlk," not in apparmor:

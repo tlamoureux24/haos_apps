@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.34
+
+- Remove all legacy private-state migration logic after the test installation
+  data was explicitly deleted.
+- Initialize and read private state exclusively as UID/GID 1000, pass the
+  pepper in memory to both listeners, and remove the `fowner` capability.
+- Validate a genuinely empty persistent volume through startup and restart.
+
 ## 0.1.33
 
 - Apply the same owner/bootstrap-group traversal model to the `/data` parent
