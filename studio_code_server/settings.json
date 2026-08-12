@@ -25,6 +25,7 @@
     "Codex workspace": { "path": "/bin/zsh" }
   },
   "terminal.integrated.copyOnSelection": true,
+  "git.autofetch": true,
   "telemetry.telemetryLevel": "off",
   "update.mode": "none",
   "yaml.customTags": [

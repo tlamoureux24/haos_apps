@@ -46,6 +46,7 @@ fi
 settings_tmp="$(mktemp)"
 jq \
   '.["terminal.integrated.defaultProfile.linux"] = "Codex workspace"
+   | .["git.autofetch"] = true
    | .["terminal.integrated.profiles.linux"] = {
        "Codex workspace": {"path": "/bin/zsh"}
      }' \
@@ -53,9 +54,29 @@ jq \
 mv "${settings_tmp}" "${USER_DATA}/User/settings.json"
 chown codex:codex "${USER_DATA}/User/settings.json"
 
-touch "${DATA_HOME}/.gitconfig" "${DATA_HOME}/.zsh_history"
+touch "${DATA_HOME}/.gitconfig" "${DATA_HOME}/.zsh_history" "${DATA_HOME}/.zshrc"
 chmod 0600 "${DATA_HOME}/.zsh_history"
-chown codex:codex "${DATA_HOME}/.gitconfig" "${DATA_HOME}/.zsh_history"
+chown codex:codex "${DATA_HOME}/.gitconfig" "${DATA_HOME}/.zsh_history" "${DATA_HOME}/.zshrc"
+
+ha_mcp_url="$(bashio::config 'ha_mcp_url')"
+if [[ -n "${ha_mcp_url}" ]]; then
+  if [[ ! "${ha_mcp_url}" =~ ^https?://[^[:space:]]+/private_[^/[:space:]]+$ ]]; then
+    bashio::exit.nok "ha_mcp_url must be an HTTP(S) private HA-MCP URL ending in /private_<secret>"
+  fi
+
+  codex_mcp=(
+    s6-setuidgid codex
+    env
+    -u HASS_TOKEN
+    -u SUPERVISOR_TOKEN
+    HOME="${DATA_HOME}"
+    /usr/local/bin/codex-real
+    mcp
+  )
+  "${codex_mcp[@]}" remove home-assistant >/dev/null 2>&1 || true
+  "${codex_mcp[@]}" add home-assistant --url "${ha_mcp_url}" >/dev/null
+  bashio::log.info "Configured the private Home Assistant MCP server for Codex"
+fi
 
 if bashio::config.has_value 'packages'; then
   mapfile -t packages < <(bashio::config 'packages')

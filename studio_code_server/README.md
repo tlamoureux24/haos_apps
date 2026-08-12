@@ -28,6 +28,8 @@ reduced functionality.
 - bundled Home Assistant Config Helper and YAML extensions;
 - optional manual installer for the experimental Codex extension;
 - persistent editor settings, extensions, repositories, SSH keys, Git configuration, shell history, and Codex data;
+- automatic remote Git fetching without automatic merges or pulls;
+- optional HA-MCP setup through a protected App option;
 - writable access to Home Assistant and App configuration.
 - a dedicated unprivileged Codex runtime with no Supervisor token in its environment.
 
@@ -71,6 +73,20 @@ The App persists `/data/home/.gitconfig`, `/data/home/.ssh`,
 `/data/home/.codex`, `/data/workspace`, and `/data/vscode`. The default private
 workspace is included in cold App backups.
 
+code-server periodically runs `git fetch` automatically so remote commits are
+reported, but it never changes the local branch. Pulling remains deliberate.
+
+## Home Assistant through HA-MCP
+
+Copy the private Streamable HTTP URL displayed by the HA-MCP App into the
+protected **Private HA-MCP URL** option, then restart this App. It automatically
+configures a Codex server named `home-assistant`. The URL must end in
+`/private_<secret>` and must never be committed or included in screenshots.
+
+After restart, reload the editor window and ask Codex to check server
+availability without executing a tool. Effective permissions are those exposed
+by HA-MCP; starting read-only is recommended.
+
 ## Permissions and exposure
 
 The startup container has Supervisor `manager` access, the Home Assistant API,
@@ -95,6 +111,7 @@ Never publish the internal port without adding separate authentication.
 
 - `log_level`: startup log verbosity;
 - `workspace_path`: initial folder, `/data/workspace` by default;
+- `ha_mcp_url`: optional private HA-MCP URL stored as a protected value;
 - `packages`: extra Debian packages installed on each start;
 - `init_commands`: trusted root commands executed on each start.
 

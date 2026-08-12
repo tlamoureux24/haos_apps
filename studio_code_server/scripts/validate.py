@@ -79,6 +79,7 @@ def main() -> int:
         "homeassistant_api: true",
         "backup: cold",
         'workspace_path: "/data/workspace"',
+        'ha_mcp_url: "password?"',
         "  - aarch64",
         "  - amd64",
     )
@@ -102,6 +103,9 @@ def main() -> int:
         '--disable-update-check',
         'codex login --device-auth',
         'install-codex-extension',
+        "bashio::config 'ha_mcp_url'",
+        'add home-assistant --url "${ha_mcp_url}"',
+        '.["git.autofetch"] = true',
     )
     for item in required_launcher:
         if item not in launcher:
@@ -129,6 +133,8 @@ def main() -> int:
         raise RuntimeError("VS Code telemetry must remain disabled")
     if settings.get("terminal.integrated.defaultProfile.linux") != "Codex workspace":
         raise RuntimeError("The default terminal must be the unprivileged Codex workspace")
+    if settings.get("git.autofetch") is not True:
+        raise RuntimeError("Git automatic fetch must be enabled")
 
     required_files = (
         "CHANGELOG.md",
@@ -159,6 +165,7 @@ def main() -> int:
     expected_translation_keys = {
         "log_level",
         "workspace_path",
+        "ha_mcp_url",
         "packages",
         "init_commands",
     }

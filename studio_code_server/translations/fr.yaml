@@ -5,6 +5,9 @@ configuration:
   workspace_path:
     name: Espace de travail initial
     description: Dossier persistant ouvert par code-server. Conserver /data/workspace sauf besoin d’un autre dossier Home Assistant monté.
+  ha_mcp_url:
+    name: URL privée HA-MCP
+    description: URL Streamable HTTP complète affichée par l’App HA-MCP et terminant par /private_<secret>. Si elle est renseignée, le serveur home-assistant est configuré automatiquement dans Codex au démarrage.
   packages:
     name: Paquets Debian supplémentaires
     description: Noms de paquets facultatifs installés à chaque démarrage. De nombreux paquets ralentissent le démarrage.

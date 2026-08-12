@@ -57,7 +57,7 @@ jobs:
             "${root}/addons" \
             "${root}/share" \
             "${root}/supervisor/addons/self/options"
-          jq --null-input '{result:"ok",data:{log_level:"info",workspace_path:"/data/workspace",packages:[],init_commands:[]}}' \
+          jq --null-input '{result:"ok",data:{log_level:"info",workspace_path:"/data/workspace",ha_mcp_url:"http://supervisor/private_ci-secret",packages:[],init_commands:[]}}' \
             >"${root}/supervisor/addons/self/options/config"
 
           cleanup() {
@@ -112,6 +112,7 @@ jobs:
               docker exec studio-code-smoke codex-shell -c 'codex --version'
               docker exec studio-code-smoke codex-shell -c 'git config --global user.name "CI Codex User"'
               test "$(docker exec studio-code-smoke codex-shell -c 'git config --global user.name')" = "CI Codex User"
+              docker exec studio-code-smoke codex-shell -c 'codex mcp list --json | jq -e '\''.[] | select(.name == "home-assistant")'\'' >/dev/null'
               docker exec studio-code-smoke s6-setuidgid codex touch /data/workspace/.codex-write-test
               test -f "${root}/data/workspace/.codex-write-test"
               docker exec studio-code-smoke ha --help >/dev/null

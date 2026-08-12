@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7 - 2026-08-12
+
+- Enable automatic Git remote fetching in code-server while keeping pulls manual.
+- Add a protected App option for the private HA-MCP Streamable HTTP URL.
+- Configure or update the `home-assistant` MCP server in persistent Codex settings at startup without logging its secret URL.
+- Create the persistent Zsh startup file automatically to suppress the first-terminal setup wizard.
+
 ## 0.1.6 - 2026-08-12
 
 - Run code-server itself, its extension host, all integrated terminals, and Codex as UID 1000.

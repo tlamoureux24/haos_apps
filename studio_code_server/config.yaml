@@ -1,6 +1,6 @@
 name: "Studio Code Server + Codex"
 slug: "studio_code_server"
-version: "0.1.6"
+version: "0.1.7"
 description: "Browser-based development workspace with Git, Home Assistant tools, and Codex CLI"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/studio_code_server"
 arch:
@@ -31,11 +31,13 @@ map:
 options:
   log_level: "info"
   workspace_path: "/data/workspace"
+  ha_mcp_url: ""
   packages: []
   init_commands: []
 schema:
   log_level: "list(trace|debug|info|notice|warning|error|fatal)"
   workspace_path: "str"
+  ha_mcp_url: "password?"
   packages:
     - "str"
   init_commands:

@@ -28,6 +28,8 @@ perdre certaines fonctions.
 - extensions Home Assistant Config Helper et YAML préinstallées ;
 - installateur manuel facultatif de l’extension Codex expérimentale ;
 - persistance des réglages VS Code, extensions, dépôts, clés SSH, configuration Git, historique et données Codex ;
+- récupération automatique des informations Git distantes, sans fusion ni `pull` automatique ;
+- configuration facultative de HA-MCP directement depuis les options protégées de l’App ;
 - accès en écriture à la configuration Home Assistant et aux configurations des Apps.
 - exécution de Codex et de ses commandes sous un utilisateur dédié non privilégié, sans jeton Supervisor dans son environnement.
 
@@ -89,6 +91,22 @@ Les fichiers suivants persistent après redémarrage et mise à jour :
 Le dossier `/data/workspace` est privé à l’App et inclus dans ses sauvegardes à
 froid. Il convient aux clones Git utilisés depuis cet environnement.
 
+code-server exécute automatiquement `git fetch` à intervalles réguliers. Il
+signale ainsi les nouveaux commits distants, mais ne modifie jamais la branche
+locale : le `pull` reste une action volontaire.
+
+## Home Assistant via HA-MCP
+
+Copier l’URL privée Streamable HTTP affichée par l’App HA-MCP dans l’option
+protégée **URL privée HA-MCP**, puis redémarrer cette App. Elle configure alors
+automatiquement un serveur Codex nommé `home-assistant`. L’URL doit se terminer
+par `/private_<secret>` et ne doit jamais être placée dans Git ou une capture.
+
+Après redémarrage, recharger la fenêtre de l’éditeur et demander à Codex de
+vérifier la disponibilité du serveur sans exécuter d’outil. Les permissions
+effectives sont celles exposées par HA-MCP ; commencer en lecture seule est
+recommandé.
+
 ## Permissions
 
 Cette App possède des accès administratifs au niveau du conteneur de démarrage :
@@ -119,6 +137,7 @@ authentification indépendante.
 
 - `log_level` : niveau de détail du journal ;
 - `workspace_path` : dossier ouvert au démarrage, `/data/workspace` par défaut ;
+- `ha_mcp_url` : URL privée HA-MCP facultative, enregistrée comme valeur protégée ;
 - `packages` : paquets Debian supplémentaires installés à chaque démarrage ;
 - `init_commands` : commandes root exécutées à chaque démarrage.
 

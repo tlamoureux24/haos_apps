@@ -40,6 +40,7 @@ Fonctionnalités principales :
 - éditeur, extensions et terminaux exécutés sous un compte non privilégié ;
 - installateur facultatif de l’extension Codex expérimentale, car sa compatibilité avec code-server doit être validée ;
 - persistance des dépôts, clés SSH, réglages Git, sessions Codex, paramètres et extensions ;
+- récupération Git automatique et connexion HA-MCP facultative configurée depuis l’App ;
 - exécution de Codex sous un compte non privilégié sans jeton Supervisor hérité ;
 - accès administratif à la configuration Home Assistant et aux configurations des Apps ;
 - aucun port direct : accès uniquement par Home Assistant et le VPN utilisé pour joindre Home Assistant.
@@ -243,6 +244,7 @@ Main features:
 - editor, extensions, and terminals running under an unprivileged account;
 - optional installer for the experimental Codex extension, pending real code-server compatibility validation;
 - persistent repositories, SSH keys, Git settings, Codex sessions, editor settings, and extensions;
+- automatic Git fetching and optional HA-MCP connection configured from the App;
 - Codex execution under an unprivileged account without an inherited Supervisor token;
 - administrative access to Home Assistant and App configuration;
 - no direct port: access only through Home Assistant and the VPN used to reach it.
