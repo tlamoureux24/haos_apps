@@ -153,9 +153,10 @@ jobs:
             test -f /data/agent_gateway.db
           private_stat="$(docker exec agent-gateway-smoke su-exec agent-gateway:agent-gateway stat -c '%u:%g:%a' /data/private)"
           pepper_stat="$(docker exec agent-gateway-smoke su-exec agent-gateway:agent-gateway stat -c '%u:%g:%a' /data/private/credential-pepper)"
+          runtime_gid="$(docker exec agent-gateway-smoke id -g agent-gateway)"
           echo "SMOKE_CHECK=private:${private_stat} pepper:${pepper_stat}"
-          test "${private_stat}" = "1000:1000:700"
-          test "${pepper_stat}" = "1000:1000:600"
+          test "${private_stat}" = "1000:${runtime_gid}:700"
+          test "${pepper_stat}" = "1000:${runtime_gid}:600"
           docker cp agent_gateway/tests/control_plane_smoke.py \
             agent-gateway-smoke:/tmp/control_plane_smoke.py
           docker exec --env PYTHONPATH=/app/src agent-gateway-smoke \
