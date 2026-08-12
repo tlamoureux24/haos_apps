@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.15
+
+- Allow read/execute access to the exact `/usr/bin/with-contenv` link and its
+  canonical packaged s6-overlay target.
+
 ## 0.1.14
 
 - Allow enumeration of the packaged s6-rc scripts directory and read/execute

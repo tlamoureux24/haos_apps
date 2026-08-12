@@ -82,13 +82,13 @@ jobs:
             test "$(find "${root}" -type f -print | wc -l)" = 5
           '
 
-      - name: Inspect with-contenv path used by AppArmor
+      - name: Validate with-contenv path used by AppArmor
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
           docker run --rm --entrypoint /bin/sh "agent-gateway:${version}" -c '
-            stat -c "WITH_CONTENV|%F|%N" /usr/bin/with-contenv
-            printf "WITH_CONTENV_TARGET|%s\n" "$(readlink -f /usr/bin/with-contenv)"
+            test -L /usr/bin/with-contenv
+            test "$(readlink -f /usr/bin/with-contenv)" = "/package/admin/s6-overlay-3.2.2.0/command/with-contenv"
           '
 
       - name: Smoke-test listener isolation and persistence

@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.14"',
+        'version: "0.1.15"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -117,6 +117,10 @@ def main() -> int:
         raise RuntimeError("AppArmor must allow the shell to read printcontenv")
     if "/package/admin/s6-overlay-*/command/printcontenv rix," not in apparmor:
         raise RuntimeError("AppArmor must allow reading the canonical printcontenv target")
+    if "/usr/bin/with-contenv rix," not in apparmor:
+        raise RuntimeError("AppArmor must allow execlineb to read the with-contenv link")
+    if "/package/admin/s6-overlay-*/command/with-contenv rix," not in apparmor:
+        raise RuntimeError("AppArmor must allow reading the canonical with-contenv target")
     if "/etc/s6-overlay/s6-rc.d/ r," not in apparmor:
         raise RuntimeError("AppArmor must allow s6-rc-compile to enumerate its source directory")
     if "/etc/s6-overlay/s6-rc.d/user/ r," not in apparmor:
