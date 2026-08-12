@@ -136,10 +136,10 @@ jobs:
               docker exec studio-code-update-smoke sh -c 'ps -eo uid=,args= | grep "[c]ode-server" | grep -q "^ *1000 "'
               docker exec studio-code-update-smoke codex --version
               test "$(docker exec studio-code-update-smoke s6-setuidgid codex id -u)" = "1000"
-              test "$(docker exec studio-code-update-smoke codex-shell -c 'id -u')" = "1000"
-              docker exec studio-code-update-smoke codex-shell -c 'codex --version'
-              docker exec studio-code-update-smoke codex-shell -c 'git config --global user.name "CI Codex User"'
-              docker exec studio-code-update-smoke codex-shell -c 'codex mcp list --json | jq -e '\''.[] | select(.name == "home-assistant")'\'' >/dev/null'
+              test "$(docker exec --user codex studio-code-update-smoke id -u)" = "1000"
+              docker exec --user codex studio-code-update-smoke codex --version
+              docker exec --user codex --env HOME=/data/home studio-code-update-smoke git config --global user.name "CI Codex User"
+              docker exec --user codex --env HOME=/data/home studio-code-update-smoke sh -c 'codex mcp list --json | jq -e '\''.[] | select(.name == "home-assistant")'\'' >/dev/null'
               docker exec studio-code-update-smoke git --version
               exit 0
             fi

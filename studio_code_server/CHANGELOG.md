@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9 - 2026-08-12
+
+- Remove the obsolete privileged-to-unprivileged terminal helper.
+- Rename the remaining Codex launcher to `codex-wrapper.sh` to reflect its current role.
+- Keep the same UID and Supervisor-credential isolation guarantees with fewer runtime files.
+
 ## 0.1.8 - 2026-08-12
 
 - Add dedicated `icon.png` and `logo.png` assets for Home Assistant.

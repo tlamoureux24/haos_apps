@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Keep the administrative code-server terminal separate from the agent runtime.
-# From a root terminal, drop privileges once. From the default Codex terminal,
-# the process is already UID 1000 and must not attempt setgroups again.
+# Run the real Codex binary with the persistent user home and without inherited
+# Home Assistant Supervisor credentials. Root callers are reduced to the same
+# UID used by code-server; interactive callers are already that user.
 codex_env=(
   env
   -u HASS_TOKEN

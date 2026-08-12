@@ -109,12 +109,12 @@ jobs:
               docker exec studio-code-smoke s6-setuidgid codex sh -c 'pid="$(pgrep -u 1000 -f code-server | head -n 1)"; test -n "${pid}"; ! tr "\0" "\n" < "/proc/${pid}/environ" | grep -Eq "^(SUPERVISOR_TOKEN|HASS_TOKEN)="'
               docker exec studio-code-smoke codex --version
               test "$(docker exec studio-code-smoke s6-setuidgid codex id -u)" = "1000"
-              test "$(docker exec studio-code-smoke codex-shell -c 'id -u')" = "1000"
-              docker exec studio-code-smoke codex-shell -c 'test -z "${SUPERVISOR_TOKEN+x}" && test -z "${HASS_TOKEN+x}"'
-              docker exec studio-code-smoke codex-shell -c 'codex --version'
-              docker exec studio-code-smoke codex-shell -c 'git config --global user.name "CI Codex User"'
-              test "$(docker exec studio-code-smoke codex-shell -c 'git config --global user.name')" = "CI Codex User"
-              docker exec studio-code-smoke codex-shell -c 'codex mcp list --json | jq -e '\''all(.[]; .name != "home-assistant")'\'' >/dev/null'
+              test "$(docker exec --user codex studio-code-smoke id -u)" = "1000"
+              docker exec --user codex studio-code-smoke env -u SUPERVISOR_TOKEN -u HASS_TOKEN sh -c 'test -z "${SUPERVISOR_TOKEN+x}" && test -z "${HASS_TOKEN+x}"'
+              docker exec --user codex studio-code-smoke codex --version
+              docker exec --user codex --env HOME=/data/home studio-code-smoke git config --global user.name "CI Codex User"
+              test "$(docker exec --user codex --env HOME=/data/home studio-code-smoke git config --global user.name)" = "CI Codex User"
+              docker exec --user codex --env HOME=/data/home studio-code-smoke sh -c 'codex mcp list --json | jq -e '\''all(.[]; .name != "home-assistant")'\'' >/dev/null'
               docker exec studio-code-smoke s6-setuidgid codex touch /data/workspace/.codex-write-test
               test -f "${root}/data/workspace/.codex-write-test"
               docker exec studio-code-smoke ha --help >/dev/null
@@ -138,7 +138,7 @@ jobs:
                 "studio-code-server-codex:${version}" >/dev/null
               for restart_attempt in {1..120}; do
                 if curl --fail --silent http://127.0.0.1:11338/healthz >/dev/null; then
-                  docker exec studio-code-smoke-mcp codex-shell -c 'codex mcp list --json | jq -e '\''.[] | select(.name == "home-assistant")'\'' >/dev/null'
+                  docker exec --user codex --env HOME=/data/home studio-code-smoke-mcp sh -c 'codex mcp list --json | jq -e '\''.[] | select(.name == "home-assistant")'\'' >/dev/null'
                   exit 0
                 fi
                 sleep 1
