@@ -115,6 +115,17 @@ jobs:
           }
           trap cleanup EXIT
 
+          wait_ready() {
+            for attempt in {1..60}; do
+              if curl --fail --silent http://127.0.0.1:18098/health/ready | jq -e '.status == "ready"' >/dev/null; then
+                return 0
+              fi
+              sleep 1
+            done
+            docker inspect agent-gateway-smoke --format 'READINESS_FAILURE|status={{.State.Status}}|running={{.State.Running}}|exit={{.State.ExitCode}}|ports={{json .NetworkSettings.Ports}}'
+            return 1
+          }
+
           docker network create agent-gateway-smoke >/dev/null
           ingress_proxy_ip="$(docker network inspect agent-gateway-smoke --format '{{(index .IPAM.Config 0).Gateway}}')"
           docker run --detach \
@@ -127,12 +138,7 @@ jobs:
             --volume "${root}/data:/data" \
             "agent-gateway:${version}"
 
-          for attempt in {1..60}; do
-            if curl --fail --silent http://127.0.0.1:18098/health/ready >/dev/null; then
-              break
-            fi
-            sleep 1
-          done
+          wait_ready
           curl --fail --silent http://127.0.0.1:18098/health/ready | jq -e '.status == "ready"'
           curl --fail --silent \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
@@ -194,14 +200,5 @@ jobs:
             http://127.0.0.1:18099/admin/api/v1/status)" = "403"
 
           docker restart agent-gateway-smoke >/dev/null
-          for attempt in {1..60}; do
-            if curl --fail --silent http://127.0.0.1:18098/health/ready >/dev/null; then
-              exit 0
-            fi
-            if (( attempt % 10 == 0 )); then
-              docker inspect agent-gateway-smoke --format 'RESTART_DIAGNOSTIC|status={{.State.Status}}|running={{.State.Running}}|exit={{.State.ExitCode}}|restarts={{.RestartCount}}|ports={{json .NetworkSettings.Ports}}'
-              curl --verbose --max-time 2 http://127.0.0.1:18098/health/ready || true
-            fi
-            sleep 1
-          done
-          exit 1
+          wait_ready
+          docker exec agent-gateway-smoke test -f /data/agent_gateway.db
