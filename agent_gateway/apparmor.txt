@@ -1,0 +1,38 @@
+#include <tunables/global>
+
+profile agent_gateway flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/bash>
+  #include <abstractions/nameservice>
+  #include <abstractions/python>
+
+  capability setgid,
+  capability setuid,
+  network inet stream,
+  network inet6 stream,
+  signal,
+
+  /init ix,
+  /bin/** ix,
+  /usr/bin/** ix,
+  /usr/local/bin/** ix,
+  /run/{s6,s6-rc*,service}/** ix,
+  /package/** ix,
+  /command/** ix,
+  /etc/services.d/** rwix,
+  /etc/cont-init.d/** rwix,
+  /etc/cont-finish.d/** rwix,
+  /run/{,**} rwk,
+  /run.sh rix,
+  /app/** r,
+  /usr/lib/python3*/** r,
+  /data/{,**} rwk,
+  /tmp/{,**} rwk,
+  /etc/ssl/** r,
+  /etc/ca-certificates/** r,
+  /usr/share/ca-certificates/** r,
+  /proc/** r,
+  /dev/null rw,
+  /dev/urandom r,
+  /dev/random r,
+}

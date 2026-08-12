@@ -1,0 +1,93 @@
+name: Validate Agent Gateway App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "agent_gateway/**"
+      - ".gitignore"
+      - ".github/workflows/agent-gateway-validate.yml"
+  pull_request:
+    paths:
+      - "agent_gateway/**"
+      - ".gitignore"
+      - ".github/workflows/agent-gateway-validate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate metadata and source
+        run: |
+          set -euo pipefail
+          python3 agent_gateway/scripts/validate.py
+          bash -n agent_gateway/run.sh
+          python3 -m compileall -q \
+            agent_gateway/migrations \
+            agent_gateway/src \
+            agent_gateway/tests
+          PYTHONPATH=agent_gateway/src \
+            python3 -m unittest discover -s agent_gateway/tests -v
+
+      - name: Build amd64 image
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
+          docker build --pull \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg "BUILD_VERSION=${version}" \
+            --tag "agent-gateway:${version}" \
+            agent_gateway
+
+      - name: Smoke-test listener isolation and persistence
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
+          root="${RUNNER_TEMP}/agent-gateway-smoke"
+          mkdir -p "${root}/data"
+
+          cleanup() {
+            docker logs agent-gateway-smoke 2>&1 || true
+            docker rm --force agent-gateway-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name agent-gateway-smoke \
+            --publish 127.0.0.1:18098:8098 \
+            --publish 127.0.0.1:18099:8099 \
+            --volume "${root}/data:/data" \
+            "agent-gateway:${version}"
+
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:18098/health/ready >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18098/health/ready | jq -e '.status == "ready"'
+          curl --fail --silent http://127.0.0.1:18099/ | grep -q "Agent Gateway"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)" = "404"
+          test "$(docker exec agent-gateway-smoke pgrep -f 'uvicorn agent_gateway.main:app' | wc -l)" = "2"
+          docker exec agent-gateway-smoke sh -c \
+            'for pid in $(pgrep -f "uvicorn agent_gateway.main:app"); do test "$(awk "/^Uid:/{print \$2}" /proc/${pid}/status)" = 1000; done'
+          test -f "${root}/data/agent_gateway.db"
+
+          docker restart agent-gateway-smoke >/dev/null
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:18098/health/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1

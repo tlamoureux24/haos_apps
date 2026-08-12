@@ -1,0 +1,8 @@
+configuration:
+  log_level:
+    name: Log level
+    description: Controls the verbosity of the App technical logs. Secrets remain redacted at every level.
+network:
+  8098/tcp:
+    name: MCP and event port
+    description: Optional port for authenticated MCP clients and event sources. Expose it only on a trusted local network or VPN.

@@ -1,0 +1,8 @@
+configuration:
+  log_level:
+    name: Niveau de journalisation
+    description: Contrôle le niveau de détail des journaux techniques de l’App. Les secrets restent masqués quel que soit le niveau.
+network:
+  8098/tcp:
+    name: Port MCP et événements
+    description: Port facultatif pour les clients MCP et les sources d’événements authentifiés. Ne l’exposer que sur un réseau local ou VPN de confiance.
