@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.6"',
+        'version: "0.1.7"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -93,11 +93,15 @@ def main() -> int:
         raise RuntimeError("AppArmor must allow reading the s6-overlay rc.shutdown template")
     if "/command/printcontenv rix," not in apparmor:
         raise RuntimeError("AppArmor must allow the shell to read printcontenv")
+    if "/package/admin/s6-overlay-*/command/printcontenv rix," not in apparmor:
+        raise RuntimeError("AppArmor must allow reading the canonical printcontenv target")
     if "/etc/s6-overlay/s6-rc.d/ r," not in apparmor:
         raise RuntimeError("AppArmor must allow s6-rc-compile to enumerate its source directory")
+    if "/etc/s6-overlay/s6-rc.d/user/ r," not in apparmor:
+        raise RuntimeError("AppArmor must allow s6-rc-compile to enumerate the user bundle directory")
     if "/package/** rix," in apparmor or "/package/admin/s6-overlay-*/libexec/** rix," in apparmor:
         raise RuntimeError("AppArmor must grant read access to s6-overlay scripts file by file")
-    if "/command/** rix," in apparmor or "/etc/s6-overlay/** r" in apparmor:
+    if "/command/** rix," in apparmor or "/etc/s6-overlay/** r" in apparmor or "/etc/s6-overlay/s6-rc.d/user/** r" in apparmor:
         raise RuntimeError("AppArmor must not grant broad read access to command or s6-overlay trees")
 
     ignored_documents = (

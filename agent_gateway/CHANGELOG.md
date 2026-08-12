@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7
+
+- Allow reading the canonical s6-overlay target behind the
+  `/command/printcontenv` symbolic link.
+- Allow `s6-rc-compile` to enumerate only the `user` bundle directory, without
+  granting read access to its contents.
+
 ## 0.1.6
 
 - Allow the shell to read and execute only `/command/printcontenv`.

@@ -62,7 +62,9 @@ jobs:
               printf "TARGET "
               readlink -f "${path}"
             done
-            find -L /etc/s6-overlay/s6-rc.d/user -maxdepth 2 -printf "USER %y %p -> %l\n" | sort
+            find -L /etc/s6-overlay/s6-rc.d/user -maxdepth 2 -print | sort | while read -r entry; do
+              ls -ld "${entry}"
+            done
           '
 
       - name: Smoke-test listener isolation and persistence
