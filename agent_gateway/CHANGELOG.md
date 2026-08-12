@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4
+
+- Allow read-only access to the s6-overlay `rc.init` template required to build
+  the runtime files under `/run/s6`.
+
 ## 0.1.3
 
 - Allow the shell to read only the s6-overlay `stage0` script required after
