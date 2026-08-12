@@ -5,6 +5,10 @@ runtime_uid=1000
 runtime_gid=1000
 
 if [ -d /data/private ]; then
+  if [ -f /data/private/credential-pepper ]; then
+    chown "${runtime_uid}:${runtime_gid}" /data/private/credential-pepper
+    chmod 0600 /data/private/credential-pepper
+  fi
   chown "${runtime_uid}:${runtime_gid}" /data/private
   chmod 0700 /data/private
 fi

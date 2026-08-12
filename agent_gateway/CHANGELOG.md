@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.27
+
+- Migrate the exact persisted `credential-pepper` file from earlier attempts to
+  UID/GID 1000 and mode `0600` before transferring its parent directories.
+- Seed a root-owned, overly broad legacy pepper in CI and verify its ownership
+  and permissions after startup.
+
 ## 0.1.26
 
 - Invoke Alembic and Uvicorn as Python modules instead of `/usr/bin` console

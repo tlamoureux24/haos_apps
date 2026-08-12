@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.26"',
+        'version: "0.1.27"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -91,6 +91,11 @@ def main() -> int:
     data_chown = launcher.index('chown "${runtime_uid}:${runtime_gid}" /data\n')
     if private_chown > data_chown:
         raise RuntimeError("Private data must be migrated before root loses parent traversal access")
+    pepper_chown = launcher.index('chown "${runtime_uid}:${runtime_gid}" /data/private/credential-pepper')
+    if pepper_chown > private_chown:
+        raise RuntimeError("Credential pepper must be migrated before its private parent")
+    if "chmod 0600 /data/private/credential-pepper" not in launcher:
+        raise RuntimeError("Existing credential pepper must retain owner-only access")
     if "chmod 0700 /data/private" not in launcher:
         raise RuntimeError("Existing private data directory must be restricted during migration")
     if "os.geteuid() != 1000" not in application:
