@@ -5,6 +5,9 @@ runtime_uid=1000
 runtime_gid=1000
 
 chown "${runtime_uid}:${runtime_gid}" /data
+if [ -d /data/private ]; then
+  chown "${runtime_uid}:${runtime_gid}" /data/private
+fi
 su-exec agent-gateway:agent-gateway install -d -m 0700 /data/private
 
 if [ -f /data/options.json ]; then

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.22
+
+- Migrate an existing root-owned `/data/private` directory from earlier app
+  versions to UID/GID 1000 before enforcing mode `0700` as the runtime user.
+- Seed that legacy ownership state in CI and verify the resulting owner and mode.
+
 ## 0.1.21
 
 - Allow inherited execution of the exact `/sbin/su-exec` binary required to

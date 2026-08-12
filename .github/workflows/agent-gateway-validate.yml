@@ -107,6 +107,7 @@ jobs:
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
           root="${RUNNER_TEMP}/agent-gateway-smoke"
           mkdir -p "${root}/data"
+          mkdir -m 0755 "${root}/data/private"
 
           cleanup() {
             docker logs agent-gateway-smoke 2>&1 || true
@@ -140,6 +141,7 @@ jobs:
             http://127.0.0.1:18099/ | grep -q "Agent Gateway"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)" = "404"
           docker exec agent-gateway-smoke test -f /data/agent_gateway.db
+          test "$(stat -c '%u:%g:%a' "${root}/data/private")" = "1000:1000:700"
           docker cp agent_gateway/tests/control_plane_smoke.py \
             agent-gateway-smoke:/tmp/control_plane_smoke.py
           docker exec --env PYTHONPATH=/app/src agent-gateway-smoke \

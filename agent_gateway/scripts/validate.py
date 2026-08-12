@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.21"',
+        'version: "0.1.22"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -79,6 +79,8 @@ def main() -> int:
         raise RuntimeError("Launcher must not require the broad bashio runtime")
     if 'chown "${runtime_uid}:${runtime_gid}" /data' not in launcher:
         raise RuntimeError("Persistent data mount must be writable by the runtime user")
+    if 'chown "${runtime_uid}:${runtime_gid}" /data/private' not in launcher:
+        raise RuntimeError("Existing private data must be migrated to the runtime user")
     if "su-exec agent-gateway:agent-gateway install -d -m 0700 /data/private" not in launcher:
         raise RuntimeError("Private data directory must be initialized by the runtime user")
     if "os.geteuid() != 1000" not in application:
