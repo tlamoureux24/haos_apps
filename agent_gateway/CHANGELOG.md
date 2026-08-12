@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.14
+
+- Allow enumeration of the packaged s6-rc scripts directory and read/execute
+  access to its five inventoried lifecycle scripts, using exact AppArmor rules.
+- Lock the six-entry scripts inventory in CI.
+
 ## 0.1.13
 
 - Allow read-only access to all 29 inventoried entries in the packaged s6-rc

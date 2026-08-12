@@ -71,14 +71,15 @@ jobs:
             test "$(find "${root}" -type f -print | wc -l)" = 19
           '
 
-      - name: Inspect packaged s6-rc scripts used by AppArmor
+      - name: Validate packaged s6-rc script inventory
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
           docker run --rm --entrypoint /bin/sh "agent-gateway:${version}" -c '
-            find /package/admin/s6-overlay-*/etc/s6-rc/scripts -print | sort | while read -r entry; do
-              printf "S6_SCRIPT|%s|%s|%s\n" "$(stat -c "%F" "${entry}")" "${entry}" "$(readlink -f "${entry}")"
-            done
+            root=/package/admin/s6-overlay-3.2.2.0/etc/s6-rc/scripts
+            test "$(find "${root}" -print | wc -l)" = 6
+            test "$(find "${root}" -type d -print | wc -l)" = 1
+            test "$(find "${root}" -type f -print | wc -l)" = 5
           '
 
       - name: Smoke-test listener isolation and persistence
