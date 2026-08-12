@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Allow the shell to read the s6-overlay `preinit` script while retaining narrow
+  AppArmor path restrictions.
+
 ## 0.1.1
 
 - Allow the Home Assistant base image shell to read and execute `/init` under

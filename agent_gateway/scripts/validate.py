@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.1"',
+        'version: "0.1.2"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -83,6 +83,8 @@ def main() -> int:
         raise RuntimeError("AppArmor grants an excessive capability")
     if "/init rix," not in apparmor:
         raise RuntimeError("AppArmor must allow the shell to read and execute /init")
+    if "/package/admin/s6-overlay-*/libexec/preinit rix," not in apparmor:
+        raise RuntimeError("AppArmor must allow the shell to read the s6-overlay preinit script")
 
     ignored_documents = (
         "/agent_gateway/PROJECT_BRIEF.md",
