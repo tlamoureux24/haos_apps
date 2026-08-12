@@ -38,7 +38,7 @@ Fonctionnalités principales :
 - Git, SSH, Home Assistant CLI, Python et Node.js ;
 - Codex CLI avec connexion OAuth à l’abonnement ChatGPT, sans clé OpenAI Platform imposée ;
 - éditeur, extensions et terminaux exécutés sous un compte non privilégié ;
-- installateur facultatif de l’extension Codex expérimentale, car sa compatibilité avec code-server doit être validée ;
+- extension officielle Codex installable facultativement depuis le Marketplace de l’éditeur ;
 - persistance des dépôts, clés SSH, réglages Git, sessions Codex, paramètres et extensions ;
 - récupération Git automatique et connexion HA-MCP facultative configurée depuis l’App ;
 - exécution de Codex sous un compte non privilégié sans jeton Supervisor hérité ;
@@ -242,7 +242,7 @@ Main features:
 - Git, SSH, Home Assistant CLI, Python, and Node.js;
 - Codex CLI with ChatGPT subscription OAuth and no required OpenAI Platform API key;
 - editor, extensions, and terminals running under an unprivileged account;
-- optional installer for the experimental Codex extension, pending real code-server compatibility validation;
+- optional official Codex extension installation from the editor Marketplace;
 - persistent repositories, SSH keys, Git settings, Codex sessions, editor settings, and extensions;
 - automatic Git fetching and optional HA-MCP connection configured from the App;
 - Codex execution under an unprivileged account without an inherited Supervisor token;

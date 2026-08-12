@@ -2,7 +2,7 @@ ARG BUILD_FROM="ghcr.io/hassio-addons/debian-base:9.3.0"
 FROM ${BUILD_FROM}
 
 ARG BUILD_ARCH="amd64"
-ARG BUILD_VERSION="0.1.7"
+ARG BUILD_VERSION="0.1.8"
 ARG CODE_SERVER_VERSION="4.132.0"
 ARG CODEX_VERSION="0.147.0"
 ARG HA_CLI_VERSION="5.3.0"
@@ -78,7 +78,6 @@ RUN apt-get update \
 COPY run.sh /usr/local/bin/studio-code-server
 COPY codex-unprivileged.sh /usr/local/bin/codex
 COPY codex-shell.sh /usr/local/bin/codex-shell
-COPY install-codex-extension.sh /usr/local/bin/install-codex-extension
 COPY settings.json /usr/local/share/studio-code-server/settings.json
 COPY LICENSE.upstream.md /usr/share/licenses/studio-code-server/LICENSE.upstream.md
 COPY THIRD_PARTY.md /usr/share/doc/studio-code-server/THIRD_PARTY.md
@@ -86,7 +85,6 @@ COPY THIRD_PARTY.md /usr/share/doc/studio-code-server/THIRD_PARTY.md
 RUN chmod 0755 \
     /usr/local/bin/codex \
     /usr/local/bin/codex-shell \
-    /usr/local/bin/install-codex-extension \
     /usr/local/bin/studio-code-server
 
 HEALTHCHECK CMD curl --fail --silent http://127.0.0.1:1337/healthz >/dev/null || exit 1

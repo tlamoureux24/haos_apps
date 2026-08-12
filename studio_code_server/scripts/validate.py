@@ -50,15 +50,6 @@ def main() -> int:
         if docker_value != value:
             raise RuntimeError(f"{arg}={docker_value} does not match {key}={value}")
 
-    installer = (ROOT / "install-codex-extension.sh").read_text(encoding="utf-8")
-    installer_extension = one(
-        r'^readonly CODEX_EXTENSION_VERSION="([^"]+)"$',
-        installer,
-        "Codex extension installer version",
-    )
-    if installer_extension != versions.get("codex-extension"):
-        raise RuntimeError("Codex extension installer version does not match upstream_versions")
-
     app_version = one(r'^version: "([^"]+)"$', config, "App version")
     build_version = one(
         r'^ARG BUILD_VERSION="([^"]+)"$', dockerfile, "Docker App version"
@@ -102,7 +93,6 @@ def main() -> int:
         '--disable-telemetry',
         '--disable-update-check',
         'codex login --device-auth',
-        'install-codex-extension',
         "bashio::config 'ha_mcp_url'",
         'add home-assistant --url "${ha_mcp_url}"',
         '.["git.autofetch"] = true',
@@ -146,13 +136,19 @@ def main() -> int:
         "UPSTREAM.md",
         "codex-shell.sh",
         "codex-unprivileged.sh",
-        "install-codex-extension.sh",
+        "icon.png",
+        "logo.png",
         "translations/en.yaml",
         "translations/fr.yaml",
     )
     for filename in required_files:
         if not (ROOT / filename).is_file():
             raise RuntimeError(f"Missing required file: {filename}")
+
+    for filename in ("icon.png", "logo.png"):
+        image = (ROOT / filename).read_bytes()
+        if not image.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise RuntimeError(f"Invalid PNG asset: {filename}")
 
     translation_keys: dict[str, set[str]] = {}
     for language in ("en", "fr"):

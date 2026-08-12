@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8 - 2026-08-12
+
+- Add dedicated `icon.png` and `logo.png` assets for Home Assistant.
+- Remove the obsolete command-line Codex extension downloader.
+- Document installation of the official OpenAI Codex extension directly from the editor Marketplace.
+
 ## 0.1.7 - 2026-08-12
 
 - Enable automatic Git remote fetching in code-server while keeping pulls manual.

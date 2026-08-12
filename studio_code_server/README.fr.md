@@ -13,10 +13,10 @@ Cette version `0.1.x` sert à valider la compatibilité réelle de code-server a
 Home Assistant OS et Codex. Ne pas l’utiliser comme unique copie d’un dépôt ou
 d’une clé SSH importante.
 
-Codex CLI est le mode d’utilisation de référence. L’extension IDE officielle
-Codex peut être installée séparément pour évaluation, mais OpenAI ne documente pas officiellement
-code-server parmi ses éditeurs compatibles. Elle peut donc ne pas se charger ou
-perdre certaines fonctions.
+Codex CLI reste disponible comme interface de référence. L’extension IDE
+officielle Codex peut aussi être installée directement depuis le Marketplace de
+l’éditeur. Elle fonctionne dans l’environnement testé, même si OpenAI ne
+documente pas officiellement code-server parmi ses éditeurs compatibles.
 
 ## Fonctionnalités
 
@@ -26,7 +26,7 @@ perdre certaines fonctions.
 - Codex CLI 0.147.0, sans clé OpenAI Platform imposée ;
 - connexion à l’abonnement ChatGPT par OAuth Device Code ;
 - extensions Home Assistant Config Helper et YAML préinstallées ;
-- installateur manuel facultatif de l’extension Codex expérimentale ;
+- installation facultative de l’extension officielle Codex depuis le Marketplace de l’éditeur ;
 - persistance des réglages VS Code, extensions, dépôts, clés SSH, configuration Git, historique et données Codex ;
 - récupération automatique des informations Git distantes, sans fusion ni `pull` automatique ;
 - configuration facultative de HA-MCP directement depuis les options protégées de l’App ;
@@ -57,19 +57,13 @@ codex
 Les jetons OAuth sont conservés dans le stockage privé de l’App. Ils ne doivent
 jamais être copiés dans un dépôt Git, un ticket ou une conversation.
 
-## Essai facultatif de l’extension Codex
+## Extension officielle Codex
 
-Le CLI doit d’abord être validé. Pour tester ensuite l’interface Codex intégrée
-à l’éditeur, exécuter volontairement :
-
-```bash
-install-codex-extension
-```
-
-Le téléchargement compressé représente environ 200 Mo et l’extension occupe
-environ 550 Mo. Elle est installée dans le stockage persistant, sans alourdir la
-construction de l’App ni son démarrage. Recharger ensuite la fenêtre du
-navigateur. Son fonctionnement sous code-server n’est pas garanti.
+Ouvrir la vue **Extensions** de l’éditeur, rechercher l’extension officielle
+`Codex – OpenAI’s coding agent` publiée par `openai`, puis cliquer sur
+**Installer**. L’extension et sa connexion persistent dans `/data/vscode` et
+`/data/home/.codex`. Elle n’est pas intégrée à l’image de l’App afin de laisser
+le choix à l’utilisateur et d’éviter d’alourdir chaque installation.
 
 ## Git et SSH
 
@@ -147,7 +141,7 @@ y placer de commande provenant d’une source non vérifiée.
 ## Limites du test initial
 
 - ergonomie smartphone à évaluer réellement ;
-- extension Codex facultative et non garantie dans code-server ;
+- compatibilité future de l’extension Codex avec code-server dépendante de ses mises à jour ;
 - image disponible uniquement pour `amd64` et `aarch64` ;
 - consommation mémoire potentiellement importante ;
 - mises à jour automatiques internes désactivées : toute mise à jour passe par une nouvelle version de l’App.

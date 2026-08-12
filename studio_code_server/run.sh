@@ -107,7 +107,6 @@ bashio::log.info "Codex CLI: $(codex --version)"
 bashio::log.info "Codex runtime: unprivileged user codex (uid 1000), Supervisor token removed"
 bashio::log.info "Editor, extensions, terminals, and Codex run as uid 1000 without Supervisor credentials"
 bashio::log.info "Run 'codex login --device-auth' once from the integrated terminal"
-bashio::log.info "Optional experiment: run 'install-codex-extension' to test the Codex IDE extension"
 
 cd "${workspace_path}"
 exec s6-setuidgid codex \

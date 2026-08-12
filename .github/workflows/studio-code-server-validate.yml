@@ -29,7 +29,6 @@ jobs:
         run: |
           set -euo pipefail
           python3 studio_code_server/scripts/validate.py
-          bash -n studio_code_server/install-codex-extension.sh
           bash -n studio_code_server/run.sh
           python3 -m py_compile \
             studio_code_server/scripts/update_versions.py \
@@ -120,7 +119,6 @@ jobs:
               test -f "${root}/data/workspace/.codex-write-test"
               docker exec studio-code-smoke ha --help >/dev/null
               docker exec studio-code-smoke git --version
-              docker exec studio-code-smoke test -x /usr/local/bin/install-codex-extension
               test -d "${root}/data/home/.codex"
               test -f "${root}/data/home/.gitconfig"
               test -d "${root}/data/workspace"
