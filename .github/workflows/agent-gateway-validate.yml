@@ -78,9 +78,9 @@ jobs:
           curl --fail --silent http://127.0.0.1:18098/health/ready | jq -e '.status == "ready"'
           curl --fail --silent http://127.0.0.1:18099/ | grep -q "Agent Gateway"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)" = "404"
-          test "$(docker exec agent-gateway-smoke pgrep -f 'uvicorn agent_gateway.main:app' | wc -l)" = "2"
-          docker exec agent-gateway-smoke sh -c \
-            'for pid in $(pgrep -f "uvicorn agent_gateway.main:app"); do test "$(awk "/^Uid:/{print \$2}" /proc/${pid}/status)" = 1000; done'
+          processes="$(docker exec agent-gateway-smoke ps -eo uid=,args= | grep '[u]vicorn agent_gateway.main:app')"
+          test "$(printf '%s\n' "${processes}" | wc -l)" = "2"
+          test "$(printf '%s\n' "${processes}" | awk '{print $1}' | sort -u)" = "1000"
           test -f "${root}/data/agent_gateway.db"
 
           docker restart agent-gateway-smoke >/dev/null
