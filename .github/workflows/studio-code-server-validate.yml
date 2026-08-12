@@ -53,6 +53,7 @@ jobs:
           mkdir -p \
             "${root}/config" \
             "${root}/data" \
+            "${root}/data-mcp" \
             "${root}/addon_configs" \
             "${root}/addons" \
             "${root}/share" \
@@ -62,8 +63,10 @@ jobs:
 
           cleanup() {
             docker logs studio-code-smoke 2>&1 || true
+            docker logs studio-code-smoke-mcp 2>&1 || true
             docker logs studio-code-supervisor 2>&1 || true
             docker rm --force studio-code-smoke >/dev/null 2>&1 || true
+            docker rm --force studio-code-smoke-mcp >/dev/null 2>&1 || true
             docker rm --force studio-code-supervisor >/dev/null 2>&1 || true
             docker network rm studio-code-smoke >/dev/null 2>&1 || true
           }
@@ -104,7 +107,7 @@ jobs:
           for attempt in {1..120}; do
             if curl --fail --silent http://127.0.0.1:11337/healthz >/dev/null; then
               docker exec studio-code-smoke sh -c 'ps -eo uid=,args= | grep "[c]ode-server" | grep -q "^ *1000 "'
-              docker exec studio-code-smoke sh -c 'pid="$(pgrep -u 1000 -f code-server | head -n 1)"; test -n "${pid}"; ! tr "\0" "\n" < "/proc/${pid}/environ" | grep -Eq "^(SUPERVISOR_TOKEN|HASS_TOKEN)="'
+              docker exec studio-code-smoke s6-setuidgid codex sh -c 'pid="$(pgrep -u 1000 -f code-server | head -n 1)"; test -n "${pid}"; ! tr "\0" "\n" < "/proc/${pid}/environ" | grep -Eq "^(SUPERVISOR_TOKEN|HASS_TOKEN)="'
               docker exec studio-code-smoke codex --version
               test "$(docker exec studio-code-smoke s6-setuidgid codex id -u)" = "1000"
               test "$(docker exec studio-code-smoke codex-shell -c 'id -u')" = "1000"
@@ -123,10 +126,21 @@ jobs:
               test -d "${root}/data/workspace"
               jq --null-input '{result:"ok",data:{log_level:"info",workspace_path:"/data/workspace",ha_mcp_url:"http://supervisor/private_ci-secret",packages:[],init_commands:[]}}' \
                 >"${root}/supervisor/addons/self/options/config"
-              docker restart studio-code-smoke >/dev/null
+              docker run --detach \
+                --name studio-code-smoke-mcp \
+                --network studio-code-smoke \
+                --add-host "supervisor:${supervisor_ip}" \
+                --env SUPERVISOR_TOKEN=test \
+                --publish 127.0.0.1:11338:1337 \
+                --volume "${root}/config:/config" \
+                --volume "${root}/data-mcp:/data" \
+                --volume "${root}/addon_configs:/addon_configs" \
+                --volume "${root}/addons:/addons" \
+                --volume "${root}/share:/share" \
+                "studio-code-server-codex:${version}" >/dev/null
               for restart_attempt in {1..120}; do
-                if curl --fail --silent http://127.0.0.1:11337/healthz >/dev/null; then
-                  docker exec studio-code-smoke codex-shell -c 'codex mcp list --json | jq -e '\''.[] | select(.name == "home-assistant")'\'' >/dev/null'
+                if curl --fail --silent http://127.0.0.1:11338/healthz >/dev/null; then
+                  docker exec studio-code-smoke-mcp codex-shell -c 'codex mcp list --json | jq -e '\''.[] | select(.name == "home-assistant")'\'' >/dev/null'
                   exit 0
                 fi
                 sleep 1
