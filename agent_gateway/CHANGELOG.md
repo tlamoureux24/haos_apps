@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.24
+
+- Replace the AppArmor-sensitive `/data/private` existence test with an
+  idempotent `mkdir -p`, followed by explicit ownership and mode enforcement.
+
 ## 0.1.23
 
 - Split private-directory setup into a new-install path created directly as UID

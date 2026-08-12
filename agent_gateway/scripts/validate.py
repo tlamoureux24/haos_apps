@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.23"',
+        'version: "0.1.24"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -81,8 +81,10 @@ def main() -> int:
         raise RuntimeError("Persistent data mount must be writable by the runtime user")
     if 'chown "${runtime_uid}:${runtime_gid}" /data/private' not in launcher:
         raise RuntimeError("Existing private data must be migrated to the runtime user")
-    if "su-exec agent-gateway:agent-gateway mkdir -m 0700 /data/private" not in launcher:
-        raise RuntimeError("New private data directory must be created by the runtime user")
+    if "su-exec agent-gateway:agent-gateway mkdir -p -m 0700 /data/private" not in launcher:
+        raise RuntimeError("Private data directory setup must be idempotent under the runtime user")
+    if "[ -d /data/private ]" in launcher:
+        raise RuntimeError("Private data setup must not rely on AppArmor-sensitive existence tests")
     if "chmod 0700 /data/private" not in launcher:
         raise RuntimeError("Existing private data directory must be restricted during migration")
     if "os.geteuid() != 1000" not in application:

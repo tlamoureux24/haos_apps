@@ -5,12 +5,9 @@ runtime_uid=1000
 runtime_gid=1000
 
 chown "${runtime_uid}:${runtime_gid}" /data
-if [ -d /data/private ]; then
-  chown "${runtime_uid}:${runtime_gid}" /data/private
-  chmod 0700 /data/private
-else
-  su-exec agent-gateway:agent-gateway mkdir -m 0700 /data/private
-fi
+su-exec agent-gateway:agent-gateway mkdir -p -m 0700 /data/private
+chown "${runtime_uid}:${runtime_gid}" /data/private
+chmod 0700 /data/private
 
 if [ -f /data/options.json ]; then
   log_level="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("log_level", "info"))')"
