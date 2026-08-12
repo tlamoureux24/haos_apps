@@ -79,7 +79,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:18099/ | grep -q "Agent Gateway"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)" = "404"
           docker exec agent-gateway-smoke sh -c \
-            'count=0; for status in /proc/[0-9]*/status; do uid="$(awk "/^Uid:/{print \$2}" "${status}")"; test "${uid}" = 1000 || continue; process_dir="${status%/status}"; command="$(tr "\0" " " < "${process_dir}/cmdline")"; case "${command}" in *"uvicorn agent_gateway.main:app"*) count=$((count + 1));; esac; done; test "${count}" = 2'
+            'pids="$(pidof python3)"; test "$(printf "%s\n" ${pids} | wc -l)" = 2; for pid in ${pids}; do test "$(awk "/^Uid:/{print \$2}" /proc/${pid}/status)" = 1000; done'
           test -f "${root}/data/agent_gateway.db"
 
           docker restart agent-gateway-smoke >/dev/null
