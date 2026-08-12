@@ -78,8 +78,8 @@ jobs:
           curl --fail --silent http://127.0.0.1:18098/health/ready | jq -e '.status == "ready"'
           curl --fail --silent http://127.0.0.1:18099/ | grep -q "Agent Gateway"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)" = "404"
-          docker exec agent-gateway-smoke sh -c \
-            'pids="$(pidof python3)"; test "$(printf "%s\n" ${pids} | wc -l)" = 2; for pid in ${pids}; do test "$(awk "/^Uid:/{print \$2}" /proc/${pid}/status)" = 1000; done'
+          docker top agent-gateway-smoke -eo pid,uid,args | \
+            awk '$2 == 1000 && /[u]vicorn agent_gateway.main:app/ {count++} END {exit count == 2 ? 0 : 1}'
           test -f "${root}/data/agent_gateway.db"
 
           docker restart agent-gateway-smoke >/dev/null
