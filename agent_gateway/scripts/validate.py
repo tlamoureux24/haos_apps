@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.19"',
+        'version: "0.1.20"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -71,16 +71,16 @@ def main() -> int:
 
     if "adduser -S -D -H" not in dockerfile:
         raise RuntimeError("Container must create an unprivileged runtime user")
-    if launcher.count("su-exec agent-gateway:agent-gateway") != 3:
-        raise RuntimeError("Migrations and both listeners must run unprivileged")
+    if launcher.count("su-exec agent-gateway:agent-gateway") != 4:
+        raise RuntimeError("Private data setup, migrations, and both listeners must run unprivileged")
     if not launcher.startswith("#!/usr/bin/with-contenv /bin/sh\n"):
         raise RuntimeError("Launcher must preserve the s6 environment with a POSIX shell")
     if "bashio" in launcher:
         raise RuntimeError("Launcher must not require the broad bashio runtime")
     if 'chown "${runtime_uid}:${runtime_gid}" /data' not in launcher:
         raise RuntimeError("Persistent data mount must be writable by the runtime user")
-    if 'install -d -m 0700 -o "${runtime_uid}" -g "${runtime_gid}" /data/private' not in launcher:
-        raise RuntimeError("Private data directory must be initialized with restrictive permissions")
+    if "su-exec agent-gateway:agent-gateway install -d -m 0700 /data/private" not in launcher:
+        raise RuntimeError("Private data directory must be initialized by the runtime user")
     if "os.geteuid() != 1000" not in application:
         raise RuntimeError("Application must refuse to run under an unexpected UID")
     if "AGENT_GATEWAY_SURFACE=admin" not in launcher:
@@ -91,8 +91,8 @@ def main() -> int:
         raise RuntimeError("AppArmor grants an excessive capability")
     if "capability chown," not in apparmor:
         raise RuntimeError("AppArmor must allow ownership transfer of persistent data")
-    if "capability fowner," not in apparmor:
-        raise RuntimeError("AppArmor must allow setting the private data directory mode")
+    if "capability fowner," in apparmor or "capability dac_override," in apparmor:
+        raise RuntimeError("Runtime-user directory setup must not require ownership bypass capabilities")
     if "/data/ rw," not in apparmor or "/data/private/ rw," not in apparmor:
         raise RuntimeError("AppArmor must allow the exact persistent data directories")
     if "/init rix," not in apparmor:

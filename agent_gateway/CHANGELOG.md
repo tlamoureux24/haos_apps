@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.20
+
+- Create `/data/private` directly as the unprivileged runtime user after the
+  `/data` ownership transfer, avoiding root access to a UID-1000-owned mount.
+- Remove the now-unnecessary `fowner` capability instead of adding the broader
+  `dac_override` capability.
+
 ## 0.1.19
 
 - Transfer ownership of the `/data` mount without changing its Home

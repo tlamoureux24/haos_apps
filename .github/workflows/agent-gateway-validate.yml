@@ -110,6 +110,8 @@ jobs:
           docker run --detach \
             --name agent-gateway-smoke \
             --network agent-gateway-smoke \
+            --cap-drop DAC_OVERRIDE \
+            --cap-drop FOWNER \
             --env "AGENT_GATEWAY_INGRESS_PROXY_IP=${ingress_proxy_ip}" \
             --publish 127.0.0.1:18098:8098 \
             --publish 127.0.0.1:18099:8099 \
