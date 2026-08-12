@@ -137,6 +137,7 @@ jobs:
               docker exec studio-code-update-smoke codex --version
               test "$(docker exec studio-code-update-smoke s6-setuidgid codex id -u)" = "1000"
               test "$(docker exec studio-code-update-smoke codex-shell -c 'id -u')" = "1000"
+              docker exec studio-code-update-smoke codex-shell -c 'codex --version'
               docker exec studio-code-update-smoke codex-shell -c 'git config --global user.name "CI Codex User"'
               docker exec studio-code-update-smoke git --version
               exit 0

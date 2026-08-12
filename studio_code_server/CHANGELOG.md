@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 - 2026-08-12
+
+- Start Codex directly when invoked from the already-unprivileged default terminal.
+- Retain the privilege drop when Codex is invoked deliberately from the root administrator profile.
+- Test the complete default-terminal-to-Codex launch path in CI.
+
 ## 0.1.4 - 2026-08-12
 
 - Give the unprivileged development user ownership of its persistent home directory.
