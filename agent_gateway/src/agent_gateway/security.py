@@ -26,14 +26,22 @@ def load_or_create_pepper(path: Path) -> bytes:
         pepper = path.read_bytes()
     except FileNotFoundError:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        pepper = secrets.token_bytes(32)
+        candidate = secrets.token_bytes(32)
+        temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:
-            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:
-            pepper = path.read_bytes()
-        else:
             with os.fdopen(descriptor, "wb") as handle:
-                handle.write(pepper)
+                handle.write(candidate)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.link(temporary, path)
+            except FileExistsError:
+                pepper = path.read_bytes()
+            else:
+                pepper = candidate
+        finally:
+            temporary.unlink(missing_ok=True)
     if len(pepper) != 32:
         raise RuntimeError("Credential pepper has an invalid length")
     return pepper

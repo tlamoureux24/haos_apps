@@ -4,13 +4,14 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
 from agent_gateway.database import database_ready
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
-from agent_gateway.security import issue_credential, parse_and_verify_token
+from agent_gateway.security import issue_credential, load_or_create_pepper, parse_and_verify_token
 from agent_gateway.settings import load_settings
 from agent_gateway.surfaces import exposed_paths
 
@@ -100,6 +101,15 @@ class CredentialTests(unittest.TestCase):
 
     def test_malformed_token_is_denied(self) -> None:
         self.assertIsNone(parse_and_verify_token("not-a-token", b"a" * 32, "0" * 64))
+
+    def test_concurrent_pepper_creation_is_atomic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "private" / "credential-pepper"
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                peppers = list(executor.map(lambda _: load_or_create_pepper(path), range(32)))
+            self.assertEqual(len(set(peppers)), 1)
+            self.assertEqual(len(peppers[0]), 32)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
 
 class PolicyTests(unittest.TestCase):
