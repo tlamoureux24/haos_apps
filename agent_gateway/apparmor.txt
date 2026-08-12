@@ -21,6 +21,7 @@ profile agent_gateway flags=(attach_disconnected,mediate_deleted) {
   /package/admin/s6-overlay-*/libexec/preinit rix,
   /package/admin/s6-overlay-*/libexec/stage0 rix,
   /package/admin/s6-overlay-*/etc/s6-linux-init/skel/rc.init r,
+  /package/admin/s6-overlay-*/etc/s6-linux-init/skel/rc.shutdown r,
   /command/** ix,
   /etc/services.d/** rwix,
   /etc/cont-init.d/** rwix,

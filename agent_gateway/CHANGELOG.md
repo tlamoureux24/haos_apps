@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- Allow read-only access to the s6-overlay `rc.shutdown` template required to
+  build the runtime shutdown script under `/run/s6`.
+
 ## 0.1.4
 
 - Allow read-only access to the s6-overlay `rc.init` template required to build
