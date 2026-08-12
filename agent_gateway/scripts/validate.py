@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.31"',
+        'version: "0.1.32"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -83,22 +83,22 @@ def main() -> int:
         raise RuntimeError("Launcher must not require the broad bashio runtime")
     if 'chown "${runtime_uid}:${runtime_gid}" /data' not in launcher:
         raise RuntimeError("Persistent data mount must be writable by the runtime user")
-    if 'chown "${runtime_uid}:${runtime_gid}" /data/private' not in launcher:
+    if 'chown "${runtime_uid}:0" /data/private' not in launcher:
         raise RuntimeError("Existing private data must be migrated to the runtime user")
-    if "install -d -m 0700 /data/private" not in launcher:
+    if "install -d -m 0710 /data/private" not in launcher:
         raise RuntimeError("Private data must be initialized before ownership transfer")
-    private_chown = launcher.index('chown "${runtime_uid}:${runtime_gid}" /data/private\n')
+    private_chown = launcher.index('chown "${runtime_uid}:0" /data/private\n')
     data_chown = launcher.index('chown "${runtime_uid}:${runtime_gid}" /data\n')
     if private_chown > data_chown:
         raise RuntimeError("Private data must be migrated before root loses parent traversal access")
-    pepper_chown = launcher.index('chown "${runtime_uid}:${runtime_gid}" /data/private/credential-pepper')
+    pepper_chown = launcher.index('chown "${runtime_uid}:0" /data/private/credential-pepper')
     if pepper_chown > private_chown:
         raise RuntimeError("Credential pepper must be migrated before its private parent")
-    if "chmod 0600 /data/private/credential-pepper" not in launcher:
-        raise RuntimeError("Existing credential pepper must retain owner-only access")
+    if 'chown "${runtime_uid}:0" /data/private/credential-pepper' not in launcher or "chmod 0640 /data/private/credential-pepper" not in launcher:
+        raise RuntimeError("Credential pepper must be limited to runtime owner and bootstrap group")
     if 'export AGENT_GATEWAY_CREDENTIAL_PEPPER_HEX="${pepper_hex}"' not in launcher:
         raise RuntimeError("Runtime processes must receive the bootstrapped pepper in memory")
-    if "chmod 0700 /data/private" not in launcher:
+    if 'chown "${runtime_uid}:0" /data/private' not in launcher or "chmod 0710 /data/private" not in launcher:
         raise RuntimeError("Existing private data directory must be restricted during migration")
     if "os.geteuid() != 1000" not in application:
         raise RuntimeError("Application must refuse to run under an unexpected UID")

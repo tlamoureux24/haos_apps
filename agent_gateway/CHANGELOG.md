@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.32
+
+- Permit only the runtime owner and root bootstrap group to traverse private
+  state (`1000:0:710`) and read the pepper (`1000:0:640`).
+- Keep runtime listeners on the in-memory pepper while allowing the confined
+  launcher to bootstrap it again after a container restart without
+  `DAC_OVERRIDE`.
+
 ## 0.1.31
 
 - Bootstrap the persistent credential pepper once, before transferring the

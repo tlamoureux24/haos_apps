@@ -4,12 +4,12 @@ set -eu
 runtime_uid=1000
 runtime_gid=1000
 
-install -d -m 0700 /data/private
+install -d -m 0710 /data/private
 pepper_hex="$(PYTHONPATH=/app/src python3 -c 'from pathlib import Path; from agent_gateway.security import load_or_create_pepper; print(load_or_create_pepper(Path("/data/private/credential-pepper")).hex())')"
-chown "${runtime_uid}:${runtime_gid}" /data/private/credential-pepper
-chmod 0600 /data/private/credential-pepper
-chown "${runtime_uid}:${runtime_gid}" /data/private
-chmod 0700 /data/private
+chown "${runtime_uid}:0" /data/private/credential-pepper
+chmod 0640 /data/private/credential-pepper
+chown "${runtime_uid}:0" /data/private
+chmod 0710 /data/private
 chown "${runtime_uid}:${runtime_gid}" /data
 
 if [ -f /data/options.json ]; then
