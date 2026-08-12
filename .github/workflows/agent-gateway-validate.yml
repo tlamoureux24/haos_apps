@@ -201,4 +201,6 @@ jobs:
 
           docker restart agent-gateway-smoke >/dev/null
           wait_ready
-          docker exec agent-gateway-smoke test -f /data/agent_gateway.db
+          docker exec agent-gateway-smoke \
+            su-exec agent-gateway:agent-gateway \
+            test -f /data/agent_gateway.db
