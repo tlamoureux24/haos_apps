@@ -36,7 +36,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.1.9"',
+        'version: "0.1.10"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -103,6 +103,8 @@ def main() -> int:
         raise RuntimeError("AppArmor must allow reading the s6 user bundle type")
     if "/etc/s6-overlay/s6-rc.d/user/contents.d/ r," not in apparmor:
         raise RuntimeError("AppArmor must allow enumerating the s6 user bundle contents directory")
+    if "/etc/s6-overlay/s6-rc.d/user2/ r," not in apparmor:
+        raise RuntimeError("AppArmor must allow enumerating the s6 user2 bundle directory")
     if "/package/** rix," in apparmor or "/package/admin/s6-overlay-*/libexec/** rix," in apparmor:
         raise RuntimeError("AppArmor must grant read access to s6-overlay scripts file by file")
     if "/command/** rix," in apparmor or "/etc/s6-overlay/** r" in apparmor or "/etc/s6-overlay/s6-rc.d/user/** r" in apparmor:

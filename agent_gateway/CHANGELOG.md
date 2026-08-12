@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- Allow `s6-rc-compile` to enumerate only the standard `user2` bundle directory.
+
 ## 0.1.9
 
 - Allow `s6-rc-compile` to enumerate the `user/contents.d` bundle directory
