@@ -104,7 +104,7 @@ jobs:
           for attempt in {1..120}; do
             if curl --fail --silent http://127.0.0.1:11337/healthz >/dev/null; then
               docker exec studio-code-smoke codex --version
-              docker exec studio-code-smoke ha --version
+              docker exec studio-code-smoke ha --help >/dev/null
               docker exec studio-code-smoke git --version
               docker exec studio-code-smoke test -x /usr/local/bin/install-codex-extension
               test -d "${root}/data/home/.codex"
