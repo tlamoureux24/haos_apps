@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.29
+
+- Run CI ownership/mode assertions as the UID-1000 secret owner, preserving the
+  intentional inability of root without `DAC_OVERRIDE` to traverse private data.
+
 ## 0.1.28
 
 - Verify the secured private directory and pepper from inside the container so

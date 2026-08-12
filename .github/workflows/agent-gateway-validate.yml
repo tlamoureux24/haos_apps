@@ -142,8 +142,8 @@ jobs:
             http://127.0.0.1:18099/ | grep -q "Agent Gateway"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)" = "404"
           docker exec agent-gateway-smoke test -f /data/agent_gateway.db
-          test "$(docker exec agent-gateway-smoke stat -c '%u:%g:%a' /data/private)" = "1000:1000:700"
-          test "$(docker exec agent-gateway-smoke stat -c '%u:%g:%a' /data/private/credential-pepper)" = "1000:1000:600"
+          test "$(docker exec agent-gateway-smoke su-exec agent-gateway:agent-gateway stat -c '%u:%g:%a' /data/private)" = "1000:1000:700"
+          test "$(docker exec agent-gateway-smoke su-exec agent-gateway:agent-gateway stat -c '%u:%g:%a' /data/private/credential-pepper)" = "1000:1000:600"
           docker cp agent_gateway/tests/control_plane_smoke.py \
             agent-gateway-smoke:/tmp/control_plane_smoke.py
           docker exec --env PYTHONPATH=/app/src agent-gateway-smoke \
