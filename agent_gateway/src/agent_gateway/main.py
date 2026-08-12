@@ -78,7 +78,7 @@ async def ready(_: Request) -> JSONResponse:
 
 
 async def admin_index(request: Request) -> HTMLResponse:
-    prefix = request.scope.get("root_path", "")
+    prefix = request.headers.get("x-ingress-path", request.scope.get("root_path", "")).rstrip("/")
     safe_prefix = html.escape(prefix, quote=True)
     document = f"""<!doctype html>
 <html lang="fr">

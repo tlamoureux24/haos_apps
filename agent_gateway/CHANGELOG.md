@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.35
+
+- Preserve the Home Assistant Ingress prefix in administration-page links.
+- Validate the generated readiness link in the container smoke test.
+
 ## 0.1.34
 
 - Remove all legacy private-state migration logic after the test installation
