@@ -35,6 +35,7 @@ def main() -> int:
     apparmor = (ROOT / "apparmor.txt").read_text(encoding="utf-8")
     application = (ROOT / "src/agent_gateway/main.py").read_text(encoding="utf-8")
     admin_ui = (ROOT / "src/agent_gateway/admin_ui.py").read_text(encoding="utf-8")
+    package = (ROOT / "src/agent_gateway/__init__.py").read_text(encoding="utf-8")
     fake_mcp = (ROOT / "scripts/fake_mcp_server.py").read_text(encoding="utf-8")
     root_readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
 
@@ -57,6 +58,8 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
+    if '__version__ = "0.40.4"' not in package:
+        raise RuntimeError("Package and App metadata versions must remain synchronized")
     if "ha_mcp" in config.lower():
         raise RuntimeError("No upstream MCP connector may be fixed in App configuration")
     if "document.querySelector(`#${name}`)" in admin_ui:
