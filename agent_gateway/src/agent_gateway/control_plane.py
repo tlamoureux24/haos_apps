@@ -516,9 +516,9 @@ class ControlPlane:
         task_states = {item["id"]: item["status"] for item in self.list_tasks()}
         return [{**dict(row), "enabled": bool(row["enabled"]), "status": "paused" if not row["enabled"] else ("active" if row["source_status"] == "active" and task_states.get(row["task_definition_id"]) == "ready" else "suspended")} for row in rows]
 
-    def create_event_mapping(self, display_name: str, source_identity_id: str, event_type: str, task_id: str, cooldown_minutes: int, correlation_id: str) -> str:
+    def create_event_mapping(self, display_name: str, source_identity_id: str, event_type: str, task_id: str, cooldown_minutes: int, input_mode: str, correlation_id: str) -> str:
         mapping_id, now = str(uuid4()), utc_now()
-        if not display_name.strip() or not 0 <= cooldown_minutes <= 10080:
+        if not display_name.strip() or not 0 <= cooldown_minutes <= 10080 or input_mode not in {"full_event", "subject", "attributes"}:
             raise ValueError("invalid_event_mapping")
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -528,8 +528,8 @@ class ControlPlane:
             task = next((item for item in self.list_tasks() if item["id"] == task_id), None)
             if task is None or task["status"] != "ready":
                 raise ValueError("task_not_ready")
-            connection.execute("INSERT INTO event_mappings(id,display_name,source_identity_id,event_type,task_definition_id,enabled,cooldown_minutes,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?,?)", (mapping_id, display_name.strip(), source_identity_id, event_type, task_id, cooldown_minutes, now, now))
-            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.create", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"source_identity_id": source_identity_id, "event_type": event_type, "task_id": task_id, "cooldown_minutes": cooldown_minutes})
+            connection.execute("INSERT INTO event_mappings(id,display_name,source_identity_id,event_type,task_definition_id,enabled,cooldown_minutes,input_mode,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?,?,?)", (mapping_id, display_name.strip(), source_identity_id, event_type, task_id, cooldown_minutes, input_mode, now, now))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.create", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"source_identity_id": source_identity_id, "event_type": event_type, "task_id": task_id, "cooldown_minutes": cooldown_minutes, "input_mode": input_mode})
         return mapping_id
 
     def set_event_mapping_enabled(self, mapping_id: str, enabled: bool, correlation_id: str) -> bool:
@@ -1393,7 +1393,7 @@ class ControlPlane:
                 return IntakeResult(existing["event_id"], existing["job_id"], True, existing["outcome"] or ("accepted" if existing["job_id"] else "suppressed"))
             task_revision = connection.execute(
                 """SELECT r.id,d.id AS task_definition_id,d.name,m.id AS mapping_id,
-                          m.cooldown_minutes,m.last_triggered_at FROM event_mappings m
+                          m.cooldown_minutes,m.input_mode,m.last_triggered_at FROM event_mappings m
                    JOIN task_definitions d ON d.id=m.task_definition_id
                    JOIN task_revisions r ON r.task_definition_id=d.id
                    WHERE m.source_identity_id=? AND m.event_type=? AND m.enabled=1 AND d.enabled=1
@@ -1452,6 +1452,7 @@ class ControlPlane:
                     payload,
                 ),
             )
+            task_input = canonical_json(redact(event if task_revision["input_mode"] == "full_event" else event[task_revision["input_mode"]]))
             cooldown_cutoff = (datetime.now(UTC) - timedelta(minutes=task_revision["cooldown_minutes"])).isoformat(timespec="milliseconds").replace("+00:00", "Z")
             outcome = None
             if task_revision["cooldown_minutes"] and task_revision["last_triggered_at"] and task_revision["last_triggered_at"] > cooldown_cutoff:
@@ -1471,7 +1472,7 @@ class ControlPlane:
             job_id = str(uuid4())
             connection.execute(
                 "INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
-                (job_id, event_id, task_name, "queued", identity.policy_revision_id, task_revision["id"], payload, now, now),
+                (job_id, event_id, task_name, "queued", identity.policy_revision_id, task_revision["id"], task_input, now, now),
             )
             connection.execute("UPDATE event_mappings SET last_triggered_at=?,updated_at=? WHERE id=?", (now, now, task_revision["mapping_id"]))
             self._append_audit(
@@ -1484,7 +1485,7 @@ class ControlPlane:
                 decision="allowed",
                 reason_code="accepted",
                 correlation_id=correlation_id,
-                metadata={"job_id": job_id, "event_type": event["event_type"], "mapping_id": task_revision["mapping_id"]},
+                metadata={"job_id": job_id, "event_type": event["event_type"], "mapping_id": task_revision["mapping_id"], "input_mode": task_revision["input_mode"]},
             )
         return IntakeResult(event_id, job_id, False, "queued")
 

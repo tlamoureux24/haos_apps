@@ -260,7 +260,7 @@ async def admin_create_event_mapping(request: Request) -> JSONResponse:
         return error_response(403, "csrf_failed", correlation_id)
     try:
         contract = await json_contract(request, EventMappingCreateRequest)
-        mapping_id = await run_in_threadpool(request.app.state.control_plane.create_event_mapping, contract.display_name, contract.source_identity_id, contract.event_type, contract.task_id, contract.cooldown_minutes, correlation_id)
+        mapping_id = await run_in_threadpool(request.app.state.control_plane.create_event_mapping, contract.display_name, contract.source_identity_id, contract.event_type, contract.task_id, contract.cooldown_minutes, contract.input_mode, correlation_id)
     except sqlite3.IntegrityError:
         return error_response(409, "event_mapping_exists", correlation_id)
     except (OverflowError, ValueError, ValidationError):

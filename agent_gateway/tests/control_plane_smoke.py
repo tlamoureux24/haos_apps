@@ -49,7 +49,7 @@ created = control_plane.create_identity(
 )
 identity = control_plane.authenticate(created.credential.token)
 mapping_id = control_plane.create_event_mapping(
-    "CI service alerts", identity.identity_id, "service.alert", "ci-inspection", 0, "ci-create-mapping"
+    "CI service alerts", identity.identity_id, "service.alert", "ci-inspection", 0, "full_event", "ci-create-mapping"
 )
 event = {
     "schema_version": 1,
@@ -141,8 +141,9 @@ cooldown = control_plane.ingest_event(identity, "ci-cooldown-key", event, "ci-co
 assert cooldown.job_id is None
 assert cooldown.outcome == "cooldown_active"
 with sqlite3.connect(database) as connection:
-    connection.execute("UPDATE event_mappings SET cooldown_minutes=0 WHERE id=?", (mapping_id,))
+    connection.execute("UPDATE event_mappings SET cooldown_minutes=0,input_mode='attributes' WHERE id=?", (mapping_id,))
 failed = control_plane.ingest_event(identity, "ci-failure-key", event, "ci-failure-event")
+assert control_plane.get_job(failed.job_id)["input"] == {"status": "unavailable"}
 failed_lease = control_plane.claim_job(worker, "ci-failure-claim")
 assert failed_lease is not None and failed_lease.job["id"] == failed.job_id
 with sqlite3.connect(database) as connection:

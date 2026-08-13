@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "9"
+SCHEMA_GENERATION = "10"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO gateway_metadata VALUES('application','agent_gateway');
-INSERT INTO gateway_metadata VALUES('schema_generation','9');
+INSERT INTO gateway_metadata VALUES('schema_generation','10');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -78,10 +78,11 @@ CREATE INDEX ix_schedules_due ON schedules(enabled,next_run_at);
 CREATE TABLE event_mappings(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,source_identity_id TEXT NOT NULL,
   event_type TEXT NOT NULL,task_definition_id TEXT NOT NULL,enabled INTEGER NOT NULL,
-  cooldown_minutes INTEGER NOT NULL,last_triggered_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+  cooldown_minutes INTEGER NOT NULL,input_mode TEXT NOT NULL,last_triggered_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
   FOREIGN KEY(source_identity_id) REFERENCES identities(id) ON DELETE RESTRICT,
   FOREIGN KEY(task_definition_id) REFERENCES task_definitions(id) ON DELETE RESTRICT,
-  UNIQUE(source_identity_id,event_type),CHECK(enabled IN (0,1)),CHECK(cooldown_minutes BETWEEN 0 AND 10080));
+  UNIQUE(source_identity_id,event_type),CHECK(enabled IN (0,1)),CHECK(cooldown_minutes BETWEEN 0 AND 10080),
+  CHECK(input_mode IN ('full_event','subject','attributes')));
 CREATE INDEX ix_event_mappings_lookup ON event_mappings(source_identity_id,event_type,enabled);
 CREATE TABLE events(
   id TEXT PRIMARY KEY,source_identity_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,
@@ -186,6 +187,14 @@ def initialize_database(path: Path) -> None:
                 ALTER TABLE event_mappings ADD COLUMN cooldown_minutes INTEGER NOT NULL DEFAULT 0 CHECK(cooldown_minutes BETWEEN 0 AND 10080);
                 ALTER TABLE event_mappings ADD COLUMN last_triggered_at TEXT;
                 UPDATE gateway_metadata SET value='9' WHERE key='schema_generation';
+                """
+            )
+            generation = ("9",)
+        if generation and generation[0] == "9":
+            connection.executescript(
+                """
+                ALTER TABLE event_mappings ADD COLUMN input_mode TEXT NOT NULL DEFAULT 'full_event' CHECK(input_mode IN ('full_event','subject','attributes'));
+                UPDATE gateway_metadata SET value='10' WHERE key='schema_generation';
                 """
             )
             return

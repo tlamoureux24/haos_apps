@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.33.0
+
+- Add a bounded event-input projection to each trigger: complete event, subject
+  only, or attributes only.
+- Keep the authenticated event complete in persistent history while giving the
+  agent only the administrator-selected projection as its job input.
+- Preserve existing triggers and data through a direct schema-ten upgrade,
+  defaulting every existing mapping to the previous complete-event behavior.
+
 ## 0.32.0
 
 - Add live execution-health counters for queued, leased and dead-letter jobs to
