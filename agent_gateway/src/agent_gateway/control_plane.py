@@ -12,6 +12,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
+from agent_gateway.connectors import (
+    connector_display_endpoint,
+    protect_connector_config,
+    reveal_connector_config,
+    validate_streamable_http_url,
+)
 from agent_gateway.database import connect
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
@@ -153,6 +159,119 @@ class ControlPlane:
         self.pepper = load_or_create_pepper(private_dir / "credential-pepper")
         self.queue_limit = queue_limit
         self.intake_rate_limit_per_minute = intake_rate_limit_per_minute
+
+    def list_connectors(self) -> list[dict[str, object]]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT c.id,c.display_name,c.transport,c.display_endpoint,c.status,c.enabled,
+                       c.created_at,c.updated_at,c.last_checked_at,c.last_error_code,
+                       c.inventory_revision,count(t.name) AS tool_count
+                FROM connectors c LEFT JOIN connector_tools t ON t.connector_id=c.id
+                GROUP BY c.id ORDER BY c.display_name COLLATE NOCASE
+                """
+            ).fetchall()
+        return [
+            {
+                **dict(row),
+                "enabled": bool(row["enabled"]),
+                "has_secret": True,
+            }
+            for row in rows
+        ]
+
+    def list_connector_tools(self, connector_id: str) -> list[dict[str, object]]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                "SELECT name,description,input_schema_json,schema_fingerprint,discovered_at FROM connector_tools WHERE connector_id=? ORDER BY name",
+                (connector_id,),
+            ).fetchall()
+        return [
+            {
+                "name": row["name"],
+                "description": row["description"],
+                "input_schema": json.loads(row["input_schema_json"]),
+                "schema_fingerprint": row["schema_fingerprint"],
+                "discovered_at": row["discovered_at"],
+            }
+            for row in rows
+        ]
+
+    def create_connector(
+        self,
+        display_name: str,
+        url: str,
+        bearer_token: str,
+        inventory: list[dict[str, object]],
+        correlation_id: str,
+    ) -> str:
+        name = display_name.strip()
+        if not name:
+            raise ValueError("invalid_connector_name")
+        normalized_url = validate_streamable_http_url(url)
+        connector_id = str(uuid4())
+        now = utc_now()
+        protected = protect_connector_config(self.pepper, normalized_url, bearer_token)
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "INSERT INTO connectors(id,display_name,transport,protected_config,display_endpoint,status,enabled,created_at,updated_at,last_checked_at,inventory_revision) VALUES(?,?,?,?,?,'ready',1,?,?,?,1)",
+                (connector_id, name, "streamable_http", protected, connector_display_endpoint(normalized_url), now, now, now),
+            )
+            self._replace_connector_tools(connection, connector_id, inventory, now)
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.create", target_type="connector", target_id=connector_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"display_name": name, "tool_count": len(inventory)})
+        return connector_id
+
+    def connector_connection_config(self, connector_id: str) -> tuple[str, str] | None:
+        with connect(self.database_path) as connection:
+            row = connection.execute("SELECT protected_config FROM connectors WHERE id=?", (connector_id,)).fetchone()
+        return None if row is None else reveal_connector_config(self.pepper, row["protected_config"])
+
+    def refresh_connector(self, connector_id: str, inventory: list[dict[str, object]] | None, error_code: str | None, correlation_id: str) -> bool:
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("SELECT enabled FROM connectors WHERE id=?", (connector_id,)).fetchone()
+            if row is None:
+                return False
+            if inventory is None:
+                connection.execute("UPDATE connectors SET status='unreachable',updated_at=?,last_checked_at=?,last_error_code=? WHERE id=?", (now, now, error_code or "connection_failed", connector_id))
+                reason = "unreachable"
+            else:
+                status = "ready" if row["enabled"] else "disabled"
+                connection.execute("UPDATE connectors SET status=?,updated_at=?,last_checked_at=?,last_error_code=NULL,inventory_revision=inventory_revision+1 WHERE id=?", (status, now, now, connector_id))
+                self._replace_connector_tools(connection, connector_id, inventory, now)
+                reason = "inventory_refreshed"
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.check", target_type="connector", target_id=connector_id, decision="recorded", reason_code=reason, correlation_id=correlation_id, metadata={"tool_count": len(inventory or [])})
+        return True
+
+    def set_connector_enabled(self, connector_id: str, enabled: bool, correlation_id: str) -> bool:
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            updated = connection.execute("UPDATE connectors SET enabled=?,status=?,updated_at=? WHERE id=?", (int(enabled), "ready" if enabled else "disabled", now, connector_id)).rowcount
+            if not updated:
+                return False
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.enable" if enabled else "connectors.disable", target_type="connector", target_id=connector_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
+        return True
+
+    def delete_connector(self, connector_id: str, correlation_id: str) -> bool:
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            deleted = connection.execute("DELETE FROM connectors WHERE id=?", (connector_id,)).rowcount
+            if not deleted:
+                return False
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.delete", target_type="connector", target_id=connector_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
+        return True
+
+    @staticmethod
+    def _replace_connector_tools(connection: sqlite3.Connection, connector_id: str, inventory: list[dict[str, object]], now: str) -> None:
+        connection.execute("DELETE FROM connector_tools WHERE connector_id=?", (connector_id,))
+        for tool in inventory:
+            connection.execute(
+                "INSERT INTO connector_tools(connector_id,name,description,input_schema_json,schema_fingerprint,discovered_at) VALUES(?,?,?,?,?,?)",
+                (connector_id, str(tool["name"]), str(tool["description"]), canonical_json(tool["input_schema"]), str(tool["schema_fingerprint"]), now),
+            )
 
     def create_identity(
         self,

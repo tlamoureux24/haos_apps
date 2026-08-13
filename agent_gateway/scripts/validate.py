@@ -38,7 +38,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.14.0"',
+        'version: "0.15.0"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -77,6 +77,8 @@ def main() -> int:
 
     if "adduser -S -D -H" not in dockerfile:
         raise RuntimeError("Container must create an unprivileged runtime user")
+    if "py3-cryptography" not in dockerfile:
+        raise RuntimeError("Connector secrets require authenticated encryption support")
     if launcher.count("su-exec agent-gateway:agent-gateway") != 5:
         raise RuntimeError("Private bootstrap, schema initialization, and listeners must run unprivileged")
     if "python3 -m agent_gateway.database initialize" not in launcher or launcher.count("python3 -m uvicorn") != 2:

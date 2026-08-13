@@ -26,6 +26,20 @@ class JobCancelRequest(StrictContract):
     job_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
 
 
+class ConnectorCreateRequest(StrictContract):
+    display_name: str = Field(min_length=1, max_length=120)
+    url: str = Field(min_length=1, max_length=2048)
+    bearer_token: str = Field(default="", max_length=4096)
+
+
+class ConnectorIdRequest(StrictContract):
+    connector_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+
+
+class ConnectorEnabledRequest(ConnectorIdRequest):
+    enabled: bool
+
+
 class EventCreateRequest(StrictContract):
     schema_version: Literal[1]
     event_type: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.-]*$")

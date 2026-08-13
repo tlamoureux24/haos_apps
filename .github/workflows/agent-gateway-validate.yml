@@ -258,6 +258,44 @@ jobs:
             --data '{"display_name":"CI observer","identity_type":"client","actions":["gateway.status.read","permissions.effective.read","events.read","jobs.read","reports.read"]}' \
             http://127.0.0.1:18099/admin/api/v1/identities)"
           observer_credential="$(printf '%s' "${observer_response}" | jq -er '.credential')"
+          connector_response="$(curl --fail --silent \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data "$(jq --null-input --compact-output --arg token "${observer_credential}" '{display_name:"CI generic MCP",url:"http://127.0.0.1:8098/mcp",bearer_token:$token}')" \
+            http://127.0.0.1:18099/admin/api/v1/connectors)"
+          connector_id="$(printf '%s' "${connector_response}" | jq -er '.connector_id')"
+          printf '%s' "${connector_response}" | jq -e '.status == "ready" and .tool_count == 8'
+          curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/connectors | \
+            jq -e --arg id "${connector_id}" '.count == 1 and .connectors[0].id == $id and .connectors[0].status == "ready" and .connectors[0].tool_count == 8 and (.connectors[0] | has("protected_config") | not)'
+          curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            "http://127.0.0.1:18099/admin/api/v1/connectors/tools?connector_id=${connector_id}" | \
+            jq -e '.count == 8 and (.tools | all(.schema_fingerprint | length == 64))'
+          docker exec --env "CI_CONNECTOR_TOKEN=${observer_credential}" agent-gateway-smoke \
+            su-exec agent-gateway:agent-gateway \
+            python3 -c 'import os,sqlite3; row=sqlite3.connect("/data/agent_gateway.db").execute("SELECT protected_config,display_endpoint FROM connectors").fetchone(); assert os.environ["CI_CONNECTOR_TOKEN"] not in row[0]; assert os.environ["CI_CONNECTOR_TOKEN"] not in row[1]; assert row[1] == "http://127.0.0.1:8098"'
+          curl --fail --silent \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data "{\"connector_id\":\"${connector_id}\",\"enabled\":false}" \
+            http://127.0.0.1:18099/admin/api/v1/connectors/enabled | jq -e '.status == "disabled"'
+          curl --fail --silent \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data "{\"connector_id\":\"${connector_id}\",\"enabled\":true}" \
+            http://127.0.0.1:18099/admin/api/v1/connectors/enabled | jq -e '.status == "ready"'
+          echo "SMOKE_STAGE=generic-connector-ready"
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
             http://127.0.0.1:18098/api/v1/events | jq -e '.events | length == 3'
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \

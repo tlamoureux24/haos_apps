@@ -8,7 +8,7 @@ LABEL \
   io.hass.type="app" \
   io.hass.arch="${BUILD_ARCH}"
 
-RUN apk add --no-cache python3 py3-pip su-exec \
+RUN apk add --no-cache python3 py3-pip py3-cryptography su-exec \
   && addgroup -S agent-gateway \
   && adduser -S -D -H -h /data -G agent-gateway -u 1000 agent-gateway
 

@@ -11,11 +11,15 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from agent_gateway.contracts import (
+    ConnectorCreateRequest,
+    ConnectorEnabledRequest,
+    ConnectorIdRequest,
     EventCreateRequest,
     IdentityCreateRequest,
     IdentityRevokeRequest,
     JobCancelRequest,
 )
+from agent_gateway.connectors import discover_streamable_http, validate_streamable_http_url
 from agent_gateway.control_plane import (
     AuthenticatedIdentity,
     AuthenticationError,
@@ -82,12 +86,16 @@ async def audit_denial(
 
 async def admin_status(request: Request) -> JSONResponse:
     counts = await run_in_threadpool(request.app.state.control_plane.status_counts)
+    connectors = await run_in_threadpool(request.app.state.control_plane.list_connectors)
     return JSONResponse(
         {
             "status": "ready",
             "surface": "admin",
             **counts,
-            "connectors": {"total": 0, "ready": 0},
+            "connectors": {
+                "total": len(connectors),
+                "ready": sum(item["status"] == "ready" for item in connectors),
+            },
         }
     )
 
@@ -95,6 +103,105 @@ async def admin_status(request: Request) -> JSONResponse:
 async def admin_list_identities(request: Request) -> JSONResponse:
     identities = await run_in_threadpool(request.app.state.control_plane.list_identities)
     return JSONResponse({"identities": identities})
+
+
+async def admin_list_connectors(request: Request) -> JSONResponse:
+    connectors = await run_in_threadpool(request.app.state.control_plane.list_connectors)
+    return JSONResponse({"connectors": connectors, "count": len(connectors)})
+
+
+async def admin_create_connector(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        await audit_denial(request, "connectors.create", "csrf_failed")
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, ConnectorCreateRequest)
+        url = validate_streamable_http_url(contract.url)
+        tools = await discover_streamable_http(url, contract.bearer_token)
+        connector_id = await run_in_threadpool(
+            request.app.state.control_plane.create_connector,
+            contract.display_name,
+            url,
+            contract.bearer_token,
+            tools,
+            correlation_id,
+        )
+    except OverflowError:
+        return error_response(413, "body_too_large", correlation_id)
+    except (ValueError, ValidationError):
+        return error_response(422, "invalid_connector", correlation_id)
+    except Exception:
+        return error_response(503, "connector_unreachable", correlation_id)
+    return JSONResponse({"connector_id": connector_id, "status": "ready", "tool_count": len(tools)}, status_code=201)
+
+
+async def admin_list_connector_tools(request: Request) -> JSONResponse:
+    connector_id = request.query_params.get("connector_id", "")
+    connectors = await run_in_threadpool(request.app.state.control_plane.list_connectors)
+    if not any(item["id"] == connector_id for item in connectors):
+        return error_response(404, "connector_not_found", request.state.correlation_id)
+    tools = await run_in_threadpool(request.app.state.control_plane.list_connector_tools, connector_id)
+    return JSONResponse({"tools": tools, "count": len(tools)})
+
+
+async def admin_check_connector(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, ConnectorIdRequest)
+        config = await run_in_threadpool(request.app.state.control_plane.connector_connection_config, contract.connector_id)
+        if config is None:
+            return error_response(404, "connector_not_found", correlation_id)
+        try:
+            tools = await discover_streamable_http(*config)
+        except Exception:
+            await run_in_threadpool(request.app.state.control_plane.refresh_connector, contract.connector_id, None, "connection_failed", correlation_id)
+            return error_response(503, "connector_unreachable", correlation_id)
+        await run_in_threadpool(request.app.state.control_plane.refresh_connector, contract.connector_id, tools, None, correlation_id)
+    except (OverflowError, ValueError, ValidationError):
+        return error_response(422, "invalid_request", correlation_id)
+    return JSONResponse({"connector_id": contract.connector_id, "status": "ready", "tool_count": len(tools)})
+
+
+async def admin_set_connector_enabled(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, ConnectorEnabledRequest)
+        tools = None
+        if contract.enabled:
+            config = await run_in_threadpool(request.app.state.control_plane.connector_connection_config, contract.connector_id)
+            if config is None:
+                return error_response(404, "connector_not_found", correlation_id)
+            try:
+                tools = await discover_streamable_http(*config)
+            except Exception:
+                return error_response(503, "connector_unreachable", correlation_id)
+        found = await run_in_threadpool(request.app.state.control_plane.set_connector_enabled, contract.connector_id, contract.enabled, correlation_id)
+        if found and tools is not None:
+            await run_in_threadpool(request.app.state.control_plane.refresh_connector, contract.connector_id, tools, None, correlation_id)
+    except (OverflowError, ValueError, ValidationError):
+        return error_response(422, "invalid_request", correlation_id)
+    if not found:
+        return error_response(404, "connector_not_found", correlation_id)
+    return JSONResponse({"connector_id": contract.connector_id, "status": "ready" if contract.enabled else "disabled"})
+
+
+async def admin_delete_connector(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, ConnectorIdRequest)
+        found = await run_in_threadpool(request.app.state.control_plane.delete_connector, contract.connector_id, correlation_id)
+    except (OverflowError, ValueError, ValidationError):
+        return error_response(422, "invalid_request", correlation_id)
+    if not found:
+        return error_response(404, "connector_not_found", correlation_id)
+    return JSONResponse({"connector_id": contract.connector_id, "deleted": True})
 
 
 async def admin_list_events(request: Request) -> JSONResponse:

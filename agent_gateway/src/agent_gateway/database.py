@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "4"
+SCHEMA_GENERATION = "5"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO gateway_metadata VALUES('application','agent_gateway');
-INSERT INTO gateway_metadata VALUES('schema_generation','4');
+INSERT INTO gateway_metadata VALUES('schema_generation','5');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -42,6 +42,20 @@ CREATE TABLE task_revisions(
   max_attempts INTEGER NOT NULL,created_at TEXT NOT NULL,
   FOREIGN KEY(task_definition_id) REFERENCES task_definitions(id),
   UNIQUE(task_definition_id,revision),CHECK(max_attempts BETWEEN 1 AND 10));
+CREATE TABLE connectors(
+  id TEXT PRIMARY KEY,display_name TEXT NOT NULL UNIQUE,transport TEXT NOT NULL,
+  protected_config TEXT NOT NULL,display_endpoint TEXT NOT NULL,status TEXT NOT NULL,
+  enabled INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+  last_checked_at TEXT,last_error_code TEXT,inventory_revision INTEGER NOT NULL DEFAULT 0,
+  CHECK(transport IN ('streamable_http')),
+  CHECK(status IN ('ready','unreachable','disabled','inventory_changed','invalid')),
+  CHECK(enabled IN (0,1)));
+CREATE TABLE connector_tools(
+  connector_id TEXT NOT NULL,name TEXT NOT NULL,description TEXT NOT NULL,
+  input_schema_json TEXT NOT NULL,schema_fingerprint TEXT NOT NULL,discovered_at TEXT NOT NULL,
+  PRIMARY KEY(connector_id,name),
+  FOREIGN KEY(connector_id) REFERENCES connectors(id) ON DELETE CASCADE);
+CREATE INDEX ix_connector_tools_connector ON connector_tools(connector_id);
 CREATE TABLE events(
   id TEXT PRIMARY KEY,source_identity_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,
   schema_version INTEGER NOT NULL,event_type TEXT NOT NULL,occurred_at TEXT NOT NULL,

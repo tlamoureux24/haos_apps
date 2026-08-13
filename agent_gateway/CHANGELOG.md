@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.0
+
+- Add administrator-managed generic MCP Streamable HTTP connectors with no
+  built-in server or vendor assumption.
+- Test MCP initialization before creation, discover a bounded tool inventory,
+  and support explicit recheck, enable, disable and deletion operations.
+- Encrypt connector URLs and optional Bearer tokens at rest with a purpose-
+  derived authenticated key; expose only a redacted origin to the interface.
+- Keep discovered tools administrative and disabled for execution until the
+  configurable task composer assigns exact tools in the next phase.
+
 ## 0.14.0
 
 - Reset the prototype around a connector-neutral gateway: remove the fixed

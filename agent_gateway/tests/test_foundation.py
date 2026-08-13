@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from agent_gateway.database import database_ready, initialize_database
 from agent_gateway.control_plane import validate_json_contract
+from agent_gateway.connectors import connector_display_endpoint, validate_streamable_http_url
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
 from agent_gateway.security import issue_credential, load_or_create_pepper, parse_and_verify_token
@@ -27,6 +28,22 @@ class SettingsTests(unittest.TestCase):
         with patch.dict(os.environ, {"AGENT_GATEWAY_SURFACE": "both"}, clear=True):
             with self.assertRaises(RuntimeError):
                 load_settings()
+
+
+class ConnectorContractTests(unittest.TestCase):
+    def test_accepts_generic_streamable_http_endpoint(self) -> None:
+        url = "https://mcp.example.test:8443/custom/path?tenant=one"
+        self.assertEqual(validate_streamable_http_url(url), url)
+        self.assertEqual(connector_display_endpoint(url), "https://mcp.example.test:8443")
+
+    def test_rejects_embedded_credentials_and_fragments(self) -> None:
+        for url in (
+            "https://user:secret@mcp.example.test/mcp",
+            "https://mcp.example.test/mcp#secret",
+            "file:///tmp/server",
+        ):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                validate_streamable_http_url(url)
 
     def test_rejects_invalid_ingress_proxy_ip(self) -> None:
         with patch.dict(

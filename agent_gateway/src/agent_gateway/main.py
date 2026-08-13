@@ -21,6 +21,12 @@ from agent_gateway.database import database_ready
 from agent_gateway.control_plane import ControlPlane
 from agent_gateway.http_api import (
     admin_create_identity,
+    admin_create_connector,
+    admin_check_connector,
+    admin_delete_connector,
+    admin_list_connectors,
+    admin_list_connector_tools,
+    admin_set_connector_enabled,
     admin_list_events,
     admin_list_identities,
     admin_list_jobs,
@@ -107,7 +113,7 @@ async def admin_index(request: Request) -> HTMLResponse:
 <section id="events" class="view"><div class="pagehead"><h1>Événements</h1><p>Derniers événements authentifiés reçus par la passerelle.</p></div><section class="card"><div id="events-list" class="tablewrap loading">Chargement…</div></section></section>
 <section id="jobs" class="view"><div class="pagehead"><h1>Tâches</h1><p>File persistante des travaux demandés à la passerelle.</p></div><section class="card"><div id="jobs-list" class="tablewrap loading">Chargement…</div></section></section>
 <section id="reports" class="view"><div class="pagehead"><h1>Rapports</h1><p>Résultats structurés et persistants produits par les agents.</p></div><section class="card"><div id="reports-list" class="tablewrap loading">Chargement…</div></section></section>
-<section id="connectors" class="view"><div class="pagehead"><h1>Connecteurs MCP</h1><p>Les serveurs MCP externes seront ajoutés et administrés ici.</p></div><section class="card"><div class="empty"><div class="emptyicon">⌁</div><strong>Aucun connecteur</strong><p>Agent Gateway fonctionne sans connecteur. Leur configuration générique arrive dans la prochaine étape.</p></div></section></section>
+<section id="connectors" class="view"><div class="pagehead"><h1>Connecteurs MCP</h1><p>Ajoutez les serveurs MCP externes dont les outils pourront ensuite être attribués aux tâches.</p></div><div class="workspace"><section class="card"><div class="cardhead"><div><h2>Nouveau connecteur</h2><p>La connexion et l’inventaire sont validés avant l’enregistrement.</p></div></div><form id="connector-create"><label>Nom<input name="display_name" maxlength="120" placeholder="Ex. Home Assistant" required></label><label>URL Streamable HTTP<input name="url" maxlength="2048" type="url" placeholder="http://serveur:port/mcp" required></label><label>Jeton Bearer facultatif<input name="bearer_token" maxlength="4096" type="password" autocomplete="new-password"></label><button class="primary" type="submit">Tester et ajouter</button><p id="connector-message" class="error"></p></form></section><section class="card identities"><div class="cardhead"><div><h2>Connecteurs configurés</h2><p>La découverte n’autorise aucun outil automatiquement.</p></div><span id="connector-count" class="count">–</span></div><div id="connector-list"><p class="loading">Chargement…</p></div></section></div></section>
 <section id="audit" class="view"><div class="pagehead split"><div><h1>Journal d’audit</h1><p>Décisions de sécurité chaînées et expurgées de la passerelle.</p></div><a class="export" href="{safe_prefix}/admin/api/v1/audit/export" download>Exporter JSONL v1</a></div><section class="card"><div id="audit-list" class="tablewrap loading">Chargement…</div></section></section>
 </main><script src="{safe_prefix}/admin/assets/admin.js" defer></script></body></html>"""
     return HTMLResponse(document)
@@ -135,6 +141,11 @@ route_handlers = {
     "/admin/assets/admin.js": admin_js,
     "/admin/assets/logo.png": admin_logo,
     "/admin/api/v1/status": admin_status,
+    "/admin/api/v1/connectors": admin_create_connector,
+    "/admin/api/v1/connectors/check": admin_check_connector,
+    "/admin/api/v1/connectors/delete": admin_delete_connector,
+    "/admin/api/v1/connectors/enabled": admin_set_connector_enabled,
+    "/admin/api/v1/connectors/tools": admin_list_connector_tools,
     "/admin/api/v1/identities": admin_create_identity,
     "/admin/api/v1/identities/revoke": admin_revoke_identity,
     "/admin/api/v1/events": admin_list_events,
@@ -154,7 +165,7 @@ routes = [
     Route(
         path,
         route_handlers[path],
-        methods=["POST"] if path in {"/admin/api/v1/identities", "/admin/api/v1/identities/revoke", "/admin/api/v1/jobs/cancel", "/api/v1/events"} else ["GET"],
+        methods=["POST"] if path in {"/admin/api/v1/connectors", "/admin/api/v1/connectors/check", "/admin/api/v1/connectors/delete", "/admin/api/v1/connectors/enabled", "/admin/api/v1/identities", "/admin/api/v1/identities/revoke", "/admin/api/v1/jobs/cancel", "/api/v1/events"} else ["GET"],
     )
     for path in exposed_paths(settings.surface)
 ]
@@ -168,6 +179,7 @@ mcp_application = mcp_server.streamable_http_app() if mcp_server else None
 
 if settings.surface == "admin":
     routes.append(Route("/admin/api/v1/identities", admin_list_identities, methods=["GET"]))
+    routes.append(Route("/admin/api/v1/connectors", admin_list_connectors, methods=["GET"]))
 if settings.surface == "public":
     routes.append(Route("/api/v1/events", list_events, methods=["GET"]))
     routes.append(Mount("/", app=OpaqueBearerMiddleware(mcp_application, control_plane)))
