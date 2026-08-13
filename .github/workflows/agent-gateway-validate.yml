@@ -299,7 +299,7 @@ jobs:
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/audit | \
-            jq -e '.limit == 200 and (.audit_entries | length >= 4) and any(.decision == "denied") and all(has("credential_id") | not)'
+            jq -e '.limit == 200 and (.audit_entries | length >= 4 and any(.decision == "denied") and all(has("credential_id") | not))'
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/audit/export \
