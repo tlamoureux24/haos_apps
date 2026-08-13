@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.32.0
+
+- Add live execution-health counters for queued, leased and dead-letter jobs to
+  the Ingress operations page.
+- Add local filters for all, active and intervention-required executions so
+  dead letters and their guarded relaunch action remain easy to find.
+- Keep these operational views read-only and schema-free; existing data is
+  preserved without a database upgrade.
+
 ## 0.31.0
 
 - Add an explicit `Relancer` action for dead-letter executions in the Ingress

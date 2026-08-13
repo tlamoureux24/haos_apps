@@ -817,6 +817,9 @@ class ControlPlane:
                   (SELECT count(*) FROM identities WHERE status='active') AS active_identities,
                   (SELECT count(*) FROM events) AS events,
                   (SELECT count(*) FROM jobs) AS jobs,
+                  (SELECT count(*) FROM jobs WHERE state='queued') AS queued_jobs,
+                  (SELECT count(*) FROM jobs WHERE state='leased') AS running_jobs,
+                  (SELECT count(*) FROM jobs WHERE state='dead_letter') AS dead_letter_jobs,
                   (SELECT count(*) FROM reports) AS reports
                 """
             ).fetchone()
