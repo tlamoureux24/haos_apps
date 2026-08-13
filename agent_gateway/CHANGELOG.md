@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.40.6
+
+- Replace broad read/write/lock access to all of `/run` with the four exact
+  s6 runtime subtrees and the single generated s6-rc link observed across 934
+  HAOS audit records.
+- Resolve `ghcr.io/home-assistant/base:latest` to the immutable OCI index
+  digest `sha256:94ff231402a5e7ad2a82e261ad5fa4ffae7d7bb095c3febb2edbdf309c9b6aca`
+  and build against that digest for reproducibility.
+- Record the selected base name and digest in OCI image labels and print the
+  resolved digest in the App startup log for operational traceability.
+
 ## 0.40.5
 
 - Allow the single generated s6 shutdown stage executable at the exact path

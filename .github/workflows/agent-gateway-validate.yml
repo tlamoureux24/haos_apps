@@ -42,11 +42,36 @@ jobs:
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
+          base_digest="$(sed -n 's/^ARG BASE_IMAGE_DIGEST=//p' agent_gateway/Dockerfile)"
           docker build --pull \
             --build-arg BUILD_ARCH=amd64 \
             --build-arg "BUILD_VERSION=${version}" \
             --tag "agent-gateway:${version}" \
             agent_gateway
+          recorded_digest="$(docker image inspect "agent-gateway:${version}" \
+            --format '{{index .Config.Labels "org.opencontainers.image.base.digest"}}')"
+          test "${recorded_digest}" = "${base_digest}"
+          printf '%s\n' \
+            'base_name=ghcr.io/home-assistant/base:latest' \
+            "base_digest=${base_digest}" \
+            "agent_gateway_version=${version}" \
+            "source_commit=${GITHUB_SHA}" \
+            > agent_gateway-base-image.txt
+          {
+            echo '### Agent Gateway base image'
+            echo
+            echo '`ghcr.io/home-assistant/base:latest`'
+            echo
+            echo "Resolved digest: \`${base_digest}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload base image provenance
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-gateway-base-image
+          path: agent_gateway-base-image.txt
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Build ephemeral AppArmor trace image
         run: |

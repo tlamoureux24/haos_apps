@@ -41,7 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.40.5"',
+        'version: "0.40.6"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -58,8 +58,17 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "0.40.5"' not in package:
+    if '__version__ = "0.40.6"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
+    base_digest = "sha256:94ff231402a5e7ad2a82e261ad5fa4ffae7d7bb095c3febb2edbdf309c9b6aca"
+    if f"ARG BASE_IMAGE_DIGEST={base_digest}" not in dockerfile:
+        raise RuntimeError("Home Assistant base image must use the audited immutable digest")
+    if "FROM ghcr.io/home-assistant/base:latest@${BASE_IMAGE_DIGEST}" not in dockerfile:
+        raise RuntimeError("Home Assistant base tag and digest must remain explicit")
+    if 'org.opencontainers.image.base.digest="${BASE_IMAGE_DIGEST}"' not in dockerfile:
+        raise RuntimeError("Base image digest must be recorded in OCI metadata")
+    if "Home Assistant base:latest resolved digest" not in launcher:
+        raise RuntimeError("Base image digest must be emitted in the startup log")
     if "ha_mcp" in config.lower():
         raise RuntimeError("No upstream MCP connector may be fixed in App configuration")
     if "document.querySelector(`#${name}`)" in admin_ui:
@@ -142,6 +151,19 @@ def main() -> int:
     for broad_rule in broad_execution_rules:
         if broad_rule in apparmor:
             raise RuntimeError(f"AppArmor retains broad execution rule: {broad_rule}")
+    if "/run/{,**} rwk," in apparmor:
+        raise RuntimeError("AppArmor must restrict writable runtime data to s6 subtrees")
+    exact_s6_runtime_trees = (
+        "/run/ rw,",
+        "/run/s6/{,**} rwk,",
+        "/run/s6-rc rw,",
+        "/run/s6-rc:s6-rc-init:*/{,**} rwk,",
+        "/run/service/{,**} rwk,",
+        "/run/s6-linux-init-container-results/{,**} rwk,",
+    )
+    for runtime_rule in exact_s6_runtime_trees:
+        if runtime_rule not in apparmor:
+            raise RuntimeError(f"Missing bounded s6 runtime rule: {runtime_rule}")
     if "/data/{,**} rwk," in apparmor or "/data/**" in apparmor:
         raise RuntimeError("AppArmor must restrict persistent data file by file")
     exact_runtime_files = (
