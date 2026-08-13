@@ -48,6 +48,64 @@ jobs:
             --tag "agent-gateway:${version}" \
             agent_gateway
 
+      - name: Build ephemeral AppArmor trace image
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
+          docker build \
+            --file agent_gateway/scripts/Dockerfile.apparmor-audit \
+            --build-arg "BASE_IMAGE=agent-gateway:${version}" \
+            --tag "agent-gateway-apparmor-audit:${version}" \
+            agent_gateway
+
+      - name: Trace startup executable inventory
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
+          trace_root="${RUNNER_TEMP}/agent-gateway-apparmor-audit"
+          mkdir -p "${trace_root}/data" "${trace_root}/trace"
+
+          cleanup() {
+            docker logs agent-gateway-apparmor-audit 2>&1 || true
+            docker rm --force agent-gateway-apparmor-audit >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name agent-gateway-apparmor-audit \
+            --publish 127.0.0.1:28098:8098 \
+            --publish 127.0.0.1:28099:8099 \
+            --volume "${trace_root}/data:/data" \
+            --volume "${trace_root}/trace:/tmp/apparmor-audit" \
+            "agent-gateway-apparmor-audit:${version}"
+
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:28098/health/ready >/dev/null; then
+              break
+            fi
+            if [ "${attempt}" = 60 ]; then
+              exit 1
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:28098/health/live >/dev/null
+          docker stop --time 15 agent-gateway-apparmor-audit >/dev/null
+          python3 agent_gateway/scripts/summarize_apparmor_trace.py \
+            "${trace_root}/trace" \
+            --output "${trace_root}/executables.txt"
+          test -s "${trace_root}/executables.txt"
+          grep -Fx '/init' "${trace_root}/executables.txt"
+          grep -Fx '/run.sh' "${trace_root}/executables.txt"
+          cp "${trace_root}/executables.txt" agent_gateway-apparmor-executables.txt
+
+      - name: Upload AppArmor executable inventory
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-gateway-apparmor-executables
+          path: agent_gateway-apparmor-executables.txt
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Validate expected s6 service-definition inventory
         run: |
           set -euo pipefail

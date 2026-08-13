@@ -1,0 +1,8 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# CI-only image. strace is never installed in the distributed App image.
+RUN apk add --no-cache strace
+
+ENTRYPOINT ["/usr/bin/strace", "-ff", "-qq", "-e", "trace=execve,execveat", "-o", "/tmp/apparmor-audit/exec"]
+CMD ["/init", "/run.sh"]
