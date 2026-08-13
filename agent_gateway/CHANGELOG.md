@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.0
+
+- Allow administrators to define bounded fixed arguments for each selected task
+  tool and validate them against the discovered upstream input schema.
+- Persist fixed arguments in immutable task revisions so future virtual tools
+  can remove those values from agent-controlled input and inject them internally.
+- Generate collision-resistant virtual capability names from stable task and
+  connector identities, keeping identical upstream tool names unambiguous.
+
 ## 0.18.0
 
 - Add pause and resume controls to configured tasks while preserving their

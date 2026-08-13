@@ -212,7 +212,7 @@ class ControlPlane:
             for row in rows:
                 selections = connection.execute(
                     """
-                    SELECT s.connector_id,s.tool_name,s.namespaced_name,s.schema_fingerprint,
+                    SELECT s.connector_id,s.tool_name,s.namespaced_name,s.schema_fingerprint,s.constraints_json,
                            c.display_name AS connector_name,c.enabled AS connector_enabled,c.status AS connector_status,
                            t.schema_fingerprint AS current_fingerprint
                     FROM task_tool_selections s
@@ -245,6 +245,7 @@ class ControlPlane:
                                 "connector_name": item["connector_name"],
                                 "tool_name": item["tool_name"],
                                 "namespaced_name": item["namespaced_name"],
+                                "constraints": json.loads(item["constraints_json"]),
                             }
                             for item in selections
                         ],
@@ -284,7 +285,7 @@ class ControlPlane:
             for selection in selections:
                 row = connection.execute(
                     """
-                    SELECT c.id AS connector_id,c.status,c.enabled,t.name,t.schema_fingerprint
+                    SELECT c.id AS connector_id,c.status,c.enabled,t.name,t.schema_fingerprint,t.input_schema_json
                     FROM connectors c JOIN connector_tools t ON t.connector_id=c.id
                     WHERE c.id=? AND t.name=?
                     """,
@@ -292,7 +293,19 @@ class ControlPlane:
                 ).fetchone()
                 if row is None or not row["enabled"] or row["status"] != "ready":
                     raise ValueError("task_connector_not_ready")
-                resolved.append(row)
+                fixed_arguments = selection.get("fixed_arguments", {})
+                if not isinstance(fixed_arguments, dict):
+                    raise ValueError("invalid_fixed_arguments")
+                input_schema = json.loads(row["input_schema_json"])
+                properties = input_schema.get("properties", {})
+                if not isinstance(properties, dict) or any(key not in properties for key in fixed_arguments):
+                    raise ValueError("unknown_fixed_argument")
+                for key, value in fixed_arguments.items():
+                    child_schema = properties[key]
+                    if not isinstance(child_schema, dict):
+                        raise ValueError("invalid_upstream_schema")
+                    validate_json_contract(value, child_schema, f"fixed_arguments.{key}")
+                resolved.append((row, fixed_arguments))
             connection.execute(
                 "INSERT INTO task_definitions(id,name,display_name,enabled,created_at) VALUES(?,?,?,?,?)",
                 (task_id, name.strip(), display_name.strip(), 1, now),
@@ -301,10 +314,13 @@ class ControlPlane:
                 "INSERT INTO task_revisions(id,task_definition_id,revision,objective,input_schema_json,report_schema_json,max_attempts,created_at) VALUES(?,?,?,?,?,?,?,?)",
                 (revision_id, task_id, 1, objective.strip(), '{"type":"object"}', canonical_json(report_schema), max_attempts, now),
             )
-            for row in resolved:
+            for row, fixed_arguments in resolved:
+                digest = hashlib.sha256(f"{revision_id}:{row['connector_id']}:{row['name']}".encode()).hexdigest()[:12]
+                safe_tool_name = "".join(character if character.isalnum() else "_" for character in row["name"]).strip("_")[:80] or "tool"
+                virtual_name = f"task_{task_id.replace('-', '')[:12]}__{safe_tool_name}__{digest}"
                 connection.execute(
                     "INSERT INTO task_tool_selections(task_revision_id,connector_id,tool_name,schema_fingerprint,namespaced_name,constraints_json) VALUES(?,?,?,?,?,?)",
-                    (revision_id, row["connector_id"], row["name"], row["schema_fingerprint"], f"connector/{row['connector_id']}/{row['name']}", "{}"),
+                    (revision_id, row["connector_id"], row["name"], row["schema_fingerprint"], virtual_name, canonical_json({"fixed_arguments": fixed_arguments})),
                 )
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.create", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"tool_count": len(resolved)})
         return task_id
