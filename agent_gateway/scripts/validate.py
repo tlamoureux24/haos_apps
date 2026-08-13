@@ -40,7 +40,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.40.1"',
+        'version: "0.40.2"',
         "  - aarch64",
         "  - amd64",
         "init: false",

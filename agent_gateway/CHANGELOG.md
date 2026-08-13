@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.40.2
+
+- Resolve the complete strict-mode startup denial batch captured from HAOS:
+  exact `s6-overlay-stat`, `s6-ftrigrd` and s6 portable-utils multicall paths,
+  the final shutdown template, and the single generated shutdown supervisor
+  script under `/run/service`.
+- Use exact installed package versions for the denied multicall targets after
+  confirming that their broader version patterns did not authorize the loaded
+  HAOS profile as intended.
+- Keep recursive executable access to `/run`, `/command` and `/package`
+  forbidden.
+
 ## 0.40.1
 
 - Allow the exact `/command/s6-mkdir` startup alias and its s6 portable-utils
