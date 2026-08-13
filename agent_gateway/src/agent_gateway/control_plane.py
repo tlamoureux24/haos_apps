@@ -1438,6 +1438,122 @@ class ControlPlane:
             for row in rows
         ]
 
+    def verify_audit_chain(self) -> dict[str, object]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                """SELECT sequence,id,occurred_at,actor_identity_id,credential_id,action,
+                          target_type,target_id,decision,reason_code,correlation_id,
+                          metadata_json,previous_hash,entry_hash
+                   FROM audit_entries ORDER BY sequence"""
+            ).fetchall()
+        expected_previous = GENESIS_HASH
+        for row in rows:
+            material = canonical_json({
+                "id": row["id"], "occurred_at": row["occurred_at"],
+                "actor_identity_id": row["actor_identity_id"], "credential_id": row["credential_id"],
+                "action": row["action"], "target_type": row["target_type"], "target_id": row["target_id"],
+                "decision": row["decision"], "reason_code": row["reason_code"],
+                "correlation_id": row["correlation_id"], "metadata_json": row["metadata_json"],
+                "previous_hash": row["previous_hash"],
+            })
+            expected_hash = hmac.new(self.pepper, material.encode("utf-8"), hashlib.sha256).hexdigest()
+            if row["previous_hash"] != expected_previous or not hmac.compare_digest(row["entry_hash"], expected_hash):
+                return {"valid": False, "entries": len(rows), "failed_sequence": row["sequence"]}
+            expected_previous = row["entry_hash"]
+        return {"valid": True, "entries": len(rows), "failed_sequence": None}
+
+    def retention_status(self) -> dict[str, object]:
+        with connect(self.database_path) as connection:
+            values = {row["key"]: row["value"] for row in connection.execute(
+                "SELECT key,value FROM gateway_metadata WHERE key IN ('retention_days','retention_batch_size','retention_automatic','retention_last_run_at')"
+            ).fetchall()}
+        retention_days = int(values.get("retention_days", "90"))
+        batch_size = int(values.get("retention_batch_size", "250"))
+        automatic = values.get("retention_automatic", "0") == "1"
+        preview = self._retention_preview(retention_days, batch_size)
+        return {"retention_days": retention_days, "batch_size": batch_size, "automatic": automatic,
+                "last_run_at": values.get("retention_last_run_at"), "preview": preview,
+                "audit": self.verify_audit_chain()}
+
+    def _retention_preview(self, retention_days: int, batch_size: int) -> dict[str, int]:
+        cutoff = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with connect(self.database_path) as connection:
+            job_ids = [row["id"] for row in connection.execute(
+                "SELECT id FROM jobs WHERE state IN ('completed','failed','cancelled','dead_letter') AND updated_at<? ORDER BY updated_at,id LIMIT ?",
+                (cutoff, batch_size),
+            ).fetchall()]
+            if job_ids:
+                placeholders = ",".join("?" for _ in job_ids)
+                reports = connection.execute(f"SELECT count(*) FROM reports WHERE job_id IN ({placeholders})", job_ids).fetchone()[0]
+                attempts = connection.execute(f"SELECT count(*) FROM job_attempts WHERE job_id IN ({placeholders})", job_ids).fetchone()[0]
+                events = connection.execute(
+                    f"""SELECT count(*) FROM events e WHERE e.received_at<?
+                       AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.event_id=e.id AND j.id NOT IN ({placeholders}))
+                       AND NOT EXISTS(SELECT 1 FROM pending_event_triggers p WHERE p.event_id=e.id)""",
+                    (cutoff, *job_ids),
+                ).fetchone()[0]
+            else:
+                reports = attempts = 0
+                events = connection.execute(
+                    """SELECT count(*) FROM events e WHERE e.received_at<?
+                       AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.event_id=e.id)
+                       AND NOT EXISTS(SELECT 1 FROM pending_event_triggers p WHERE p.event_id=e.id)""", (cutoff,)
+                ).fetchone()[0]
+        return {"jobs": len(job_ids), "reports": reports, "attempts": attempts, "orphan_events": min(events, batch_size)}
+
+    def set_retention_policy(self, retention_days: int, batch_size: int, automatic: bool, correlation_id: str) -> None:
+        if not 7 <= retention_days <= 3650 or not 10 <= batch_size <= 1000:
+            raise ValueError("invalid_retention_policy")
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            for key, value in (("retention_days", str(retention_days)), ("retention_batch_size", str(batch_size)), ("retention_automatic", "1" if automatic else "0")):
+                connection.execute("INSERT INTO gateway_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="maintenance.retention_update", target_type="retention_policy", target_id=None, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"retention_days": retention_days, "batch_size": batch_size, "automatic": automatic})
+
+    def run_retention(self, correlation_id: str, automatic: bool = False) -> dict[str, int]:
+        with connect(self.database_path) as connection:
+            values = {row["key"]: row["value"] for row in connection.execute(
+                "SELECT key,value FROM gateway_metadata WHERE key IN ('retention_days','retention_batch_size','retention_automatic','retention_last_run_at')"
+            ).fetchall()}
+        retention_days = int(values.get("retention_days", "90"))
+        batch_size = int(values.get("retention_batch_size", "250"))
+        if automatic and values.get("retention_automatic", "0") != "1":
+            return {"jobs": 0, "reports": 0, "attempts": 0, "orphan_events": 0}
+        if automatic and values.get("retention_last_run_at"):
+            last = datetime.fromisoformat(values["retention_last_run_at"].replace("Z", "+00:00"))
+            if datetime.now(UTC) - last < timedelta(hours=24):
+                return {"jobs": 0, "reports": 0, "attempts": 0, "orphan_events": 0}
+        cutoff = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            job_ids = [row["id"] for row in connection.execute(
+                "SELECT id FROM jobs WHERE state IN ('completed','failed','cancelled','dead_letter') AND updated_at<? ORDER BY updated_at,id LIMIT ?", (cutoff, batch_size)
+            ).fetchall()]
+            reports = attempts = 0
+            if job_ids:
+                placeholders = ",".join("?" for _ in job_ids)
+                report_ids = [row["id"] for row in connection.execute(f"SELECT id FROM reports WHERE job_id IN ({placeholders})", job_ids).fetchall()]
+                if report_ids:
+                    report_marks = ",".join("?" for _ in report_ids)
+                    connection.execute(f"UPDATE reports SET supersedes_id=NULL WHERE supersedes_id IN ({report_marks})", report_ids)
+                reports = connection.execute(f"DELETE FROM reports WHERE job_id IN ({placeholders})", job_ids).rowcount
+                attempts = connection.execute(f"DELETE FROM job_attempts WHERE job_id IN ({placeholders})", job_ids).rowcount
+                connection.execute(f"DELETE FROM jobs WHERE id IN ({placeholders})", job_ids)
+            event_ids = [row["id"] for row in connection.execute(
+                """SELECT e.id FROM events e WHERE e.received_at<?
+                   AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.event_id=e.id)
+                   AND NOT EXISTS(SELECT 1 FROM pending_event_triggers p WHERE p.event_id=e.id)
+                   ORDER BY e.received_at,e.id LIMIT ?""", (cutoff, batch_size)
+            ).fetchall()]
+            if event_ids:
+                event_marks = ",".join("?" for _ in event_ids)
+                connection.execute(f"DELETE FROM events WHERE id IN ({event_marks})", event_ids)
+            connection.execute("INSERT INTO gateway_metadata(key,value) VALUES('retention_last_run_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (now,))
+            result = {"jobs": len(job_ids), "reports": reports, "attempts": attempts, "orphan_events": len(event_ids)}
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="maintenance.retention_run", target_type="retention_policy", target_id=None, decision="recorded", reason_code="automatic" if automatic else "ingress_admin", correlation_id=correlation_id, metadata=result)
+        return result
+
     def authenticate(self, token: str) -> AuthenticatedIdentity:
         credential_id = token_credential_id(token)
         if credential_id is None:

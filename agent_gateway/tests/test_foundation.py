@@ -310,6 +310,32 @@ class TaskCompositionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid_schedule"):
             ControlPlane._next_schedule_run("weekly", 10080, "09:00", None, "Europe/Paris", reference)
 
+    def test_retention_removes_only_expired_terminal_data_and_keeps_audit_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            old = "2000-01-01T00:00:00.000Z"
+            with sqlite3.connect(path) as connection:
+                connection.execute("INSERT INTO identities(id,display_name,identity_type,status,created_at) VALUES('10000000-0000-0000-0000-000000000001','Source','event_source','active',?)", (old,))
+                connection.execute("INSERT INTO policy_documents(id,name,created_at) VALUES('policy','policy',?)", (old,))
+                connection.execute("INSERT INTO policy_revisions(id,policy_id,schema_version,document_json,created_at) VALUES('revision','policy',1,'{}',?)", (old,))
+                connection.execute("INSERT INTO task_definitions(id,name,display_name,enabled,created_at) VALUES('task','task','Task',1,?)", (old,))
+                connection.execute("INSERT INTO task_revisions(id,task_definition_id,revision,objective,input_schema_json,report_schema_json,max_attempts,created_at) VALUES('task-revision','task',1,'Task','{}','{}',1,?)", (old,))
+                connection.execute("INSERT INTO events(id,source_identity_id,idempotency_key,schema_version,event_type,occurred_at,received_at,payload_json) VALUES('event','10000000-0000-0000-0000-000000000001','key',1,'test.event',?,?, '{}')", (old, old))
+                connection.execute("INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES('old-job','event','task','completed','revision','task-revision','{}',?,?)", (old, old))
+                connection.execute("INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES('active-job',NULL,'task','queued','revision','task-revision','{}',?,?)", (old, old))
+                connection.execute("INSERT INTO reports(id,job_id,schema_version,report_json,created_at) VALUES('report','old-job',1,'{}',?)", (old,))
+                connection.execute("INSERT INTO job_attempts(id,job_id,attempt_number,identity_id,lease_verifier,leased_at,lease_expires_at,max_expires_at,finished_at,outcome) VALUES('attempt','old-job',1,'10000000-0000-0000-0000-000000000001','x',?,?,?,?, 'completed')", (old, old, old, old))
+            control_plane.record_audit(actor_identity_id=None, credential_id=None, action="test", decision="recorded", reason_code="test", correlation_id="test")
+            self.assertEqual(control_plane.retention_status()["preview"]["jobs"], 1)
+            deleted = control_plane.run_retention("test-retention")
+            self.assertEqual(deleted, {"jobs": 1, "reports": 1, "attempts": 1, "orphan_events": 1})
+            with sqlite3.connect(path) as connection:
+                self.assertEqual(connection.execute("SELECT id FROM jobs").fetchall(), [("active-job",)])
+            self.assertTrue(control_plane.verify_audit_chain()["valid"])
+
 
 if __name__ == "__main__":
     unittest.main()

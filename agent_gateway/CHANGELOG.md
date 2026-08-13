@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.36.0
+
+- Add an Ingress retention policy with a conservative 90-day default, bounded
+  batches, an explicit preview and a confirmed manual cleanup action.
+- Optionally run the same bounded cleanup automatically at most once every 24
+  hours, persisting its policy and last-run time without a schema change.
+- Delete only expired terminal executions and their reports and attempts, plus
+  old events no longer referenced by a job or pending grace window.
+- Never delete queued or leased work, configuration, identities, connector
+  inventory, pending grace windows or audit entries.
+- Add full cryptographic audit-chain verification and display its health and
+  entry count alongside the retention controls.
+- Audit every policy change and cleanup result while keeping the append-only
+  chain intact.
+- Close every SQLite connection deterministically after its transaction,
+  preventing descriptor accumulation in the long-running App processes.
+
 ## 0.35.0
 
 - Add interval, daily and weekly planifications with an explicit IANA timezone

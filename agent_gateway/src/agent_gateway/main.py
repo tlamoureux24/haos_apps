@@ -51,6 +51,9 @@ from agent_gateway.http_api import (
     admin_list_reports,
     admin_list_audit,
     admin_export_audit,
+    admin_retention_status,
+    admin_update_retention,
+    admin_run_retention,
     admin_revoke_identity,
     admin_status,
     create_event,
@@ -134,7 +137,7 @@ async def admin_index(request: Request) -> HTMLResponse:
 <section id="jobs" class="view"><div class="pagehead"><h1>Exécutions</h1><p>File persistante des travaux demandés à la passerelle.</p></div><section class="metrics job-metrics"><article class="metric amber"><strong id="jobs-queued">–</strong><span>En attente</span></article><article class="metric"><strong id="jobs-running">–</strong><span>En cours</span></article><article class="metric danger-metric"><strong id="jobs-dead-letter">–</strong><span>À traiter</span></article></section><section class="card"><div class="job-toolbar" role="group" aria-label="Filtrer les exécutions"><button class="job-filter active" type="button" data-state="all">Toutes</button><button class="job-filter" type="button" data-state="active">Actives</button><button class="job-filter" type="button" data-state="dead_letter">À traiter</button></div><div id="jobs-list" class="tablewrap loading">Chargement…</div></section></section>
 <section id="reports" class="view"><div class="pagehead"><h1>Rapports</h1><p>Résultats structurés et persistants produits par les agents.</p></div><section class="card"><div id="reports-list" class="tablewrap loading">Chargement…</div></section></section>
 <section id="connectors" class="view"><div class="pagehead"><h1>Connecteurs MCP</h1><p>Ajoutez les serveurs MCP externes dont les outils pourront ensuite être attribués aux tâches.</p></div><div class="workspace"><section class="card"><div class="cardhead"><div><h2>Nouveau connecteur</h2><p>La connexion et l’inventaire sont validés avant l’enregistrement.</p></div></div><form id="connector-create"><label>Nom<input name="display_name" maxlength="120" placeholder="Ex. Home Assistant" required></label><label>URL Streamable HTTP<input name="url" maxlength="2048" type="url" placeholder="http://serveur:port/mcp" required></label><label>Jeton Bearer facultatif<input name="bearer_token" maxlength="4096" type="password" autocomplete="new-password"></label><button class="primary" type="submit">Tester et ajouter</button><p id="connector-message" class="error"></p></form></section><section class="card identities"><div class="cardhead"><div><h2>Connecteurs configurés</h2><p>La découverte n’autorise aucun outil automatiquement.</p></div><span id="connector-count" class="count">–</span></div><div id="connector-list"><p class="loading">Chargement…</p></div></section></div></section>
-<section id="audit" class="view"><div class="pagehead split"><div><h1>Journal d’audit</h1><p>Décisions de sécurité chaînées et expurgées de la passerelle.</p></div><a class="export" href="{safe_prefix}/admin/api/v1/audit/export" download>Exporter JSONL v1</a></div><section class="card"><div id="audit-list" class="tablewrap loading">Chargement…</div></section></section>
+<section id="audit" class="view"><div class="pagehead split"><div><h1>Audit et rétention</h1><p>Vérifiez la chaîne d’audit et maîtrisez le volume des données opérationnelles.</p></div><a class="export" href="{safe_prefix}/admin/api/v1/audit/export" download>Exporter JSONL v1</a></div><div class="workspace maintenance"><section class="card"><div class="cardhead"><div><h2>Politique de rétention</h2><p>Les exécutions actives et l’audit ne sont jamais supprimés.</p></div></div><form id="retention-form"><label>Conserver les données terminées<select name="retention_days"><option value="30">30 jours</option><option value="90">90 jours</option><option value="180">180 jours</option><option value="365">1 an</option><option value="730">2 ans</option></select></label><label>Maximum par passage<select name="batch_size"><option value="100">100 éléments</option><option value="250">250 éléments</option><option value="500">500 éléments</option><option value="1000">1 000 éléments</option></select></label><label class="permission"><input name="automatic" type="checkbox"><span>Nettoyage automatique<small>Un passage borné au maximum toutes les 24 heures.</small></span></label><button class="primary" type="submit">Enregistrer la politique</button><p id="retention-message" class="error"></p></form></section><section class="card"><div class="cardhead"><div><h2>Aperçu du nettoyage</h2><p id="retention-last">Chargement…</p></div><i id="audit-chain-dot" class="status-dot disabled" role="img"></i></div><div id="retention-preview" class="metrics"><article class="metric"><strong>–</strong><span>Exécutions</span></article></div><p id="audit-chain-status" class="actions">Vérification de la chaîne…</p><button id="retention-run" class="danger" type="button">Nettoyer maintenant</button></section></div><section class="card audit-card"><div id="audit-list" class="tablewrap loading">Chargement…</div></section></section>
 </main><script src="{safe_prefix}/admin/assets/admin.js" defer></script></body></html>"""
     return HTMLResponse(document)
 
@@ -187,6 +190,9 @@ route_handlers = {
     "/admin/api/v1/reports": admin_list_reports,
     "/admin/api/v1/audit": admin_list_audit,
     "/admin/api/v1/audit/export": admin_export_audit,
+    "/admin/api/v1/retention": admin_retention_status,
+    "/admin/api/v1/retention/update": admin_update_retention,
+    "/admin/api/v1/retention/run": admin_run_retention,
     "/api/v1/events": create_event,
     "/api/v1/jobs": list_jobs,
     "/api/v1/reports": list_reports,
@@ -198,7 +204,7 @@ routes = [
     Route(
         path,
         route_handlers[path],
-        methods=["POST"] if path in {"/admin/api/v1/connectors", "/admin/api/v1/connectors/check", "/admin/api/v1/connectors/delete", "/admin/api/v1/connectors/enabled", "/admin/api/v1/tasks", "/admin/api/v1/tasks/delete", "/admin/api/v1/tasks/enabled", "/admin/api/v1/tasks/run", "/admin/api/v1/schedules", "/admin/api/v1/schedules/update", "/admin/api/v1/schedules/enabled", "/admin/api/v1/schedules/delete", "/admin/api/v1/event-mappings", "/admin/api/v1/event-mappings/update", "/admin/api/v1/event-mappings/enabled", "/admin/api/v1/event-mappings/delete", "/admin/api/v1/identities", "/admin/api/v1/identities/revoke", "/admin/api/v1/jobs/cancel", "/admin/api/v1/jobs/requeue", "/api/v1/events"} else ["GET"],
+        methods=["POST"] if path in {"/admin/api/v1/connectors", "/admin/api/v1/connectors/check", "/admin/api/v1/connectors/delete", "/admin/api/v1/connectors/enabled", "/admin/api/v1/tasks", "/admin/api/v1/tasks/delete", "/admin/api/v1/tasks/enabled", "/admin/api/v1/tasks/run", "/admin/api/v1/schedules", "/admin/api/v1/schedules/update", "/admin/api/v1/schedules/enabled", "/admin/api/v1/schedules/delete", "/admin/api/v1/event-mappings", "/admin/api/v1/event-mappings/update", "/admin/api/v1/event-mappings/enabled", "/admin/api/v1/event-mappings/delete", "/admin/api/v1/identities", "/admin/api/v1/identities/revoke", "/admin/api/v1/jobs/cancel", "/admin/api/v1/jobs/requeue", "/admin/api/v1/retention/update", "/admin/api/v1/retention/run", "/api/v1/events"} else ["GET"],
     )
     for path in exposed_paths(settings.surface)
 ]
@@ -225,9 +231,14 @@ if settings.surface == "public":
 async def lifespan(_: Starlette):
     if mcp_server is None:
         async def schedule_loop():
+            loop = asyncio.get_running_loop()
+            next_retention_check = 0.0
             while True:
                 await asyncio.to_thread(control_plane.run_due_schedules)
                 await asyncio.to_thread(control_plane.run_due_event_triggers)
+                if loop.time() >= next_retention_check:
+                    await asyncio.to_thread(control_plane.run_retention, "automatic-retention", True)
+                    next_retention_check = loop.time() + 86_400
                 await asyncio.sleep(15)
         task = asyncio.create_task(schedule_loop())
         try:

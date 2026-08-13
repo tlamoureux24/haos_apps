@@ -153,3 +153,13 @@ class EventMappingEnabledRequest(EventMappingIdRequest):
 
 class EventMappingUpdateRequest(EventMappingCreateRequest):
     mapping_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+
+
+class RetentionPolicyRequest(StrictContract):
+    retention_days: int = Field(ge=7, le=3650)
+    batch_size: int = Field(ge=10, le=1000)
+    automatic: bool
+
+
+class RetentionRunRequest(StrictContract):
+    confirm: Literal[True]

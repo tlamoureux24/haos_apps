@@ -31,6 +31,8 @@ from agent_gateway.contracts import (
     ScheduleEnabledRequest,
     ScheduleIdRequest,
     ScheduleUpdateRequest,
+    RetentionPolicyRequest,
+    RetentionRunRequest,
 )
 from agent_gateway.connectors import discover_streamable_http, validate_streamable_http_url
 from agent_gateway.control_plane import (
@@ -510,6 +512,35 @@ async def admin_export_audit(request: Request) -> Response:
         media_type="application/x-ndjson",
         headers={"Content-Disposition": 'attachment; filename="agent-gateway-audit-v1.jsonl"'},
     )
+
+
+async def admin_retention_status(request: Request) -> JSONResponse:
+    status = await run_in_threadpool(request.app.state.control_plane.retention_status)
+    return JSONResponse(status)
+
+
+async def admin_update_retention(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, RetentionPolicyRequest)
+        await run_in_threadpool(request.app.state.control_plane.set_retention_policy, contract.retention_days, contract.batch_size, contract.automatic, correlation_id)
+    except (OverflowError, ValueError, ValidationError):
+        return error_response(422, "invalid_retention_policy", correlation_id)
+    return JSONResponse(await run_in_threadpool(request.app.state.control_plane.retention_status))
+
+
+async def admin_run_retention(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        await json_contract(request, RetentionRunRequest)
+        deleted = await run_in_threadpool(request.app.state.control_plane.run_retention, correlation_id, False)
+    except (OverflowError, ValueError, ValidationError):
+        return error_response(422, "invalid_retention_request", correlation_id)
+    return JSONResponse({"deleted": deleted})
 
 
 async def authenticated_collection(

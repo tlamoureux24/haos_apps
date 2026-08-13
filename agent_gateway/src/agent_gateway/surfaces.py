@@ -40,6 +40,9 @@ def exposed_paths(surface: str) -> tuple[str, ...]:
             "/admin/api/v1/reports",
             "/admin/api/v1/audit",
             "/admin/api/v1/audit/export",
+            "/admin/api/v1/retention",
+            "/admin/api/v1/retention/update",
+            "/admin/api/v1/retention/run",
             *HEALTH_PATHS,
         )
     if surface == "public":

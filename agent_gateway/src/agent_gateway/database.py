@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import sqlite3
 import sys
+from contextlib import contextmanager
+from collections.abc import Iterator
 from pathlib import Path
 
 
@@ -139,12 +141,17 @@ CREATE TABLE intake_rate_windows(
 """
 
 
-def connect(path: Path) -> sqlite3.Connection:
+@contextmanager
+def connect(path: Path) -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(path, timeout=5)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys=ON")
     connection.execute("PRAGMA busy_timeout=5000")
-    return connection
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
 
 
 def initialize_database(path: Path) -> None:
