@@ -133,7 +133,6 @@ jobs:
             "${trace_root}/s6-package-executables.txt" \
             > agent_gateway-apparmor-executables.txt
           grep -Fx '/init' agent_gateway-apparmor-executables.txt
-          grep -E '/s6-(svscan|supervise)$' agent_gateway-apparmor-executables.txt
 
       - name: Upload AppArmor executable inventory
         uses: actions/upload-artifact@v6
