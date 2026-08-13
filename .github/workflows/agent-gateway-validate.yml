@@ -272,7 +272,7 @@ jobs:
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/connectors | \
-            jq -e --arg id "${connector_id}" '.count == 1 and .connectors[0].id == $id and .connectors[0].status == "ready" and .connectors[0].tool_count == 8 and (.connectors[0] | has("protected_config") | not)'
+            jq -e --arg id "${connector_id}" '.count == 2 and any(.connectors[]; .id == $id and .status == "ready" and .tool_count == 8 and (has("protected_config") | not))'
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             "http://127.0.0.1:18099/admin/api/v1/connectors/tools?connector_id=${connector_id}" | \
