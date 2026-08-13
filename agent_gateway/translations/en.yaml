@@ -2,6 +2,9 @@ configuration:
   log_level:
     name: Log level
     description: Controls the verbosity of the App technical logs. Secrets remain redacted at every level.
+  intake_rate_limit_per_minute:
+    name: Events per minute limit
+    description: Maximum new events accepted per minute for each identity. Idempotent replays are not counted.
 network:
   8098/tcp:
     name: MCP and event port

@@ -1,6 +1,6 @@
 name: "Agent Gateway"
 slug: "agent_gateway"
-version: "0.7.0"
+version: "0.8.0"
 description: "Governed automation gateway for MCP-compatible agents"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/agent_gateway"
 arch:
@@ -29,6 +29,8 @@ ports_description:
 
 options:
   log_level: "info"
+  intake_rate_limit_per_minute: 30
 
 schema:
   log_level: "list(debug|info|warning|error)"
+  intake_rate_limit_per_minute: "int(1,600)"

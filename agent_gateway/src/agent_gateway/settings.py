@@ -14,6 +14,7 @@ class Settings:
     surface: str
     log_level: str
     ingress_proxy_ip: str
+    intake_rate_limit_per_minute: int
 
     @property
     def database_path(self) -> Path:
@@ -32,9 +33,16 @@ def load_settings() -> Settings:
         ipaddress.ip_address(ingress_proxy_ip)
     except ValueError as exc:
         raise RuntimeError("Invalid AGENT_GATEWAY_INGRESS_PROXY_IP") from exc
+    try:
+        intake_rate_limit = int(os.environ.get("AGENT_GATEWAY_INTAKE_RATE_LIMIT", "30"))
+    except ValueError as exc:
+        raise RuntimeError("Invalid AGENT_GATEWAY_INTAKE_RATE_LIMIT") from exc
+    if not 1 <= intake_rate_limit <= 600:
+        raise RuntimeError("AGENT_GATEWAY_INTAKE_RATE_LIMIT must be between 1 and 600")
     return Settings(
         data_dir=Path(os.environ.get("AGENT_GATEWAY_DATA_DIR", "/data")),
         surface=surface,
         log_level=log_level,
         ingress_proxy_ip=ingress_proxy_ip,
+        intake_rate_limit_per_minute=intake_rate_limit,
     )

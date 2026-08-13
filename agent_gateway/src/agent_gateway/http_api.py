@@ -22,6 +22,7 @@ from agent_gateway.control_plane import (
     AuthorizationError,
     ControlPlane,
     QueueFullError,
+    RateLimitExceeded,
     canonical_json,
 )
 from agent_gateway.security import token_credential_id
@@ -311,6 +312,11 @@ async def create_event(request: Request) -> JSONResponse:
     except QueueFullError:
         await audit_denial(request, "events.create", "queue_full", identity)
         return error_response(503, "queue_full", correlation_id)
+    except RateLimitExceeded:
+        await audit_denial(request, "events.create", "rate_limited", identity)
+        response = error_response(429, "rate_limited", correlation_id)
+        response.headers["Retry-After"] = "60"
+        return response
     except (ValueError, ValidationError):
         await audit_denial(request, "events.create", "invalid_request", identity)
         return error_response(422, "invalid_request", correlation_id)

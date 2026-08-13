@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 
 
-EXPECTED_REVISION = "0002_control_plane"
+EXPECTED_REVISION = "0003_intake_rate_limits"
 
 
 def connect(path: Path) -> sqlite3.Connection:

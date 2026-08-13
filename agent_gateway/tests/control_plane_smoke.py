@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from agent_gateway.control_plane import AuthenticationError, ControlPlane
@@ -26,9 +27,19 @@ event = {
     "attributes": {"state": "off"},
     "requested_task": "gatus_readonly_diagnostic",
 }
-first = control_plane.ingest_event(identity, "ci-stable-key", event, "ci-event")
-replay = control_plane.ingest_event(identity, "ci-stable-key", event, "ci-replay")
-assert replay.duplicate and first.event_id == replay.event_id and first.job_id == replay.job_id
+with ThreadPoolExecutor(max_workers=8) as executor:
+    results = list(
+        executor.map(
+            lambda index: control_plane.ingest_event(
+                identity, "ci-stable-key", event, f"ci-concurrent-{index}"
+            ),
+            range(16),
+        )
+    )
+first = results[0]
+assert len({result.event_id for result in results}) == 1
+assert len({result.job_id for result in results}) == 1
+assert sum(not result.duplicate for result in results) == 1
 
 try:
     control_plane.authenticate(created.credential.token[:-1] + "x")

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0
+
+- Add a persistent, transactional per-identity event intake limit, configurable
+  from 1 to 600 new events per minute and defaulting to 30.
+- Exempt idempotent replays from the quota and return audited HTTP 429 responses
+  with a bounded `Retry-After` value when the limit is reached.
+- Add the `0003_intake_rate_limits` migration so quota state survives listener
+  restarts without affecting existing identities, events or jobs.
+
 ## 0.7.0
 
 - Add CSRF-protected cancellation for queued jobs from the Ingress task view.

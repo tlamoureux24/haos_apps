@@ -157,7 +157,11 @@ routes = [
     )
     for path in exposed_paths(settings.surface)
 ]
-control_plane = ControlPlane(settings.database_path, settings.data_dir / "private")
+control_plane = ControlPlane(
+    settings.database_path,
+    settings.data_dir / "private",
+    intake_rate_limit_per_minute=settings.intake_rate_limit_per_minute,
+)
 mcp_server = create_mcp(control_plane) if settings.surface == "public" else None
 mcp_application = mcp_server.streamable_http_app() if mcp_server else None
 

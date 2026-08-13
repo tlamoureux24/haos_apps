@@ -131,8 +131,9 @@ jobs:
           docker run --detach \
             --name agent-gateway-smoke \
             --network agent-gateway-smoke \
-            --cap-drop DAC_OVERRIDE \
-            --env "AGENT_GATEWAY_INGRESS_PROXY_IP=${ingress_proxy_ip}" \
+          --cap-drop DAC_OVERRIDE \
+          --env "AGENT_GATEWAY_INGRESS_PROXY_IP=${ingress_proxy_ip}" \
+          --env "AGENT_GATEWAY_INTAKE_RATE_LIMIT=1" \
             --publish 127.0.0.1:18098:8098 \
             --publish 127.0.0.1:18099:8099 \
             --volume "${root}/data:/data" \
@@ -215,6 +216,16 @@ jobs:
             --data "${event_payload}" \
             http://127.0.0.1:18098/api/v1/events)" = "200"
           test "$(jq -r '.event_id' /tmp/event-first.json)" = "$(jq -r '.event_id' /tmp/event-replay.json)"
+          test "$(curl --silent --dump-header /tmp/rate-limit-headers.txt \
+            --output /tmp/rate-limit.json --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer ${credential}" \
+            --header "Idempotency-Key: ci-api-second-key" \
+            --header "Content-Type: application/json" \
+            --data "${event_payload}" \
+            http://127.0.0.1:18098/api/v1/events)" = "429"
+          jq -e '.error.code == "rate_limited"' /tmp/rate-limit.json
+          grep -qi '^retry-after: 60' /tmp/rate-limit-headers.txt
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/events | \

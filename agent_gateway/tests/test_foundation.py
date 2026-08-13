@@ -36,6 +36,20 @@ class SettingsTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 load_settings()
 
+    def test_accepts_configured_intake_rate_limit(self) -> None:
+        with patch.dict(
+            os.environ, {"AGENT_GATEWAY_INTAKE_RATE_LIMIT": "42"}, clear=True
+        ):
+            settings = load_settings()
+        self.assertEqual(settings.intake_rate_limit_per_minute, 42)
+
+    def test_rejects_out_of_range_intake_rate_limit(self) -> None:
+        with patch.dict(
+            os.environ, {"AGENT_GATEWAY_INTAKE_RATE_LIMIT": "0"}, clear=True
+        ):
+            with self.assertRaises(RuntimeError):
+                load_settings()
+
 
 class DatabaseReadinessTests(unittest.TestCase):
     def test_missing_database_is_not_ready(self) -> None:
@@ -48,7 +62,7 @@ class DatabaseReadinessTests(unittest.TestCase):
             connection.executescript(
                 """
                 CREATE TABLE alembic_version(version_num TEXT PRIMARY KEY);
-                INSERT INTO alembic_version VALUES('0002_control_plane');
+                INSERT INTO alembic_version VALUES('0003_intake_rate_limits');
                 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 INSERT INTO gateway_metadata VALUES('application', 'agent_gateway');
                 """

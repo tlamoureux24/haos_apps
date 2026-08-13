@@ -74,11 +74,22 @@ class QueueFullError(RuntimeError):
     pass
 
 
+class RateLimitExceeded(RuntimeError):
+    pass
+
+
 class ControlPlane:
-    def __init__(self, database_path: Path, private_dir: Path, queue_limit: int = 1000):
+    def __init__(
+        self,
+        database_path: Path,
+        private_dir: Path,
+        queue_limit: int = 1000,
+        intake_rate_limit_per_minute: int = 30,
+    ):
         self.database_path = database_path
         self.pepper = load_or_create_pepper(private_dir / "credential-pepper")
         self.queue_limit = queue_limit
+        self.intake_rate_limit_per_minute = intake_rate_limit_per_minute
 
     def create_identity(
         self,
@@ -502,6 +513,23 @@ class ControlPlane:
             ).fetchone()
             if existing:
                 return IntakeResult(existing["event_id"], existing["job_id"], True)
+            window_started_at = now[:16] + ":00.000Z"
+            rate = connection.execute(
+                "SELECT window_started_at,request_count FROM intake_rate_windows WHERE identity_id=?",
+                (identity.identity_id,),
+            ).fetchone()
+            if rate is None or rate["window_started_at"] != window_started_at:
+                connection.execute(
+                    "INSERT INTO intake_rate_windows(identity_id,window_started_at,request_count) VALUES(?,?,1) ON CONFLICT(identity_id) DO UPDATE SET window_started_at=excluded.window_started_at,request_count=1",
+                    (identity.identity_id, window_started_at),
+                )
+            elif rate["request_count"] >= self.intake_rate_limit_per_minute:
+                raise RateLimitExceeded("rate_limited")
+            else:
+                connection.execute(
+                    "UPDATE intake_rate_windows SET request_count=request_count+1 WHERE identity_id=?",
+                    (identity.identity_id,),
+                )
             queued = connection.execute(
                 "SELECT count(*) FROM jobs WHERE state IN ('queued','leased')"
             ).fetchone()[0]
