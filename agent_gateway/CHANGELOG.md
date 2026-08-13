@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0
+
+- Replace the unbounded task tool checklist with a compact connector and tool
+  selector that can add any number of tools from any ready MCP connector.
+- Display only tool names in the task composer while retaining detailed tool
+  documentation on the Connectors page.
+- Derive the internal task identifier automatically from its visible name and
+  remove that implementation detail from the administration interface.
+- Use the same compact green/red task readiness indicator as connectors.
+
 ## 0.16.0
 
 - Add the first generic task composer: name an objective and select exact tools
