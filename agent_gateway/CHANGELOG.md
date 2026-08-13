@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- Add CSRF-protected cancellation for queued jobs from the Ingress task view.
+- Make cancellation an atomic `queued` to `cancelled` transition and reject
+  missing or already terminal jobs without changing their state.
+- Audit successful cancellations and every rejected cancellation request while
+  keeping the mutation endpoint absent from the public listener.
+
 ## 0.6.0
 
 - Add an Ingress-only audit view showing the 200 newest allowed and denied

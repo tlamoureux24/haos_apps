@@ -301,6 +301,37 @@ class ControlPlane:
         result["input"] = redact(json.loads(result.pop("input_json")))
         return result
 
+    def cancel_job(self, job_id: str, correlation_id: str) -> str:
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT state FROM jobs WHERE id=?", (job_id,)
+            ).fetchone()
+            if row is None:
+                return "not_found"
+            if row["state"] != "queued":
+                return "not_cancellable"
+            updated = connection.execute(
+                "UPDATE jobs SET state='cancelled',updated_at=? WHERE id=? AND state='queued'",
+                (now, job_id),
+            ).rowcount
+            if updated != 1:
+                return "not_cancellable"
+            self._append_audit(
+                connection,
+                actor_identity_id=None,
+                credential_id=None,
+                action="jobs.cancel",
+                target_type="job",
+                target_id=job_id,
+                decision="allowed",
+                reason_code="ingress_admin",
+                correlation_id=correlation_id,
+                metadata={"previous_state": "queued"},
+            )
+        return "cancelled"
+
     def list_reports(self, limit: int = 100) -> list[dict[str, object]]:
         with connect(self.database_path) as connection:
             rows = connection.execute(

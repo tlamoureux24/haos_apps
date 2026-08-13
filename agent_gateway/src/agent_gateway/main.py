@@ -24,6 +24,7 @@ from agent_gateway.http_api import (
     admin_list_events,
     admin_list_identities,
     admin_list_jobs,
+    admin_cancel_job,
     admin_list_reports,
     admin_list_audit,
     admin_export_audit,
@@ -137,6 +138,7 @@ route_handlers = {
     "/admin/api/v1/identities/revoke": admin_revoke_identity,
     "/admin/api/v1/events": admin_list_events,
     "/admin/api/v1/jobs": admin_list_jobs,
+    "/admin/api/v1/jobs/cancel": admin_cancel_job,
     "/admin/api/v1/reports": admin_list_reports,
     "/admin/api/v1/audit": admin_list_audit,
     "/admin/api/v1/audit/export": admin_export_audit,
@@ -151,7 +153,7 @@ routes = [
     Route(
         path,
         route_handlers[path],
-        methods=["POST"] if path in {"/admin/api/v1/identities", "/admin/api/v1/identities/revoke", "/api/v1/events"} else ["GET"],
+        methods=["POST"] if path in {"/admin/api/v1/identities", "/admin/api/v1/identities/revoke", "/admin/api/v1/jobs/cancel", "/api/v1/events"} else ["GET"],
     )
     for path in exposed_paths(settings.surface)
 ]

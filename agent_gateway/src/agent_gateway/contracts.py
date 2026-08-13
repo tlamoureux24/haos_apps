@@ -26,6 +26,10 @@ class IdentityRevokeRequest(StrictContract):
     identity_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
 
 
+class JobCancelRequest(StrictContract):
+    job_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+
+
 class EventSubject(StrictContract):
     entity_id: str = Field(min_length=3, max_length=255)
 

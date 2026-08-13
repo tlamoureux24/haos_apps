@@ -10,7 +10,12 @@ from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from agent_gateway.contracts import EventCreateRequest, IdentityCreateRequest, IdentityRevokeRequest
+from agent_gateway.contracts import (
+    EventCreateRequest,
+    IdentityCreateRequest,
+    IdentityRevokeRequest,
+    JobCancelRequest,
+)
 from agent_gateway.control_plane import (
     AuthenticatedIdentity,
     AuthenticationError,
@@ -98,6 +103,33 @@ async def admin_list_events(request: Request) -> JSONResponse:
 async def admin_list_jobs(request: Request) -> JSONResponse:
     jobs = await run_in_threadpool(request.app.state.control_plane.list_jobs)
     return JSONResponse({"jobs": jobs, "limit": 100})
+
+
+async def admin_cancel_job(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        await audit_denial(request, "jobs.cancel", "csrf_failed")
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, JobCancelRequest)
+        result = await run_in_threadpool(
+            request.app.state.control_plane.cancel_job,
+            contract.job_id,
+            correlation_id,
+        )
+    except OverflowError:
+        await audit_denial(request, "jobs.cancel", "body_too_large")
+        return error_response(413, "body_too_large", correlation_id)
+    except (ValueError, ValidationError):
+        await audit_denial(request, "jobs.cancel", "invalid_request")
+        return error_response(422, "invalid_request", correlation_id)
+    if result == "not_found":
+        await audit_denial(request, "jobs.cancel", "job_not_found")
+        return error_response(404, "job_not_found", correlation_id)
+    if result == "not_cancellable":
+        await audit_denial(request, "jobs.cancel", "job_not_cancellable")
+        return error_response(409, "job_not_cancellable", correlation_id)
+    return JSONResponse({"job_id": contract.job_id, "state": "cancelled"})
 
 
 async def admin_list_reports(request: Request) -> JSONResponse:
