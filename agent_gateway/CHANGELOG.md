@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.40.3
+
+- Complete the exact s6 stop/restart allowlist with its three generated
+  `.s6-svscan` termination scripts and the exact `s6-svc` alias and target.
+- Allow directory enumeration of `/app` separately from recursive file reads.
+- Disable Python bytecode generation at runtime instead of granting write
+  access to source-tree `__pycache__` directories.
+
 ## 0.40.2
 
 - Resolve the complete strict-mode startup denial batch captured from HAOS:

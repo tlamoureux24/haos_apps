@@ -3,6 +3,7 @@ set -eu
 
 runtime_uid=1000
 runtime_gid=1000
+export PYTHONDONTWRITEBYTECODE=1
 
 chown "${runtime_uid}:${runtime_gid}" /data
 su-exec agent-gateway:agent-gateway install -d -m 0700 /data/private

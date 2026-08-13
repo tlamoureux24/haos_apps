@@ -40,7 +40,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.40.2"',
+        'version: "0.40.3"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -119,6 +119,8 @@ def main() -> int:
         raise RuntimeError("Missing isolated admin listener")
     if "AGENT_GATEWAY_SURFACE=public" not in launcher:
         raise RuntimeError("Missing isolated public listener")
+    if "export PYTHONDONTWRITEBYTECODE=1" not in launcher:
+        raise RuntimeError("Runtime must not attempt bytecode writes inside /app")
     if "capability sys_admin" in apparmor or "network raw" in apparmor:
         raise RuntimeError("AppArmor grants an excessive capability")
     if "complain" in apparmor:
