@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1
+
+- Replace each administration loading state independently with either its data,
+  a proper empty state or a visible bounded error state.
+- Add authenticated public read APIs for events, jobs and reports, protected by
+  their separate deny-by-default policy actions.
+- Audit missing, invalid and insufficient credentials on all new read surfaces.
+
 ## 0.3.0
 
 - Activate the Events, Jobs and Reports navigation pages in the Ingress UI.

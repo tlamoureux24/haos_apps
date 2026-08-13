@@ -80,6 +80,8 @@ class PublicSurfaceTests(unittest.TestCase):
             paths,
             {
                 "/api/v1/events",
+                "/api/v1/jobs",
+                "/api/v1/reports",
                 "/api/v1/permissions/effective",
                 "/health/live",
                 "/health/ready",

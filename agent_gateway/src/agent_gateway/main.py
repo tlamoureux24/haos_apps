@@ -28,6 +28,9 @@ from agent_gateway.http_api import (
     admin_status,
     create_event,
     effective_permissions,
+    list_events,
+    list_jobs,
+    list_reports,
 )
 from agent_gateway.settings import load_settings
 from agent_gateway.surfaces import exposed_paths
@@ -131,6 +134,8 @@ route_handlers = {
     "/admin/api/v1/jobs": admin_list_jobs,
     "/admin/api/v1/reports": admin_list_reports,
     "/api/v1/events": create_event,
+    "/api/v1/jobs": list_jobs,
+    "/api/v1/reports": list_reports,
     "/api/v1/permissions/effective": effective_permissions,
     "/health/live": live,
     "/health/ready": ready,
@@ -145,6 +150,8 @@ routes = [
 ]
 if settings.surface == "admin":
     routes.append(Route("/admin/api/v1/identities", admin_list_identities, methods=["GET"]))
+if settings.surface == "public":
+    routes.append(Route("/api/v1/events", list_events, methods=["GET"]))
 
 app = Starlette(
     debug=False,

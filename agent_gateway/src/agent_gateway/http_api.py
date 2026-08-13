@@ -104,6 +104,40 @@ async def admin_list_reports(request: Request) -> JSONResponse:
     return JSONResponse({"reports": reports, "limit": 100})
 
 
+async def authenticated_collection(
+    request: Request, action: str, loader_name: str, response_key: str
+) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    token = ""
+    identity = None
+    try:
+        token = bearer_token(request)
+        identity = await run_in_threadpool(request.app.state.control_plane.authenticate, token)
+        request.app.state.control_plane.authorize(identity, action)
+        items = await run_in_threadpool(
+            getattr(request.app.state.control_plane, loader_name)
+        )
+    except AuthenticationError as exc:
+        await audit_denial(request, action, str(exc), token=token)
+        return error_response(401, str(exc), correlation_id)
+    except AuthorizationError as exc:
+        await audit_denial(request, action, exc.reason_code, identity)
+        return error_response(403, exc.reason_code, correlation_id)
+    return JSONResponse({response_key: items, "limit": 100})
+
+
+async def list_events(request: Request) -> JSONResponse:
+    return await authenticated_collection(request, "events.read", "list_events", "events")
+
+
+async def list_jobs(request: Request) -> JSONResponse:
+    return await authenticated_collection(request, "jobs.read", "list_jobs", "jobs")
+
+
+async def list_reports(request: Request) -> JSONResponse:
+    return await authenticated_collection(request, "reports.read", "list_reports", "reports")
+
+
 async def admin_create_identity(request: Request) -> JSONResponse:
     correlation_id = request.state.correlation_id
     if not csrf_valid(request):
