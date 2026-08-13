@@ -68,6 +68,8 @@ jobs:
           cleanup() {
             docker logs agent-gateway-apparmor-audit 2>&1 || true
             docker rm --force agent-gateway-apparmor-audit >/dev/null 2>&1 || true
+            docker logs agent-gateway-s6-inventory 2>&1 || true
+            docker rm --force agent-gateway-s6-inventory >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
@@ -95,7 +97,44 @@ jobs:
             --output "${trace_root}/executables.txt"
           test -s "${trace_root}/executables.txt"
           grep -Fx '/bin/sh' "${trace_root}/executables.txt"
-          cp "${trace_root}/executables.txt" agent_gateway-apparmor-executables.txt
+
+          docker run --detach \
+            --name agent-gateway-s6-inventory \
+            --publish 127.0.0.1:28098:8098 \
+            --volume "${trace_root}/data:/data" \
+            "agent-gateway:${version}"
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:28098/health/ready >/dev/null; then
+              break
+            fi
+            if [ "${attempt}" = 60 ]; then
+              exit 1
+            fi
+            sleep 1
+          done
+
+          docker exec agent-gateway-s6-inventory /bin/sh -c '
+            for process in /proc/[0-9]*; do
+              readlink -f "${process}/exe" 2>/dev/null || true
+            done
+          ' > "${trace_root}/s6-running-executables.txt"
+          docker run --rm --entrypoint /bin/sh "agent-gateway:${version}" -c '
+            find /package -type f -perm /111 -print
+            find /command -maxdepth 1 -type l -print
+            for executable in /command/*; do
+              readlink -f "${executable}" 2>/dev/null || true
+            done
+          ' > "${trace_root}/s6-package-executables.txt"
+          docker stop --time 15 agent-gateway-s6-inventory >/dev/null
+
+          sort -u \
+            "${trace_root}/executables.txt" \
+            "${trace_root}/s6-running-executables.txt" \
+            "${trace_root}/s6-package-executables.txt" \
+            > agent_gateway-apparmor-executables.txt
+          grep -Fx '/init' agent_gateway-apparmor-executables.txt
+          grep -Fx '/package/admin/s6-overlay-3.2.2.0/command/s6-svscan' \
+            agent_gateway-apparmor-executables.txt
 
       - name: Upload AppArmor executable inventory
         uses: actions/upload-artifact@v6
