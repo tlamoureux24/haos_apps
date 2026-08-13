@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "2"
+SCHEMA_GENERATION = "3"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO gateway_metadata VALUES('application','agent_gateway');
-INSERT INTO gateway_metadata VALUES('schema_generation','2');
+INSERT INTO gateway_metadata VALUES('schema_generation','3');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -34,6 +34,21 @@ CREATE TABLE policy_bindings(
   identity_id TEXT PRIMARY KEY,policy_revision_id TEXT NOT NULL,bound_at TEXT NOT NULL,
   FOREIGN KEY(identity_id) REFERENCES identities(id) ON DELETE CASCADE,
   FOREIGN KEY(policy_revision_id) REFERENCES policy_revisions(id));
+CREATE TABLE task_definitions(
+  id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL);
+CREATE TABLE task_revisions(
+  id TEXT PRIMARY KEY,task_definition_id TEXT NOT NULL,revision INTEGER NOT NULL,
+  objective TEXT NOT NULL,input_schema_json TEXT NOT NULL,report_schema_json TEXT NOT NULL,
+  max_attempts INTEGER NOT NULL,created_at TEXT NOT NULL,
+  FOREIGN KEY(task_definition_id) REFERENCES task_definitions(id),
+  UNIQUE(task_definition_id,revision),CHECK(max_attempts BETWEEN 1 AND 10));
+INSERT INTO task_definitions VALUES('gatus-readonly','gatus_readonly_diagnostic','2026-08-13T00:00:00.000Z');
+INSERT INTO task_revisions VALUES(
+  'gatus-readonly-v1','gatus-readonly',1,
+  'Diagnostiquer en lecture seule l’indisponibilité signalée et produire un rapport structuré.',
+  '{"schema_version":1,"type":"gatus.endpoint_unavailable"}',
+  '{"schema_version":1,"required":["summary","observations"]}',3,
+  '2026-08-13T00:00:00.000Z');
 CREATE TABLE events(
   id TEXT PRIMARY KEY,source_identity_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,
   schema_version INTEGER NOT NULL,event_type TEXT NOT NULL,occurred_at TEXT NOT NULL,
@@ -43,9 +58,10 @@ CREATE TABLE events(
 CREATE INDEX ix_events_received ON events(received_at);
 CREATE TABLE jobs(
   id TEXT PRIMARY KEY,event_id TEXT,task_name TEXT NOT NULL,state TEXT NOT NULL,
-  policy_revision_id TEXT NOT NULL,input_json TEXT NOT NULL,created_at TEXT NOT NULL,
+  policy_revision_id TEXT NOT NULL,task_revision_id TEXT NOT NULL,input_json TEXT NOT NULL,created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,FOREIGN KEY(event_id) REFERENCES events(id),
   FOREIGN KEY(policy_revision_id) REFERENCES policy_revisions(id),
+  FOREIGN KEY(task_revision_id) REFERENCES task_revisions(id),
   CHECK(state IN ('queued','leased','completed','failed','cancelled','dead_letter')));
 CREATE INDEX ix_jobs_state_created ON jobs(state,created_at);
 CREATE TABLE job_attempts(

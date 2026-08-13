@@ -232,7 +232,7 @@ jobs:
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/jobs | \
-            jq -e '.jobs | length == 3 and any(.state == "queued") and any(.state == "completed") and any(.state == "failed")'
+            jq -e '.jobs | length == 3 and any(.state == "queued") and any(.state == "completed") and any(.state == "dead_letter")'
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/reports | \
@@ -297,6 +297,21 @@ jobs:
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":6,"method":"tools/list","params":{}}' \
             http://127.0.0.1:18098/mcp | jq -e '.result.tools | map(.name) == ["permissions_get_effective_v1"]'
+          worker_response="$(curl --fail --silent \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data '{"display_name":"CI MCP worker","identity_type":"client","actions":["jobs.claim","jobs.heartbeat","jobs.complete","jobs.fail"]}' \
+            http://127.0.0.1:18099/admin/api/v1/identities)"
+          worker_credential="$(printf '%s' "${worker_response}" | jq -er '.credential')"
+          curl --fail --silent --request POST \
+            --header "Authorization: Bearer ${worker_credential}" \
+            --header 'Content-Type: application/json' \
+            --header 'Accept: application/json, text/event-stream' \
+            --data '{"jsonrpc":"2.0","id":7,"method":"tools/list","params":{}}' \
+            http://127.0.0.1:18098/mcp | jq -e '.result.tools | map(.name) == ["jobs_claim_v1","jobs_heartbeat_v1","jobs_complete_v1","jobs_fail_v1"]'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --request POST \
             --header "X-Ingress-Path: ${ingress_path}" \

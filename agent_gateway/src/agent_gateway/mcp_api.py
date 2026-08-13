@@ -161,11 +161,11 @@ def create_mcp(control_plane: ControlPlane) -> GovernedMCP:
         return {"job_id": job_id, "state": "completed", "report_id": report_id}
 
     @server.tool(name="jobs_fail_v1", structured_output=True)
-    def jobs_fail(job_id: str, lease_token: str, reason: str, ctx: Context) -> dict[str, object]:
+    def jobs_fail(job_id: str, lease_token: str, reason: str, retryable: bool, ctx: Context) -> dict[str, object]:
         """Finish an owned lease as failed with a bounded reason."""
         identity = control_plane.authenticate(request_token(ctx))
-        control_plane.fail_job(identity, job_id, lease_token, reason, "mcp-fail")
-        return {"job_id": job_id, "state": "failed"}
+        state = control_plane.fail_job(identity, job_id, lease_token, reason, retryable, "mcp-fail")
+        return {"job_id": job_id, "state": state}
 
     @server.tool(name="reports_list_v1", structured_output=True)
     def reports_list() -> dict[str, object]:

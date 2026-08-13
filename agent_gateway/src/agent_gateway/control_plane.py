@@ -299,8 +299,9 @@ class ControlPlane:
             rows = connection.execute(
                 """
                 SELECT j.id,j.event_id,j.task_name,j.state,j.created_at,j.updated_at,
-                       count(r.id) AS report_count
+                       count(DISTINCT r.id) AS report_count,count(DISTINCT a.id) AS attempt_count
                 FROM jobs j LEFT JOIN reports r ON r.job_id=j.id
+                LEFT JOIN job_attempts a ON a.job_id=j.id
                 GROUP BY j.id ORDER BY j.created_at DESC LIMIT ?
                 """,
                 (min(max(limit, 1), 100),),
@@ -311,9 +312,10 @@ class ControlPlane:
         with connect(self.database_path) as connection:
             row = connection.execute(
                 """
-                SELECT j.id,j.event_id,j.task_name,j.state,j.input_json,j.created_at,
-                       j.updated_at,count(r.id) AS report_count
+                SELECT j.id,j.event_id,j.task_name,j.state,j.task_revision_id,j.input_json,j.created_at,
+                       j.updated_at,count(DISTINCT r.id) AS report_count,count(DISTINCT a.id) AS attempt_count
                 FROM jobs j LEFT JOIN reports r ON r.job_id=j.id
+                LEFT JOIN job_attempts a ON a.job_id=j.id
                 WHERE j.id=? GROUP BY j.id
                 """,
                 (job_id,),
@@ -365,6 +367,21 @@ class ControlPlane:
         verifier = hmac.new(self.pepper, token.encode(), hashlib.sha256).hexdigest()
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
+            expired = connection.execute(
+                "SELECT a.id,a.job_id,a.attempt_number,t.max_attempts FROM job_attempts a JOIN jobs j ON j.id=a.job_id JOIN task_revisions t ON t.id=j.task_revision_id WHERE j.state='leased' AND a.finished_at IS NULL AND a.lease_expires_at<=?",
+                (now,),
+            ).fetchall()
+            for attempt in expired:
+                next_state = "queued" if attempt["attempt_number"] < attempt["max_attempts"] else "dead_letter"
+                connection.execute("UPDATE job_attempts SET finished_at=?,outcome='failed',failure_reason='lease_expired' WHERE id=?", (now, attempt["id"]))
+                connection.execute("UPDATE jobs SET state=?,updated_at=? WHERE id=? AND state='leased'", (next_state, now, attempt["job_id"]))
+                self._append_audit(connection, actor_identity_id=None, credential_id=None, action="jobs.lease_expire", target_type="job", target_id=attempt["job_id"], decision="recorded", reason_code=next_state, correlation_id=correlation_id, metadata={"attempt": attempt["attempt_number"]})
+            active = connection.execute(
+                "SELECT count(*) FROM job_attempts WHERE identity_id=? AND finished_at IS NULL AND lease_expires_at>?",
+                (identity.identity_id, now),
+            ).fetchone()[0]
+            if active >= 1:
+                return None
             row = connection.execute(
                 "SELECT id FROM jobs WHERE state='queued' ORDER BY created_at,id LIMIT 1"
             ).fetchone()
@@ -387,8 +404,11 @@ class ControlPlane:
             self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.claim", target_type="job", target_id=job_id, decision="allowed", reason_code="leased", correlation_id=correlation_id, metadata={"attempt": attempt_number})
         job = self.get_job(job_id)
         assert job is not None
-        job["objective"] = "Diagnostiquer en lecture seule l’indisponibilité signalée et produire un rapport structuré."
-        job["required_report_schema"] = {"schema_version": 1, "summary": "string", "observations": "array"}
+        with connect(self.database_path) as connection:
+            task = connection.execute("SELECT objective,input_schema_json,report_schema_json FROM task_revisions WHERE id=?", (job["task_revision_id"],)).fetchone()
+        job["objective"] = task["objective"]
+        job["input_schema"] = json.loads(task["input_schema_json"])
+        job["required_report_schema"] = json.loads(task["report_schema_json"])
         job["allowed_capabilities"] = []
         return LeaseResult(job, token, lease_expires)
 
@@ -447,7 +467,7 @@ class ControlPlane:
             self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.complete", target_type="job", target_id=job_id, decision="allowed", reason_code="completed", correlation_id=correlation_id, metadata={"report_id": report_id})
         return report_id
 
-    def fail_job(self, identity, job_id: str, lease_token: str, reason: str, correlation_id: str) -> None:
+    def fail_job(self, identity, job_id: str, lease_token: str, reason: str, retryable: bool, correlation_id: str) -> str:
         self.authorize(identity, "jobs.fail")
         if not reason.strip() or len(reason) > 500:
             raise ValueError("invalid_failure_reason")
@@ -456,8 +476,11 @@ class ControlPlane:
             connection.execute("BEGIN IMMEDIATE")
             attempt = self._leased_attempt(connection, identity, job_id, lease_token)
             connection.execute("UPDATE job_attempts SET finished_at=?,outcome='failed',failure_reason=? WHERE id=?", (now, reason.strip(), attempt["id"]))
-            connection.execute("UPDATE jobs SET state='failed',updated_at=? WHERE id=? AND state='leased'", (now, job_id))
-            self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.fail", target_type="job", target_id=job_id, decision="allowed", reason_code="failed", correlation_id=correlation_id, metadata={"reason": reason})
+            maximum = connection.execute("SELECT t.max_attempts FROM jobs j JOIN task_revisions t ON t.id=j.task_revision_id WHERE j.id=?", (job_id,)).fetchone()[0]
+            state = "queued" if retryable and attempt["attempt_number"] < maximum else ("dead_letter" if retryable else "failed")
+            connection.execute("UPDATE jobs SET state=?,updated_at=? WHERE id=? AND state='leased'", (state, now, job_id))
+            self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.fail", target_type="job", target_id=job_id, decision="allowed", reason_code=state, correlation_id=correlation_id, metadata={"reason": reason, "retryable": retryable})
+        return state
 
     def list_reports(self, limit: int = 100) -> list[dict[str, object]]:
         with connect(self.database_path) as connection:
@@ -667,9 +690,12 @@ class ControlPlane:
                     payload,
                 ),
             )
+            task_revision = connection.execute("SELECT r.id FROM task_revisions r JOIN task_definitions d ON d.id=r.task_definition_id WHERE d.name=? ORDER BY r.revision DESC LIMIT 1", (task_name,)).fetchone()
+            if task_revision is None:
+                raise ValueError("Unknown task revision")
             connection.execute(
-                "INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,input_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
-                (job_id, event_id, task_name, "queued", identity.policy_revision_id, payload, now, now),
+                "INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                (job_id, event_id, task_name, "queued", identity.policy_revision_id, task_revision["id"], payload, now, now),
             )
             self._append_audit(
                 connection,

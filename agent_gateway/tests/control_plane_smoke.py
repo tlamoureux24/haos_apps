@@ -85,7 +85,28 @@ assert control_plane.complete_job(
 failed = control_plane.ingest_event(identity, "ci-failure-key", event, "ci-failure-event")
 failed_lease = control_plane.claim_job(worker, "ci-failure-claim")
 assert failed_lease is not None and failed_lease.job["id"] == failed.job_id
-control_plane.fail_job(worker, failed.job_id, failed_lease.lease_token, "bounded CI failure", "ci-fail")
+with sqlite3.connect(database) as connection:
+    connection.execute(
+        "UPDATE job_attempts SET lease_expires_at='2000-01-01T00:00:00.000Z' WHERE job_id=? AND finished_at IS NULL",
+        (failed.job_id,),
+    )
+failed_lease = control_plane.claim_job(worker, "ci-expired-reclaim")
+assert failed_lease is not None and failed_lease.job["id"] == failed.job_id
+for attempt_number in range(2, 4):
+    state = control_plane.fail_job(
+        worker,
+        failed.job_id,
+        failed_lease.lease_token,
+        "bounded transient CI failure",
+        True,
+        f"ci-fail-{attempt_number}",
+    )
+    if attempt_number < 3:
+        assert state == "queued"
+        failed_lease = control_plane.claim_job(worker, f"ci-retry-{attempt_number}")
+        assert failed_lease is not None and failed_lease.job["id"] == failed.job_id
+    else:
+        assert state == "dead_letter"
 
 try:
     control_plane.authenticate(created.credential.token[:-1] + "x")
@@ -97,6 +118,6 @@ else:
 with sqlite3.connect(database) as connection:
     assert connection.execute("SELECT count(*) FROM events").fetchone()[0] == 2
     assert connection.execute("SELECT count(*) FROM jobs").fetchone()[0] == 2
-    assert {row[0] for row in connection.execute("SELECT state FROM jobs")} == {"completed", "failed"}
+    assert {row[0] for row in connection.execute("SELECT state FROM jobs")} == {"completed", "dead_letter"}
     assert connection.execute("SELECT count(*) FROM reports").fetchone()[0] == 1
-    assert connection.execute("SELECT count(*) FROM job_attempts").fetchone()[0] == 2
+    assert connection.execute("SELECT count(*) FROM job_attempts").fetchone()[0] == 4

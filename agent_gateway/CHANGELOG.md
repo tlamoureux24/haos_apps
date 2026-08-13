@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.0
+
+- Complete the phase-two queue foundation with an immutable versioned
+  `gatus_readonly_diagnostic` task definition and schema references on jobs.
+- Requeue transient failures and expired leases up to three attempts, then move
+  the job to the visible dead-letter state while retaining every attempt.
+- Limit each reasoning identity to one active lease and expose attempt counts in
+  the administration task view.
+
 ## 0.10.0
 
 - Add the first complete reasoning-client loop: atomic claim, bounded heartbeat,
