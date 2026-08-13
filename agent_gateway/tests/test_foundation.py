@@ -98,6 +98,18 @@ class DatabaseReadinessTests(unittest.TestCase):
                 initialize_database(path)
             self.assertFalse(database_ready(path))
 
+    def test_generation_six_is_upgraded_without_data_loss(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "gateway.db"
+            initialize_database(path)
+            with sqlite3.connect(path) as connection:
+                connection.execute("DROP TABLE schedules")
+                connection.execute("UPDATE gateway_metadata SET value='6' WHERE key='schema_generation'")
+            initialize_database(path)
+            self.assertTrue(database_ready(path))
+            with sqlite3.connect(path) as connection:
+                self.assertEqual(connection.execute("SELECT count(*) FROM schedules").fetchone()[0], 0)
+
 
 class PublicSurfaceTests(unittest.TestCase):
     def test_public_root_is_not_exposed(self) -> None:
@@ -257,6 +269,28 @@ class TaskCompositionTests(unittest.TestCase):
             control_plane = ControlPlane(path, root / "private")
             with self.assertRaisesRegex(ValueError, "requires_tool"):
                 control_plane.create_task("Empty", "empty", "No tools", 1, [], "test")
+
+    def test_due_schedule_queues_once_and_skips_an_active_task(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            connector_id = "10000000-0000-0000-0000-000000000001"
+            with sqlite3.connect(path) as connection:
+                connection.execute("INSERT INTO connectors(id,display_name,transport,protected_config,display_endpoint,status,enabled,created_at,updated_at,inventory_revision) VALUES(?,?,?,?,?,'ready',1,?,?,1)", (connector_id,"Example MCP","streamable_http","protected","https://mcp.example.test","2026-08-13T00:00:00Z","2026-08-13T00:00:00Z"))
+                connection.execute("INSERT INTO connector_tools(connector_id,name,description,input_schema_json,schema_fingerprint,discovered_at) VALUES(?,?,?,?,?,?)", (connector_id,"inspect","Inspect",'{"type":"object"}',"a"*64,"2026-08-13T00:00:00Z"))
+            task_id = control_plane.create_task("Inspect", "inspect", "Inspect.", 1, [{"connector_id":connector_id,"tool_name":"inspect"}], "test-task")
+            schedule_id = control_plane.create_schedule("Every hour", task_id, 60, "test-schedule")
+            with sqlite3.connect(path) as connection:
+                connection.execute("UPDATE schedules SET next_run_at='2000-01-01T00:00:00Z' WHERE id=?", (schedule_id,))
+            self.assertEqual(control_plane.run_due_schedules(), 1)
+            self.assertEqual(control_plane.list_schedules()[0]["last_outcome"], "queued")
+            with sqlite3.connect(path) as connection:
+                connection.execute("UPDATE schedules SET next_run_at='2000-01-01T00:00:00Z' WHERE id=?", (schedule_id,))
+            self.assertEqual(control_plane.run_due_schedules(), 1)
+            self.assertEqual(control_plane.list_schedules()[0]["last_outcome"], "skipped_active")
+            self.assertEqual(len(control_plane.list_jobs()), 1)
 
 
 if __name__ == "__main__":

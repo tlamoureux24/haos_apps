@@ -338,7 +338,8 @@ class ControlPlane:
             if row is None:
                 return "not_found"
             used = connection.execute("SELECT 1 FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id WHERE r.task_definition_id=? LIMIT 1", (task_id,)).fetchone()
-            if used is not None:
+            scheduled = connection.execute("SELECT 1 FROM schedules WHERE task_definition_id=? LIMIT 1", (task_id,)).fetchone()
+            if used is not None or scheduled is not None:
                 return "in_use"
             revision_ids = [item[0] for item in connection.execute("SELECT id FROM task_revisions WHERE task_definition_id=?", (task_id,)).fetchall()]
             for revision_id in revision_ids:
@@ -349,7 +350,11 @@ class ControlPlane:
         return "deleted"
 
     def enqueue_manual_task(
-        self, task_id: str, task_input: dict[str, object], correlation_id: str
+        self,
+        task_id: str,
+        task_input: dict[str, object],
+        correlation_id: str,
+        reason_code: str = "ingress_manual",
     ) -> str:
         if not isinstance(task_input, dict) or len(canonical_json(task_input).encode()) > 32 * 1024:
             raise ValueError("invalid_task_input")
@@ -404,8 +409,98 @@ class ControlPlane:
                 "INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES(?,NULL,?,?,?,?,?,?,?)",
                 (job_id, task["name"], "queued", policy_revision_id, task["revision_id"], canonical_json(redact(task_input)), now, now),
             )
-            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="jobs.create", target_type="job", target_id=job_id, decision="allowed", reason_code="ingress_manual", correlation_id=correlation_id, metadata={"task_id": task_id})
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="jobs.create", target_type="job", target_id=job_id, decision="allowed", reason_code=reason_code, correlation_id=correlation_id, metadata={"task_id": task_id})
         return job_id
+
+    def list_schedules(self) -> list[dict[str, object]]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                """SELECT s.*,d.display_name AS task_display_name,d.enabled AS task_enabled
+                   FROM schedules s JOIN task_definitions d ON d.id=s.task_definition_id
+                   ORDER BY s.display_name COLLATE NOCASE"""
+            ).fetchall()
+        task_states = {item["id"]: item["status"] for item in self.list_tasks()}
+        return [
+            {
+                **dict(row),
+                "enabled": bool(row["enabled"]),
+                "task_enabled": bool(row["task_enabled"]),
+                "status": "paused" if not row["enabled"] else ("active" if task_states.get(row["task_definition_id"]) == "ready" else "suspended"),
+            }
+            for row in rows
+        ]
+
+    def create_schedule(self, display_name: str, task_id: str, interval_minutes: int, correlation_id: str) -> str:
+        if not display_name.strip() or not 1 <= interval_minutes <= 10080:
+            raise ValueError("invalid_schedule")
+        schedule_id, now = str(uuid4()), datetime.now(UTC)
+        next_run = (now + timedelta(minutes=interval_minutes)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        timestamp = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            task = connection.execute(
+                """SELECT d.id,d.enabled,r.id AS revision_id FROM task_definitions d
+                   JOIN task_revisions r ON r.task_definition_id=d.id WHERE d.id=?
+                   AND r.revision=(SELECT max(r2.revision) FROM task_revisions r2 WHERE r2.task_definition_id=d.id)""",
+                (task_id,),
+            ).fetchone()
+            if task is None or not task["enabled"]:
+                raise ValueError("task_not_ready")
+            dependencies = connection.execute(
+                """SELECT s.schema_fingerprint,c.enabled,c.status,t.schema_fingerprint AS current_fingerprint
+                   FROM task_tool_selections s JOIN connectors c ON c.id=s.connector_id
+                   LEFT JOIN connector_tools t ON t.connector_id=s.connector_id AND t.name=s.tool_name
+                   WHERE s.task_revision_id=?""",
+                (task["revision_id"],),
+            ).fetchall()
+            if not dependencies or any(not item["enabled"] or item["status"] != "ready" or item["current_fingerprint"] != item["schema_fingerprint"] for item in dependencies):
+                raise ValueError("task_not_ready")
+            connection.execute(
+                "INSERT INTO schedules(id,display_name,task_definition_id,interval_minutes,enabled,next_run_at,created_at,updated_at) VALUES(?,?,?,?,1,?,?,?)",
+                (schedule_id, display_name.strip(), task_id, interval_minutes, next_run, timestamp, timestamp),
+            )
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="schedules.create", target_type="schedule", target_id=schedule_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"task_id": task_id, "interval_minutes": interval_minutes})
+        return schedule_id
+
+    def set_schedule_enabled(self, schedule_id: str, enabled: bool, correlation_id: str) -> bool:
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("SELECT interval_minutes FROM schedules WHERE id=?", (schedule_id,)).fetchone()
+            if row is None:
+                return False
+            next_run = (now_dt + timedelta(minutes=row["interval_minutes"])).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            connection.execute("UPDATE schedules SET enabled=?,next_run_at=?,updated_at=? WHERE id=?", (int(enabled), next_run, now, schedule_id))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="schedules.enable" if enabled else "schedules.disable", target_type="schedule", target_id=schedule_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
+        return True
+
+    def delete_schedule(self, schedule_id: str, correlation_id: str) -> bool:
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("DELETE FROM schedules WHERE id=?", (schedule_id,)).rowcount != 1:
+                return False
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="schedules.delete", target_type="schedule", target_id=schedule_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
+        return True
+
+    def run_due_schedules(self) -> int:
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            due = connection.execute("SELECT id,task_definition_id,interval_minutes FROM schedules WHERE enabled=1 AND next_run_at<=? ORDER BY next_run_at,id LIMIT 100", (now,)).fetchall()
+        for schedule in due:
+            outcome = "queued"
+            try:
+                self.enqueue_manual_task(schedule["task_definition_id"], {}, f"schedule:{schedule['id']}:{now}", "internal_schedule")
+            except TaskExecutionActiveError:
+                outcome = "skipped_active"
+            except QueueFullError:
+                outcome = "queue_full"
+            except ValueError:
+                outcome = "task_unavailable"
+            next_run = (datetime.now(UTC) + timedelta(minutes=schedule["interval_minutes"])).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            with connect(self.database_path) as connection:
+                connection.execute("UPDATE schedules SET next_run_at=?,last_run_at=?,last_outcome=?,updated_at=? WHERE id=?", (next_run, now, outcome, now, schedule["id"]))
+        return len(due)
 
     def create_connector(
         self,

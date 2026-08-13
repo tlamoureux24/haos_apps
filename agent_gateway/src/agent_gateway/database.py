@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "6"
+SCHEMA_GENERATION = "7"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO gateway_metadata VALUES('application','agent_gateway');
-INSERT INTO gateway_metadata VALUES('schema_generation','6');
+INSERT INTO gateway_metadata VALUES('schema_generation','7');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -67,6 +67,14 @@ CREATE TABLE task_tool_selections(
   FOREIGN KEY(task_revision_id) REFERENCES task_revisions(id) ON DELETE CASCADE,
   FOREIGN KEY(connector_id) REFERENCES connectors(id) ON DELETE RESTRICT);
 CREATE INDEX ix_task_tool_connector ON task_tool_selections(connector_id,tool_name);
+CREATE TABLE schedules(
+  id TEXT PRIMARY KEY,display_name TEXT NOT NULL,task_definition_id TEXT NOT NULL,
+  interval_minutes INTEGER NOT NULL,enabled INTEGER NOT NULL,next_run_at TEXT NOT NULL,
+  last_run_at TEXT,last_outcome TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+  FOREIGN KEY(task_definition_id) REFERENCES task_definitions(id) ON DELETE RESTRICT,
+  CHECK(interval_minutes BETWEEN 1 AND 10080),CHECK(enabled IN (0,1)),
+  CHECK(last_outcome IS NULL OR last_outcome IN ('queued','skipped_active','task_unavailable','queue_full')));
+CREATE INDEX ix_schedules_due ON schedules(enabled,next_run_at);
 CREATE TABLE events(
   id TEXT PRIMARY KEY,source_identity_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,
   schema_version INTEGER NOT NULL,event_type TEXT NOT NULL,occurred_at TEXT NOT NULL,
@@ -134,6 +142,21 @@ def initialize_database(path: Path) -> None:
             ).fetchone()
         except sqlite3.Error as exc:
             raise RuntimeError("incompatible_database_remove_app_data") from exc
+        if generation and generation[0] == "6":
+            connection.executescript(
+                """
+                CREATE TABLE schedules(
+                  id TEXT PRIMARY KEY,display_name TEXT NOT NULL,task_definition_id TEXT NOT NULL,
+                  interval_minutes INTEGER NOT NULL,enabled INTEGER NOT NULL,next_run_at TEXT NOT NULL,
+                  last_run_at TEXT,last_outcome TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+                  FOREIGN KEY(task_definition_id) REFERENCES task_definitions(id) ON DELETE RESTRICT,
+                  CHECK(interval_minutes BETWEEN 1 AND 10080),CHECK(enabled IN (0,1)),
+                  CHECK(last_outcome IS NULL OR last_outcome IN ('queued','skipped_active','task_unavailable','queue_full')));
+                CREATE INDEX ix_schedules_due ON schedules(enabled,next_run_at);
+                UPDATE gateway_metadata SET value='7' WHERE key='schema_generation';
+                """
+            )
+            return
         if generation is None or generation[0] != SCHEMA_GENERATION:
             raise RuntimeError("incompatible_database_remove_app_data")
 

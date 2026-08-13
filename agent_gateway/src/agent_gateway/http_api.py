@@ -23,6 +23,9 @@ from agent_gateway.contracts import (
     TaskEnabledRequest,
     TaskIdRequest,
     TaskRunRequest,
+    ScheduleCreateRequest,
+    ScheduleEnabledRequest,
+    ScheduleIdRequest,
 )
 from agent_gateway.connectors import discover_streamable_http, validate_streamable_http_url
 from agent_gateway.control_plane import (
@@ -200,6 +203,47 @@ async def admin_run_task(request: Request) -> JSONResponse:
     except TaskExecutionActiveError:
         return error_response(409, "task_execution_active", correlation_id)
     return JSONResponse({"job_id": job_id, "status": "queued"}, status_code=201)
+
+
+async def admin_list_schedules(request: Request) -> JSONResponse:
+    schedules = await run_in_threadpool(request.app.state.control_plane.list_schedules)
+    return JSONResponse({"schedules": schedules, "count": len(schedules)})
+
+
+async def admin_create_schedule(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, ScheduleCreateRequest)
+        schedule_id = await run_in_threadpool(request.app.state.control_plane.create_schedule, contract.display_name, contract.task_id, contract.interval_minutes, correlation_id)
+    except (OverflowError, ValueError, ValidationError):
+        return error_response(422, "invalid_schedule", correlation_id)
+    return JSONResponse({"schedule_id": schedule_id, "status": "active"}, status_code=201)
+
+
+async def admin_set_schedule_enabled(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, ScheduleEnabledRequest)
+    except (OverflowError, ValidationError):
+        return error_response(422, "invalid_schedule", correlation_id)
+    found = await run_in_threadpool(request.app.state.control_plane.set_schedule_enabled, contract.schedule_id, contract.enabled, correlation_id)
+    return JSONResponse({"schedule_id": contract.schedule_id, "status": "active" if contract.enabled else "paused"}) if found else error_response(404, "schedule_not_found", correlation_id)
+
+
+async def admin_delete_schedule(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, ScheduleIdRequest)
+    except (OverflowError, ValidationError):
+        return error_response(422, "invalid_schedule", correlation_id)
+    found = await run_in_threadpool(request.app.state.control_plane.delete_schedule, contract.schedule_id, correlation_id)
+    return JSONResponse({"schedule_id": contract.schedule_id, "status": "deleted"}) if found else error_response(404, "schedule_not_found", correlation_id)
 
 
 async def admin_create_connector(request: Request) -> JSONResponse:

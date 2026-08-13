@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.28.0
+
+- Add persistent recurring schedules for ready task definitions with pause,
+  resume and deletion controls in a dedicated Ingress page.
+- Run the bounded scheduler only on the private administration process, skip
+  missed occurrences after downtime and prevent duplicate active executions.
+- Preserve existing generation-six databases through the first intentionally
+  supported direct schema upgrade now that Phase 7 retains useful data.
+
 ## 0.27.0
 
 - Restore the last administration page after a Home Assistant Ingress refresh

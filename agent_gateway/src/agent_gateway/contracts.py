@@ -65,6 +65,20 @@ class TaskRunRequest(TaskIdRequest):
     input: dict[str, Any] = Field(default_factory=dict, max_length=64)
 
 
+class ScheduleCreateRequest(StrictContract):
+    display_name: str = Field(min_length=1, max_length=120)
+    task_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+    interval_minutes: int = Field(ge=1, le=10080)
+
+
+class ScheduleIdRequest(StrictContract):
+    schedule_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+
+
+class ScheduleEnabledRequest(ScheduleIdRequest):
+    enabled: bool
+
+
 class EventCreateRequest(StrictContract):
     schema_version: Literal[1]
     event_type: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.-]*$")
