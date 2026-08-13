@@ -933,7 +933,7 @@ class ControlPlane:
             connection.execute(
                 """INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at)
                    VALUES(?,?,?,'queued',?,?,?,?,?)""",
-                (new_job_id, job["event_id"], job["task_name"], job["policy_revision_id"], job["task_revision_id"], job["input_json"], now, now),
+                (new_job_id, None, job["task_name"], job["policy_revision_id"], job["task_revision_id"], job["input_json"], now, now),
             )
             self._append_audit(
                 connection,
@@ -945,7 +945,7 @@ class ControlPlane:
                 decision="allowed",
                 reason_code="ingress_admin",
                 correlation_id=correlation_id,
-                metadata={"new_job_id": new_job_id},
+                metadata={"new_job_id": new_job_id, "original_event_id": job["event_id"]},
             )
         return "queued", new_job_id
 

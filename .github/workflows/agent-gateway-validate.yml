@@ -370,7 +370,7 @@ jobs:
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
             http://127.0.0.1:18098/api/v1/events | jq -e '.events | length == 5'
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
-            http://127.0.0.1:18098/api/v1/jobs | jq -e '.jobs | length == 3'
+            http://127.0.0.1:18098/api/v1/jobs | jq -e '.jobs | length == 4'
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
             http://127.0.0.1:18098/api/v1/reports | jq -e '.reports | length == 1'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \

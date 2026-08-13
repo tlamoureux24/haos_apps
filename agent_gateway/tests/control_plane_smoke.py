@@ -192,3 +192,4 @@ with sqlite3.connect(database) as connection:
     assert connection.execute("SELECT count(*) FROM reports").fetchone()[0] == 1
     assert connection.execute("SELECT count(*) FROM job_attempts").fetchone()[0] == 4
     assert connection.execute("SELECT count(*) FROM job_attempts WHERE job_id=?", (requeued_job_id,)).fetchone()[0] == 0
+    assert connection.execute("SELECT event_id FROM jobs WHERE id=?", (requeued_job_id,)).fetchone()[0] is None
