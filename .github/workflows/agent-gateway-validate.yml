@@ -132,12 +132,18 @@ jobs:
             "${trace_root}/s6-running-executables.txt" \
             "${trace_root}/s6-package-executables.txt" \
             > agent_gateway-apparmor-executables.txt
+          cp "${trace_root}/executables.txt" \
+            agent_gateway-apparmor-application-executables.txt
+          cp "${trace_root}/s6-running-executables.txt" \
+            agent_gateway-apparmor-s6-running-executables.txt
+          cp "${trace_root}/s6-package-executables.txt" \
+            agent_gateway-apparmor-s6-package-executables.txt
 
       - name: Upload AppArmor executable inventory
         uses: actions/upload-artifact@v6
         with:
           name: agent-gateway-apparmor-executables
-          path: agent_gateway-apparmor-executables.txt
+          path: agent_gateway-apparmor-*-executables.txt
           if-no-files-found: error
           retention-days: 7
 
