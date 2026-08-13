@@ -41,7 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.40.4"',
+        'version: "0.40.5"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -58,7 +58,7 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "0.40.4"' not in package:
+    if '__version__ = "0.40.5"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
     if "ha_mcp" in config.lower():
         raise RuntimeError("No upstream MCP connector may be fixed in App configuration")
@@ -188,6 +188,7 @@ def main() -> int:
         "/run/s6/basedir/bin/halt rix,",
         "/run/s6-rc:s6-rc-init:*/servicedirs/s6rc-oneshot-runner/run rix,",
         "/run/service/s6-linux-init-shutdownd/run rix,",
+        '"/run/service/s6-linux-init-shutdownd/stage 4" rix,',
         "/run/service/.s6-svscan/SIGTERM rix,",
         "/run/service/.s6-svscan/finish rix,",
         "/run/service/.s6-svscan/crash rix,",

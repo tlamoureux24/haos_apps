@@ -126,6 +126,7 @@ profile agent_gateway flags=(attach_disconnected,mediate_deleted) {
   /run/s6/basedir/bin/halt rix,
   /run/s6-rc:s6-rc-init:*/servicedirs/s6rc-oneshot-runner/run rix,
   /run/service/s6-linux-init-shutdownd/run rix,
+  "/run/service/s6-linux-init-shutdownd/stage 4" rix,
   /run/service/.s6-svscan/SIGTERM rix,
   /run/service/.s6-svscan/finish rix,
   /run/service/.s6-svscan/crash rix,

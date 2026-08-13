@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.40.5
+
+- Allow the single generated s6 shutdown stage executable at the exact path
+  `/run/service/s6-linux-init-shutdownd/stage 4`.
+- Account for AppArmor's hexadecimal audit encoding of paths containing a
+  space, which excluded this final shutdown hook from the earlier transition
+  inventory.
+
 ## 0.40.4
 
 - Derive the enforced s6 execution allowlist from the complete HAOS
