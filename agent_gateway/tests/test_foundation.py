@@ -210,14 +210,13 @@ class TaskCompositionTests(unittest.TestCase):
                 "inspect_service",
                 "Inspect the selected service.",
                 3,
-                [{"connector_id": connector_id, "tool_name": "inspect", "fixed_arguments": {"slug": "example"}}],
+                [{"connector_id": connector_id, "tool_name": "inspect"}],
                 "test-task",
             )
             task = control_plane.list_tasks()[0]
             self.assertEqual(task["id"], task_id)
             self.assertEqual(task["status"], "ready")
             self.assertEqual(len(task["tools"]), 1)
-            self.assertEqual(task["tools"][0]["constraints"], {"fixed_arguments": {"slug": "example"}})
             self.assertRegex(task["tools"][0]["namespaced_name"], r"^task_[0-9a-f]{12}__inspect__[0-9a-f]{12}$")
             self.assertEqual(control_plane.delete_connector(connector_id, "test-delete"), "in_use")
             with sqlite3.connect(path) as connection:

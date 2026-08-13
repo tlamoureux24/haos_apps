@@ -43,16 +43,6 @@ class ConnectorEnabledRequest(ConnectorIdRequest):
 class TaskToolSelection(StrictContract):
     connector_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
     tool_name: str = Field(min_length=1, max_length=160)
-    fixed_arguments: dict[str, Any] = Field(default_factory=dict, max_length=32)
-
-    @field_validator("fixed_arguments")
-    @classmethod
-    def bounded_fixed_arguments(cls, value: dict[str, Any]) -> dict[str, Any]:
-        import json
-
-        if len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode()) > 8192:
-            raise ValueError("fixed_arguments_too_large")
-        return value
 
 
 class TaskCreateRequest(StrictContract):

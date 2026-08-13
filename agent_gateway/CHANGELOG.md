@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.21.0
+
+- Simplify task composition to agent instructions plus an exact selection of
+  upstream tools; remove fixed-parameter configuration from the product flow.
+- Preserve each selected tool's complete discovered input schema for its future
+  virtual capability while keeping the collision-resistant gateway name.
+- Keep upstream endpoints, credentials, original callable names and every
+  unselected tool hidden from reasoning clients.
+
 ## 0.20.0
 
 - Replace raw JSON constraint editing with schema-driven fixed-parameter fields

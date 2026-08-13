@@ -36,9 +36,6 @@ ALLOWED_IDENTITY_TYPES = frozenset({"client", "event_source", "scheduler"})
 
 def validate_json_contract(value: object, schema: dict[str, object], path: str = "report") -> None:
     """Validate the bounded JSON Schema subset produced by task definitions."""
-    choices = schema.get("enum")
-    if choices is not None and (not isinstance(choices, list) or value not in choices):
-        raise ValueError(f"invalid_contract:{path}:enum")
     expected = schema.get("type")
     if expected is None and ("properties" in schema or "required" in schema):
         expected = "object"
@@ -87,13 +84,6 @@ def validate_json_contract(value: object, schema: dict[str, object], path: str =
             raise ValueError(f"invalid_contract:{path}:min_length")
         if maximum is not None and len(value) > int(maximum):
             raise ValueError(f"invalid_contract:{path}:max_length")
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        minimum = schema.get("minimum")
-        maximum = schema.get("maximum")
-        if minimum is not None and value < float(minimum):
-            raise ValueError(f"invalid_contract:{path}:minimum")
-        if maximum is not None and value > float(maximum):
-            raise ValueError(f"invalid_contract:{path}:maximum")
 
 
 def utc_now() -> str:
@@ -222,7 +212,7 @@ class ControlPlane:
             for row in rows:
                 selections = connection.execute(
                     """
-                    SELECT s.connector_id,s.tool_name,s.namespaced_name,s.schema_fingerprint,s.constraints_json,
+                    SELECT s.connector_id,s.tool_name,s.namespaced_name,s.schema_fingerprint,
                            c.display_name AS connector_name,c.enabled AS connector_enabled,c.status AS connector_status,
                            t.schema_fingerprint AS current_fingerprint
                     FROM task_tool_selections s
@@ -255,7 +245,6 @@ class ControlPlane:
                                 "connector_name": item["connector_name"],
                                 "tool_name": item["tool_name"],
                                 "namespaced_name": item["namespaced_name"],
-                                "constraints": json.loads(item["constraints_json"]),
                             }
                             for item in selections
                         ],
@@ -295,7 +284,7 @@ class ControlPlane:
             for selection in selections:
                 row = connection.execute(
                     """
-                    SELECT c.id AS connector_id,c.status,c.enabled,t.name,t.schema_fingerprint,t.input_schema_json
+                    SELECT c.id AS connector_id,c.status,c.enabled,t.name,t.schema_fingerprint
                     FROM connectors c JOIN connector_tools t ON t.connector_id=c.id
                     WHERE c.id=? AND t.name=?
                     """,
@@ -303,19 +292,7 @@ class ControlPlane:
                 ).fetchone()
                 if row is None or not row["enabled"] or row["status"] != "ready":
                     raise ValueError("task_connector_not_ready")
-                fixed_arguments = selection.get("fixed_arguments", {})
-                if not isinstance(fixed_arguments, dict):
-                    raise ValueError("invalid_fixed_arguments")
-                input_schema = json.loads(row["input_schema_json"])
-                properties = input_schema.get("properties", {})
-                if not isinstance(properties, dict) or any(key not in properties for key in fixed_arguments):
-                    raise ValueError("unknown_fixed_argument")
-                for key, value in fixed_arguments.items():
-                    child_schema = properties[key]
-                    if not isinstance(child_schema, dict):
-                        raise ValueError("invalid_upstream_schema")
-                    validate_json_contract(value, child_schema, f"fixed_arguments.{key}")
-                resolved.append((row, fixed_arguments))
+                resolved.append(row)
             connection.execute(
                 "INSERT INTO task_definitions(id,name,display_name,enabled,created_at) VALUES(?,?,?,?,?)",
                 (task_id, name.strip(), display_name.strip(), 1, now),
@@ -324,13 +301,13 @@ class ControlPlane:
                 "INSERT INTO task_revisions(id,task_definition_id,revision,objective,input_schema_json,report_schema_json,max_attempts,created_at) VALUES(?,?,?,?,?,?,?,?)",
                 (revision_id, task_id, 1, objective.strip(), '{"type":"object"}', canonical_json(report_schema), max_attempts, now),
             )
-            for row, fixed_arguments in resolved:
+            for row in resolved:
                 digest = hashlib.sha256(f"{revision_id}:{row['connector_id']}:{row['name']}".encode()).hexdigest()[:12]
                 safe_tool_name = "".join(character if character.isalnum() else "_" for character in row["name"]).strip("_")[:80] or "tool"
                 virtual_name = f"task_{task_id.replace('-', '')[:12]}__{safe_tool_name}__{digest}"
                 connection.execute(
                     "INSERT INTO task_tool_selections(task_revision_id,connector_id,tool_name,schema_fingerprint,namespaced_name,constraints_json) VALUES(?,?,?,?,?,?)",
-                    (revision_id, row["connector_id"], row["name"], row["schema_fingerprint"], virtual_name, canonical_json({"fixed_arguments": fixed_arguments})),
+                    (revision_id, row["connector_id"], row["name"], row["schema_fingerprint"], virtual_name, "{}"),
                 )
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.create", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"tool_count": len(resolved)})
         return task_id
@@ -744,7 +721,10 @@ class ControlPlane:
         with connect(self.database_path) as connection:
             task = connection.execute("SELECT objective,input_schema_json,report_schema_json FROM task_revisions WHERE id=?", (job["task_revision_id"],)).fetchone()
             capabilities = connection.execute(
-                "SELECT namespaced_name,connector_id,tool_name,constraints_json FROM task_tool_selections WHERE task_revision_id=? ORDER BY namespaced_name",
+                """SELECT s.namespaced_name,s.connector_id,s.tool_name,t.input_schema_json
+                   FROM task_tool_selections s JOIN connector_tools t
+                     ON t.connector_id=s.connector_id AND t.name=s.tool_name
+                   WHERE s.task_revision_id=? ORDER BY s.namespaced_name""",
                 (job["task_revision_id"],),
             ).fetchall()
         job["objective"] = task["objective"]
@@ -755,7 +735,7 @@ class ControlPlane:
                 "name": item["namespaced_name"],
                 "connector_id": item["connector_id"],
                 "tool_name": item["tool_name"],
-                "constraints": json.loads(item["constraints_json"]),
+                "input_schema": json.loads(item["input_schema_json"]),
             }
             for item in capabilities
         ]
