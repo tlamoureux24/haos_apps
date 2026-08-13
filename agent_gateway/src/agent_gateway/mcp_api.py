@@ -6,6 +6,7 @@ from typing import Any
 
 import anyio
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.server import Settings as FastMCPSettings
 from starlette.responses import JSONResponse
 
 from agent_gateway import __version__
@@ -19,6 +20,11 @@ TOOL_ACTIONS = {
     "jobs_list_v1": "jobs.read",
     "reports_list_v1": "reports.read",
 }
+
+# mcp 1.28.1 leaves its generic lifespan annotation unresolved when imported
+# under Python 3.14. Rebuild after the SDK module is fully loaded, before its
+# BaseSettings instance reads any source.
+FastMCPSettings.model_rebuild()
 
 
 def request_token(context: Context) -> str:

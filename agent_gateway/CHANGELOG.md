@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- Rebuild the MCP SDK settings model before initialization on Python 3.14,
+  removing its harmless unresolved generic lifespan warning from App logs.
+- Fail the container smoke test if that compatibility warning reappears.
+
 ## 0.4.0
 
 - Add the authenticated stateless MCP Streamable HTTP endpoint at `/mcp`.

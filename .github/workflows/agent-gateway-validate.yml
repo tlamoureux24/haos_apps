@@ -140,6 +140,10 @@ jobs:
 
           wait_ready
           echo "SMOKE_STAGE=initial-ready"
+          if docker logs agent-gateway-smoke 2>&1 | grep -q 'IncompleteFieldDefinitionWarning'; then
+            echo 'Unexpected MCP/Pydantic settings warning' >&2
+            exit 1
+          fi
           ingress_page="$(curl --fail --silent \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/)"
