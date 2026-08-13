@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.30.0
+
+- Add a configurable per-trigger cooldown from zero to seven days and expose
+  its last successful trigger time in the Ingress interface.
+- Persist every authenticated event during cooldown or while its task already
+  has an active execution, but suppress duplicate jobs and record the exact
+  reason in the event view and audit trail.
+- Preserve generation-eight data through a direct schema-nine upgrade and
+  retain existing triggers with cooldown disabled by default.
+
 ## 0.29.0
 
 - Add administrator-managed event triggers binding one active event-source

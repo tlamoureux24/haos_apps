@@ -114,8 +114,9 @@ class CreatedIdentity:
 @dataclass(frozen=True)
 class IntakeResult:
     event_id: str
-    job_id: str
+    job_id: str | None
     duplicate: bool
+    outcome: str
 
 
 @dataclass(frozen=True)
@@ -515,9 +516,9 @@ class ControlPlane:
         task_states = {item["id"]: item["status"] for item in self.list_tasks()}
         return [{**dict(row), "enabled": bool(row["enabled"]), "status": "paused" if not row["enabled"] else ("active" if row["source_status"] == "active" and task_states.get(row["task_definition_id"]) == "ready" else "suspended")} for row in rows]
 
-    def create_event_mapping(self, display_name: str, source_identity_id: str, event_type: str, task_id: str, correlation_id: str) -> str:
+    def create_event_mapping(self, display_name: str, source_identity_id: str, event_type: str, task_id: str, cooldown_minutes: int, correlation_id: str) -> str:
         mapping_id, now = str(uuid4()), utc_now()
-        if not display_name.strip():
+        if not display_name.strip() or not 0 <= cooldown_minutes <= 10080:
             raise ValueError("invalid_event_mapping")
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -527,8 +528,8 @@ class ControlPlane:
             task = next((item for item in self.list_tasks() if item["id"] == task_id), None)
             if task is None or task["status"] != "ready":
                 raise ValueError("task_not_ready")
-            connection.execute("INSERT INTO event_mappings(id,display_name,source_identity_id,event_type,task_definition_id,enabled,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?)", (mapping_id, display_name.strip(), source_identity_id, event_type, task_id, now, now))
-            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.create", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"source_identity_id": source_identity_id, "event_type": event_type, "task_id": task_id})
+            connection.execute("INSERT INTO event_mappings(id,display_name,source_identity_id,event_type,task_definition_id,enabled,cooldown_minutes,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?,?)", (mapping_id, display_name.strip(), source_identity_id, event_type, task_id, cooldown_minutes, now, now))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.create", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"source_identity_id": source_identity_id, "event_type": event_type, "task_id": task_id, "cooldown_minutes": cooldown_minutes})
         return mapping_id
 
     def set_event_mapping_enabled(self, mapping_id: str, enabled: bool, correlation_id: str) -> bool:
@@ -757,7 +758,8 @@ class ControlPlane:
             rows = connection.execute(
                 """
                 SELECT e.id,e.event_type,e.occurred_at,e.received_at,e.payload_json,
-                       i.display_name AS source_name,j.id AS job_id
+                       i.display_name AS source_name,j.id AS job_id,
+                       (SELECT a.reason_code FROM audit_entries a WHERE a.target_type='event' AND a.target_id=e.id ORDER BY a.sequence DESC LIMIT 1) AS outcome
                 FROM events e
                 JOIN identities i ON i.id=e.source_identity_id
                 LEFT JOIN jobs j ON j.event_id=e.id
@@ -773,6 +775,7 @@ class ControlPlane:
                 "received_at": row["received_at"],
                 "source_name": row["source_name"],
                 "job_id": row["job_id"],
+                "outcome": row["outcome"],
                 "payload": redact(json.loads(row["payload_json"])),
             }
             for row in rows
@@ -783,7 +786,8 @@ class ControlPlane:
             row = connection.execute(
                 """
                 SELECT e.id,e.event_type,e.occurred_at,e.received_at,e.payload_json,
-                       i.display_name AS source_name,j.id AS job_id
+                       i.display_name AS source_name,j.id AS job_id,
+                       (SELECT a.reason_code FROM audit_entries a WHERE a.target_type='event' AND a.target_id=e.id ORDER BY a.sequence DESC LIMIT 1) AS outcome
                 FROM events e
                 JOIN identities i ON i.id=e.source_identity_id
                 LEFT JOIN jobs j ON j.event_id=e.id
@@ -800,6 +804,7 @@ class ControlPlane:
             "received_at": row["received_at"],
             "source_name": row["source_name"],
             "job_id": row["job_id"],
+            "outcome": row["outcome"],
             "payload": redact(json.loads(row["payload_json"])),
         }
 
@@ -1313,13 +1318,17 @@ class ControlPlane:
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
-                "SELECT e.id AS event_id,j.id AS job_id FROM events e JOIN jobs j ON j.event_id=e.id WHERE e.source_identity_id=? AND e.idempotency_key=?",
+                """SELECT e.id AS event_id,j.id AS job_id,
+                          (SELECT a.reason_code FROM audit_entries a WHERE a.target_type='event' AND a.target_id=e.id ORDER BY a.sequence DESC LIMIT 1) AS outcome
+                   FROM events e LEFT JOIN jobs j ON j.event_id=e.id
+                   WHERE e.source_identity_id=? AND e.idempotency_key=?""",
                 (identity.identity_id, idempotency_key),
             ).fetchone()
             if existing:
-                return IntakeResult(existing["event_id"], existing["job_id"], True)
+                return IntakeResult(existing["event_id"], existing["job_id"], True, existing["outcome"] or ("accepted" if existing["job_id"] else "suppressed"))
             task_revision = connection.execute(
-                """SELECT r.id,d.name,m.id AS mapping_id FROM event_mappings m
+                """SELECT r.id,d.id AS task_definition_id,d.name,m.id AS mapping_id,
+                          m.cooldown_minutes,m.last_triggered_at FROM event_mappings m
                    JOIN task_definitions d ON d.id=m.task_definition_id
                    JOIN task_revisions r ON r.task_definition_id=d.id
                    WHERE m.source_identity_id=? AND m.event_type=? AND m.enabled=1 AND d.enabled=1
@@ -1363,13 +1372,7 @@ class ControlPlane:
                     "UPDATE intake_rate_windows SET request_count=request_count+1 WHERE identity_id=?",
                     (identity.identity_id,),
                 )
-            queued = connection.execute(
-                "SELECT count(*) FROM jobs WHERE state IN ('queued','leased')"
-            ).fetchone()[0]
-            if queued >= self.queue_limit:
-                raise QueueFullError("queue_full")
             event_id = str(uuid4())
-            job_id = str(uuid4())
             payload = canonical_json(redact(event))
             connection.execute(
                 "INSERT INTO events(id,source_identity_id,idempotency_key,schema_version,event_type,occurred_at,received_at,payload_json) VALUES(?,?,?,?,?,?,?,?)",
@@ -1384,10 +1387,28 @@ class ControlPlane:
                     payload,
                 ),
             )
+            cooldown_cutoff = (datetime.now(UTC) - timedelta(minutes=task_revision["cooldown_minutes"])).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            outcome = None
+            if task_revision["cooldown_minutes"] and task_revision["last_triggered_at"] and task_revision["last_triggered_at"] > cooldown_cutoff:
+                outcome = "cooldown_active"
+            elif connection.execute(
+                """SELECT 1 FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id
+                   WHERE r.task_definition_id=? AND j.state IN ('queued','leased') LIMIT 1""",
+                (task_revision["task_definition_id"],),
+            ).fetchone() is not None:
+                outcome = "task_execution_active"
+            if outcome:
+                self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="events.create", target_type="event", target_id=event_id, decision="recorded", reason_code=outcome, correlation_id=correlation_id, metadata={"event_type": event["event_type"], "mapping_id": task_revision["mapping_id"]})
+                return IntakeResult(event_id, None, False, outcome)
+            queued = connection.execute("SELECT count(*) FROM jobs WHERE state IN ('queued','leased')").fetchone()[0]
+            if queued >= self.queue_limit:
+                raise QueueFullError("queue_full")
+            job_id = str(uuid4())
             connection.execute(
                 "INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
                 (job_id, event_id, task_name, "queued", identity.policy_revision_id, task_revision["id"], payload, now, now),
             )
+            connection.execute("UPDATE event_mappings SET last_triggered_at=?,updated_at=? WHERE id=?", (now, now, task_revision["mapping_id"]))
             self._append_audit(
                 connection,
                 actor_identity_id=identity.identity_id,
@@ -1400,7 +1421,7 @@ class ControlPlane:
                 correlation_id=correlation_id,
                 metadata={"job_id": job_id, "event_type": event["event_type"], "mapping_id": task_revision["mapping_id"]},
             )
-        return IntakeResult(event_id, job_id, False)
+        return IntakeResult(event_id, job_id, False, "queued")
 
     def _append_audit(
         self,

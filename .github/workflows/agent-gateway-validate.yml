@@ -253,7 +253,7 @@ jobs:
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/events | \
-            jq -e '.events | length == 3 and all(has("credential") | not)'
+            jq -e '.events | length == 5 and all(has("credential") | not)'
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/jobs | \

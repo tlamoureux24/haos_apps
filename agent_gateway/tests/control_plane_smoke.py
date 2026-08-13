@@ -48,8 +48,8 @@ created = control_plane.create_identity(
     "ci-create-identity",
 )
 identity = control_plane.authenticate(created.credential.token)
-control_plane.create_event_mapping(
-    "CI service alerts", identity.identity_id, "service.alert", "ci-inspection", "ci-create-mapping"
+mapping_id = control_plane.create_event_mapping(
+    "CI service alerts", identity.identity_id, "service.alert", "ci-inspection", 0, "ci-create-mapping"
 )
 event = {
     "schema_version": 1,
@@ -71,6 +71,9 @@ first = results[0]
 assert len({result.event_id for result in results}) == 1
 assert len({result.job_id for result in results}) == 1
 assert sum(not result.duplicate for result in results) == 1
+suppressed = control_plane.ingest_event(identity, "ci-active-key", event, "ci-active-event")
+assert suppressed.job_id is None
+assert suppressed.outcome == "task_execution_active"
 
 worker_created = control_plane.create_identity(
     "CI reasoning worker",
@@ -132,6 +135,13 @@ assert control_plane.complete_job(
     {"schema_version": 1, "summary": "CI complete", "findings": []},
     "ci-complete-replay",
 ) == report_id
+with sqlite3.connect(database) as connection:
+    connection.execute("UPDATE event_mappings SET cooldown_minutes=15 WHERE id=?", (mapping_id,))
+cooldown = control_plane.ingest_event(identity, "ci-cooldown-key", event, "ci-cooldown-event")
+assert cooldown.job_id is None
+assert cooldown.outcome == "cooldown_active"
+with sqlite3.connect(database) as connection:
+    connection.execute("UPDATE event_mappings SET cooldown_minutes=0 WHERE id=?", (mapping_id,))
 failed = control_plane.ingest_event(identity, "ci-failure-key", event, "ci-failure-event")
 failed_lease = control_plane.claim_job(worker, "ci-failure-claim")
 assert failed_lease is not None and failed_lease.job["id"] == failed.job_id
@@ -166,7 +176,7 @@ else:
     raise AssertionError("A modified credential was accepted")
 
 with sqlite3.connect(database) as connection:
-    assert connection.execute("SELECT count(*) FROM events").fetchone()[0] == 2
+    assert connection.execute("SELECT count(*) FROM events").fetchone()[0] == 4
     assert connection.execute("SELECT count(*) FROM jobs").fetchone()[0] == 2
     assert {row[0] for row in connection.execute("SELECT state FROM jobs")} == {"completed", "dead_letter"}
     assert connection.execute("SELECT count(*) FROM reports").fetchone()[0] == 1
