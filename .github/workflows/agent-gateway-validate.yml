@@ -94,7 +94,7 @@ jobs:
             "${trace_root}/trace" \
             --output "${trace_root}/executables.txt"
           test -s "${trace_root}/executables.txt"
-          grep -Fx '/run.sh' "${trace_root}/executables.txt"
+          grep -Fx '/bin/sh' "${trace_root}/executables.txt"
           cp "${trace_root}/executables.txt" agent_gateway-apparmor-executables.txt
 
       - name: Upload AppArmor executable inventory
