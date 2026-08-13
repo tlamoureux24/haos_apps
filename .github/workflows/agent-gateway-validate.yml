@@ -253,11 +253,11 @@ jobs:
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/events | \
-            jq -e '.events | length == 5 and all(has("credential") | not)'
+            jq -e '.events | length == 8 and all(has("credential") | not)'
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/jobs | \
-            jq -e '.jobs | length == 4 and any(.state == "queued") and any(.state == "completed") and any(.state == "dead_letter") and any(.state == "cancelled")'
+            jq -e '.jobs | length == 5 and any(.state == "queued") and any(.state == "completed") and any(.state == "dead_letter") and any(.state == "cancelled")'
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/reports | \
@@ -368,9 +368,9 @@ jobs:
             jq -e 'all(.tasks[]; .name != "ci_status_task")'
           echo "SMOKE_STAGE=generic-connector-ready"
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
-            http://127.0.0.1:18098/api/v1/events | jq -e '.events | length == 5'
+            http://127.0.0.1:18098/api/v1/events | jq -e '.events | length == 8'
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
-            http://127.0.0.1:18098/api/v1/jobs | jq -e '.jobs | length == 4'
+            http://127.0.0.1:18098/api/v1/jobs | jq -e '.jobs | length == 5'
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
             http://127.0.0.1:18098/api/v1/reports | jq -e '.reports | length == 1'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \

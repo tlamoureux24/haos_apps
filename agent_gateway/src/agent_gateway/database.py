@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "10"
+SCHEMA_GENERATION = "11"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO gateway_metadata VALUES('application','agent_gateway');
-INSERT INTO gateway_metadata VALUES('schema_generation','10');
+INSERT INTO gateway_metadata VALUES('schema_generation','11');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -78,12 +78,21 @@ CREATE INDEX ix_schedules_due ON schedules(enabled,next_run_at);
 CREATE TABLE event_mappings(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,source_identity_id TEXT NOT NULL,
   event_type TEXT NOT NULL,task_definition_id TEXT NOT NULL,enabled INTEGER NOT NULL,
-  cooldown_minutes INTEGER NOT NULL,input_mode TEXT NOT NULL,last_triggered_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+  cooldown_minutes INTEGER NOT NULL,grace_minutes INTEGER NOT NULL,recovery_event_type TEXT,
+  input_mode TEXT NOT NULL,last_triggered_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
   FOREIGN KEY(source_identity_id) REFERENCES identities(id) ON DELETE RESTRICT,
   FOREIGN KEY(task_definition_id) REFERENCES task_definitions(id) ON DELETE RESTRICT,
   UNIQUE(source_identity_id,event_type),CHECK(enabled IN (0,1)),CHECK(cooldown_minutes BETWEEN 0 AND 10080),
+  CHECK(grace_minutes BETWEEN 0 AND 1440),
   CHECK(input_mode IN ('full_event','subject','attributes')));
 CREATE INDEX ix_event_mappings_lookup ON event_mappings(source_identity_id,event_type,enabled);
+CREATE TABLE pending_event_triggers(
+  mapping_id TEXT PRIMARY KEY,event_id TEXT NOT NULL,task_revision_id TEXT NOT NULL,
+  policy_revision_id TEXT NOT NULL,input_json TEXT NOT NULL,due_at TEXT NOT NULL,created_at TEXT NOT NULL,
+  FOREIGN KEY(mapping_id) REFERENCES event_mappings(id) ON DELETE CASCADE,
+  FOREIGN KEY(event_id) REFERENCES events(id),FOREIGN KEY(task_revision_id) REFERENCES task_revisions(id),
+  FOREIGN KEY(policy_revision_id) REFERENCES policy_revisions(id));
+CREATE INDEX ix_pending_event_triggers_due ON pending_event_triggers(due_at);
 CREATE TABLE events(
   id TEXT PRIMARY KEY,source_identity_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,
   schema_version INTEGER NOT NULL,event_type TEXT NOT NULL,occurred_at TEXT NOT NULL,
@@ -195,6 +204,22 @@ def initialize_database(path: Path) -> None:
                 """
                 ALTER TABLE event_mappings ADD COLUMN input_mode TEXT NOT NULL DEFAULT 'full_event' CHECK(input_mode IN ('full_event','subject','attributes'));
                 UPDATE gateway_metadata SET value='10' WHERE key='schema_generation';
+                """
+            )
+            generation = ("10",)
+        if generation and generation[0] == "10":
+            connection.executescript(
+                """
+                ALTER TABLE event_mappings ADD COLUMN grace_minutes INTEGER NOT NULL DEFAULT 0 CHECK(grace_minutes BETWEEN 0 AND 1440);
+                ALTER TABLE event_mappings ADD COLUMN recovery_event_type TEXT;
+                CREATE TABLE IF NOT EXISTS pending_event_triggers(
+                  mapping_id TEXT PRIMARY KEY,event_id TEXT NOT NULL,task_revision_id TEXT NOT NULL,
+                  policy_revision_id TEXT NOT NULL,input_json TEXT NOT NULL,due_at TEXT NOT NULL,created_at TEXT NOT NULL,
+                  FOREIGN KEY(mapping_id) REFERENCES event_mappings(id) ON DELETE CASCADE,
+                  FOREIGN KEY(event_id) REFERENCES events(id),FOREIGN KEY(task_revision_id) REFERENCES task_revisions(id),
+                  FOREIGN KEY(policy_revision_id) REFERENCES policy_revisions(id));
+                CREATE INDEX IF NOT EXISTS ix_pending_event_triggers_due ON pending_event_triggers(due_at);
+                UPDATE gateway_metadata SET value='11' WHERE key='schema_generation';
                 """
             )
             return

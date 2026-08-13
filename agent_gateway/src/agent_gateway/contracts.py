@@ -118,6 +118,8 @@ class EventMappingCreateRequest(StrictContract):
     event_type: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.-]*$")
     task_id: str = Field(min_length=1, max_length=120, pattern=r"^[a-zA-Z0-9-]+$")
     cooldown_minutes: int = Field(default=0, ge=0, le=10080)
+    grace_minutes: int = Field(default=0, ge=0, le=1440)
+    recovery_event_type: str | None = Field(default=None, max_length=120, pattern=r"^[a-z][a-z0-9_.-]*$")
     input_mode: Literal["full_event", "subject", "attributes"] = "full_event"
 
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.34.0
+
+- Add durable per-trigger grace windows from one minute to one hour, processed
+  after App restarts by the bounded administration dispatcher.
+- Add an administrator-defined recovery event type that cancels a pending grace
+  window without creating a job; repeated alerts do not extend the deadline.
+- Show pending deadlines and recovery routes in Ingress, and translate event
+  outcomes into clear French operational labels.
+- Cancel pending windows when their trigger, source identity or task is paused
+  or revoked, and postpone promotion safely while dependencies, cooldown, an
+  active task execution or the global queue prevent it.
+- Preserve existing data through a direct schema-eleven upgrade with grace
+  disabled for all existing triggers.
+
 ## 0.33.0
 
 - Add a bounded event-input projection to each trigger: complete event, subject

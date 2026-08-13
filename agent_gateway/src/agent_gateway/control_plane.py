@@ -329,6 +329,8 @@ class ControlPlane:
             updated = connection.execute("UPDATE task_definitions SET enabled=? WHERE id=?", (int(enabled), task_id)).rowcount
             if not updated:
                 return False
+            if not enabled:
+                connection.execute("DELETE FROM pending_event_triggers WHERE mapping_id IN (SELECT id FROM event_mappings WHERE task_definition_id=?)", (task_id,))
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.enable" if enabled else "tasks.disable", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
         return True
 
@@ -504,21 +506,78 @@ class ControlPlane:
                 connection.execute("UPDATE schedules SET next_run_at=?,last_run_at=?,last_outcome=?,updated_at=? WHERE id=?", (next_run, now, outcome, now, schedule["id"]))
         return len(due)
 
+    def run_due_event_triggers(self) -> int:
+        """Promote durable grace windows to jobs when their conditions still hold."""
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            due_ids = [row["mapping_id"] for row in connection.execute(
+                "SELECT mapping_id FROM pending_event_triggers WHERE due_at<=? ORDER BY due_at,mapping_id LIMIT 100", (now,)
+            ).fetchall()]
+        promoted = 0
+        for mapping_id in due_ids:
+            with connect(self.database_path) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                pending = connection.execute(
+                    """SELECT p.*,m.enabled,m.cooldown_minutes,m.last_triggered_at,d.id AS task_definition_id,
+                              d.name AS task_name,d.enabled AS task_enabled
+                       FROM pending_event_triggers p JOIN event_mappings m ON m.id=p.mapping_id
+                       JOIN task_revisions r ON r.id=p.task_revision_id
+                       JOIN task_definitions d ON d.id=r.task_definition_id
+                       WHERE p.mapping_id=? AND p.due_at<=?""", (mapping_id, now)
+                ).fetchone()
+                if pending is None:
+                    continue
+                dependencies = connection.execute(
+                    """SELECT s.schema_fingerprint,c.enabled,c.status,t.schema_fingerprint AS current_fingerprint
+                       FROM task_tool_selections s JOIN connectors c ON c.id=s.connector_id
+                       LEFT JOIN connector_tools t ON t.connector_id=s.connector_id AND t.name=s.tool_name
+                       WHERE s.task_revision_id=?""", (pending["task_revision_id"],)
+                ).fetchall()
+                ready = pending["enabled"] and pending["task_enabled"] and dependencies and not any(
+                    not item["enabled"] or item["status"] != "ready" or item["current_fingerprint"] != item["schema_fingerprint"]
+                    for item in dependencies
+                )
+                active = connection.execute(
+                    """SELECT 1 FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id
+                       WHERE r.task_definition_id=? AND j.state IN ('queued','leased') LIMIT 1""",
+                    (pending["task_definition_id"],),
+                ).fetchone()
+                cooldown_cutoff = (datetime.now(UTC) - timedelta(minutes=pending["cooldown_minutes"])).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+                cooling = pending["cooldown_minutes"] and pending["last_triggered_at"] and pending["last_triggered_at"] > cooldown_cutoff
+                queued = connection.execute("SELECT count(*) FROM jobs WHERE state IN ('queued','leased')").fetchone()[0]
+                if not ready or active or cooling or queued >= self.queue_limit:
+                    continue
+                job_id = str(uuid4())
+                connection.execute(
+                    "INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES(?,?,?,'queued',?,?,?,?,?)",
+                    (job_id, pending["event_id"], pending["task_name"], pending["policy_revision_id"], pending["task_revision_id"], pending["input_json"], now, now),
+                )
+                connection.execute("DELETE FROM pending_event_triggers WHERE mapping_id=?", (mapping_id,))
+                connection.execute("UPDATE event_mappings SET last_triggered_at=?,updated_at=? WHERE id=?", (now, now, mapping_id))
+                self._append_audit(connection, actor_identity_id=None, credential_id=None, action="events.grace_expire", target_type="event", target_id=pending["event_id"], decision="allowed", reason_code="accepted_after_grace", correlation_id=f"grace:{mapping_id}:{now}", metadata={"job_id": job_id, "mapping_id": mapping_id})
+                promoted += 1
+        return promoted
+
     def list_event_mappings(self) -> list[dict[str, object]]:
         with connect(self.database_path) as connection:
             rows = connection.execute(
-                """SELECT m.*,i.display_name AS source_name,i.status AS source_status,
+                """SELECT m.*,p.due_at AS pending_due_at,i.display_name AS source_name,i.status AS source_status,
                           d.display_name AS task_display_name,d.enabled AS task_enabled
                    FROM event_mappings m JOIN identities i ON i.id=m.source_identity_id
                    JOIN task_definitions d ON d.id=m.task_definition_id
+                   LEFT JOIN pending_event_triggers p ON p.mapping_id=m.id
                    ORDER BY m.display_name COLLATE NOCASE"""
             ).fetchall()
         task_states = {item["id"]: item["status"] for item in self.list_tasks()}
         return [{**dict(row), "enabled": bool(row["enabled"]), "status": "paused" if not row["enabled"] else ("active" if row["source_status"] == "active" and task_states.get(row["task_definition_id"]) == "ready" else "suspended")} for row in rows]
 
-    def create_event_mapping(self, display_name: str, source_identity_id: str, event_type: str, task_id: str, cooldown_minutes: int, input_mode: str, correlation_id: str) -> str:
+    def create_event_mapping(self, display_name: str, source_identity_id: str, event_type: str, task_id: str, cooldown_minutes: int, grace_minutes: int, recovery_event_type: str | None, input_mode: str, correlation_id: str) -> str:
         mapping_id, now = str(uuid4()), utc_now()
-        if not display_name.strip() or not 0 <= cooldown_minutes <= 10080 or input_mode not in {"full_event", "subject", "attributes"}:
+        recovery_event_type = recovery_event_type or None
+        if (not display_name.strip() or not 0 <= cooldown_minutes <= 10080
+                or not 0 <= grace_minutes <= 1440 or input_mode not in {"full_event", "subject", "attributes"}
+                or (grace_minutes == 0 and recovery_event_type is not None)
+                or (grace_minutes > 0 and (recovery_event_type is None or recovery_event_type == event_type))):
             raise ValueError("invalid_event_mapping")
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -528,8 +587,11 @@ class ControlPlane:
             task = next((item for item in self.list_tasks() if item["id"] == task_id), None)
             if task is None or task["status"] != "ready":
                 raise ValueError("task_not_ready")
-            connection.execute("INSERT INTO event_mappings(id,display_name,source_identity_id,event_type,task_definition_id,enabled,cooldown_minutes,input_mode,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?,?,?)", (mapping_id, display_name.strip(), source_identity_id, event_type, task_id, cooldown_minutes, input_mode, now, now))
-            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.create", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"source_identity_id": source_identity_id, "event_type": event_type, "task_id": task_id, "cooldown_minutes": cooldown_minutes, "input_mode": input_mode})
+            collision = connection.execute("SELECT 1 FROM event_mappings WHERE source_identity_id=? AND (event_type IN (?,?) OR recovery_event_type IN (?,?)) LIMIT 1", (source_identity_id, event_type, recovery_event_type, event_type, recovery_event_type)).fetchone()
+            if collision:
+                raise ValueError("event_type_conflict")
+            connection.execute("INSERT INTO event_mappings(id,display_name,source_identity_id,event_type,task_definition_id,enabled,cooldown_minutes,grace_minutes,recovery_event_type,input_mode,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?,?,?,?,?)", (mapping_id, display_name.strip(), source_identity_id, event_type, task_id, cooldown_minutes, grace_minutes, recovery_event_type, input_mode, now, now))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.create", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"source_identity_id": source_identity_id, "event_type": event_type, "recovery_event_type": recovery_event_type, "task_id": task_id, "cooldown_minutes": cooldown_minutes, "grace_minutes": grace_minutes, "input_mode": input_mode})
         return mapping_id
 
     def set_event_mapping_enabled(self, mapping_id: str, enabled: bool, correlation_id: str) -> bool:
@@ -537,6 +599,8 @@ class ControlPlane:
             connection.execute("BEGIN IMMEDIATE")
             if connection.execute("UPDATE event_mappings SET enabled=?,updated_at=? WHERE id=?", (int(enabled), utc_now(), mapping_id)).rowcount != 1:
                 return False
+            if not enabled:
+                connection.execute("DELETE FROM pending_event_triggers WHERE mapping_id=?", (mapping_id,))
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.enable" if enabled else "event_mappings.disable", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
         return True
 
@@ -739,6 +803,7 @@ class ControlPlane:
                     "UPDATE credentials SET revoked_at=? WHERE identity_id=? AND revoked_at IS NULL",
                     (now, identity_id),
                 )
+                connection.execute("DELETE FROM pending_event_triggers WHERE mapping_id IN (SELECT id FROM event_mappings WHERE source_identity_id=?)", (identity_id,))
                 self._append_audit(
                     connection,
                     actor_identity_id=None,
@@ -1393,12 +1458,14 @@ class ControlPlane:
                 return IntakeResult(existing["event_id"], existing["job_id"], True, existing["outcome"] or ("accepted" if existing["job_id"] else "suppressed"))
             task_revision = connection.execute(
                 """SELECT r.id,d.id AS task_definition_id,d.name,m.id AS mapping_id,
-                          m.cooldown_minutes,m.input_mode,m.last_triggered_at FROM event_mappings m
+                          m.cooldown_minutes,m.grace_minutes,m.recovery_event_type,m.input_mode,m.last_triggered_at,
+                          CASE WHEN m.recovery_event_type=? THEN 1 ELSE 0 END AS is_recovery
+                   FROM event_mappings m
                    JOIN task_definitions d ON d.id=m.task_definition_id
                    JOIN task_revisions r ON r.task_definition_id=d.id
-                   WHERE m.source_identity_id=? AND m.event_type=? AND m.enabled=1 AND d.enabled=1
+                   WHERE m.source_identity_id=? AND (m.event_type=? OR m.recovery_event_type=?) AND m.enabled=1 AND d.enabled=1
                    ORDER BY r.revision DESC LIMIT 1""",
-                (identity.identity_id, event_type),
+                (event_type, identity.identity_id, event_type, event_type),
             ).fetchone()
             if task_revision is None:
                 raise ValueError("No active event mapping")
@@ -1413,12 +1480,12 @@ class ControlPlane:
                 """,
                 (task_revision["id"],),
             ).fetchall()
-            if not dependencies or any(
+            if not task_revision["is_recovery"] and (not dependencies or any(
                 not item["enabled"]
                 or item["status"] != "ready"
                 or item["current_fingerprint"] != item["schema_fingerprint"]
                 for item in dependencies
-            ):
+            )):
                 raise ValueError("Requested task is unavailable")
             window_started_at = now[:16] + ":00.000Z"
             rate = connection.execute(
@@ -1453,6 +1520,11 @@ class ControlPlane:
                 ),
             )
             task_input = canonical_json(redact(event if task_revision["input_mode"] == "full_event" else event[task_revision["input_mode"]]))
+            if task_revision["is_recovery"]:
+                cancelled = connection.execute("DELETE FROM pending_event_triggers WHERE mapping_id=?", (task_revision["mapping_id"],)).rowcount
+                outcome = "grace_cancelled" if cancelled else "recovery_recorded"
+                self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="events.create", target_type="event", target_id=event_id, decision="recorded", reason_code=outcome, correlation_id=correlation_id, metadata={"event_type": event["event_type"], "mapping_id": task_revision["mapping_id"]})
+                return IntakeResult(event_id, None, False, outcome)
             cooldown_cutoff = (datetime.now(UTC) - timedelta(minutes=task_revision["cooldown_minutes"])).isoformat(timespec="milliseconds").replace("+00:00", "Z")
             outcome = None
             if task_revision["cooldown_minutes"] and task_revision["last_triggered_at"] and task_revision["last_triggered_at"] > cooldown_cutoff:
@@ -1465,6 +1537,15 @@ class ControlPlane:
                 outcome = "task_execution_active"
             if outcome:
                 self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="events.create", target_type="event", target_id=event_id, decision="recorded", reason_code=outcome, correlation_id=correlation_id, metadata={"event_type": event["event_type"], "mapping_id": task_revision["mapping_id"]})
+                return IntakeResult(event_id, None, False, outcome)
+            if task_revision["grace_minutes"]:
+                due_at = (datetime.now(UTC) + timedelta(minutes=task_revision["grace_minutes"])).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+                created = connection.execute(
+                    "INSERT OR IGNORE INTO pending_event_triggers(mapping_id,event_id,task_revision_id,policy_revision_id,input_json,due_at,created_at) VALUES(?,?,?,?,?,?,?)",
+                    (task_revision["mapping_id"], event_id, task_revision["id"], identity.policy_revision_id, task_input, due_at, now),
+                ).rowcount
+                outcome = "grace_started" if created else "grace_active"
+                self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="events.create", target_type="event", target_id=event_id, decision="recorded", reason_code=outcome, correlation_id=correlation_id, metadata={"event_type": event["event_type"], "mapping_id": task_revision["mapping_id"], "due_at": due_at if created else None})
                 return IntakeResult(event_id, None, False, outcome)
             queued = connection.execute("SELECT count(*) FROM jobs WHERE state IN ('queued','leased')").fetchone()[0]
             if queued >= self.queue_limit:

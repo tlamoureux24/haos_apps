@@ -49,7 +49,7 @@ created = control_plane.create_identity(
 )
 identity = control_plane.authenticate(created.credential.token)
 mapping_id = control_plane.create_event_mapping(
-    "CI service alerts", identity.identity_id, "service.alert", "ci-inspection", 0, "full_event", "ci-create-mapping"
+    "CI service alerts", identity.identity_id, "service.alert", "ci-inspection", 0, 0, None, "full_event", "ci-create-mapping"
 )
 event = {
     "schema_version": 1,
@@ -179,6 +179,22 @@ blocked_state, blocked_job_id = control_plane.requeue_dead_letter(
 assert blocked_state == "task_execution_active" and blocked_job_id is None
 assert control_plane.cancel_job(requeued_job_id, "ci-requeued-cancel") == "cancelled"
 
+with sqlite3.connect(database) as connection:
+    connection.execute("UPDATE event_mappings SET grace_minutes=1,recovery_event_type='service.recovered' WHERE id=?", (mapping_id,))
+grace_started = control_plane.ingest_event(identity, "ci-grace-start", event, "ci-grace-start")
+assert grace_started.job_id is None and grace_started.outcome == "grace_started"
+recovery_event = {**event, "event_type": "service.recovered"}
+grace_cancelled = control_plane.ingest_event(identity, "ci-grace-recovery", recovery_event, "ci-grace-recovery")
+assert grace_cancelled.job_id is None and grace_cancelled.outcome == "grace_cancelled"
+grace_restarted = control_plane.ingest_event(identity, "ci-grace-restart", event, "ci-grace-restart")
+assert grace_restarted.job_id is None and grace_restarted.outcome == "grace_started"
+with sqlite3.connect(database) as connection:
+    connection.execute("UPDATE pending_event_triggers SET due_at='2000-01-01T00:00:00.000Z' WHERE mapping_id=?", (mapping_id,))
+assert control_plane.run_due_event_triggers() == 1
+grace_job = next(job for job in control_plane.list_jobs() if job["event_id"] == grace_restarted.event_id)
+assert grace_job["state"] == "queued"
+assert control_plane.cancel_job(grace_job["id"], "ci-grace-cancel") == "cancelled"
+
 try:
     control_plane.authenticate(created.credential.token[:-1] + "x")
 except AuthenticationError:
@@ -187,8 +203,8 @@ else:
     raise AssertionError("A modified credential was accepted")
 
 with sqlite3.connect(database) as connection:
-    assert connection.execute("SELECT count(*) FROM events").fetchone()[0] == 4
-    assert connection.execute("SELECT count(*) FROM jobs").fetchone()[0] == 3
+    assert connection.execute("SELECT count(*) FROM events").fetchone()[0] == 7
+    assert connection.execute("SELECT count(*) FROM jobs").fetchone()[0] == 4
     assert {row[0] for row in connection.execute("SELECT state FROM jobs")} == {"completed", "dead_letter", "cancelled"}
     assert connection.execute("SELECT count(*) FROM reports").fetchone()[0] == 1
     assert connection.execute("SELECT count(*) FROM job_attempts").fetchone()[0] == 4
