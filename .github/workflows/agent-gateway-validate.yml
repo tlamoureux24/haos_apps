@@ -257,7 +257,7 @@ jobs:
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/jobs | \
-            jq -e '.jobs | length == 3 and any(.state == "queued") and any(.state == "completed") and any(.state == "dead_letter")'
+            jq -e '.jobs | length == 4 and any(.state == "queued") and any(.state == "completed") and any(.state == "dead_letter") and any(.state == "cancelled")'
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/reports | \
