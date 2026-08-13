@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.40.0
+
+- Complete the bounded HAOS AppArmor audit from 3,329 recorded accesses,
+  reduced to nine unique operation, path and permission combinations.
+- Allow the four missing transient s6 startup executables identified by the
+  recorded profile transition chain and the `kill` capability used for child
+  process lifecycle management.
+- Remove AppArmor complain mode and restore full enforcement.
+- Replace recursive writable access to all of `/data` with exact rules for the
+  options file, SQLite database and its journal, WAL and shared-memory files,
+  while retaining the already exact private credential rules.
+- Add CI invariants preventing complain mode, broad executable-tree access and
+  recursive persistent-data permissions from returning.
+
 ## 0.39.0
 
 - Add a temporary AppArmor diagnostic release that replaces broad executable

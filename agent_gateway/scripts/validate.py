@@ -40,7 +40,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.39.0"',
+        'version: "0.40.0"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -121,8 +121,8 @@ def main() -> int:
         raise RuntimeError("Missing isolated public listener")
     if "capability sys_admin" in apparmor or "network raw" in apparmor:
         raise RuntimeError("AppArmor grants an excessive capability")
-    if "flags=(attach_disconnected,mediate_deleted,complain)" not in apparmor:
-        raise RuntimeError("The temporary AppArmor audit release must use complain mode")
+    if "complain" in apparmor:
+        raise RuntimeError("The final AppArmor profile must enforce its rules")
     broad_execution_rules = (
         "/bin/** ix,",
         "/usr/bin/** ix,",
@@ -137,6 +137,16 @@ def main() -> int:
     for broad_rule in broad_execution_rules:
         if broad_rule in apparmor:
             raise RuntimeError(f"AppArmor retains broad execution rule: {broad_rule}")
+    if "/data/{,**} rwk," in apparmor or "/data/**" in apparmor:
+        raise RuntimeError("AppArmor must restrict persistent data file by file")
+    exact_runtime_files = (
+        "/data/options.json r,",
+        "/data/agent_gateway.db rwlk,",
+        "/data/agent_gateway.db-{journal,shm,wal} rwlk,",
+    )
+    for runtime_rule in exact_runtime_files:
+        if runtime_rule not in apparmor:
+            raise RuntimeError(f"Missing exact runtime rule: {runtime_rule}")
     if "capability chown," not in apparmor:
         raise RuntimeError("AppArmor must allow ownership transfer of persistent data")
     if "capability fowner," in apparmor or "capability dac_override," in apparmor:
