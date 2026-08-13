@@ -273,6 +273,46 @@ class TaskCompositionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "requires_tool"):
                 control_plane.create_task("Empty", "empty", "No tools", 1, [], "test")
 
+    def test_archiving_preserves_history_and_restores_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            connector_id = "10000000-0000-0000-0000-000000000001"
+            with sqlite3.connect(path) as connection:
+                connection.execute(
+                    "INSERT INTO connectors(id,display_name,transport,protected_config,display_endpoint,status,enabled,created_at,updated_at,inventory_revision) VALUES(?,?,?,?,?,'ready',1,?,?,1)",
+                    (connector_id, "Example MCP", "streamable_http", "protected", "https://mcp.example.test", "2026-08-13T00:00:00Z", "2026-08-13T00:00:00Z"),
+                )
+                connection.execute(
+                    "INSERT INTO connector_tools(connector_id,name,description,input_schema_json,schema_fingerprint,discovered_at) VALUES(?,?,?,?,?,?)",
+                    (connector_id, "inspect", "Inspect", '{"type":"object"}', "a" * 64, "2026-08-13T00:00:00Z"),
+                )
+            task_id = control_plane.create_task("Inspect", "inspect", "Inspect.", 1, [{"connector_id": connector_id, "tool_name": "inspect"}], "test-task")
+            job_id = control_plane.enqueue_manual_task(task_id, {}, "test-run")
+            with self.assertRaisesRegex(ValueError, "task_execution_active"):
+                control_plane.set_task_archived(task_id, True, "test-active-archive")
+            with self.assertRaisesRegex(ValueError, "connector_execution_active"):
+                control_plane.set_connector_archived(connector_id, True, "test-active-connector-archive")
+            with sqlite3.connect(path) as connection:
+                connection.execute("UPDATE jobs SET state='cancelled' WHERE id=?", (job_id,))
+            self.assertTrue(control_plane.set_task_archived(task_id, True, "test-archive"))
+            task = control_plane.list_tasks()[0]
+            self.assertEqual(task["status"], "archived")
+            self.assertIsNotNone(task["archived_at"])
+            self.assertEqual(control_plane.get_job(job_id)["state"], "cancelled")
+            self.assertTrue(control_plane.set_task_archived(task_id, False, "test-restore"))
+            self.assertEqual(control_plane.list_tasks()[0]["status"], "disabled")
+            self.assertTrue(control_plane.set_connector_archived(connector_id, True, "test-connector-archive"))
+            connector = control_plane.list_connectors()[0]
+            self.assertFalse(connector["enabled"])
+            self.assertIsNotNone(connector["archived_at"])
+            self.assertTrue(control_plane.set_connector_archived(connector_id, False, "test-connector-restore"))
+            connector = control_plane.list_connectors()[0]
+            self.assertFalse(connector["enabled"])
+            self.assertIsNone(connector["archived_at"])
+
     def test_due_schedule_queues_once_and_skips_an_active_task(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

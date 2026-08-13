@@ -40,6 +40,10 @@ class ConnectorEnabledRequest(ConnectorIdRequest):
     enabled: bool
 
 
+class ConnectorArchivedRequest(ConnectorIdRequest):
+    archived: bool
+
+
 class TaskToolSelection(StrictContract):
     connector_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
     tool_name: str = Field(min_length=1, max_length=160)
@@ -59,6 +63,10 @@ class TaskIdRequest(StrictContract):
 
 class TaskEnabledRequest(TaskIdRequest):
     enabled: bool
+
+
+class TaskArchivedRequest(TaskIdRequest):
+    archived: bool
 
 
 class TaskRunRequest(TaskIdRequest):

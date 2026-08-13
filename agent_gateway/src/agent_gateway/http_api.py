@@ -14,6 +14,7 @@ from starlette.responses import JSONResponse, Response
 from agent_gateway.contracts import (
     ConnectorCreateRequest,
     ConnectorEnabledRequest,
+    ConnectorArchivedRequest,
     ConnectorIdRequest,
     EventCreateRequest,
     EventMappingCreateRequest,
@@ -25,6 +26,7 @@ from agent_gateway.contracts import (
     JobCancelRequest,
     TaskCreateRequest,
     TaskEnabledRequest,
+    TaskArchivedRequest,
     TaskIdRequest,
     TaskRunRequest,
     ScheduleCreateRequest,
@@ -169,6 +171,30 @@ async def admin_set_task_enabled(request: Request) -> JSONResponse:
     if not found:
         return error_response(404, "task_not_found", correlation_id)
     return JSONResponse({"task_id": contract.task_id, "status": "ready" if contract.enabled else "disabled"})
+
+
+async def admin_set_task_archived(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        await audit_denial(request, "tasks.configure", "csrf_failed")
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, TaskArchivedRequest)
+        found = await run_in_threadpool(
+            request.app.state.control_plane.set_task_archived,
+            contract.task_id,
+            contract.archived,
+            correlation_id,
+        )
+    except ValueError as error:
+        if str(error) == "task_execution_active":
+            return error_response(409, "task_execution_active", correlation_id)
+        return error_response(422, "invalid_task_request", correlation_id)
+    except (OverflowError, ValidationError):
+        return error_response(422, "invalid_task_request", correlation_id)
+    if not found:
+        return error_response(404, "task_not_found", correlation_id)
+    return JSONResponse({"task_id": contract.task_id, "status": "archived" if contract.archived else "disabled"})
 
 
 async def admin_delete_task(request: Request) -> JSONResponse:
@@ -400,6 +426,29 @@ async def admin_set_connector_enabled(request: Request) -> JSONResponse:
     if not found:
         return error_response(404, "connector_not_found", correlation_id)
     return JSONResponse({"connector_id": contract.connector_id, "status": "ready" if contract.enabled else "disabled"})
+
+
+async def admin_set_connector_archived(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, ConnectorArchivedRequest)
+        found = await run_in_threadpool(
+            request.app.state.control_plane.set_connector_archived,
+            contract.connector_id,
+            contract.archived,
+            correlation_id,
+        )
+    except ValueError as error:
+        if str(error) == "connector_execution_active":
+            return error_response(409, "connector_execution_active", correlation_id)
+        return error_response(422, "invalid_request", correlation_id)
+    except (OverflowError, ValidationError):
+        return error_response(422, "invalid_request", correlation_id)
+    if not found:
+        return error_response(404, "connector_not_found", correlation_id)
+    return JSONResponse({"connector_id": contract.connector_id, "status": "archived" if contract.archived else "disabled"})
 
 
 async def admin_delete_connector(request: Request) -> JSONResponse:

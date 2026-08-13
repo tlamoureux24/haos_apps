@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.37.0
+
+- Add reversible archival for tasks and MCP connectors while preserving every
+  execution, report and audit entry linked to them.
+- Refuse to archive a task with queued or leased work; archiving a task also
+  pauses its schedules and event triggers and clears pending grace windows.
+- Restore archived resources in a deliberately disabled state so an operator
+  must explicitly reactivate them.
+- Add administration filters for archived tasks and connectors, keeping normal
+  operational views uncluttered.
+- Improve human-readable rendering of free-form agent findings, including
+  connector, virtual-tool, comparison and evidence fields.
+- Include the read-only fake Streamable HTTP MCP server used to validate
+  multi-connector routing and duplicate upstream tool names.
+
 ## 0.36.0
 
 - Add an Ingress retention policy with a conservative 90-day default, bounded

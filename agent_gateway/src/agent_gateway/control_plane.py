@@ -170,7 +170,7 @@ class ControlPlane:
         with connect(self.database_path) as connection:
             rows = connection.execute(
                 """
-                SELECT c.id,c.display_name,c.transport,c.display_endpoint,c.status,c.enabled,
+                SELECT c.id,c.display_name,c.transport,c.display_endpoint,c.status,c.enabled,c.archived_at,
                        c.created_at,c.updated_at,c.last_checked_at,c.last_error_code,
                        c.inventory_revision,count(t.name) AS tool_count
                 FROM connectors c LEFT JOIN connector_tools t ON t.connector_id=c.id
@@ -207,7 +207,7 @@ class ControlPlane:
         with connect(self.database_path) as connection:
             rows = connection.execute(
                 """
-                SELECT d.id,d.name,d.display_name,d.enabled,d.created_at,r.id AS revision_id,
+                SELECT d.id,d.name,d.display_name,d.enabled,d.archived_at,d.created_at,r.id AS revision_id,
                        r.revision,r.objective,r.max_attempts,r.created_at AS revision_created_at
                 FROM task_definitions d JOIN task_revisions r ON r.task_definition_id=d.id
                 WHERE r.revision=(SELECT max(r2.revision) FROM task_revisions r2 WHERE r2.task_definition_id=d.id)
@@ -238,7 +238,7 @@ class ControlPlane:
                         failures.append(f"tool_missing:{selection['connector_name']}.{selection['tool_name']}")
                     elif selection["current_fingerprint"] != selection["schema_fingerprint"]:
                         failures.append(f"tool_schema_changed:{selection['connector_name']}.{selection['tool_name']}")
-                status = "disabled" if not row["enabled"] else ("ready" if selections and not failures else "unavailable")
+                status = "archived" if row["archived_at"] else ("disabled" if not row["enabled"] else ("ready" if selections and not failures else "unavailable"))
                 active_job_count = connection.execute(
                     """SELECT count(*) FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id
                        WHERE r.task_definition_id=? AND j.state IN ('queued','leased')""",
@@ -327,12 +327,33 @@ class ControlPlane:
     def set_task_enabled(self, task_id: str, enabled: bool, correlation_id: str) -> bool:
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            updated = connection.execute("UPDATE task_definitions SET enabled=? WHERE id=?", (int(enabled), task_id)).rowcount
+            updated = connection.execute("UPDATE task_definitions SET enabled=? WHERE id=? AND archived_at IS NULL", (int(enabled), task_id)).rowcount
             if not updated:
                 return False
             if not enabled:
                 connection.execute("DELETE FROM pending_event_triggers WHERE mapping_id IN (SELECT id FROM event_mappings WHERE task_definition_id=?)", (task_id,))
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.enable" if enabled else "tasks.disable", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
+        return True
+
+    def set_task_archived(self, task_id: str, archived: bool, correlation_id: str) -> bool:
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("SELECT archived_at FROM task_definitions WHERE id=?", (task_id,)).fetchone()
+            if row is None:
+                return False
+            active = connection.execute(
+                """SELECT 1 FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id
+                   WHERE r.task_definition_id=? AND j.state IN ('queued','leased') LIMIT 1""", (task_id,)
+            ).fetchone()
+            if archived and active:
+                raise ValueError("task_execution_active")
+            connection.execute("UPDATE task_definitions SET enabled=0,archived_at=? WHERE id=?", (now if archived else None, task_id))
+            if archived:
+                connection.execute("UPDATE schedules SET enabled=0,updated_at=? WHERE task_definition_id=?", (now, task_id))
+                connection.execute("UPDATE event_mappings SET enabled=0,updated_at=? WHERE task_definition_id=?", (now, task_id))
+                connection.execute("DELETE FROM pending_event_triggers WHERE mapping_id IN (SELECT id FROM event_mappings WHERE task_definition_id=?)", (task_id,))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.archive" if archived else "tasks.restore", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
         return True
 
     def delete_task(self, task_id: str, correlation_id: str) -> str:
@@ -739,10 +760,27 @@ class ControlPlane:
         now = utc_now()
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            updated = connection.execute("UPDATE connectors SET enabled=?,status=?,updated_at=? WHERE id=?", (int(enabled), "ready" if enabled else "disabled", now, connector_id)).rowcount
+            updated = connection.execute("UPDATE connectors SET enabled=?,status=?,updated_at=? WHERE id=? AND archived_at IS NULL", (int(enabled), "ready" if enabled else "disabled", now, connector_id)).rowcount
             if not updated:
                 return False
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.enable" if enabled else "connectors.disable", target_type="connector", target_id=connector_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
+        return True
+
+    def set_connector_archived(self, connector_id: str, archived: bool, correlation_id: str) -> bool:
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("SELECT 1 FROM connectors WHERE id=?", (connector_id,)).fetchone() is None:
+                return False
+            active = connection.execute(
+                """SELECT 1 FROM jobs j JOIN task_tool_selections s ON s.task_revision_id=j.task_revision_id
+                   WHERE s.connector_id=? AND j.state IN ('queued','leased') LIMIT 1""",
+                (connector_id,),
+            ).fetchone()
+            if archived and active:
+                raise ValueError("connector_execution_active")
+            connection.execute("UPDATE connectors SET enabled=0,status='disabled',archived_at=?,updated_at=? WHERE id=?", (now if archived else None, now, connector_id))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.archive" if archived else "connectors.restore", target_type="connector", target_id=connector_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
         return True
 
     def delete_connector(self, connector_id: str, correlation_id: str) -> str:

@@ -9,12 +9,12 @@ from collections.abc import Iterator
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "12"
+SCHEMA_GENERATION = "13"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO gateway_metadata VALUES('application','agent_gateway');
-INSERT INTO gateway_metadata VALUES('schema_generation','12');
+INSERT INTO gateway_metadata VALUES('schema_generation','13');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -38,7 +38,7 @@ CREATE TABLE policy_bindings(
   FOREIGN KEY(policy_revision_id) REFERENCES policy_revisions(id));
 CREATE TABLE task_definitions(
   id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE,display_name TEXT NOT NULL,
-  enabled INTEGER NOT NULL,created_at TEXT NOT NULL,
+  enabled INTEGER NOT NULL,archived_at TEXT,created_at TEXT NOT NULL,
   CHECK(enabled IN (0,1)));
 CREATE TABLE task_revisions(
   id TEXT PRIMARY KEY,task_definition_id TEXT NOT NULL,revision INTEGER NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE task_revisions(
 CREATE TABLE connectors(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL UNIQUE,transport TEXT NOT NULL,
   protected_config TEXT NOT NULL,display_endpoint TEXT NOT NULL,status TEXT NOT NULL,
-  enabled INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+  enabled INTEGER NOT NULL,archived_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
   last_checked_at TEXT,last_error_code TEXT,inventory_revision INTEGER NOT NULL DEFAULT 0,
   CHECK(transport IN ('streamable_http')),
   CHECK(status IN ('ready','unreachable','disabled','inventory_changed','invalid')),
@@ -242,6 +242,15 @@ def initialize_database(path: Path) -> None:
                 UPDATE gateway_metadata SET value='12' WHERE key='schema_generation';
                 """
             )
+            generation = ("12",)
+        if generation and generation[0] == "12":
+            task_columns = {row[1] for row in connection.execute("PRAGMA table_info(task_definitions)")}
+            connector_columns = {row[1] for row in connection.execute("PRAGMA table_info(connectors)")}
+            if "archived_at" not in task_columns:
+                connection.execute("ALTER TABLE task_definitions ADD COLUMN archived_at TEXT")
+            if "archived_at" not in connector_columns:
+                connection.execute("ALTER TABLE connectors ADD COLUMN archived_at TEXT")
+            connection.execute("UPDATE gateway_metadata SET value='13' WHERE key='schema_generation'")
             return
         if generation is None or generation[0] != SCHEMA_GENERATION:
             raise RuntimeError("incompatible_database_remove_app_data")
