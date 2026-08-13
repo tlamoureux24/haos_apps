@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- Add the authenticated stateless MCP Streamable HTTP endpoint at `/mcp`.
+- Expose the first five versioned read-only tools for gateway status, effective
+  permissions, events, jobs and reports.
+- Filter tool discovery per identity policy and recheck authorization on every
+  tool invocation using the existing opaque, independently revocable bearer.
+- Avoid OAuth emulation and stateful MCP sessions; no connector secret or
+  additional execution capability is introduced.
+
 ## 0.3.2
 
 - Prevent an empty initial URL fragment from producing an invalid CSS selector

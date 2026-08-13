@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import os
 import secrets
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from starlette.applications import Starlette
@@ -12,7 +13,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
-from starlette.routing import Route
+from starlette.routing import Mount, Route
 
 from agent_gateway import __version__
 from agent_gateway.admin_ui import ADMIN_CSS, ADMIN_JS
@@ -32,6 +33,7 @@ from agent_gateway.http_api import (
     list_jobs,
     list_reports,
 )
+from agent_gateway.mcp_api import OpaqueBearerMiddleware, create_mcp
 from agent_gateway.settings import load_settings
 from agent_gateway.surfaces import exposed_paths
 
@@ -148,18 +150,30 @@ routes = [
     )
     for path in exposed_paths(settings.surface)
 ]
+control_plane = ControlPlane(settings.database_path, settings.data_dir / "private")
+mcp_server = create_mcp(control_plane) if settings.surface == "public" else None
+mcp_application = mcp_server.streamable_http_app() if mcp_server else None
+
 if settings.surface == "admin":
     routes.append(Route("/admin/api/v1/identities", admin_list_identities, methods=["GET"]))
 if settings.surface == "public":
     routes.append(Route("/api/v1/events", list_events, methods=["GET"]))
+    routes.append(Mount("/", app=OpaqueBearerMiddleware(mcp_application, control_plane)))
+
+
+@asynccontextmanager
+async def lifespan(_: Starlette):
+    if mcp_server is None:
+        yield
+    else:
+        async with mcp_server.session_manager.run():
+            yield
 
 app = Starlette(
     debug=False,
     routes=routes,
     middleware=[Middleware(SecurityHeadersMiddleware)],
     exception_handlers={404: not_found},
+    lifespan=lifespan,
 )
-app.state.control_plane = ControlPlane(
-    settings.database_path,
-    settings.data_dir / "private",
-)
+app.state.control_plane = control_plane

@@ -231,7 +231,7 @@ jobs:
             --header "X-CSRF-Token: ${csrf_token}" \
             --header "Cookie: agw_csrf=${csrf_token}" \
             --header "Content-Type: application/json" \
-            --data '{"display_name":"CI observer","identity_type":"client","actions":["events.read","jobs.read","reports.read"]}' \
+            --data '{"display_name":"CI observer","identity_type":"client","actions":["gateway.status.read","permissions.effective.read","events.read","jobs.read","reports.read"]}' \
             http://127.0.0.1:18099/admin/api/v1/identities)"
           observer_credential="$(printf '%s' "${observer_response}" | jq -er '.credential')"
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
@@ -240,6 +240,28 @@ jobs:
             http://127.0.0.1:18098/api/v1/jobs | jq -e '.jobs | length == 2'
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
             http://127.0.0.1:18098/api/v1/reports | jq -e '.reports | length == 0'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --request POST --header 'Content-Type: application/json' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            http://127.0.0.1:18098/mcp)" = "401"
+          curl --fail --silent --request POST \
+            --header "Authorization: Bearer ${observer_credential}" \
+            --header 'Content-Type: application/json' \
+            --header 'Accept: application/json, text/event-stream' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            http://127.0.0.1:18098/mcp | jq -e '.result.serverInfo.name == "Agent Gateway"'
+          curl --fail --silent --request POST \
+            --header "Authorization: Bearer ${observer_credential}" \
+            --header 'Content-Type: application/json' \
+            --header 'Accept: application/json, text/event-stream' \
+            --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+            http://127.0.0.1:18098/mcp | jq -e '.result.tools | map(.name) == ["gateway_status_v1","permissions_get_effective_v1","events_list_v1","jobs_list_v1","reports_list_v1"]'
+          curl --fail --silent --request POST \
+            --header "Authorization: Bearer ${observer_credential}" \
+            --header 'Content-Type: application/json' \
+            --header 'Accept: application/json, text/event-stream' \
+            --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"gateway_status_v1","arguments":{}}}' \
+            http://127.0.0.1:18098/mcp | jq -e '.result.structuredContent.status == "ready"'
           curl --fail --silent \
             --header "Authorization: Bearer ${credential}" \
             http://127.0.0.1:18098/api/v1/permissions/effective | \
