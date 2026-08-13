@@ -33,10 +33,11 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text(encoding="utf-8")
     apparmor = (ROOT / "apparmor.txt").read_text(encoding="utf-8")
     application = (ROOT / "src/agent_gateway/main.py").read_text(encoding="utf-8")
+    admin_ui = (ROOT / "src/agent_gateway/admin_ui.py").read_text(encoding="utf-8")
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.3.1"',
+        'version: "0.3.2"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -53,6 +54,8 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
+    if "document.querySelector(`#${name}`)" in admin_ui:
+        raise RuntimeError("Admin navigation must reject an empty URL fragment before selecting a view")
 
     if "privileged:" in config or "host_network:" in config:
         raise RuntimeError("Agent Gateway must not request privileged or host networking")

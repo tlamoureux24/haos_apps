@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- Prevent an empty initial URL fragment from producing an invalid CSS selector
+  and stopping all administration JavaScript before data loading begins.
+- Validate navigation names against the four known views before changing tabs.
+
 ## 0.3.1
 
 - Replace each administration loading state independently with either its data,
