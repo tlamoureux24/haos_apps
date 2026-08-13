@@ -12,6 +12,10 @@ KNOWN_ACTIONS = frozenset(
         "events.create",
         "events.read",
         "jobs.read",
+        "jobs.claim",
+        "jobs.heartbeat",
+        "jobs.complete",
+        "jobs.fail",
         "reports.read",
     }
 )

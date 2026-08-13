@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0
+
+- Add the first complete reasoning-client loop: atomic claim, bounded heartbeat,
+  immutable report completion and explicit failure over MCP.
+- Bind opaque lease tokens to both job and identity, store only keyed verifiers,
+  and recheck current identity authorization on every operation.
+- Expose a single worker permission in the UI while persisting the four explicit
+  deny-by-default actions required by the protocol.
+
 ## 0.9.0
 
 - Remove Alembic, SQLAlchemy and every development migration as requested for

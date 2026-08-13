@@ -20,6 +20,10 @@ TOOL_ACTIONS = {
     "events_get_v1": "events.read",
     "jobs_list_v1": "jobs.read",
     "jobs_get_v1": "jobs.read",
+    "jobs_claim_v1": "jobs.claim",
+    "jobs_heartbeat_v1": "jobs.heartbeat",
+    "jobs_complete_v1": "jobs.complete",
+    "jobs_fail_v1": "jobs.fail",
     "reports_list_v1": "reports.read",
     "reports_get_v1": "reports.read",
 }
@@ -42,7 +46,7 @@ class GovernedMCP(FastMCP):
     def __init__(self, control_plane: ControlPlane):
         super().__init__(
             "Agent Gateway",
-            instructions="Governed read-only access to Agent Gateway state.",
+            instructions="Governed access to Agent Gateway jobs and state.",
             stateless_http=True,
             json_response=True,
             streamable_http_path="/mcp",
@@ -132,6 +136,36 @@ def create_mcp(control_plane: ControlPlane) -> GovernedMCP:
         if job is None:
             raise ValueError("job_not_found")
         return {"job": job}
+
+    @server.tool(name="jobs_claim_v1", structured_output=True)
+    def jobs_claim(ctx: Context) -> dict[str, object]:
+        """Atomically lease the oldest queued job eligible for this client."""
+        identity = control_plane.authenticate(request_token(ctx))
+        lease = control_plane.claim_job(identity, ctx.request_context.request.headers.get("x-request-id", "mcp-claim"))
+        if lease is None:
+            return {"claimed": False}
+        return {"claimed": True, "job": lease.job, "lease_token": lease.lease_token, "lease_expires_at": lease.lease_expires_at}
+
+    @server.tool(name="jobs_heartbeat_v1", structured_output=True)
+    def jobs_heartbeat(job_id: str, lease_token: str, ctx: Context) -> dict[str, object]:
+        """Extend an owned unexpired lease within its maximum runtime."""
+        identity = control_plane.authenticate(request_token(ctx))
+        expires = control_plane.heartbeat_job(identity, job_id, lease_token, "mcp-heartbeat")
+        return {"job_id": job_id, "lease_expires_at": expires}
+
+    @server.tool(name="jobs_complete_v1", structured_output=True)
+    def jobs_complete(job_id: str, lease_token: str, completion_key: str, report: dict[str, object], ctx: Context) -> dict[str, object]:
+        """Complete an owned lease with one immutable redacted report."""
+        identity = control_plane.authenticate(request_token(ctx))
+        report_id = control_plane.complete_job(identity, job_id, lease_token, completion_key, report, "mcp-complete")
+        return {"job_id": job_id, "state": "completed", "report_id": report_id}
+
+    @server.tool(name="jobs_fail_v1", structured_output=True)
+    def jobs_fail(job_id: str, lease_token: str, reason: str, ctx: Context) -> dict[str, object]:
+        """Finish an owned lease as failed with a bounded reason."""
+        identity = control_plane.authenticate(request_token(ctx))
+        control_plane.fail_job(identity, job_id, lease_token, reason, "mcp-fail")
+        return {"job_id": job_id, "state": "failed"}
 
     @server.tool(name="reports_list_v1", structured_output=True)
     def reports_list() -> dict[str, object]:

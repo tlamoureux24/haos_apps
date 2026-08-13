@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "1"
+SCHEMA_GENERATION = "2"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO gateway_metadata VALUES('application','agent_gateway');
-INSERT INTO gateway_metadata VALUES('schema_generation','1');
+INSERT INTO gateway_metadata VALUES('schema_generation','2');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -48,6 +48,15 @@ CREATE TABLE jobs(
   FOREIGN KEY(policy_revision_id) REFERENCES policy_revisions(id),
   CHECK(state IN ('queued','leased','completed','failed','cancelled','dead_letter')));
 CREATE INDEX ix_jobs_state_created ON jobs(state,created_at);
+CREATE TABLE job_attempts(
+  id TEXT PRIMARY KEY,job_id TEXT NOT NULL,attempt_number INTEGER NOT NULL,
+  identity_id TEXT NOT NULL,lease_verifier TEXT NOT NULL,leased_at TEXT NOT NULL,
+  lease_expires_at TEXT NOT NULL,max_expires_at TEXT NOT NULL,finished_at TEXT,
+  outcome TEXT,failure_reason TEXT,completion_key TEXT,
+  FOREIGN KEY(job_id) REFERENCES jobs(id),FOREIGN KEY(identity_id) REFERENCES identities(id),
+  UNIQUE(job_id,attempt_number),UNIQUE(job_id,completion_key),
+  CHECK(outcome IS NULL OR outcome IN ('completed','failed')));
+CREATE INDEX ix_job_attempts_job ON job_attempts(job_id,attempt_number);
 CREATE TABLE reports(
   id TEXT PRIMARY KEY,job_id TEXT NOT NULL,schema_version INTEGER NOT NULL,
   report_json TEXT NOT NULL,created_at TEXT NOT NULL,supersedes_id TEXT,

@@ -6,8 +6,9 @@ import hashlib
 import hmac
 import json
 import sqlite3
+import secrets
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -60,6 +61,13 @@ class IntakeResult:
     duplicate: bool
 
 
+@dataclass(frozen=True)
+class LeaseResult:
+    job: dict[str, object]
+    lease_token: str
+    lease_expires_at: str
+
+
 class AuthenticationError(RuntimeError):
     pass
 
@@ -75,6 +83,10 @@ class QueueFullError(RuntimeError):
 
 
 class RateLimitExceeded(RuntimeError):
+    pass
+
+
+class LeaseError(RuntimeError):
     pass
 
 
@@ -342,6 +354,110 @@ class ControlPlane:
                 metadata={"previous_state": "queued"},
             )
         return "cancelled"
+
+    def claim_job(self, identity: AuthenticatedIdentity, correlation_id: str) -> LeaseResult | None:
+        self.authorize(identity, "jobs.claim")
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        lease_expires = (now_dt + timedelta(minutes=5)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        max_expires = (now_dt + timedelta(minutes=30)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        token = secrets.token_urlsafe(32)
+        verifier = hmac.new(self.pepper, token.encode(), hashlib.sha256).hexdigest()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT id FROM jobs WHERE state='queued' ORDER BY created_at,id LIMIT 1"
+            ).fetchone()
+            if row is None:
+                return None
+            job_id = row["id"]
+            attempt_number = connection.execute(
+                "SELECT count(*)+1 FROM job_attempts WHERE job_id=?", (job_id,)
+            ).fetchone()[0]
+            attempt_id = str(uuid4())
+            connection.execute(
+                "INSERT INTO job_attempts(id,job_id,attempt_number,identity_id,lease_verifier,leased_at,lease_expires_at,max_expires_at) VALUES(?,?,?,?,?,?,?,?)",
+                (attempt_id, job_id, attempt_number, identity.identity_id, verifier, now, lease_expires, max_expires),
+            )
+            if connection.execute(
+                "UPDATE jobs SET state='leased',updated_at=? WHERE id=? AND state='queued'",
+                (now, job_id),
+            ).rowcount != 1:
+                raise LeaseError("claim_conflict")
+            self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.claim", target_type="job", target_id=job_id, decision="allowed", reason_code="leased", correlation_id=correlation_id, metadata={"attempt": attempt_number})
+        job = self.get_job(job_id)
+        assert job is not None
+        job["objective"] = "Diagnostiquer en lecture seule l’indisponibilité signalée et produire un rapport structuré."
+        job["required_report_schema"] = {"schema_version": 1, "summary": "string", "observations": "array"}
+        job["allowed_capabilities"] = []
+        return LeaseResult(job, token, lease_expires)
+
+    def _leased_attempt(self, connection, identity, job_id: str, lease_token: str):
+        row = connection.execute(
+            "SELECT * FROM job_attempts WHERE job_id=? AND finished_at IS NULL ORDER BY attempt_number DESC LIMIT 1",
+            (job_id,),
+        ).fetchone()
+        now = utc_now()
+        if row is None or row["identity_id"] != identity.identity_id:
+            raise LeaseError("lease_not_owned")
+        verifier = hmac.new(self.pepper, lease_token.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(verifier, row["lease_verifier"]):
+            raise LeaseError("invalid_lease")
+        if row["lease_expires_at"] <= now:
+            raise LeaseError("lease_expired")
+        return row
+
+    def heartbeat_job(self, identity, job_id: str, lease_token: str, correlation_id: str) -> str:
+        self.authorize(identity, "jobs.heartbeat")
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            attempt = self._leased_attempt(connection, identity, job_id, lease_token)
+            proposed = datetime.now(UTC) + timedelta(minutes=5)
+            maximum = datetime.fromisoformat(attempt["max_expires_at"].replace("Z", "+00:00"))
+            expires = min(proposed, maximum).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            connection.execute("UPDATE job_attempts SET lease_expires_at=? WHERE id=?", (expires, attempt["id"]))
+            self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.heartbeat", target_type="job", target_id=job_id, decision="allowed", reason_code="lease_extended", correlation_id=correlation_id, metadata={})
+        return expires
+
+    def complete_job(self, identity, job_id: str, lease_token: str, completion_key: str, report: dict[str, object], correlation_id: str) -> str:
+        self.authorize(identity, "jobs.complete")
+        if (
+            not completion_key
+            or len(completion_key) > 160
+            or set(report) != {"schema_version", "summary", "observations"}
+            or report.get("schema_version") != 1
+            or not isinstance(report.get("summary"), str)
+            or not 1 <= len(report["summary"]) <= 2000
+            or not isinstance(report.get("observations"), list)
+            or len(report["observations"]) > 100
+            or len(canonical_json(report)) > 32 * 1024
+        ):
+            raise ValueError("invalid_completion")
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute("SELECT r.id FROM reports r JOIN job_attempts a ON a.job_id=r.job_id WHERE r.job_id=? AND a.completion_key=?", (job_id, completion_key)).fetchone()
+            if existing:
+                return existing["id"]
+            attempt = self._leased_attempt(connection, identity, job_id, lease_token)
+            report_id = str(uuid4())
+            connection.execute("INSERT INTO reports(id,job_id,schema_version,report_json,created_at) VALUES(?,?,?,?,?)", (report_id, job_id, 1, canonical_json(redact(report)), now))
+            connection.execute("UPDATE job_attempts SET finished_at=?,outcome='completed',completion_key=? WHERE id=?", (now, completion_key, attempt["id"]))
+            connection.execute("UPDATE jobs SET state='completed',updated_at=? WHERE id=? AND state='leased'", (now, job_id))
+            self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.complete", target_type="job", target_id=job_id, decision="allowed", reason_code="completed", correlation_id=correlation_id, metadata={"report_id": report_id})
+        return report_id
+
+    def fail_job(self, identity, job_id: str, lease_token: str, reason: str, correlation_id: str) -> None:
+        self.authorize(identity, "jobs.fail")
+        if not reason.strip() or len(reason) > 500:
+            raise ValueError("invalid_failure_reason")
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            attempt = self._leased_attempt(connection, identity, job_id, lease_token)
+            connection.execute("UPDATE job_attempts SET finished_at=?,outcome='failed',failure_reason=? WHERE id=?", (now, reason.strip(), attempt["id"]))
+            connection.execute("UPDATE jobs SET state='failed',updated_at=? WHERE id=? AND state='leased'", (now, job_id))
+            self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.fail", target_type="job", target_id=job_id, decision="allowed", reason_code="failed", correlation_id=correlation_id, metadata={"reason": reason})
 
     def list_reports(self, limit: int = 100) -> list[dict[str, object]]:
         with connect(self.database_path) as connection:

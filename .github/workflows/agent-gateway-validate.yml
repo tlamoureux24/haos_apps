@@ -195,7 +195,7 @@ jobs:
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/identities | \
-            jq -e '.identities | length == 2 and all(has("credential") | not)'
+            jq -e '.identities | length == 4 and all(has("credential") | not)'
           occurred_at="$(date --utc +'%Y-%m-%dT%H:%M:%SZ')"
           event_payload="$(jq --null-input --compact-output \
             --arg occurred_at "${occurred_at}" \
@@ -228,15 +228,15 @@ jobs:
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/events | \
-            jq -e '.events | length == 2 and all(has("credential") | not)'
+            jq -e '.events | length == 3 and all(has("credential") | not)'
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/jobs | \
-            jq -e '.jobs | length == 2 and all(.state == "queued")'
+            jq -e '.jobs | length == 3 and any(.state == "queued") and any(.state == "completed") and any(.state == "failed")'
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/reports | \
-            jq -e '.reports | length == 0'
+            jq -e '.reports | length == 1'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --header "Authorization: Bearer ${credential}" \
             http://127.0.0.1:18098/api/v1/events)" = "403"
