@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.40.1
+
+- Allow the exact `/command/s6-mkdir` startup alias and its s6 portable-utils
+  multicall target, invoked by `preinit` before the process inventory can
+  observe it.
+
 ## 0.40.0
 
 - Complete the bounded HAOS AppArmor audit from 3,329 recorded accesses,
