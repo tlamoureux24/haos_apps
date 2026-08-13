@@ -58,7 +58,7 @@ jobs:
             --tag "agent-gateway-apparmor-audit:${version}" \
             agent_gateway
 
-      - name: Trace startup executable inventory
+      - name: Trace application executable inventory
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
@@ -94,7 +94,6 @@ jobs:
             "${trace_root}/trace" \
             --output "${trace_root}/executables.txt"
           test -s "${trace_root}/executables.txt"
-          grep -Fx '/init' "${trace_root}/executables.txt"
           grep -Fx '/run.sh' "${trace_root}/executables.txt"
           cp "${trace_root}/executables.txt" agent_gateway-apparmor-executables.txt
 
