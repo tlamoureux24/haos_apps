@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.24.0
+
+- Replace the identity status pill with the same compact green/red status dot
+  used for connectors and tasks.
+- Keep upstream connector identifiers and original tool names out of claimed
+  job envelopes; workers receive only virtual capability names and schemas.
+
 ## 0.23.0
 
 - Add an Ingress-only manual trigger for ready task definitions and switch

@@ -83,6 +83,11 @@ leases = [claim for claim in claims if claim is not None]
 assert len(leases) == 1
 lease = leases[0]
 assert lease.job["id"] == first.job_id
+assert lease.job["allowed_capabilities"] == [
+    {"name": "connector/ci-connector/inspect", "input_schema": {"type": "object"}}
+]
+assert "connector_id" not in str(lease.job["allowed_capabilities"])
+assert "tool_name" not in str(lease.job["allowed_capabilities"])
 capabilities = control_plane.active_capabilities(worker)
 assert len(capabilities) == 1
 assert capabilities[0]["name"] == "connector/ci-connector/inspect"

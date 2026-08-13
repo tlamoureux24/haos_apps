@@ -774,7 +774,7 @@ class ControlPlane:
         with connect(self.database_path) as connection:
             task = connection.execute("SELECT objective,input_schema_json,report_schema_json FROM task_revisions WHERE id=?", (job["task_revision_id"],)).fetchone()
             capabilities = connection.execute(
-                """SELECT s.namespaced_name,s.connector_id,s.tool_name,t.input_schema_json
+                """SELECT s.namespaced_name,t.input_schema_json
                    FROM task_tool_selections s JOIN connector_tools t
                      ON t.connector_id=s.connector_id AND t.name=s.tool_name
                    WHERE s.task_revision_id=? ORDER BY s.namespaced_name""",
@@ -786,8 +786,6 @@ class ControlPlane:
         job["allowed_capabilities"] = [
             {
                 "name": item["namespaced_name"],
-                "connector_id": item["connector_id"],
-                "tool_name": item["tool_name"],
                 "input_schema": json.loads(item["input_schema_json"]),
             }
             for item in capabilities
