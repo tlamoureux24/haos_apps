@@ -338,6 +338,59 @@ class ControlPlane:
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.delete", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
         return "deleted"
 
+    def enqueue_manual_task(
+        self, task_id: str, task_input: dict[str, object], correlation_id: str
+    ) -> str:
+        if not isinstance(task_input, dict) or len(canonical_json(task_input).encode()) > 32 * 1024:
+            raise ValueError("invalid_task_input")
+        now = utc_now()
+        job_id = str(uuid4())
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            task = connection.execute(
+                """SELECT d.name,r.id AS revision_id,r.input_schema_json
+                   FROM task_definitions d JOIN task_revisions r ON r.task_definition_id=d.id
+                   WHERE d.id=? AND d.enabled=1
+                     AND r.revision=(SELECT max(r2.revision) FROM task_revisions r2 WHERE r2.task_definition_id=d.id)""",
+                (task_id,),
+            ).fetchone()
+            if task is None:
+                raise ValueError("task_not_ready")
+            dependencies = connection.execute(
+                """SELECT s.schema_fingerprint,c.enabled,c.status,t.schema_fingerprint AS current_fingerprint
+                   FROM task_tool_selections s JOIN connectors c ON c.id=s.connector_id
+                   LEFT JOIN connector_tools t ON t.connector_id=s.connector_id AND t.name=s.tool_name
+                   WHERE s.task_revision_id=?""",
+                (task["revision_id"],),
+            ).fetchall()
+            if not dependencies or any(
+                not item["enabled"]
+                or item["status"] != "ready"
+                or item["current_fingerprint"] != item["schema_fingerprint"]
+                for item in dependencies
+            ):
+                raise ValueError("task_not_ready")
+            validate_json_contract(task_input, json.loads(task["input_schema_json"]), "input")
+            queued = connection.execute("SELECT count(*) FROM jobs WHERE state IN ('queued','leased')").fetchone()[0]
+            if queued >= self.queue_limit:
+                raise QueueFullError("queue_full")
+            policy_id = "system-ingress-admin-policy"
+            policy_revision_id = "system-ingress-admin-policy-v1"
+            connection.execute(
+                "INSERT OR IGNORE INTO policy_documents(id,name,created_at) VALUES(?,?,?)",
+                (policy_id, "system.ingress_admin", now),
+            )
+            connection.execute(
+                "INSERT OR IGNORE INTO policy_revisions(id,policy_id,schema_version,document_json,created_at) VALUES(?,?,?,?,?)",
+                (policy_revision_id, policy_id, 1, canonical_json({"allow": {"gateway_actions": [], "capabilities": []}, "deny": {"gateway_actions": [], "capabilities": []}}), now),
+            )
+            connection.execute(
+                "INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES(?,NULL,?,?,?,?,?,?,?)",
+                (job_id, task["name"], "queued", policy_revision_id, task["revision_id"], canonical_json(redact(task_input)), now, now),
+            )
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="jobs.create", target_type="job", target_id=job_id, decision="allowed", reason_code="ingress_manual", correlation_id=correlation_id, metadata={"task_id": task_id})
+        return job_id
+
     def create_connector(
         self,
         display_name: str,

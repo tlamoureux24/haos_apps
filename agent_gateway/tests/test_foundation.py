@@ -233,6 +233,18 @@ class TaskCompositionTests(unittest.TestCase):
             self.assertEqual(control_plane.delete_task(task_id, "test-delete-task"), "deleted")
             self.assertEqual(control_plane.list_tasks(), [])
             self.assertEqual(control_plane.delete_task(task_id, "test-delete-missing"), "not_found")
+            manual_task_id = control_plane.create_task(
+                "Manual inspection",
+                "manual_inspection",
+                "Inspect on demand.",
+                1,
+                [{"connector_id": connector_id, "tool_name": "inspect"}],
+                "test-manual-task",
+            )
+            manual_job_id = control_plane.enqueue_manual_task(manual_task_id, {}, "test-manual-run")
+            self.assertEqual(control_plane.get_job(manual_job_id)["state"], "queued")
+            self.assertIsNone(control_plane.get_job(manual_job_id)["event_id"])
+            self.assertEqual(control_plane.delete_task(manual_task_id, "test-delete-used"), "in_use")
 
     def test_task_requires_a_ready_connector_tool(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

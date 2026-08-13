@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.23.0
+
+- Add an Ingress-only manual trigger for ready task definitions and switch
+  directly to the execution queue after successful creation.
+- Create manual jobs atomically against the current immutable task revision,
+  rechecking connector/tool fingerprints and queue bounds server-side.
+- Distinguish manual work from event-driven work without creating synthetic
+  events, and record the administrator trigger in the audit trail.
+
 ## 0.22.0
 
 - Dynamically expose each task-selected capability as an individual virtual MCP

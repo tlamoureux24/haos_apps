@@ -22,6 +22,7 @@ from agent_gateway.contracts import (
     TaskCreateRequest,
     TaskEnabledRequest,
     TaskIdRequest,
+    TaskRunRequest,
 )
 from agent_gateway.connectors import discover_streamable_http, validate_streamable_http_url
 from agent_gateway.control_plane import (
@@ -174,6 +175,28 @@ async def admin_delete_task(request: Request) -> JSONResponse:
     if result == "in_use":
         return error_response(409, "task_in_use", correlation_id)
     return JSONResponse({"task_id": contract.task_id, "status": "deleted"})
+
+
+async def admin_run_task(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        await audit_denial(request, "jobs.create", "csrf_failed")
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, TaskRunRequest)
+        job_id = await run_in_threadpool(
+            request.app.state.control_plane.enqueue_manual_task,
+            contract.task_id,
+            contract.input,
+            correlation_id,
+        )
+    except OverflowError:
+        return error_response(413, "body_too_large", correlation_id)
+    except (ValueError, ValidationError):
+        return error_response(422, "task_not_ready", correlation_id)
+    except QueueFullError:
+        return error_response(503, "queue_full", correlation_id)
+    return JSONResponse({"job_id": job_id, "status": "queued"}, status_code=201)
 
 
 async def admin_create_connector(request: Request) -> JSONResponse:

@@ -61,6 +61,10 @@ class TaskEnabledRequest(TaskIdRequest):
     enabled: bool
 
 
+class TaskRunRequest(TaskIdRequest):
+    input: dict[str, Any] = Field(default_factory=dict, max_length=64)
+
+
 class EventCreateRequest(StrictContract):
     schema_version: Literal[1]
     event_type: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.-]*$")
