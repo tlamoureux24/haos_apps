@@ -207,6 +207,15 @@ jobs:
             --data '{"display_name":"CI API source","identity_type":"event_source","actions":["events.create","permissions.effective.read"]}' \
             http://127.0.0.1:18099/admin/api/v1/identities)"
           credential="$(printf '%s' "${identity_response}" | jq -er '.credential')"
+          source_identity_id="$(printf '%s' "${identity_response}" | jq -er '.identity_id')"
+          curl --fail --silent \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data "$(jq --null-input --compact-output --arg source "${source_identity_id}" '{display_name:"CI API alerts",source_identity_id:$source,event_type:"service.alert",task_id:"ci-inspection"}')" \
+            http://127.0.0.1:18099/admin/api/v1/event-mappings | jq -e '.status == "active"'
           echo "SMOKE_STAGE=identity-ready"
           curl --fail --silent \
             --header "X-Ingress-Path: ${ingress_path}" \
@@ -215,7 +224,7 @@ jobs:
           occurred_at="$(date --utc +'%Y-%m-%dT%H:%M:%SZ')"
           event_payload="$(jq --null-input --compact-output \
             --arg occurred_at "${occurred_at}" \
-            '{schema_version:1,event_type:"service.alert",occurred_at:$occurred_at,subject:{service_id:"ci-api-service"},attributes:{status:"unavailable"},requested_task:"inspect_service"}')"
+            '{schema_version:1,event_type:"service.alert",occurred_at:$occurred_at,subject:{service_id:"ci-api-service"},attributes:{status:"unavailable"}}')"
           test "$(curl --silent --output /tmp/event-first.json --write-out '%{http_code}' \
             --request POST \
             --header "Authorization: Bearer ${credential}" \

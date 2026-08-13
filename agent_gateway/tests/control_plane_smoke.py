@@ -48,13 +48,15 @@ created = control_plane.create_identity(
     "ci-create-identity",
 )
 identity = control_plane.authenticate(created.credential.token)
+control_plane.create_event_mapping(
+    "CI service alerts", identity.identity_id, "service.alert", "ci-inspection", "ci-create-mapping"
+)
 event = {
     "schema_version": 1,
     "event_type": "service.alert",
     "occurred_at": "2026-08-12T15:00:00Z",
     "subject": {"service_id": "ci-service"},
     "attributes": {"status": "unavailable"},
-    "requested_task": "inspect_service",
 }
 with ThreadPoolExecutor(max_workers=8) as executor:
     results = list(

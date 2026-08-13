@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "7"
+SCHEMA_GENERATION = "8"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO gateway_metadata VALUES('application','agent_gateway');
-INSERT INTO gateway_metadata VALUES('schema_generation','7');
+INSERT INTO gateway_metadata VALUES('schema_generation','8');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -75,6 +75,14 @@ CREATE TABLE schedules(
   CHECK(interval_minutes BETWEEN 1 AND 10080),CHECK(enabled IN (0,1)),
   CHECK(last_outcome IS NULL OR last_outcome IN ('queued','skipped_active','task_unavailable','queue_full')));
 CREATE INDEX ix_schedules_due ON schedules(enabled,next_run_at);
+CREATE TABLE event_mappings(
+  id TEXT PRIMARY KEY,display_name TEXT NOT NULL,source_identity_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,task_definition_id TEXT NOT NULL,enabled INTEGER NOT NULL,
+  created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+  FOREIGN KEY(source_identity_id) REFERENCES identities(id) ON DELETE RESTRICT,
+  FOREIGN KEY(task_definition_id) REFERENCES task_definitions(id) ON DELETE RESTRICT,
+  UNIQUE(source_identity_id,event_type),CHECK(enabled IN (0,1)));
+CREATE INDEX ix_event_mappings_lookup ON event_mappings(source_identity_id,event_type,enabled);
 CREATE TABLE events(
   id TEXT PRIMARY KEY,source_identity_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,
   schema_version INTEGER NOT NULL,event_type TEXT NOT NULL,occurred_at TEXT NOT NULL,
@@ -154,6 +162,21 @@ def initialize_database(path: Path) -> None:
                   CHECK(last_outcome IS NULL OR last_outcome IN ('queued','skipped_active','task_unavailable','queue_full')));
                 CREATE INDEX ix_schedules_due ON schedules(enabled,next_run_at);
                 UPDATE gateway_metadata SET value='7' WHERE key='schema_generation';
+                """
+            )
+            generation = ("7",)
+        if generation and generation[0] == "7":
+            connection.executescript(
+                """
+                CREATE TABLE event_mappings(
+                  id TEXT PRIMARY KEY,display_name TEXT NOT NULL,source_identity_id TEXT NOT NULL,
+                  event_type TEXT NOT NULL,task_definition_id TEXT NOT NULL,enabled INTEGER NOT NULL,
+                  created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+                  FOREIGN KEY(source_identity_id) REFERENCES identities(id) ON DELETE RESTRICT,
+                  FOREIGN KEY(task_definition_id) REFERENCES task_definitions(id) ON DELETE RESTRICT,
+                  UNIQUE(source_identity_id,event_type),CHECK(enabled IN (0,1)));
+                CREATE INDEX ix_event_mappings_lookup ON event_mappings(source_identity_id,event_type,enabled);
+                UPDATE gateway_metadata SET value='8' WHERE key='schema_generation';
                 """
             )
             return

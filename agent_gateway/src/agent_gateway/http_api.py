@@ -16,6 +16,9 @@ from agent_gateway.contracts import (
     ConnectorEnabledRequest,
     ConnectorIdRequest,
     EventCreateRequest,
+    EventMappingCreateRequest,
+    EventMappingEnabledRequest,
+    EventMappingIdRequest,
     IdentityCreateRequest,
     IdentityRevokeRequest,
     JobCancelRequest,
@@ -244,6 +247,49 @@ async def admin_delete_schedule(request: Request) -> JSONResponse:
         return error_response(422, "invalid_schedule", correlation_id)
     found = await run_in_threadpool(request.app.state.control_plane.delete_schedule, contract.schedule_id, correlation_id)
     return JSONResponse({"schedule_id": contract.schedule_id, "status": "deleted"}) if found else error_response(404, "schedule_not_found", correlation_id)
+
+
+async def admin_list_event_mappings(request: Request) -> JSONResponse:
+    mappings = await run_in_threadpool(request.app.state.control_plane.list_event_mappings)
+    return JSONResponse({"event_mappings": mappings, "count": len(mappings)})
+
+
+async def admin_create_event_mapping(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, EventMappingCreateRequest)
+        mapping_id = await run_in_threadpool(request.app.state.control_plane.create_event_mapping, contract.display_name, contract.source_identity_id, contract.event_type, contract.task_id, correlation_id)
+    except sqlite3.IntegrityError:
+        return error_response(409, "event_mapping_exists", correlation_id)
+    except (OverflowError, ValueError, ValidationError):
+        return error_response(422, "invalid_event_mapping", correlation_id)
+    return JSONResponse({"mapping_id": mapping_id, "status": "active"}, status_code=201)
+
+
+async def admin_set_event_mapping_enabled(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, EventMappingEnabledRequest)
+    except (OverflowError, ValidationError):
+        return error_response(422, "invalid_event_mapping", correlation_id)
+    found = await run_in_threadpool(request.app.state.control_plane.set_event_mapping_enabled, contract.mapping_id, contract.enabled, correlation_id)
+    return JSONResponse({"mapping_id": contract.mapping_id, "status": "active" if contract.enabled else "paused"}) if found else error_response(404, "event_mapping_not_found", correlation_id)
+
+
+async def admin_delete_event_mapping(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, EventMappingIdRequest)
+    except (OverflowError, ValidationError):
+        return error_response(422, "invalid_event_mapping", correlation_id)
+    found = await run_in_threadpool(request.app.state.control_plane.delete_event_mapping, contract.mapping_id, correlation_id)
+    return JSONResponse({"mapping_id": contract.mapping_id, "status": "deleted"}) if found else error_response(404, "event_mapping_not_found", correlation_id)
 
 
 async def admin_create_connector(request: Request) -> JSONResponse:

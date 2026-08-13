@@ -85,7 +85,6 @@ class EventCreateRequest(StrictContract):
     occurred_at: datetime
     subject: dict[str, Any] = Field(default_factory=dict)
     attributes: dict[str, Any] = Field(default_factory=dict)
-    requested_task: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.-]*$")
 
     @field_validator("occurred_at")
     @classmethod
@@ -111,3 +110,18 @@ class EventCreateRequest(StrictContract):
         if any(len(str(key)) > 80 for key in value):
             raise ValueError("Event subject key is too long")
         return value
+
+
+class EventMappingCreateRequest(StrictContract):
+    display_name: str = Field(min_length=1, max_length=120)
+    source_identity_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+    event_type: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.-]*$")
+    task_id: str = Field(min_length=1, max_length=120, pattern=r"^[a-zA-Z0-9-]+$")
+
+
+class EventMappingIdRequest(StrictContract):
+    mapping_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+
+
+class EventMappingEnabledRequest(EventMappingIdRequest):
+    enabled: bool

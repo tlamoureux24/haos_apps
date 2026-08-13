@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.29.0
+
+- Add administrator-managed event triggers binding one active event-source
+  identity and exact event type to one ready task.
+- Remove client-selected task routing from the public event contract; event
+  sources can now enqueue only through an explicit active mapping.
+- Suspend mappings when their source is revoked or their task becomes
+  unavailable, with pause, resume and deletion controls in Ingress.
+- Upgrade generation-seven databases in place while retaining existing
+  identities, connectors, tasks, schedules, jobs and reports.
+
 ## 0.28.0
 
 - Add persistent recurring schedules for ready task definitions with pause,

@@ -103,12 +103,14 @@ class DatabaseReadinessTests(unittest.TestCase):
             path = Path(directory) / "gateway.db"
             initialize_database(path)
             with sqlite3.connect(path) as connection:
+                connection.execute("DROP TABLE event_mappings")
                 connection.execute("DROP TABLE schedules")
                 connection.execute("UPDATE gateway_metadata SET value='6' WHERE key='schema_generation'")
             initialize_database(path)
             self.assertTrue(database_ready(path))
             with sqlite3.connect(path) as connection:
                 self.assertEqual(connection.execute("SELECT count(*) FROM schedules").fetchone()[0], 0)
+                self.assertEqual(connection.execute("SELECT count(*) FROM event_mappings").fetchone()[0], 0)
 
 
 class PublicSurfaceTests(unittest.TestCase):

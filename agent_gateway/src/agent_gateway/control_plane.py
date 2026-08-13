@@ -339,7 +339,8 @@ class ControlPlane:
                 return "not_found"
             used = connection.execute("SELECT 1 FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id WHERE r.task_definition_id=? LIMIT 1", (task_id,)).fetchone()
             scheduled = connection.execute("SELECT 1 FROM schedules WHERE task_definition_id=? LIMIT 1", (task_id,)).fetchone()
-            if used is not None or scheduled is not None:
+            mapped = connection.execute("SELECT 1 FROM event_mappings WHERE task_definition_id=? LIMIT 1", (task_id,)).fetchone()
+            if used is not None or scheduled is not None or mapped is not None:
                 return "in_use"
             revision_ids = [item[0] for item in connection.execute("SELECT id FROM task_revisions WHERE task_definition_id=?", (task_id,)).fetchall()]
             for revision_id in revision_ids:
@@ -501,6 +502,50 @@ class ControlPlane:
             with connect(self.database_path) as connection:
                 connection.execute("UPDATE schedules SET next_run_at=?,last_run_at=?,last_outcome=?,updated_at=? WHERE id=?", (next_run, now, outcome, now, schedule["id"]))
         return len(due)
+
+    def list_event_mappings(self) -> list[dict[str, object]]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                """SELECT m.*,i.display_name AS source_name,i.status AS source_status,
+                          d.display_name AS task_display_name,d.enabled AS task_enabled
+                   FROM event_mappings m JOIN identities i ON i.id=m.source_identity_id
+                   JOIN task_definitions d ON d.id=m.task_definition_id
+                   ORDER BY m.display_name COLLATE NOCASE"""
+            ).fetchall()
+        task_states = {item["id"]: item["status"] for item in self.list_tasks()}
+        return [{**dict(row), "enabled": bool(row["enabled"]), "status": "paused" if not row["enabled"] else ("active" if row["source_status"] == "active" and task_states.get(row["task_definition_id"]) == "ready" else "suspended")} for row in rows]
+
+    def create_event_mapping(self, display_name: str, source_identity_id: str, event_type: str, task_id: str, correlation_id: str) -> str:
+        mapping_id, now = str(uuid4()), utc_now()
+        if not display_name.strip():
+            raise ValueError("invalid_event_mapping")
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            source = connection.execute("SELECT identity_type,status FROM identities WHERE id=?", (source_identity_id,)).fetchone()
+            if source is None or source["identity_type"] != "event_source" or source["status"] != "active":
+                raise ValueError("invalid_event_source")
+            task = next((item for item in self.list_tasks() if item["id"] == task_id), None)
+            if task is None or task["status"] != "ready":
+                raise ValueError("task_not_ready")
+            connection.execute("INSERT INTO event_mappings(id,display_name,source_identity_id,event_type,task_definition_id,enabled,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?)", (mapping_id, display_name.strip(), source_identity_id, event_type, task_id, now, now))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.create", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"source_identity_id": source_identity_id, "event_type": event_type, "task_id": task_id})
+        return mapping_id
+
+    def set_event_mapping_enabled(self, mapping_id: str, enabled: bool, correlation_id: str) -> bool:
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("UPDATE event_mappings SET enabled=?,updated_at=? WHERE id=?", (int(enabled), utc_now(), mapping_id)).rowcount != 1:
+                return False
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.enable" if enabled else "event_mappings.disable", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
+        return True
+
+    def delete_event_mapping(self, mapping_id: str, correlation_id: str) -> bool:
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("DELETE FROM event_mappings WHERE id=?", (mapping_id,)).rowcount != 1:
+                return False
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.delete", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
+        return True
 
     def create_connector(
         self,
@@ -1263,7 +1308,7 @@ class ControlPlane:
         self.authorize(identity, "events.create")
         if not idempotency_key or len(idempotency_key) > 160:
             raise ValueError("Idempotency key must contain 1 to 160 characters")
-        task_name = str(event.get("requested_task", ""))
+        event_type = str(event.get("event_type", ""))
         now = utc_now()
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -1274,11 +1319,16 @@ class ControlPlane:
             if existing:
                 return IntakeResult(existing["event_id"], existing["job_id"], True)
             task_revision = connection.execute(
-                "SELECT r.id FROM task_revisions r JOIN task_definitions d ON d.id=r.task_definition_id WHERE d.name=? AND d.enabled=1 ORDER BY r.revision DESC LIMIT 1",
-                (task_name,),
+                """SELECT r.id,d.name,m.id AS mapping_id FROM event_mappings m
+                   JOIN task_definitions d ON d.id=m.task_definition_id
+                   JOIN task_revisions r ON r.task_definition_id=d.id
+                   WHERE m.source_identity_id=? AND m.event_type=? AND m.enabled=1 AND d.enabled=1
+                   ORDER BY r.revision DESC LIMIT 1""",
+                (identity.identity_id, event_type),
             ).fetchone()
             if task_revision is None:
-                raise ValueError("Unknown or disabled requested task")
+                raise ValueError("No active event mapping")
+            task_name = task_revision["name"]
             dependencies = connection.execute(
                 """
                 SELECT s.connector_id,s.tool_name,s.schema_fingerprint,c.enabled,c.status,
@@ -1348,7 +1398,7 @@ class ControlPlane:
                 decision="allowed",
                 reason_code="accepted",
                 correlation_id=correlation_id,
-                metadata={"job_id": job_id, "event_type": event["event_type"]},
+                metadata={"job_id": job_id, "event_type": event["event_type"], "mapping_id": task_revision["mapping_id"]},
             )
         return IntakeResult(event_id, job_id, False)
 
