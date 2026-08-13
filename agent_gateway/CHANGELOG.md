@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.27.0
+
+- Restore the last administration page after a Home Assistant Ingress refresh
+  instead of always returning to the overview.
+- Present structured reports as human-readable summaries and findings while
+  retaining the complete raw JSON in an optional disclosure.
+
 ## 0.26.0
 
 - Advertise only the next queued job's virtual capabilities before its claim so
