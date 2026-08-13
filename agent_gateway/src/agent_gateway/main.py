@@ -20,7 +20,10 @@ from agent_gateway.database import database_ready
 from agent_gateway.control_plane import ControlPlane
 from agent_gateway.http_api import (
     admin_create_identity,
+    admin_list_events,
     admin_list_identities,
+    admin_list_jobs,
+    admin_list_reports,
     admin_revoke_identity,
     admin_status,
     create_event,
@@ -88,10 +91,14 @@ async def admin_index(request: Request) -> HTMLResponse:
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Agent Gateway</title><link rel="stylesheet" href="{safe_prefix}/admin/assets/admin.css"></head>
 <body><main class="app" data-base="{safe_prefix}" data-csrf="{csrf_token}">
-<header class="top"><a class="brand" href="{safe_prefix}/"><img src="{safe_prefix}/admin/assets/logo.png" alt=""><span>Agent Gateway<small>Control plane</small></span></a><nav class="nav" aria-label="Navigation"><a class="active" href="{safe_prefix}/">Vue d’ensemble</a><span class="future">Événements</span><span class="future">Tâches</span><span class="future">Rapports</span></nav><button id="theme" class="theme" type="button" aria-label="Changer de thème">☾</button></header>
-<section class="hero"><div><h1>Vue d’ensemble</h1><p>Gérez les identités et leurs autorisations d’accès à la passerelle.</p></div><div class="health"><i></i><a href="{safe_prefix}/health/ready">Service opérationnel</a></div></section>
+<header class="top"><a class="brand" href="#overview"><img src="{safe_prefix}/admin/assets/logo.png" alt=""><span>Agent Gateway<small>Control plane</small></span></a><nav class="nav" aria-label="Navigation"><a class="active" data-view="overview" href="#overview">Vue d’ensemble</a><a data-view="events" href="#events">Événements</a><a data-view="jobs" href="#jobs">Tâches</a><a data-view="reports" href="#reports">Rapports</a></nav><button id="theme" class="theme" type="button" aria-label="Changer de thème">☾</button></header>
+<section id="overview" class="view active"><section class="hero"><div><h1>Vue d’ensemble</h1><p>Gérez les identités et leurs autorisations d’accès à la passerelle.</p></div><div class="health"><i></i><a href="{safe_prefix}/health/ready">Service opérationnel</a></div></section>
 <section class="metrics"><article class="metric"><strong id="total">–</strong><span>Identités enregistrées</span></article><article class="metric"><strong id="active">–</strong><span>Identités actives</span></article><article class="metric amber"><strong id="revoked">–</strong><span>Identités révoquées</span></article></section>
 <div class="workspace"><section class="card"><div class="cardhead"><div><h2>Nouvelle identité</h2><p>Le secret ne sera affiché qu’une seule fois.</p></div></div><form id="create"><label>Nom<input name="display_name" maxlength="120" placeholder="Ex. Codex laptop" required></label><label>Type<select name="identity_type"><option value="client">Client MCP</option><option value="event_source">Source d’événements</option><option value="scheduler">Planificateur</option></select></label><fieldset><legend>Permissions de la passerelle</legend><label class="permission"><input type="checkbox" name="actions" value="permissions.effective.read"><span>Lire ses permissions<small>Inspecter les droits effectifs de cette identité</small></span></label><label class="permission"><input type="checkbox" name="actions" value="events.create"><span>Créer des événements<small>Soumettre des événements authentifiés</small></span></label><label class="permission"><input type="checkbox" name="actions" value="events.read"><span>Lire les événements</span></label><label class="permission"><input type="checkbox" name="actions" value="jobs.read"><span>Lire les tâches</span></label><label class="permission"><input type="checkbox" name="actions" value="reports.read"><span>Lire les rapports</span></label></fieldset><button class="primary" type="submit">Créer l’identité</button><p id="message" class="error"></p></form><aside id="credential" class="credential"><strong>Copiez cet identifiant maintenant</strong><code></code><span>Il ne pourra pas être récupéré plus tard.</span></aside></section><section class="card identities"><div class="cardhead"><div><h2>Identités</h2><p>Clients, sources et planificateurs autorisés.</p></div><span id="identity-count" class="count">–</span></div><div id="identities"><p class="loading">Chargement…</p></div></section></div>
+ </section>
+<section id="events" class="view"><div class="pagehead"><h1>Événements</h1><p>Derniers événements authentifiés reçus par la passerelle.</p></div><section class="card"><div id="events-list" class="tablewrap loading">Chargement…</div></section></section>
+<section id="jobs" class="view"><div class="pagehead"><h1>Tâches</h1><p>File persistante des diagnostics demandés.</p></div><section class="card"><div id="jobs-list" class="tablewrap loading">Chargement…</div></section></section>
+<section id="reports" class="view"><div class="pagehead"><h1>Rapports</h1><p>Résultats structurés et persistants produits par les agents.</p></div><section class="card"><div id="reports-list" class="tablewrap loading">Chargement…</div></section></section>
 </main><script src="{safe_prefix}/admin/assets/admin.js" defer></script></body></html>"""
     return HTMLResponse(document)
 
@@ -120,6 +127,9 @@ route_handlers = {
     "/admin/api/v1/status": admin_status,
     "/admin/api/v1/identities": admin_create_identity,
     "/admin/api/v1/identities/revoke": admin_revoke_identity,
+    "/admin/api/v1/events": admin_list_events,
+    "/admin/api/v1/jobs": admin_list_jobs,
+    "/admin/api/v1/reports": admin_list_reports,
     "/api/v1/events": create_event,
     "/api/v1/permissions/effective": effective_permissions,
     "/health/live": live,

@@ -74,13 +74,12 @@ async def audit_denial(
 
 
 async def admin_status(request: Request) -> JSONResponse:
-    identities = await run_in_threadpool(request.app.state.control_plane.list_identities)
+    counts = await run_in_threadpool(request.app.state.control_plane.status_counts)
     return JSONResponse(
         {
             "status": "ready",
             "surface": "admin",
-            "identities": len(identities),
-            "active_identities": sum(item["status"] == "active" for item in identities),
+            **counts,
         }
     )
 
@@ -88,6 +87,21 @@ async def admin_status(request: Request) -> JSONResponse:
 async def admin_list_identities(request: Request) -> JSONResponse:
     identities = await run_in_threadpool(request.app.state.control_plane.list_identities)
     return JSONResponse({"identities": identities})
+
+
+async def admin_list_events(request: Request) -> JSONResponse:
+    events = await run_in_threadpool(request.app.state.control_plane.list_events)
+    return JSONResponse({"events": events, "limit": 100})
+
+
+async def admin_list_jobs(request: Request) -> JSONResponse:
+    jobs = await run_in_threadpool(request.app.state.control_plane.list_jobs)
+    return JSONResponse({"jobs": jobs, "limit": 100})
+
+
+async def admin_list_reports(request: Request) -> JSONResponse:
+    reports = await run_in_threadpool(request.app.state.control_plane.list_reports)
+    return JSONResponse({"reports": reports, "limit": 100})
 
 
 async def admin_create_identity(request: Request) -> JSONResponse:

@@ -211,6 +211,18 @@ jobs:
             http://127.0.0.1:18098/api/v1/events)" = "200"
           test "$(jq -r '.event_id' /tmp/event-first.json)" = "$(jq -r '.event_id' /tmp/event-replay.json)"
           curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/events | \
+            jq -e '.events | length == 2 and all(has("credential") | not)'
+          curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/jobs | \
+            jq -e '.jobs | length == 2 and all(.state == "queued")'
+          curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/reports | \
+            jq -e '.reports | length == 0'
+          curl --fail --silent \
             --header "Authorization: Bearer ${credential}" \
             http://127.0.0.1:18098/api/v1/permissions/effective | \
             jq -e '.gateway_actions | index("events.create")'

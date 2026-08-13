@@ -206,6 +206,83 @@ class ControlPlane:
                 )
         return True
 
+    def list_events(self, limit: int = 100) -> list[dict[str, object]]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT e.id,e.event_type,e.occurred_at,e.received_at,e.payload_json,
+                       i.display_name AS source_name,j.id AS job_id
+                FROM events e
+                JOIN identities i ON i.id=e.source_identity_id
+                LEFT JOIN jobs j ON j.event_id=e.id
+                ORDER BY e.received_at DESC LIMIT ?
+                """,
+                (min(max(limit, 1), 100),),
+            ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "event_type": row["event_type"],
+                "occurred_at": row["occurred_at"],
+                "received_at": row["received_at"],
+                "source_name": row["source_name"],
+                "job_id": row["job_id"],
+                "payload": redact(json.loads(row["payload_json"])),
+            }
+            for row in rows
+        ]
+
+    def status_counts(self) -> dict[str, int]:
+        with connect(self.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                  (SELECT count(*) FROM identities) AS identities,
+                  (SELECT count(*) FROM identities WHERE status='active') AS active_identities,
+                  (SELECT count(*) FROM events) AS events,
+                  (SELECT count(*) FROM jobs) AS jobs,
+                  (SELECT count(*) FROM reports) AS reports
+                """
+            ).fetchone()
+        return {key: int(row[key]) for key in row.keys()}
+
+    def list_jobs(self, limit: int = 100) -> list[dict[str, object]]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT j.id,j.event_id,j.task_name,j.state,j.created_at,j.updated_at,
+                       count(r.id) AS report_count
+                FROM jobs j LEFT JOIN reports r ON r.job_id=j.id
+                GROUP BY j.id ORDER BY j.created_at DESC LIMIT ?
+                """,
+                (min(max(limit, 1), 100),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_reports(self, limit: int = 100) -> list[dict[str, object]]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT r.id,r.job_id,r.schema_version,r.report_json,r.created_at,
+                       r.supersedes_id,j.task_name
+                FROM reports r JOIN jobs j ON j.id=r.job_id
+                ORDER BY r.created_at DESC LIMIT ?
+                """,
+                (min(max(limit, 1), 100),),
+            ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "job_id": row["job_id"],
+                "schema_version": row["schema_version"],
+                "created_at": row["created_at"],
+                "supersedes_id": row["supersedes_id"],
+                "task_name": row["task_name"],
+                "report": redact(json.loads(row["report_json"])),
+            }
+            for row in rows
+        ]
+
     def authenticate(self, token: str) -> AuthenticatedIdentity:
         credential_id = token_credential_id(token)
         if credential_id is None:

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Activate the Events, Jobs and Reports navigation pages in the Ingress UI.
+- Add bounded, newest-first administration APIs for persistent events, queued
+  jobs and structured reports.
+- Show redacted event/report details, queue state and report counts without
+  exposing credentials, verifiers or private connector state.
+- Preserve direct tab selection through URL fragments and responsive navigation.
+
 ## 0.2.1
 
 - Redesign the Ingress dashboard using the visual conventions established by
