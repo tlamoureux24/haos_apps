@@ -309,6 +309,32 @@ class ControlPlane:
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.create", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"tool_count": len(resolved)})
         return task_id
 
+    def set_task_enabled(self, task_id: str, enabled: bool, correlation_id: str) -> bool:
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            updated = connection.execute("UPDATE task_definitions SET enabled=? WHERE id=?", (int(enabled), task_id)).rowcount
+            if not updated:
+                return False
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.enable" if enabled else "tasks.disable", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
+        return True
+
+    def delete_task(self, task_id: str, correlation_id: str) -> str:
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("SELECT id FROM task_definitions WHERE id=?", (task_id,)).fetchone()
+            if row is None:
+                return "not_found"
+            used = connection.execute("SELECT 1 FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id WHERE r.task_definition_id=? LIMIT 1", (task_id,)).fetchone()
+            if used is not None:
+                return "in_use"
+            revision_ids = [item[0] for item in connection.execute("SELECT id FROM task_revisions WHERE task_definition_id=?", (task_id,)).fetchall()]
+            for revision_id in revision_ids:
+                connection.execute("DELETE FROM task_tool_selections WHERE task_revision_id=?", (revision_id,))
+            connection.execute("DELETE FROM task_revisions WHERE task_definition_id=?", (task_id,))
+            connection.execute("DELETE FROM task_definitions WHERE id=?", (task_id,))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.delete", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
+        return "deleted"
+
     def create_connector(
         self,
         display_name: str,

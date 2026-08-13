@@ -152,7 +152,7 @@ jobs:
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/admin.js"'* ]]
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/logo.png"'* ]]
           [[ "${ingress_page}" == *'href="#audit"'* ]]
-          [[ "${ingress_page}" == *'Agent Gateway <b>v0.17.0</b>'* ]]
+          [[ "${ingress_page}" == *'Agent Gateway <b>v0.18.0</b>'* ]]
           curl --fail --silent \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/admin/api/v1/status | \
@@ -290,6 +290,22 @@ jobs:
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/tasks | \
             jq -e '.count == 2 and any(.tasks[]; .name == "ci_status_task" and .status == "ready" and (.tools | length == 1))'
+          curl --fail --silent \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data "{\"task_id\":\"$(printf '%s' "${task_response}" | jq -er '.task_id')\",\"enabled\":false}" \
+            http://127.0.0.1:18099/admin/api/v1/tasks/enabled | jq -e '.status == "disabled"'
+          curl --fail --silent \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data "{\"task_id\":\"$(printf '%s' "${task_response}" | jq -er '.task_id')\",\"enabled\":true}" \
+            http://127.0.0.1:18099/admin/api/v1/tasks/enabled | jq -e '.status == "ready"'
           test "$(curl --silent --output /tmp/connector-in-use.json --write-out '%{http_code}' \
             --request POST \
             --header "X-Ingress-Path: ${ingress_path}" \
@@ -324,6 +340,17 @@ jobs:
           curl --fail --silent --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/tasks | \
             jq -e 'any(.tasks[]; .name == "ci_status_task" and .status == "ready")'
+          curl --fail --silent \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data "{\"task_id\":\"$(printf '%s' "${task_response}" | jq -er '.task_id')\"}" \
+            http://127.0.0.1:18099/admin/api/v1/tasks/delete | jq -e '.status == "deleted"'
+          curl --fail --silent --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/tasks | \
+            jq -e 'all(.tasks[]; .name != "ci_status_task")'
           echo "SMOKE_STAGE=generic-connector-ready"
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
             http://127.0.0.1:18098/api/v1/events | jq -e '.events | length == 3'

@@ -28,7 +28,9 @@ from agent_gateway.http_api import (
     admin_list_connector_tools,
     admin_set_connector_enabled,
     admin_create_task,
+    admin_delete_task,
     admin_list_tasks,
+    admin_set_task_enabled,
     admin_list_events,
     admin_list_identities,
     admin_list_jobs,
@@ -150,6 +152,8 @@ route_handlers = {
     "/admin/api/v1/connectors/enabled": admin_set_connector_enabled,
     "/admin/api/v1/connectors/tools": admin_list_connector_tools,
     "/admin/api/v1/tasks": admin_create_task,
+    "/admin/api/v1/tasks/delete": admin_delete_task,
+    "/admin/api/v1/tasks/enabled": admin_set_task_enabled,
     "/admin/api/v1/identities": admin_create_identity,
     "/admin/api/v1/identities/revoke": admin_revoke_identity,
     "/admin/api/v1/events": admin_list_events,
@@ -169,7 +173,7 @@ routes = [
     Route(
         path,
         route_handlers[path],
-        methods=["POST"] if path in {"/admin/api/v1/connectors", "/admin/api/v1/connectors/check", "/admin/api/v1/connectors/delete", "/admin/api/v1/connectors/enabled", "/admin/api/v1/tasks", "/admin/api/v1/identities", "/admin/api/v1/identities/revoke", "/admin/api/v1/jobs/cancel", "/api/v1/events"} else ["GET"],
+        methods=["POST"] if path in {"/admin/api/v1/connectors", "/admin/api/v1/connectors/check", "/admin/api/v1/connectors/delete", "/admin/api/v1/connectors/enabled", "/admin/api/v1/tasks", "/admin/api/v1/tasks/delete", "/admin/api/v1/tasks/enabled", "/admin/api/v1/identities", "/admin/api/v1/identities/revoke", "/admin/api/v1/jobs/cancel", "/api/v1/events"} else ["GET"],
     )
     for path in exposed_paths(settings.surface)
 ]

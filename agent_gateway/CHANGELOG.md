@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.0
+
+- Add pause and resume controls to configured tasks while preserving their
+  connector and tool composition.
+- Allow unused task definitions to be deleted and refuse deletion once a job
+  references the task, preserving execution and report history.
+- Record task lifecycle changes in the append-only audit journal.
+
 ## 0.17.0
 
 - Replace the unbounded task tool checklist with a compact connector and tool

@@ -226,6 +226,12 @@ class TaskCompositionTests(unittest.TestCase):
             task = control_plane.list_tasks()[0]
             self.assertEqual(task["status"], "unavailable")
             self.assertIn("tool_schema_changed:Example MCP.inspect", task["dependency_failures"])
+            self.assertTrue(control_plane.set_task_enabled(task_id, False, "test-pause"))
+            self.assertEqual(control_plane.list_tasks()[0]["status"], "disabled")
+            self.assertTrue(control_plane.set_task_enabled(task_id, True, "test-resume"))
+            self.assertEqual(control_plane.delete_task(task_id, "test-delete-task"), "deleted")
+            self.assertEqual(control_plane.list_tasks(), [])
+            self.assertEqual(control_plane.delete_task(task_id, "test-delete-missing"), "not_found")
 
     def test_task_requires_a_ready_connector_tool(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

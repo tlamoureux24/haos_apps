@@ -20,6 +20,8 @@ from agent_gateway.contracts import (
     IdentityRevokeRequest,
     JobCancelRequest,
     TaskCreateRequest,
+    TaskEnabledRequest,
+    TaskIdRequest,
 )
 from agent_gateway.connectors import discover_streamable_http, validate_streamable_http_url
 from agent_gateway.control_plane import (
@@ -140,6 +142,38 @@ async def admin_create_task(request: Request) -> JSONResponse:
     except sqlite3.IntegrityError:
         return error_response(409, "task_name_exists", correlation_id)
     return JSONResponse({"task_id": task_id, "status": "ready"}, status_code=201)
+
+
+async def admin_set_task_enabled(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        await audit_denial(request, "tasks.configure", "csrf_failed")
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, TaskEnabledRequest)
+    except (OverflowError, ValidationError):
+        return error_response(422, "invalid_task_request", correlation_id)
+    found = await run_in_threadpool(request.app.state.control_plane.set_task_enabled, contract.task_id, contract.enabled, correlation_id)
+    if not found:
+        return error_response(404, "task_not_found", correlation_id)
+    return JSONResponse({"task_id": contract.task_id, "status": "ready" if contract.enabled else "disabled"})
+
+
+async def admin_delete_task(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        await audit_denial(request, "tasks.delete", "csrf_failed")
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, TaskIdRequest)
+        result = await run_in_threadpool(request.app.state.control_plane.delete_task, contract.task_id, correlation_id)
+    except (OverflowError, ValidationError):
+        return error_response(422, "invalid_task_request", correlation_id)
+    if result == "not_found":
+        return error_response(404, "task_not_found", correlation_id)
+    if result == "in_use":
+        return error_response(409, "task_in_use", correlation_id)
+    return JSONResponse({"task_id": contract.task_id, "status": "deleted"})
 
 
 async def admin_create_connector(request: Request) -> JSONResponse:

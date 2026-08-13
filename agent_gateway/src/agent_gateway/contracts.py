@@ -53,6 +53,14 @@ class TaskCreateRequest(StrictContract):
     tools: list[TaskToolSelection] = Field(min_length=1, max_length=100)
 
 
+class TaskIdRequest(StrictContract):
+    task_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+
+
+class TaskEnabledRequest(TaskIdRequest):
+    enabled: bool
+
+
 class EventCreateRequest(StrictContract):
     schema_version: Literal[1]
     event_type: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.-]*$")
