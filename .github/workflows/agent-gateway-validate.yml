@@ -415,12 +415,23 @@ jobs:
             --data '{"display_name":"CI MCP worker","identity_type":"client","actions":["jobs.claim","jobs.heartbeat","jobs.complete","jobs.fail"]}' \
             http://127.0.0.1:18099/admin/api/v1/identities)"
           worker_credential="$(printf '%s' "${worker_response}" | jq -er '.credential')"
-          curl --fail --silent --request POST \
+          worker_tools="$(curl --fail --silent --request POST \
             --header "Authorization: Bearer ${worker_credential}" \
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":7,"method":"tools/list","params":{}}' \
-            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.tools | map(.name) == ["jobs_claim_v1","jobs_heartbeat_v1","jobs_complete_v1","jobs_fail_v1"]'
+            http://127.0.0.1:18098/mcp | mcp_result)"
+          printf '%s' "${worker_tools}" | jq -e '
+            (.result.tools | length) == 5 and
+            ([.result.tools[].name] - ["jobs_claim_v1","jobs_heartbeat_v1","jobs_complete_v1","jobs_fail_v1"] | length) == 1'
+          queued_capability="$(printf '%s' "${worker_tools}" | jq -er '
+            [.result.tools[].name] - ["jobs_claim_v1","jobs_heartbeat_v1","jobs_complete_v1","jobs_fail_v1"] | first')"
+          curl --fail --silent --request POST \
+            --header "Authorization: Bearer ${worker_credential}" \
+            --header 'Content-Type: application/json' \
+            --header 'Accept: application/json, text/event-stream' \
+            --data "$(jq --null-input --compact-output --arg capability "${queued_capability}" '{jsonrpc:"2.0",id:8,method:"tools/call",params:{name:$capability,arguments:{}}}')" \
+            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.isError == true'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --request POST \
             --header "X-Ingress-Path: ${ingress_path}" \
