@@ -40,7 +40,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.40.3"',
+        'version: "0.40.4"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -165,6 +165,33 @@ def main() -> int:
         raise RuntimeError("AppArmor must allow the exact privilege-drop executable")
     if "/sbin/**" in apparmor:
         raise RuntimeError("AppArmor must not grant broad access to /sbin")
+    audited_s6_executables = (
+        "/package/admin/s6-2.14.0.1/command/s6-ipcclient ix,",
+        "/package/admin/s6-2.14.0.1/command/s6-ipcserver-access ix,",
+        "/package/admin/s6-2.14.0.1/command/s6-ipcserver-socketbinder ix,",
+        "/package/admin/s6-2.14.0.1/command/s6-ipcserverd ix,",
+        "/package/admin/s6-2.14.0.1/command/s6-sudo ix,",
+        "/package/admin/s6-2.14.0.1/command/s6-sudoc ix,",
+        "/package/admin/s6-2.14.0.1/command/s6-sudod ix,",
+        "/package/admin/s6-2.14.0.1/command/s6-svc ix,",
+        "/package/admin/s6-2.14.0.1/command/s6-svlisten ix,",
+        "/package/admin/s6-2.14.0.1/command/s6-svscanctl ix,",
+        "/package/admin/s6-linux-init-1.2.0.0/command/s6-linux-init-shutdown ix,",
+    )
+    for executable_rule in audited_s6_executables:
+        if executable_rule not in apparmor:
+            raise RuntimeError(f"Missing audited s6 executable rule: {executable_rule}")
+    audited_generated_scripts = (
+        "/run/s6/basedir/bin/halt rix,",
+        "/run/s6-rc:s6-rc-init:*/servicedirs/s6rc-oneshot-runner/run rix,",
+        "/run/service/s6-linux-init-shutdownd/run rix,",
+        "/run/service/.s6-svscan/SIGTERM rix,",
+        "/run/service/.s6-svscan/finish rix,",
+        "/run/service/.s6-svscan/crash rix,",
+    )
+    for script_rule in audited_generated_scripts:
+        if script_rule not in apparmor:
+            raise RuntimeError(f"Missing audited generated s6 script rule: {script_rule}")
     if "/package/admin/s6-overlay-*/libexec/preinit rix," not in apparmor:
         raise RuntimeError("AppArmor must allow the shell to read the s6-overlay preinit script")
     if "/package/admin/s6-overlay-*/libexec/stage0 rix," not in apparmor:

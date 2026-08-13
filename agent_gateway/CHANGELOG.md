@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.40.4
+
+- Derive the enforced s6 execution allowlist from the complete HAOS
+  complain-mode startup, operation, restart and shutdown audit instead of
+  relying on process snapshots.
+- Add every transient s6 IPC, supervision and oneshot executable observed in
+  that audit, using exact installed package versions rather than recursive
+  executable-directory rules.
+- Grant read-and-inherit-execute only to generated s6 scripts, including the
+  shutdown hooks and ephemeral oneshot runner; keep compiled executables on
+  inherit-execute only.
+- Add the exact shutdown executable chain (`s6-svlisten`,
+  `s6-linux-init-shutdown` and the generated `halt` script) that was absent
+  from the earlier partial audit analysis.
+
 ## 0.40.3
 
 - Complete the exact s6 stop/restart allowlist with its three generated
