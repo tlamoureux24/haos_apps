@@ -152,6 +152,10 @@ jobs:
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/admin.js"'* ]]
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/logo.png"'* ]]
           [[ "${ingress_page}" == *'href="#audit"'* ]]
+          curl --fail --silent \
+            --header "X-Ingress-Path: /api/hassio_ingress/ci" \
+            http://127.0.0.1:18099/admin/api/v1/status | \
+            jq -e '.connectors.ha_mcp == {"configured":false,"reachable":false,"tool_count":0}'
           test "$(curl --silent --output /tmp/agent-gateway-logo.png --write-out '%{http_code}' \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/admin/assets/logo.png)" = "200"

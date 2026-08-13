@@ -188,3 +188,4 @@ app = Starlette(
     lifespan=lifespan,
 )
 app.state.control_plane = control_plane
+app.state.ha_mcp_url = settings.ha_mcp_url

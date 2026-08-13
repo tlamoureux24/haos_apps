@@ -26,6 +26,7 @@ from agent_gateway.control_plane import (
     canonical_json,
 )
 from agent_gateway.security import token_credential_id
+from agent_gateway.ha_mcp import probe_ha_mcp
 
 
 MAX_BODY_BYTES = 32 * 1024
@@ -82,11 +83,13 @@ async def audit_denial(
 
 async def admin_status(request: Request) -> JSONResponse:
     counts = await run_in_threadpool(request.app.state.control_plane.status_counts)
+    connector = await probe_ha_mcp(request.app.state.ha_mcp_url)
     return JSONResponse(
         {
             "status": "ready",
             "surface": "admin",
             **counts,
+            "connectors": {"ha_mcp": connector},
         }
     )
 

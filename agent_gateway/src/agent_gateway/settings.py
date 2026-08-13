@@ -7,6 +7,8 @@ import ipaddress
 from dataclasses import dataclass
 from pathlib import Path
 
+from agent_gateway.ha_mcp import validate_private_url
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -15,6 +17,7 @@ class Settings:
     log_level: str
     ingress_proxy_ip: str
     intake_rate_limit_per_minute: int
+    ha_mcp_url: str
 
     @property
     def database_path(self) -> Path:
@@ -45,4 +48,5 @@ def load_settings() -> Settings:
         log_level=log_level,
         ingress_proxy_ip=ingress_proxy_ip,
         intake_rate_limit_per_minute=intake_rate_limit,
+        ha_mcp_url=validate_private_url(os.environ.get("AGENT_GATEWAY_HA_MCP_URL", "")),
     )

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.0
+
+- Add the protected private HA-MCP Streamable HTTP URL option using the same
+  established `/private_<secret>` convention as Studio Code Server.
+- Probe HA-MCP with an eight-second bound and show only configured, reachable
+  and aggregate tool-count status in the Ingress dashboard.
+- Keep the private URL and raw upstream tool inventory out of every public API,
+  MCP response, audit record and log.
+
 ## 0.11.0
 
 - Complete the phase-two queue foundation with an immutable versioned

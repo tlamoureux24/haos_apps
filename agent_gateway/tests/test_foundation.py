@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent_gateway.database import database_ready, initialize_database
+from agent_gateway.ha_mcp import validate_private_url
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
 from agent_gateway.security import issue_credential, load_or_create_pepper, parse_and_verify_token
@@ -49,6 +50,16 @@ class SettingsTests(unittest.TestCase):
         ):
             with self.assertRaises(RuntimeError):
                 load_settings()
+
+    def test_accepts_private_ha_mcp_url(self) -> None:
+        self.assertEqual(
+            validate_private_url("http://homeassistant.local:8123/mcp/private_secret"),
+            "http://homeassistant.local:8123/mcp/private_secret",
+        )
+
+    def test_rejects_non_private_ha_mcp_url(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_private_url("http://homeassistant.local:8123/mcp")
 
 
 class DatabaseReadinessTests(unittest.TestCase):
