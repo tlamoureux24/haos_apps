@@ -40,7 +40,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.38.0"',
+        'version: "0.39.0"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -121,6 +121,22 @@ def main() -> int:
         raise RuntimeError("Missing isolated public listener")
     if "capability sys_admin" in apparmor or "network raw" in apparmor:
         raise RuntimeError("AppArmor grants an excessive capability")
+    if "flags=(attach_disconnected,mediate_deleted,complain)" not in apparmor:
+        raise RuntimeError("The temporary AppArmor audit release must use complain mode")
+    broad_execution_rules = (
+        "/bin/** ix,",
+        "/usr/bin/** ix,",
+        "/usr/local/bin/** ix,",
+        "/run/{s6,s6-rc*,service}/** ix,",
+        "/package/** ix,",
+        "/command/** ix,",
+        "/etc/services.d/** rwix,",
+        "/etc/cont-init.d/** rwix,",
+        "/etc/cont-finish.d/** rwix,",
+    )
+    for broad_rule in broad_execution_rules:
+        if broad_rule in apparmor:
+            raise RuntimeError(f"AppArmor retains broad execution rule: {broad_rule}")
     if "capability chown," not in apparmor:
         raise RuntimeError("AppArmor must allow ownership transfer of persistent data")
     if "capability fowner," in apparmor or "capability dac_override," in apparmor:

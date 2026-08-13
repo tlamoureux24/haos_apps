@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.39.0
+
+- Add a temporary AppArmor diagnostic release that replaces broad executable
+  tree permissions with the exact application and s6 paths observed in CI.
+- Run the profile in AppArmor complain mode for one bounded HAOS acceptance
+  pass, allowing missing transient startup paths to be collected together
+  instead of requiring iterative releases.
+- Add a CI-only `strace` image and separate inventories for application
+  executables, running s6 processes and available package executables; the
+  distributed App image remains unchanged and contains no tracing utility.
+- This diagnostic profile is intentionally temporary and must be replaced by
+  the enforced final profile after the HAOS audit journal has been collected.
+
 ## 0.38.0
 
 - Add aggregated overview metrics for ready connectors, ready tasks, events
