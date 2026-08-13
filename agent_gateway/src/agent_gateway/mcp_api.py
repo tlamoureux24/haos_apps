@@ -64,7 +64,7 @@ class OpaqueBearerMiddleware:
         self.control_plane = control_plane
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
+        if scope["type"] != "http" or scope.get("path") != "/mcp":
             return await self.app(scope, receive, send)
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
         raw = headers.get(b"authorization", b"").decode("latin-1")
