@@ -116,7 +116,9 @@ jobs:
 
           wait_ready() {
             for attempt in {1..60}; do
-              if curl --fail --silent http://127.0.0.1:18098/health/ready | jq -e '.status == "ready"' >/dev/null; then
+              if curl --fail --silent http://127.0.0.1:18098/health/ready | jq -e '.status == "ready"' >/dev/null && \
+                 curl --fail --silent --header "X-Ingress-Path: /api/hassio_ingress/ci" \
+                   http://127.0.0.1:18099/health/ready | jq -e '.status == "ready"' >/dev/null; then
                 return 0
               fi
               sleep 1
