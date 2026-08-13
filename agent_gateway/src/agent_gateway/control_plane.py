@@ -682,7 +682,9 @@ class ControlPlane:
             rows = connection.execute(
                 """
                 SELECT j.id,j.event_id,j.task_name,j.state,j.created_at,j.updated_at,
-                       count(DISTINCT r.id) AS report_count,count(DISTINCT a.id) AS attempt_count
+                       count(DISTINCT r.id) AS report_count,count(DISTINCT a.id) AS attempt_count,
+                       (SELECT a2.outcome FROM job_attempts a2 WHERE a2.job_id=j.id ORDER BY a2.attempt_number DESC LIMIT 1) AS last_attempt_outcome,
+                       (SELECT a2.failure_reason FROM job_attempts a2 WHERE a2.job_id=j.id ORDER BY a2.attempt_number DESC LIMIT 1) AS last_failure_reason
                 FROM jobs j LEFT JOIN reports r ON r.job_id=j.id
                 LEFT JOIN job_attempts a ON a.job_id=j.id
                 GROUP BY j.id ORDER BY j.created_at DESC LIMIT ?
@@ -834,6 +836,43 @@ class ControlPlane:
             {
                 "name": row["namespaced_name"],
                 "description": f"Capacité autorisée pour la tâche {row['task_name']}. {row['description']}",
+                "input_schema": json.loads(row["input_schema_json"]),
+            }
+            for row in rows
+        ]
+
+    def next_queued_capabilities(self, identity: AuthenticatedIdentity) -> list[dict[str, object]]:
+        """Advertise only the tools of the exact next claimable job.
+
+        Invocation still requires an identity-owned active lease.  Advertising
+        before the claim accommodates MCP clients that keep a fixed tool
+        registry for the lifetime of one reasoning turn.
+        """
+        self.authorize(identity, "jobs.claim")
+        with connect(self.database_path) as connection:
+            job = connection.execute(
+                "SELECT task_revision_id FROM jobs WHERE state='queued' ORDER BY created_at,id LIMIT 1"
+            ).fetchone()
+            if job is None:
+                return []
+            rows = connection.execute(
+                """
+                SELECT s.namespaced_name,t.description,t.input_schema_json,d.display_name AS task_name
+                FROM task_revisions r
+                JOIN task_definitions d ON d.id=r.task_definition_id
+                JOIN task_tool_selections s ON s.task_revision_id=r.id
+                JOIN connectors c ON c.id=s.connector_id
+                JOIN connector_tools t ON t.connector_id=s.connector_id AND t.name=s.tool_name
+                WHERE r.id=? AND d.enabled=1 AND c.enabled=1 AND c.status='ready'
+                  AND t.schema_fingerprint=s.schema_fingerprint
+                ORDER BY s.namespaced_name
+                """,
+                (job["task_revision_id"],),
+            ).fetchall()
+        return [
+            {
+                "name": row["namespaced_name"],
+                "description": f"Capacité de la prochaine tâche {row['task_name']}; réclamez d'abord son exécution. {row['description']}",
                 "input_schema": json.loads(row["input_schema_json"]),
             }
             for row in rows

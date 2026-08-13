@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.26.0
+
+- Advertise only the next queued job's virtual capabilities before its claim so
+  MCP clients with a turn-scoped tool registry can use them after leasing.
+- Continue to deny every advertised capability invocation until the same
+  identity owns the matching active lease.
+- Show the latest attempt outcome or failure reason directly in the execution
+  queue instead of presenting retry failures as nonexistent reports.
+
 ## 0.25.0
 
 - Notify MCP clients when task-scoped virtual tools appear after a claim or

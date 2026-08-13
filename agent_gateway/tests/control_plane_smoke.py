@@ -6,7 +6,7 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from agent_gateway.control_plane import AuthenticationError, ControlPlane, LeaseError
+from agent_gateway.control_plane import AuthenticationError, AuthorizationError, ControlPlane, LeaseError
 
 
 database = Path("/data/agent_gateway.db")
@@ -77,6 +77,15 @@ worker_created = control_plane.create_identity(
     "ci-create-worker",
 )
 worker = control_plane.authenticate(worker_created.credential.token)
+queued_capabilities = control_plane.next_queued_capabilities(worker)
+assert len(queued_capabilities) == 1
+assert queued_capabilities[0]["name"] == "connector/ci-connector/inspect"
+try:
+    control_plane.resolve_active_capability(worker, "connector/ci-connector/inspect", {}, "ci-before-claim")
+except AuthorizationError as exc:
+    assert str(exc) == "capability_not_available"
+else:
+    raise AssertionError("An advertised capability was invokable before its lease")
 with ThreadPoolExecutor(max_workers=8) as executor:
     claims = list(executor.map(lambda index: control_plane.claim_job(worker, f"ci-claim-{index}"), range(8)))
 leases = [claim for claim in claims if claim is not None]

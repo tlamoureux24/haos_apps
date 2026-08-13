@@ -70,6 +70,8 @@ class GovernedMCP(FastMCP):
         visible = [tool for tool in tools if TOOL_ACTIONS.get(tool.name) in identity.actions]
         if "jobs.claim" in identity.actions:
             capabilities = await anyio.to_thread.run_sync(self.control_plane.active_capabilities, identity)
+            if not capabilities:
+                capabilities = await anyio.to_thread.run_sync(self.control_plane.next_queued_capabilities, identity)
             visible.extend(
                 MCPTool(
                     name=capability["name"],
