@@ -5,6 +5,7 @@ import sqlite3
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -283,7 +284,7 @@ class TaskCompositionTests(unittest.TestCase):
                 connection.execute("INSERT INTO connectors(id,display_name,transport,protected_config,display_endpoint,status,enabled,created_at,updated_at,inventory_revision) VALUES(?,?,?,?,?,'ready',1,?,?,1)", (connector_id,"Example MCP","streamable_http","protected","https://mcp.example.test","2026-08-13T00:00:00Z","2026-08-13T00:00:00Z"))
                 connection.execute("INSERT INTO connector_tools(connector_id,name,description,input_schema_json,schema_fingerprint,discovered_at) VALUES(?,?,?,?,?,?)", (connector_id,"inspect","Inspect",'{"type":"object"}',"a"*64,"2026-08-13T00:00:00Z"))
             task_id = control_plane.create_task("Inspect", "inspect", "Inspect.", 1, [{"connector_id":connector_id,"tool_name":"inspect"}], "test-task")
-            schedule_id = control_plane.create_schedule("Every hour", task_id, 60, "test-schedule")
+            schedule_id = control_plane.create_schedule("Every hour", task_id, "interval", 60, None, None, None, "test-schedule")
             with sqlite3.connect(path) as connection:
                 connection.execute("UPDATE schedules SET next_run_at='2000-01-01T00:00:00Z' WHERE id=?", (schedule_id,))
             self.assertEqual(control_plane.run_due_schedules(), 1)
@@ -293,6 +294,21 @@ class TaskCompositionTests(unittest.TestCase):
             self.assertEqual(control_plane.run_due_schedules(), 1)
             self.assertEqual(control_plane.list_schedules()[0]["last_outcome"], "skipped_active")
             self.assertEqual(len(control_plane.list_jobs()), 1)
+
+    def test_calendar_schedule_next_occurrence_uses_iana_timezone(self) -> None:
+        reference = datetime.fromisoformat("2026-08-13T08:00:00+00:00")
+        self.assertEqual(
+            ControlPlane._next_schedule_run("daily", 1440, "11:30", None, "Europe/Paris", reference),
+            "2026-08-13T09:30:00.000Z",
+        )
+        self.assertEqual(
+            ControlPlane._next_schedule_run("weekly", 10080, "09:00", 0, "Europe/Paris", reference),
+            "2026-08-17T07:00:00.000Z",
+        )
+        with self.assertRaisesRegex(ValueError, "invalid_timezone"):
+            ControlPlane._next_schedule_run("daily", 1440, "09:00", None, "Mars/Olympus", reference)
+        with self.assertRaisesRegex(ValueError, "invalid_schedule"):
+            ControlPlane._next_schedule_run("weekly", 10080, "09:00", None, "Europe/Paris", reference)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.35.0
+
+- Add interval, daily and weekly planifications with an explicit IANA timezone
+  and deterministic next occurrences across restarts and daylight-saving time.
+- Allow administrators to edit existing planifications and event triggers from
+  their current forms instead of deleting and recreating them.
+- Recompute the next occurrence after every planification change or resume,
+  without replaying missed executions in a burst.
+- Cancel an outstanding grace window and reset cooldown history when its event
+  trigger is edited, keeping the changed route unambiguous and auditable.
+- Fix conditional form sections so recovery and calendar fields are genuinely
+  hidden when they do not apply.
+- Preserve existing data through a direct schema-twelve upgrade, treating
+  existing planifications as interval schedules.
+
 ## 0.34.0
 
 - Add durable per-trigger grace windows from one minute to one hour, processed

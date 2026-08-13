@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agent_gateway.connectors import (
     connector_display_endpoint,
@@ -434,11 +435,45 @@ class ControlPlane:
             for row in rows
         ]
 
-    def create_schedule(self, display_name: str, task_id: str, interval_minutes: int, correlation_id: str) -> str:
-        if not display_name.strip() or not 1 <= interval_minutes <= 10080:
+    @staticmethod
+    def _next_schedule_run(schedule_kind: str, interval_minutes: int, time_of_day: str | None, weekday: int | None, timezone: str | None, after: datetime | None = None) -> str:
+        if schedule_kind not in {"interval", "daily", "weekly"} or not 1 <= interval_minutes <= 10080:
+            raise ValueError("invalid_schedule")
+        if schedule_kind == "interval" and any(value is not None for value in (time_of_day, weekday, timezone)):
+            raise ValueError("invalid_schedule")
+        if schedule_kind in {"daily", "weekly"} and (time_of_day is None or timezone is None):
+            raise ValueError("invalid_schedule")
+        if schedule_kind == "daily" and weekday is not None:
+            raise ValueError("invalid_schedule")
+        if schedule_kind == "weekly" and (weekday is None or not 0 <= weekday <= 6):
+            raise ValueError("invalid_schedule")
+        reference = after or datetime.now(UTC)
+        if schedule_kind == "interval":
+            candidate = reference + timedelta(minutes=interval_minutes)
+        else:
+            try:
+                zone = ZoneInfo(timezone or "")
+            except ZoneInfoNotFoundError as exc:
+                raise ValueError("invalid_timezone") from exc
+            hour, minute = (int(part) for part in (time_of_day or "").split(":"))
+            local_now = reference.astimezone(zone)
+            candidate = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if schedule_kind == "daily":
+                if candidate <= local_now:
+                    candidate += timedelta(days=1)
+            else:
+                days = ((weekday or 0) - local_now.weekday()) % 7
+                candidate += timedelta(days=days)
+                if candidate <= local_now:
+                    candidate += timedelta(days=7)
+            candidate = candidate.astimezone(UTC)
+        return candidate.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    def create_schedule(self, display_name: str, task_id: str, schedule_kind: str, interval_minutes: int, time_of_day: str | None, weekday: int | None, timezone: str | None, correlation_id: str) -> str:
+        if not display_name.strip():
             raise ValueError("invalid_schedule")
         schedule_id, now = str(uuid4()), datetime.now(UTC)
-        next_run = (now + timedelta(minutes=interval_minutes)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        next_run = self._next_schedule_run(schedule_kind, interval_minutes, time_of_day, weekday, timezone, now)
         timestamp = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -460,21 +495,37 @@ class ControlPlane:
             if not dependencies or any(not item["enabled"] or item["status"] != "ready" or item["current_fingerprint"] != item["schema_fingerprint"] for item in dependencies):
                 raise ValueError("task_not_ready")
             connection.execute(
-                "INSERT INTO schedules(id,display_name,task_definition_id,interval_minutes,enabled,next_run_at,created_at,updated_at) VALUES(?,?,?,?,1,?,?,?)",
-                (schedule_id, display_name.strip(), task_id, interval_minutes, next_run, timestamp, timestamp),
+                "INSERT INTO schedules(id,display_name,task_definition_id,interval_minutes,schedule_kind,time_of_day,weekday,timezone,enabled,next_run_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,1,?,?,?)",
+                (schedule_id, display_name.strip(), task_id, interval_minutes, schedule_kind, time_of_day, weekday, timezone, next_run, timestamp, timestamp),
             )
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="schedules.create", target_type="schedule", target_id=schedule_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"task_id": task_id, "interval_minutes": interval_minutes})
         return schedule_id
+
+    def update_schedule(self, schedule_id: str, display_name: str, task_id: str, schedule_kind: str, interval_minutes: int, time_of_day: str | None, weekday: int | None, timezone: str | None, correlation_id: str) -> bool:
+        if not display_name.strip():
+            raise ValueError("invalid_schedule")
+        now_dt, now = datetime.now(UTC), utc_now()
+        next_run = self._next_schedule_run(schedule_kind, interval_minutes, time_of_day, weekday, timezone, now_dt)
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("SELECT 1 FROM schedules WHERE id=?", (schedule_id,)).fetchone() is None:
+                return False
+            task = next((item for item in self.list_tasks() if item["id"] == task_id), None)
+            if task is None or task["status"] != "ready":
+                raise ValueError("task_not_ready")
+            connection.execute("UPDATE schedules SET display_name=?,task_definition_id=?,interval_minutes=?,schedule_kind=?,time_of_day=?,weekday=?,timezone=?,next_run_at=?,last_outcome=NULL,updated_at=? WHERE id=?", (display_name.strip(), task_id, interval_minutes, schedule_kind, time_of_day, weekday, timezone, next_run, now, schedule_id))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="schedules.update", target_type="schedule", target_id=schedule_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"task_id": task_id, "schedule_kind": schedule_kind})
+        return True
 
     def set_schedule_enabled(self, schedule_id: str, enabled: bool, correlation_id: str) -> bool:
         now_dt = datetime.now(UTC)
         now = now_dt.isoformat(timespec="milliseconds").replace("+00:00", "Z")
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute("SELECT interval_minutes FROM schedules WHERE id=?", (schedule_id,)).fetchone()
+            row = connection.execute("SELECT interval_minutes,schedule_kind,time_of_day,weekday,timezone FROM schedules WHERE id=?", (schedule_id,)).fetchone()
             if row is None:
                 return False
-            next_run = (now_dt + timedelta(minutes=row["interval_minutes"])).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            next_run = self._next_schedule_run(row["schedule_kind"], row["interval_minutes"], row["time_of_day"], row["weekday"], row["timezone"], now_dt)
             connection.execute("UPDATE schedules SET enabled=?,next_run_at=?,updated_at=? WHERE id=?", (int(enabled), next_run, now, schedule_id))
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="schedules.enable" if enabled else "schedules.disable", target_type="schedule", target_id=schedule_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
         return True
@@ -490,7 +541,7 @@ class ControlPlane:
     def run_due_schedules(self) -> int:
         now = utc_now()
         with connect(self.database_path) as connection:
-            due = connection.execute("SELECT id,task_definition_id,interval_minutes FROM schedules WHERE enabled=1 AND next_run_at<=? ORDER BY next_run_at,id LIMIT 100", (now,)).fetchall()
+            due = connection.execute("SELECT id,task_definition_id,interval_minutes,schedule_kind,time_of_day,weekday,timezone FROM schedules WHERE enabled=1 AND next_run_at<=? ORDER BY next_run_at,id LIMIT 100", (now,)).fetchall()
         for schedule in due:
             outcome = "queued"
             try:
@@ -501,7 +552,7 @@ class ControlPlane:
                 outcome = "queue_full"
             except ValueError:
                 outcome = "task_unavailable"
-            next_run = (datetime.now(UTC) + timedelta(minutes=schedule["interval_minutes"])).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            next_run = self._next_schedule_run(schedule["schedule_kind"], schedule["interval_minutes"], schedule["time_of_day"], schedule["weekday"], schedule["timezone"])
             with connect(self.database_path) as connection:
                 connection.execute("UPDATE schedules SET next_run_at=?,last_run_at=?,last_outcome=?,updated_at=? WHERE id=?", (next_run, now, outcome, now, schedule["id"]))
         return len(due)
@@ -593,6 +644,30 @@ class ControlPlane:
             connection.execute("INSERT INTO event_mappings(id,display_name,source_identity_id,event_type,task_definition_id,enabled,cooldown_minutes,grace_minutes,recovery_event_type,input_mode,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?,?,?,?,?)", (mapping_id, display_name.strip(), source_identity_id, event_type, task_id, cooldown_minutes, grace_minutes, recovery_event_type, input_mode, now, now))
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.create", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"source_identity_id": source_identity_id, "event_type": event_type, "recovery_event_type": recovery_event_type, "task_id": task_id, "cooldown_minutes": cooldown_minutes, "grace_minutes": grace_minutes, "input_mode": input_mode})
         return mapping_id
+
+    def update_event_mapping(self, mapping_id: str, display_name: str, source_identity_id: str, event_type: str, task_id: str, cooldown_minutes: int, grace_minutes: int, recovery_event_type: str | None, input_mode: str, correlation_id: str) -> bool:
+        recovery_event_type = recovery_event_type or None
+        if (not display_name.strip() or not 0 <= cooldown_minutes <= 10080
+                or not 0 <= grace_minutes <= 1440 or input_mode not in {"full_event", "subject", "attributes"}
+                or (grace_minutes == 0 and recovery_event_type is not None)
+                or (grace_minutes > 0 and (recovery_event_type is None or recovery_event_type == event_type))):
+            raise ValueError("invalid_event_mapping")
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("SELECT 1 FROM event_mappings WHERE id=?", (mapping_id,)).fetchone() is None:
+                return False
+            source = connection.execute("SELECT identity_type,status FROM identities WHERE id=?", (source_identity_id,)).fetchone()
+            task = next((item for item in self.list_tasks() if item["id"] == task_id), None)
+            if source is None or source["identity_type"] != "event_source" or source["status"] != "active" or task is None or task["status"] != "ready":
+                raise ValueError("dependency_not_ready")
+            collision = connection.execute("SELECT 1 FROM event_mappings WHERE id<>? AND source_identity_id=? AND (event_type IN (?,?) OR recovery_event_type IN (?,?)) LIMIT 1", (mapping_id, source_identity_id, event_type, recovery_event_type, event_type, recovery_event_type)).fetchone()
+            if collision:
+                raise ValueError("event_type_conflict")
+            connection.execute("DELETE FROM pending_event_triggers WHERE mapping_id=?", (mapping_id,))
+            now = utc_now()
+            connection.execute("UPDATE event_mappings SET display_name=?,source_identity_id=?,event_type=?,task_definition_id=?,cooldown_minutes=?,grace_minutes=?,recovery_event_type=?,input_mode=?,last_triggered_at=NULL,updated_at=? WHERE id=?", (display_name.strip(), source_identity_id, event_type, task_id, cooldown_minutes, grace_minutes, recovery_event_type, input_mode, now, mapping_id))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="event_mappings.update", target_type="event_mapping", target_id=mapping_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"source_identity_id": source_identity_id, "event_type": event_type, "recovery_event_type": recovery_event_type, "task_id": task_id})
+        return True
 
     def set_event_mapping_enabled(self, mapping_id: str, enabled: bool, correlation_id: str) -> bool:
         with connect(self.database_path) as connection:

@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "11"
+SCHEMA_GENERATION = "12"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO gateway_metadata VALUES('application','agent_gateway');
-INSERT INTO gateway_metadata VALUES('schema_generation','11');
+INSERT INTO gateway_metadata VALUES('schema_generation','12');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -69,10 +69,12 @@ CREATE TABLE task_tool_selections(
 CREATE INDEX ix_task_tool_connector ON task_tool_selections(connector_id,tool_name);
 CREATE TABLE schedules(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,task_definition_id TEXT NOT NULL,
-  interval_minutes INTEGER NOT NULL,enabled INTEGER NOT NULL,next_run_at TEXT NOT NULL,
+  interval_minutes INTEGER NOT NULL,schedule_kind TEXT NOT NULL,time_of_day TEXT,weekday INTEGER,timezone TEXT,
+  enabled INTEGER NOT NULL,next_run_at TEXT NOT NULL,
   last_run_at TEXT,last_outcome TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
   FOREIGN KEY(task_definition_id) REFERENCES task_definitions(id) ON DELETE RESTRICT,
-  CHECK(interval_minutes BETWEEN 1 AND 10080),CHECK(enabled IN (0,1)),
+  CHECK(interval_minutes BETWEEN 1 AND 10080),CHECK(schedule_kind IN ('interval','daily','weekly')),
+  CHECK(weekday IS NULL OR weekday BETWEEN 0 AND 6),CHECK(enabled IN (0,1)),
   CHECK(last_outcome IS NULL OR last_outcome IN ('queued','skipped_active','task_unavailable','queue_full')));
 CREATE INDEX ix_schedules_due ON schedules(enabled,next_run_at);
 CREATE TABLE event_mappings(
@@ -220,6 +222,17 @@ def initialize_database(path: Path) -> None:
                   FOREIGN KEY(policy_revision_id) REFERENCES policy_revisions(id));
                 CREATE INDEX IF NOT EXISTS ix_pending_event_triggers_due ON pending_event_triggers(due_at);
                 UPDATE gateway_metadata SET value='11' WHERE key='schema_generation';
+                """
+            )
+            generation = ("11",)
+        if generation and generation[0] == "11":
+            connection.executescript(
+                """
+                ALTER TABLE schedules ADD COLUMN schedule_kind TEXT NOT NULL DEFAULT 'interval' CHECK(schedule_kind IN ('interval','daily','weekly'));
+                ALTER TABLE schedules ADD COLUMN time_of_day TEXT;
+                ALTER TABLE schedules ADD COLUMN weekday INTEGER CHECK(weekday IS NULL OR weekday BETWEEN 0 AND 6);
+                ALTER TABLE schedules ADD COLUMN timezone TEXT;
+                UPDATE gateway_metadata SET value='12' WHERE key='schema_generation';
                 """
             )
             return

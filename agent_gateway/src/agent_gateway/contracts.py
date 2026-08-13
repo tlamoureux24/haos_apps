@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StrictContract(BaseModel):
@@ -68,7 +68,23 @@ class TaskRunRequest(TaskIdRequest):
 class ScheduleCreateRequest(StrictContract):
     display_name: str = Field(min_length=1, max_length=120)
     task_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
-    interval_minutes: int = Field(ge=1, le=10080)
+    schedule_kind: Literal["interval", "daily", "weekly"] = "interval"
+    interval_minutes: int = Field(default=60, ge=1, le=10080)
+    time_of_day: str | None = Field(default=None, pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
+    weekday: int | None = Field(default=None, ge=0, le=6)
+    timezone: str | None = Field(default=None, min_length=1, max_length=120)
+
+    @model_validator(mode="after")
+    def valid_calendar(self):
+        if self.schedule_kind == "interval" and any(value is not None for value in (self.time_of_day, self.weekday, self.timezone)):
+            raise ValueError("interval schedule has calendar fields")
+        if self.schedule_kind in {"daily", "weekly"} and (self.time_of_day is None or self.timezone is None):
+            raise ValueError("calendar schedule requires time and timezone")
+        if self.schedule_kind == "daily" and self.weekday is not None:
+            raise ValueError("daily schedule cannot have weekday")
+        if self.schedule_kind == "weekly" and self.weekday is None:
+            raise ValueError("weekly schedule requires weekday")
+        return self
 
 
 class ScheduleIdRequest(StrictContract):
@@ -77,6 +93,10 @@ class ScheduleIdRequest(StrictContract):
 
 class ScheduleEnabledRequest(ScheduleIdRequest):
     enabled: bool
+
+
+class ScheduleUpdateRequest(ScheduleCreateRequest):
+    schedule_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
 
 
 class EventCreateRequest(StrictContract):
@@ -129,3 +149,7 @@ class EventMappingIdRequest(StrictContract):
 
 class EventMappingEnabledRequest(EventMappingIdRequest):
     enabled: bool
+
+
+class EventMappingUpdateRequest(EventMappingCreateRequest):
+    mapping_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
