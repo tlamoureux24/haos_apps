@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0
+
+- Complete the phase-one MCP read surface with exact event, job and report
+  lookup tools alongside their existing bounded lists.
+- Apply the same per-action discovery filtering and authorization checks to
+  list and detail tools, with explicit not-found failures.
+- Redact persisted event payloads, job inputs and report bodies again at the
+  final detail boundary.
+
 ## 0.4.1
 
 - Rebuild the MCP SDK settings model before initialization on Python 3.14,

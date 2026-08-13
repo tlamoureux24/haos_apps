@@ -17,8 +17,11 @@ TOOL_ACTIONS = {
     "gateway_status_v1": "gateway.status.read",
     "permissions_get_effective_v1": "permissions.effective.read",
     "events_list_v1": "events.read",
+    "events_get_v1": "events.read",
     "jobs_list_v1": "jobs.read",
+    "jobs_get_v1": "jobs.read",
     "reports_list_v1": "reports.read",
+    "reports_get_v1": "reports.read",
 }
 
 # mcp 1.28.1 leaves its generic lifespan annotation unresolved when imported
@@ -109,14 +112,38 @@ def create_mcp(control_plane: ControlPlane) -> GovernedMCP:
         """List up to 100 newest redacted events."""
         return {"events": control_plane.list_events(), "limit": 100}
 
+    @server.tool(name="events_get_v1", structured_output=True)
+    def events_get(event_id: str) -> dict[str, object]:
+        """Return one redacted event by its exact opaque identifier."""
+        event = control_plane.get_event(event_id)
+        if event is None:
+            raise ValueError("event_not_found")
+        return {"event": event}
+
     @server.tool(name="jobs_list_v1", structured_output=True)
     def jobs_list() -> dict[str, object]:
         """List up to 100 newest durable jobs."""
         return {"jobs": control_plane.list_jobs(), "limit": 100}
 
+    @server.tool(name="jobs_get_v1", structured_output=True)
+    def jobs_get(job_id: str) -> dict[str, object]:
+        """Return one durable job and its redacted input by exact identifier."""
+        job = control_plane.get_job(job_id)
+        if job is None:
+            raise ValueError("job_not_found")
+        return {"job": job}
+
     @server.tool(name="reports_list_v1", structured_output=True)
     def reports_list() -> dict[str, object]:
         """List up to 100 newest redacted structured reports."""
         return {"reports": control_plane.list_reports(), "limit": 100}
+
+    @server.tool(name="reports_get_v1", structured_output=True)
+    def reports_get(report_id: str) -> dict[str, object]:
+        """Return one redacted structured report by its exact identifier."""
+        report = control_plane.get_report(report_id)
+        if report is None:
+            raise ValueError("report_not_found")
+        return {"report": report}
 
     return server

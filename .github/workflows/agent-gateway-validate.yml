@@ -259,13 +259,33 @@ jobs:
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-            http://127.0.0.1:18098/mcp | jq -e '.result.tools | map(.name) == ["gateway_status_v1","permissions_get_effective_v1","events_list_v1","jobs_list_v1","reports_list_v1"]'
+            http://127.0.0.1:18098/mcp | jq -e '.result.tools | map(.name) == ["gateway_status_v1","permissions_get_effective_v1","events_list_v1","events_get_v1","jobs_list_v1","jobs_get_v1","reports_list_v1","reports_get_v1"]'
           curl --fail --silent --request POST \
             --header "Authorization: Bearer ${observer_credential}" \
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"gateway_status_v1","arguments":{}}}' \
             http://127.0.0.1:18098/mcp | jq -e '.result.structuredContent.status == "ready"'
+          event_id="$(jq -er '.event_id' /tmp/event-first.json)"
+          job_id="$(jq -er '.job_id' /tmp/event-first.json)"
+          curl --fail --silent --request POST \
+            --header "Authorization: Bearer ${observer_credential}" \
+            --header 'Content-Type: application/json' \
+            --header 'Accept: application/json, text/event-stream' \
+            --data "$(jq --null-input --compact-output --arg event_id "${event_id}" '{jsonrpc:"2.0",id:4,method:"tools/call",params:{name:"events_get_v1",arguments:{event_id:$event_id}}}')" \
+            http://127.0.0.1:18098/mcp | jq -e --arg event_id "${event_id}" '.result.structuredContent.event.id == $event_id'
+          curl --fail --silent --request POST \
+            --header "Authorization: Bearer ${observer_credential}" \
+            --header 'Content-Type: application/json' \
+            --header 'Accept: application/json, text/event-stream' \
+            --data "$(jq --null-input --compact-output --arg job_id "${job_id}" '{jsonrpc:"2.0",id:5,method:"tools/call",params:{name:"jobs_get_v1",arguments:{job_id:$job_id}}}')" \
+            http://127.0.0.1:18098/mcp | jq -e --arg job_id "${job_id}" '.result.structuredContent.job.id == $job_id'
+          curl --fail --silent --request POST \
+            --header "Authorization: Bearer ${credential}" \
+            --header 'Content-Type: application/json' \
+            --header 'Accept: application/json, text/event-stream' \
+            --data '{"jsonrpc":"2.0","id":6,"method":"tools/list","params":{}}' \
+            http://127.0.0.1:18098/mcp | jq -e '.result.tools | map(.name) == ["permissions_get_effective_v1"]'
           curl --fail --silent \
             --header "Authorization: Bearer ${credential}" \
             http://127.0.0.1:18098/api/v1/permissions/effective | \

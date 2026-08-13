@@ -232,6 +232,31 @@ class ControlPlane:
             for row in rows
         ]
 
+    def get_event(self, event_id: str) -> dict[str, object] | None:
+        with connect(self.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT e.id,e.event_type,e.occurred_at,e.received_at,e.payload_json,
+                       i.display_name AS source_name,j.id AS job_id
+                FROM events e
+                JOIN identities i ON i.id=e.source_identity_id
+                LEFT JOIN jobs j ON j.event_id=e.id
+                WHERE e.id=?
+                """,
+                (event_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row["id"],
+            "event_type": row["event_type"],
+            "occurred_at": row["occurred_at"],
+            "received_at": row["received_at"],
+            "source_name": row["source_name"],
+            "job_id": row["job_id"],
+            "payload": redact(json.loads(row["payload_json"])),
+        }
+
     def status_counts(self) -> dict[str, int]:
         with connect(self.database_path) as connection:
             row = connection.execute(
@@ -259,6 +284,23 @@ class ControlPlane:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def get_job(self, job_id: str) -> dict[str, object] | None:
+        with connect(self.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT j.id,j.event_id,j.task_name,j.state,j.input_json,j.created_at,
+                       j.updated_at,count(r.id) AS report_count
+                FROM jobs j LEFT JOIN reports r ON r.job_id=j.id
+                WHERE j.id=? GROUP BY j.id
+                """,
+                (job_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        result["input"] = redact(json.loads(result.pop("input_json")))
+        return result
+
     def list_reports(self, limit: int = 100) -> list[dict[str, object]]:
         with connect(self.database_path) as connection:
             rows = connection.execute(
@@ -282,6 +324,28 @@ class ControlPlane:
             }
             for row in rows
         ]
+
+    def get_report(self, report_id: str) -> dict[str, object] | None:
+        with connect(self.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT r.id,r.job_id,r.schema_version,r.report_json,r.created_at,
+                       r.supersedes_id,j.task_name
+                FROM reports r JOIN jobs j ON j.id=r.job_id WHERE r.id=?
+                """,
+                (report_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row["id"],
+            "job_id": row["job_id"],
+            "schema_version": row["schema_version"],
+            "created_at": row["created_at"],
+            "supersedes_id": row["supersedes_id"],
+            "task_name": row["task_name"],
+            "report": redact(json.loads(row["report_json"])),
+        }
 
     def authenticate(self, token: str) -> AuthenticatedIdentity:
         credential_id = token_credential_id(token)
