@@ -152,6 +152,7 @@ jobs:
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/admin.js"'* ]]
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/logo.png"'* ]]
           [[ "${ingress_page}" == *'href="#audit"'* ]]
+          [[ "${ingress_page}" == *'Agent Gateway <b>v0.16.0</b>'* ]]
           curl --fail --silent \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/admin/api/v1/status | \
@@ -276,6 +277,28 @@ jobs:
             --header "X-Ingress-Path: ${ingress_path}" \
             "http://127.0.0.1:18099/admin/api/v1/connectors/tools?connector_id=${connector_id}" | \
             jq -e '.count == 8 and (.tools | all(.schema_fingerprint | length == 64))'
+          task_response="$(curl --fail --silent \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data "$(jq --null-input --compact-output --arg connector_id "${connector_id}" '{display_name:"CI status task",name:"ci_status_task",objective:"Read the governed gateway status.",max_attempts:3,tools:[{connector_id:$connector_id,tool_name:"gateway_status_v1"}]}')" \
+            http://127.0.0.1:18099/admin/api/v1/tasks)"
+          printf '%s' "${task_response}" | jq -e '.status == "ready"'
+          curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/tasks | \
+            jq -e '.count == 2 and any(.tasks[]; .name == "ci_status_task" and .status == "ready" and (.tools | length == 1))'
+          test "$(curl --silent --output /tmp/connector-in-use.json --write-out '%{http_code}' \
+            --request POST \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            --header "X-CSRF-Token: ${csrf_token}" \
+            --header "Cookie: agw_csrf=${csrf_token}" \
+            --header "Content-Type: application/json" \
+            --data "{\"connector_id\":\"${connector_id}\"}" \
+            http://127.0.0.1:18099/admin/api/v1/connectors/delete)" = "409"
+          jq -e '.error.code == "connector_in_use"' /tmp/connector-in-use.json
           docker exec --env "CI_CONNECTOR_TOKEN=${observer_credential}" agent-gateway-smoke \
             su-exec agent-gateway:agent-gateway \
             python3 -c 'import os,sqlite3; row=sqlite3.connect("/data/agent_gateway.db").execute("SELECT protected_config,display_endpoint FROM connectors").fetchone(); assert os.environ["CI_CONNECTOR_TOKEN"] not in row[0]; assert os.environ["CI_CONNECTOR_TOKEN"] not in row[1]; assert row[1] == "http://127.0.0.1:8098"'
@@ -287,6 +310,9 @@ jobs:
             --header "Content-Type: application/json" \
             --data "{\"connector_id\":\"${connector_id}\",\"enabled\":false}" \
             http://127.0.0.1:18099/admin/api/v1/connectors/enabled | jq -e '.status == "disabled"'
+          curl --fail --silent --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/tasks | \
+            jq -e 'any(.tasks[]; .name == "ci_status_task" and .status == "unavailable")'
           curl --fail --silent \
             --request POST \
             --header "X-Ingress-Path: ${ingress_path}" \
@@ -295,6 +321,9 @@ jobs:
             --header "Content-Type: application/json" \
             --data "{\"connector_id\":\"${connector_id}\",\"enabled\":true}" \
             http://127.0.0.1:18099/admin/api/v1/connectors/enabled | jq -e '.status == "ready"'
+          curl --fail --silent --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/tasks | \
+            jq -e 'any(.tasks[]; .name == "ci_status_task" and .status == "ready")'
           echo "SMOKE_STAGE=generic-connector-ready"
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
             http://127.0.0.1:18098/api/v1/events | jq -e '.events | length == 3'

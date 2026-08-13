@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent_gateway.database import database_ready, initialize_database
-from agent_gateway.control_plane import validate_json_contract
+from agent_gateway.control_plane import ControlPlane, validate_json_contract
 from agent_gateway.connectors import connector_display_endpoint, validate_streamable_http_url
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
@@ -186,6 +186,55 @@ class TaskReportContractTests(unittest.TestCase):
             validate_json_contract({}, schema)
         with self.assertRaisesRegex(ValueError, "additional_property"):
             validate_json_contract({"result": "healthy", "unexpected": True}, schema)
+
+
+class TaskCompositionTests(unittest.TestCase):
+    def test_task_dependencies_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            connector_id = "10000000-0000-0000-0000-000000000001"
+            with sqlite3.connect(path) as connection:
+                connection.execute(
+                    "INSERT INTO connectors(id,display_name,transport,protected_config,display_endpoint,status,enabled,created_at,updated_at,inventory_revision) VALUES(?,?,?,?,?,'ready',1,?,?,1)",
+                    (connector_id, "Example MCP", "streamable_http", "protected", "https://mcp.example.test", "2026-08-13T00:00:00Z", "2026-08-13T00:00:00Z"),
+                )
+                connection.execute(
+                    "INSERT INTO connector_tools(connector_id,name,description,input_schema_json,schema_fingerprint,discovered_at) VALUES(?,?,?,?,?,?)",
+                    (connector_id, "inspect", "Inspect", '{"type":"object"}', "a" * 64, "2026-08-13T00:00:00Z"),
+                )
+            task_id = control_plane.create_task(
+                "Inspect service",
+                "inspect_service",
+                "Inspect the selected service.",
+                3,
+                [{"connector_id": connector_id, "tool_name": "inspect"}],
+                "test-task",
+            )
+            task = control_plane.list_tasks()[0]
+            self.assertEqual(task["id"], task_id)
+            self.assertEqual(task["status"], "ready")
+            self.assertEqual(len(task["tools"]), 1)
+            self.assertEqual(control_plane.delete_connector(connector_id, "test-delete"), "in_use")
+            with sqlite3.connect(path) as connection:
+                connection.execute(
+                    "UPDATE connector_tools SET schema_fingerprint=? WHERE connector_id=? AND name='inspect'",
+                    ("b" * 64, connector_id),
+                )
+            task = control_plane.list_tasks()[0]
+            self.assertEqual(task["status"], "unavailable")
+            self.assertIn("tool_schema_changed:Example MCP.inspect", task["dependency_failures"])
+
+    def test_task_requires_a_ready_connector_tool(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            with self.assertRaisesRegex(ValueError, "requires_tool"):
+                control_plane.create_task("Empty", "empty", "No tools", 1, [], "test")
 
 
 if __name__ == "__main__":

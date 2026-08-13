@@ -197,6 +197,118 @@ class ControlPlane:
             for row in rows
         ]
 
+    def list_tasks(self) -> list[dict[str, object]]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT d.id,d.name,d.display_name,d.enabled,d.created_at,r.id AS revision_id,
+                       r.revision,r.objective,r.max_attempts,r.created_at AS revision_created_at
+                FROM task_definitions d JOIN task_revisions r ON r.task_definition_id=d.id
+                WHERE r.revision=(SELECT max(r2.revision) FROM task_revisions r2 WHERE r2.task_definition_id=d.id)
+                ORDER BY d.display_name COLLATE NOCASE
+                """
+            ).fetchall()
+            tasks: list[dict[str, object]] = []
+            for row in rows:
+                selections = connection.execute(
+                    """
+                    SELECT s.connector_id,s.tool_name,s.namespaced_name,s.schema_fingerprint,
+                           c.display_name AS connector_name,c.enabled AS connector_enabled,c.status AS connector_status,
+                           t.schema_fingerprint AS current_fingerprint
+                    FROM task_tool_selections s
+                    JOIN connectors c ON c.id=s.connector_id
+                    LEFT JOIN connector_tools t ON t.connector_id=s.connector_id AND t.name=s.tool_name
+                    WHERE s.task_revision_id=? ORDER BY c.display_name COLLATE NOCASE,s.tool_name
+                    """,
+                    (row["revision_id"],),
+                ).fetchall()
+                failures = []
+                for selection in selections:
+                    if not selection["connector_enabled"]:
+                        failures.append(f"connector_disabled:{selection['connector_name']}")
+                    elif selection["connector_status"] != "ready":
+                        failures.append(f"connector_not_ready:{selection['connector_name']}")
+                    elif selection["current_fingerprint"] is None:
+                        failures.append(f"tool_missing:{selection['connector_name']}.{selection['tool_name']}")
+                    elif selection["current_fingerprint"] != selection["schema_fingerprint"]:
+                        failures.append(f"tool_schema_changed:{selection['connector_name']}.{selection['tool_name']}")
+                status = "disabled" if not row["enabled"] else ("ready" if selections and not failures else "unavailable")
+                tasks.append(
+                    {
+                        **dict(row),
+                        "enabled": bool(row["enabled"]),
+                        "status": status,
+                        "dependency_failures": failures,
+                        "tools": [
+                            {
+                                "connector_id": item["connector_id"],
+                                "connector_name": item["connector_name"],
+                                "tool_name": item["tool_name"],
+                                "namespaced_name": item["namespaced_name"],
+                            }
+                            for item in selections
+                        ],
+                    }
+                )
+        return tasks
+
+    def create_task(
+        self,
+        display_name: str,
+        name: str,
+        objective: str,
+        max_attempts: int,
+        selections: list[dict[str, str]],
+        correlation_id: str,
+    ) -> str:
+        if not selections or not 1 <= max_attempts <= 10:
+            raise ValueError("task_requires_tool")
+        if len({(item["connector_id"], item["tool_name"]) for item in selections}) != len(selections):
+            raise ValueError("duplicate_task_tool")
+        task_id = str(uuid4())
+        revision_id = str(uuid4())
+        now = utc_now()
+        report_schema = {
+            "type": "object",
+            "required": ["schema_version", "summary", "findings"],
+            "additionalProperties": False,
+            "properties": {
+                "schema_version": {"type": "integer"},
+                "summary": {"type": "string", "minLength": 1, "maxLength": 2000},
+                "findings": {"type": "array", "maxItems": 100},
+            },
+        }
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            resolved = []
+            for selection in selections:
+                row = connection.execute(
+                    """
+                    SELECT c.id AS connector_id,c.status,c.enabled,t.name,t.schema_fingerprint
+                    FROM connectors c JOIN connector_tools t ON t.connector_id=c.id
+                    WHERE c.id=? AND t.name=?
+                    """,
+                    (selection["connector_id"], selection["tool_name"]),
+                ).fetchone()
+                if row is None or not row["enabled"] or row["status"] != "ready":
+                    raise ValueError("task_connector_not_ready")
+                resolved.append(row)
+            connection.execute(
+                "INSERT INTO task_definitions(id,name,display_name,enabled,created_at) VALUES(?,?,?,?,?)",
+                (task_id, name.strip(), display_name.strip(), 1, now),
+            )
+            connection.execute(
+                "INSERT INTO task_revisions(id,task_definition_id,revision,objective,input_schema_json,report_schema_json,max_attempts,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                (revision_id, task_id, 1, objective.strip(), '{"type":"object"}', canonical_json(report_schema), max_attempts, now),
+            )
+            for row in resolved:
+                connection.execute(
+                    "INSERT INTO task_tool_selections(task_revision_id,connector_id,tool_name,schema_fingerprint,namespaced_name,constraints_json) VALUES(?,?,?,?,?,?)",
+                    (revision_id, row["connector_id"], row["name"], row["schema_fingerprint"], f"connector/{row['connector_id']}/{row['name']}", "{}"),
+                )
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.create", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"tool_count": len(resolved)})
+        return task_id
+
     def create_connector(
         self,
         display_name: str,
@@ -255,14 +367,17 @@ class ControlPlane:
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.enable" if enabled else "connectors.disable", target_type="connector", target_id=connector_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
         return True
 
-    def delete_connector(self, connector_id: str, correlation_id: str) -> bool:
+    def delete_connector(self, connector_id: str, correlation_id: str) -> str:
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            deleted = connection.execute("DELETE FROM connectors WHERE id=?", (connector_id,)).rowcount
+            try:
+                deleted = connection.execute("DELETE FROM connectors WHERE id=?", (connector_id,)).rowcount
+            except sqlite3.IntegrityError:
+                return "in_use"
             if not deleted:
-                return False
+                return "not_found"
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.delete", target_type="connector", target_id=connector_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
-        return True
+        return "deleted"
 
     @staticmethod
     def _replace_connector_tools(connection: sqlite3.Connection, connector_id: str, inventory: list[dict[str, object]], now: str) -> None:
@@ -576,10 +691,22 @@ class ControlPlane:
         assert job is not None
         with connect(self.database_path) as connection:
             task = connection.execute("SELECT objective,input_schema_json,report_schema_json FROM task_revisions WHERE id=?", (job["task_revision_id"],)).fetchone()
+            capabilities = connection.execute(
+                "SELECT namespaced_name,connector_id,tool_name,constraints_json FROM task_tool_selections WHERE task_revision_id=? ORDER BY namespaced_name",
+                (job["task_revision_id"],),
+            ).fetchall()
         job["objective"] = task["objective"]
         job["input_schema"] = json.loads(task["input_schema_json"])
         job["required_report_schema"] = json.loads(task["report_schema_json"])
-        job["allowed_capabilities"] = []
+        job["allowed_capabilities"] = [
+            {
+                "name": item["namespaced_name"],
+                "connector_id": item["connector_id"],
+                "tool_name": item["tool_name"],
+                "constraints": json.loads(item["constraints_json"]),
+            }
+            for item in capabilities
+        ]
         return LeaseResult(job, token, lease_expires)
 
     def _leased_attempt(self, connection, identity, job_id: str, lease_token: str):
@@ -821,11 +948,28 @@ class ControlPlane:
             if existing:
                 return IntakeResult(existing["event_id"], existing["job_id"], True)
             task_revision = connection.execute(
-                "SELECT r.id FROM task_revisions r JOIN task_definitions d ON d.id=r.task_definition_id WHERE d.name=? ORDER BY r.revision DESC LIMIT 1",
+                "SELECT r.id FROM task_revisions r JOIN task_definitions d ON d.id=r.task_definition_id WHERE d.name=? AND d.enabled=1 ORDER BY r.revision DESC LIMIT 1",
                 (task_name,),
             ).fetchone()
             if task_revision is None:
-                raise ValueError("Unknown requested task")
+                raise ValueError("Unknown or disabled requested task")
+            dependencies = connection.execute(
+                """
+                SELECT s.connector_id,s.tool_name,s.schema_fingerprint,c.enabled,c.status,
+                       t.schema_fingerprint AS current_fingerprint
+                FROM task_tool_selections s JOIN connectors c ON c.id=s.connector_id
+                LEFT JOIN connector_tools t ON t.connector_id=s.connector_id AND t.name=s.tool_name
+                WHERE s.task_revision_id=?
+                """,
+                (task_revision["id"],),
+            ).fetchall()
+            if not dependencies or any(
+                not item["enabled"]
+                or item["status"] != "ready"
+                or item["current_fingerprint"] != item["schema_fingerprint"]
+                for item in dependencies
+            ):
+                raise ValueError("Requested task is unavailable")
             window_started_at = now[:16] + ":00.000Z"
             rate = connection.execute(
                 "SELECT window_started_at,request_count FROM intake_rate_windows WHERE identity_id=?",

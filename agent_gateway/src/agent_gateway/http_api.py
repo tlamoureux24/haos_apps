@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import sqlite3
 from datetime import UTC, datetime, timedelta
 
 from pydantic import ValidationError
@@ -18,6 +19,7 @@ from agent_gateway.contracts import (
     IdentityCreateRequest,
     IdentityRevokeRequest,
     JobCancelRequest,
+    TaskCreateRequest,
 )
 from agent_gateway.connectors import discover_streamable_http, validate_streamable_http_url
 from agent_gateway.control_plane import (
@@ -110,6 +112,36 @@ async def admin_list_connectors(request: Request) -> JSONResponse:
     return JSONResponse({"connectors": connectors, "count": len(connectors)})
 
 
+async def admin_list_tasks(request: Request) -> JSONResponse:
+    tasks = await run_in_threadpool(request.app.state.control_plane.list_tasks)
+    return JSONResponse({"tasks": tasks, "count": len(tasks)})
+
+
+async def admin_create_task(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        await audit_denial(request, "tasks.create", "csrf_failed")
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, TaskCreateRequest)
+        task_id = await run_in_threadpool(
+            request.app.state.control_plane.create_task,
+            contract.display_name,
+            contract.name,
+            contract.objective,
+            contract.max_attempts,
+            [item.model_dump() for item in contract.tools],
+            correlation_id,
+        )
+    except OverflowError:
+        return error_response(413, "body_too_large", correlation_id)
+    except (ValueError, ValidationError):
+        return error_response(422, "invalid_task", correlation_id)
+    except sqlite3.IntegrityError:
+        return error_response(409, "task_name_exists", correlation_id)
+    return JSONResponse({"task_id": task_id, "status": "ready"}, status_code=201)
+
+
 async def admin_create_connector(request: Request) -> JSONResponse:
     correlation_id = request.state.correlation_id
     if not csrf_valid(request):
@@ -196,11 +228,13 @@ async def admin_delete_connector(request: Request) -> JSONResponse:
         return error_response(403, "csrf_failed", correlation_id)
     try:
         contract = await json_contract(request, ConnectorIdRequest)
-        found = await run_in_threadpool(request.app.state.control_plane.delete_connector, contract.connector_id, correlation_id)
+        result = await run_in_threadpool(request.app.state.control_plane.delete_connector, contract.connector_id, correlation_id)
     except (OverflowError, ValueError, ValidationError):
         return error_response(422, "invalid_request", correlation_id)
-    if not found:
+    if result == "not_found":
         return error_response(404, "connector_not_found", correlation_id)
+    if result == "in_use":
+        return error_response(409, "connector_in_use", correlation_id)
     return JSONResponse({"connector_id": contract.connector_id, "deleted": True})
 
 

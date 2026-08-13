@@ -13,8 +13,8 @@ database = Path("/data/agent_gateway.db")
 control_plane = ControlPlane(database, Path("/data/private"))
 with sqlite3.connect(database) as connection:
     connection.execute(
-        "INSERT INTO task_definitions(id,name,created_at) VALUES(?,?,?)",
-        ("ci-inspection", "inspect_service", "2026-08-13T00:00:00.000Z"),
+        "INSERT INTO task_definitions(id,name,display_name,enabled,created_at) VALUES(?,?,?,?,?)",
+        ("ci-inspection", "inspect_service", "Inspect service", 1, "2026-08-13T00:00:00.000Z"),
     )
     connection.execute(
         "INSERT INTO task_revisions(id,task_definition_id,revision,objective,input_schema_json,report_schema_json,max_attempts,created_at) VALUES(?,?,?,?,?,?,?,?)",
@@ -28,6 +28,18 @@ with sqlite3.connect(database) as connection:
             3,
             "2026-08-13T00:00:00.000Z",
         ),
+    )
+    connection.execute(
+        "INSERT INTO connectors(id,display_name,transport,protected_config,display_endpoint,status,enabled,created_at,updated_at,inventory_revision) VALUES(?,?,?,?,?,'ready',1,?,?,1)",
+        ("ci-connector", "CI connector", "streamable_http", "test-only", "http://ci.invalid", "2026-08-13T00:00:00.000Z", "2026-08-13T00:00:00.000Z"),
+    )
+    connection.execute(
+        "INSERT INTO connector_tools(connector_id,name,description,input_schema_json,schema_fingerprint,discovered_at) VALUES(?,?,?,?,?,?)",
+        ("ci-connector", "inspect", "Inspect", '{"type":"object"}', "a" * 64, "2026-08-13T00:00:00.000Z"),
+    )
+    connection.execute(
+        "INSERT INTO task_tool_selections(task_revision_id,connector_id,tool_name,schema_fingerprint,namespaced_name,constraints_json) VALUES(?,?,?,?,?,?)",
+        ("ci-inspection-v1", "ci-connector", "inspect", "a" * 64, "connector/ci-connector/inspect", "{}"),
     )
 created = control_plane.create_identity(
     "CI Home Assistant events",

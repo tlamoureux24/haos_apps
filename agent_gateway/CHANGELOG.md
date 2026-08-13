@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.16.0
+
+- Add the first generic task composer: name an objective and select exact tools
+  from one or several ready MCP connectors.
+- Snapshot every selected upstream tool schema fingerprint and compute task
+  readiness from current connector, inventory and fingerprint dependencies.
+- Prevent connector deletion while a task references it and include the exact
+  namespaced tool selection in future job lease envelopes.
+- Show the App version in the header, replace connector status badges with
+  simple green/red/grey indicators, and make tool inventories collapsible.
+- Separate reusable task definitions from their queued executions in the
+  administration navigation.
+
 ## 0.15.0
 
 - Add administrator-managed generic MCP Streamable HTTP connectors with no

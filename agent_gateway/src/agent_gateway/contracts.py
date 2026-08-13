@@ -40,6 +40,19 @@ class ConnectorEnabledRequest(ConnectorIdRequest):
     enabled: bool
 
 
+class TaskToolSelection(StrictContract):
+    connector_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+    tool_name: str = Field(min_length=1, max_length=160)
+
+
+class TaskCreateRequest(StrictContract):
+    display_name: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.-]*$")
+    objective: str = Field(min_length=1, max_length=4000)
+    max_attempts: int = Field(ge=1, le=10)
+    tools: list[TaskToolSelection] = Field(min_length=1, max_length=100)
+
+
 class EventCreateRequest(StrictContract):
     schema_version: Literal[1]
     event_type: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.-]*$")

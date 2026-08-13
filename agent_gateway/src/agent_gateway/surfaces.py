@@ -19,6 +19,7 @@ def exposed_paths(surface: str) -> tuple[str, ...]:
             "/admin/api/v1/connectors/delete",
             "/admin/api/v1/connectors/enabled",
             "/admin/api/v1/connectors/tools",
+            "/admin/api/v1/tasks",
             "/admin/api/v1/identities",
             "/admin/api/v1/identities/revoke",
             "/admin/api/v1/events",

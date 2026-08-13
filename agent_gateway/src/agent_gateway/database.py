@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "5"
+SCHEMA_GENERATION = "6"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO gateway_metadata VALUES('application','agent_gateway');
-INSERT INTO gateway_metadata VALUES('schema_generation','5');
+INSERT INTO gateway_metadata VALUES('schema_generation','6');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -35,7 +35,9 @@ CREATE TABLE policy_bindings(
   FOREIGN KEY(identity_id) REFERENCES identities(id) ON DELETE CASCADE,
   FOREIGN KEY(policy_revision_id) REFERENCES policy_revisions(id));
 CREATE TABLE task_definitions(
-  id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL);
+  id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE,display_name TEXT NOT NULL,
+  enabled INTEGER NOT NULL,created_at TEXT NOT NULL,
+  CHECK(enabled IN (0,1)));
 CREATE TABLE task_revisions(
   id TEXT PRIMARY KEY,task_definition_id TEXT NOT NULL,revision INTEGER NOT NULL,
   objective TEXT NOT NULL,input_schema_json TEXT NOT NULL,report_schema_json TEXT NOT NULL,
@@ -56,6 +58,15 @@ CREATE TABLE connector_tools(
   PRIMARY KEY(connector_id,name),
   FOREIGN KEY(connector_id) REFERENCES connectors(id) ON DELETE CASCADE);
 CREATE INDEX ix_connector_tools_connector ON connector_tools(connector_id);
+CREATE TABLE task_tool_selections(
+  task_revision_id TEXT NOT NULL,connector_id TEXT NOT NULL,tool_name TEXT NOT NULL,
+  schema_fingerprint TEXT NOT NULL,namespaced_name TEXT NOT NULL,
+  constraints_json TEXT NOT NULL,
+  PRIMARY KEY(task_revision_id,connector_id,tool_name),
+  UNIQUE(task_revision_id,namespaced_name),
+  FOREIGN KEY(task_revision_id) REFERENCES task_revisions(id) ON DELETE CASCADE,
+  FOREIGN KEY(connector_id) REFERENCES connectors(id) ON DELETE RESTRICT);
+CREATE INDEX ix_task_tool_connector ON task_tool_selections(connector_id,tool_name);
 CREATE TABLE events(
   id TEXT PRIMARY KEY,source_identity_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,
   schema_version INTEGER NOT NULL,event_type TEXT NOT NULL,occurred_at TEXT NOT NULL,
