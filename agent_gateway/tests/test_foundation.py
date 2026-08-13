@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_gateway.database import database_ready
+from agent_gateway.database import database_ready, initialize_database
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
 from agent_gateway.security import issue_credential, load_or_create_pepper, parse_and_verify_token
@@ -58,31 +58,22 @@ class DatabaseReadinessTests(unittest.TestCase):
     def test_expected_schema_is_ready(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "gateway.db"
-            connection = sqlite3.connect(path)
-            connection.executescript(
-                """
-                CREATE TABLE alembic_version(version_num TEXT PRIMARY KEY);
-                INSERT INTO alembic_version VALUES('0003_intake_rate_limits');
-                CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-                INSERT INTO gateway_metadata VALUES('application', 'agent_gateway');
-                """
-            )
-            connection.close()
+            initialize_database(path)
             self.assertTrue(database_ready(path))
 
-    def test_unknown_revision_is_not_ready(self) -> None:
+    def test_incompatible_existing_schema_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "gateway.db"
             connection = sqlite3.connect(path)
             connection.executescript(
                 """
-                CREATE TABLE alembic_version(version_num TEXT PRIMARY KEY);
-                INSERT INTO alembic_version VALUES('future');
                 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 INSERT INTO gateway_metadata VALUES('application', 'agent_gateway');
                 """
             )
             connection.close()
+            with self.assertRaisesRegex(RuntimeError, "remove_app_data"):
+                initialize_database(path)
             self.assertFalse(database_ready(path))
 
 

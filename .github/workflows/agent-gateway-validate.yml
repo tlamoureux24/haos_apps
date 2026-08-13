@@ -33,7 +33,6 @@ jobs:
           python3 agent_gateway/scripts/validate.py
           bash -n agent_gateway/run.sh
           python3 -m compileall -q \
-            agent_gateway/migrations \
             agent_gateway/src \
             agent_gateway/tests
           PYTHONPATH=agent_gateway/src \

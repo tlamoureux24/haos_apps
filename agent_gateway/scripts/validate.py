@@ -30,6 +30,7 @@ def yaml_leaf_keys(text: str, section: str) -> set[str]:
 def main() -> int:
     config = (ROOT / "config.yaml").read_text(encoding="utf-8")
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     launcher = (ROOT / "run.sh").read_text(encoding="utf-8")
     apparmor = (ROOT / "apparmor.txt").read_text(encoding="utf-8")
     application = (ROOT / "src/agent_gateway/main.py").read_text(encoding="utf-8")
@@ -37,7 +38,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.8.0"',
+        'version: "0.9.0"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -75,11 +76,15 @@ def main() -> int:
     if "adduser -S -D -H" not in dockerfile:
         raise RuntimeError("Container must create an unprivileged runtime user")
     if launcher.count("su-exec agent-gateway:agent-gateway") != 5:
-        raise RuntimeError("Private bootstrap, migrations, and both listeners must run unprivileged")
-    if "python3 -m alembic" not in launcher or launcher.count("python3 -m uvicorn") != 2:
-        raise RuntimeError("Python tools must run as modules without readable /usr/bin wrappers")
-    if re.search(r"agent-gateway:agent-gateway (alembic|uvicorn)\b", launcher):
+        raise RuntimeError("Private bootstrap, schema initialization, and listeners must run unprivileged")
+    if "python3 -m agent_gateway.database initialize" not in launcher or launcher.count("python3 -m uvicorn") != 2:
+        raise RuntimeError("Schema initialization and listeners must run as Python modules")
+    if re.search(r"agent-gateway:agent-gateway uvicorn\b", launcher):
         raise RuntimeError("Launcher must not invoke Python console-script wrappers")
+    if "alembic" in requirements.lower() or "sqlalchemy" in requirements.lower():
+        raise RuntimeError("Development builds must not contain a migration framework")
+    if "alembic.ini" in dockerfile or "COPY migrations" in dockerfile:
+        raise RuntimeError("Container must package only the current direct schema")
     if not launcher.startswith("#!/usr/bin/with-contenv /bin/sh\n"):
         raise RuntimeError("Launcher must preserve the s6 environment with a POSIX shell")
     if "bashio" in launcher:

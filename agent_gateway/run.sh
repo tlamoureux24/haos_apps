@@ -30,8 +30,8 @@ log_error() {
   printf '[Agent Gateway] ERROR: %s\n' "$*" >&2
 }
 
-log_info "Applying Agent Gateway database migrations"
-su-exec agent-gateway:agent-gateway python3 -m alembic -c /app/alembic.ini upgrade head
+log_info "Initializing Agent Gateway database schema"
+su-exec agent-gateway:agent-gateway python3 -m agent_gateway.database initialize
 
 admin_pid=""
 public_pid=""

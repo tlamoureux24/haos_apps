@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0
+
+- Remove Alembic, SQLAlchemy and every development migration as requested for
+  the pre-data development phase.
+- Create the complete current SQLite schema directly on an empty App data
+  directory and fail closed on an incompatible existing database.
+- Establish the development rule that schema changes require an explicitly
+  announced clean reinstall until the product reaches real-data testing.
+
 ## 0.8.0
 
 - Add a persistent, transactional per-identity event intake limit, configurable

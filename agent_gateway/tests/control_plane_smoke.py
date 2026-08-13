@@ -1,4 +1,4 @@
-"""Container-only transaction smoke test run after Alembic migrations."""
+"""Container-only transaction smoke test run after clean schema initialization."""
 
 from __future__ import annotations
 

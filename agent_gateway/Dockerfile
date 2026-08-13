@@ -19,8 +19,6 @@ RUN python3 -m pip install \
   --no-cache-dir \
   --requirement /app/requirements.txt
 
-COPY alembic.ini /app/alembic.ini
-COPY migrations /app/migrations
 COPY src /app/src
 COPY logo.png /app/logo.png
 COPY run.sh /run.sh
