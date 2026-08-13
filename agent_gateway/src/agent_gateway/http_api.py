@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 from agent_gateway.contracts import EventCreateRequest, IdentityCreateRequest, IdentityRevokeRequest
 from agent_gateway.control_plane import (
@@ -17,6 +17,7 @@ from agent_gateway.control_plane import (
     AuthorizationError,
     ControlPlane,
     QueueFullError,
+    canonical_json,
 )
 from agent_gateway.security import token_credential_id
 
@@ -102,6 +103,28 @@ async def admin_list_jobs(request: Request) -> JSONResponse:
 async def admin_list_reports(request: Request) -> JSONResponse:
     reports = await run_in_threadpool(request.app.state.control_plane.list_reports)
     return JSONResponse({"reports": reports, "limit": 100})
+
+
+async def admin_list_audit(request: Request) -> JSONResponse:
+    entries = await run_in_threadpool(
+        request.app.state.control_plane.list_audit_entries, 200
+    )
+    return JSONResponse({"audit_entries": entries, "limit": 200})
+
+
+async def admin_export_audit(request: Request) -> Response:
+    entries = await run_in_threadpool(
+        request.app.state.control_plane.list_audit_entries, 10_000
+    )
+    body = "".join(
+        canonical_json({"schema_version": 1, "audit_entry": entry}) + "\n"
+        for entry in reversed(entries)
+    )
+    return Response(
+        body,
+        media_type="application/x-ndjson",
+        headers={"Content-Disposition": 'attachment; filename="agent-gateway-audit-v1.jsonl"'},
+    )
 
 
 async def authenticated_collection(

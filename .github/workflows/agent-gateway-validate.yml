@@ -151,6 +151,7 @@ jobs:
           [[ "${ingress_page}" == *'href="/api/hassio_ingress/ci/health/ready"'* ]]
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/admin.js"'* ]]
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/logo.png"'* ]]
+          [[ "${ingress_page}" == *'href="#audit"'* ]]
           test "$(curl --silent --output /tmp/agent-gateway-logo.png --write-out '%{http_code}' \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/admin/assets/logo.png)" = "200"
@@ -295,6 +296,18 @@ jobs:
           docker exec --env PYTHONPATH=/app/src agent-gateway-smoke \
             su-exec agent-gateway:agent-gateway \
             python3 -c 'import sqlite3; connection=sqlite3.connect("/data/agent_gateway.db"); assert connection.execute("SELECT count(*) FROM audit_entries WHERE decision=\"denied\"").fetchone()[0] >= 1'
+          curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/audit | \
+            jq -e '.limit == 200 and (.audit_entries | length >= 4) and any(.decision == "denied") and all(has("credential_id") | not)'
+          curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/audit/export \
+            --output /tmp/agent-gateway-audit.jsonl
+          test "$(wc -l </tmp/agent-gateway-audit.jsonl)" -ge 4
+          jq -e '.schema_version == 1 and (.audit_entry.entry_hash | length == 64) and (.audit_entry | has("credential_id") | not)' /tmp/agent-gateway-audit.jsonl >/dev/null
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:18098/admin/api/v1/audit)" = "404"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             http://127.0.0.1:18099/admin/api/v1/status)" = "403"
           echo "SMOKE_STAGE=api-ready"

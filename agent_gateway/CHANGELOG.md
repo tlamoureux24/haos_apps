@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- Add an Ingress-only audit view showing the 200 newest allowed and denied
+  security decisions with actor, reason and redacted context.
+- Add a chronological, versioned and redacted JSONL v1 audit export, bounded to
+  10,000 records and carrying the existing integrity-chain hashes.
+- Keep audit inspection entirely off the public listener and omit credential
+  material from both representations.
+
 ## 0.5.0
 
 - Complete the phase-one MCP read surface with exact event, job and report

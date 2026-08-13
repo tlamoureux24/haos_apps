@@ -347,6 +347,38 @@ class ControlPlane:
             "report": redact(json.loads(row["report_json"])),
         }
 
+    def list_audit_entries(self, limit: int = 200) -> list[dict[str, object]]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT a.sequence,a.id,a.occurred_at,a.action,a.target_type,a.target_id,
+                       a.decision,a.reason_code,a.correlation_id,a.metadata_json,
+                       a.previous_hash,a.entry_hash,i.display_name AS actor_name
+                FROM audit_entries a
+                LEFT JOIN identities i ON i.id=a.actor_identity_id
+                ORDER BY a.sequence DESC LIMIT ?
+                """,
+                (min(max(limit, 1), 10_000),),
+            ).fetchall()
+        return [
+            {
+                "sequence": row["sequence"],
+                "id": row["id"],
+                "occurred_at": row["occurred_at"],
+                "actor_name": row["actor_name"],
+                "action": row["action"],
+                "target_type": row["target_type"],
+                "target_id": row["target_id"],
+                "decision": row["decision"],
+                "reason_code": row["reason_code"],
+                "correlation_id": row["correlation_id"],
+                "metadata": redact(json.loads(row["metadata_json"])),
+                "previous_hash": row["previous_hash"],
+                "entry_hash": row["entry_hash"],
+            }
+            for row in rows
+        ]
+
     def authenticate(self, token: str) -> AuthenticatedIdentity:
         credential_id = token_credential_id(token)
         if credential_id is None:
