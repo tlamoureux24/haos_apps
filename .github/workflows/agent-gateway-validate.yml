@@ -299,9 +299,9 @@ jobs:
             --data "{\"connector_id\":\"${connector_id}\"}" \
             http://127.0.0.1:18099/admin/api/v1/connectors/delete)" = "409"
           jq -e '.error.code == "connector_in_use"' /tmp/connector-in-use.json
-          docker exec --env "CI_CONNECTOR_TOKEN=${observer_credential}" agent-gateway-smoke \
+          docker exec --env "CI_CONNECTOR_ID=${connector_id}" --env "CI_CONNECTOR_TOKEN=${observer_credential}" agent-gateway-smoke \
             su-exec agent-gateway:agent-gateway \
-            python3 -c 'import os,sqlite3; row=sqlite3.connect("/data/agent_gateway.db").execute("SELECT protected_config,display_endpoint FROM connectors").fetchone(); assert os.environ["CI_CONNECTOR_TOKEN"] not in row[0]; assert os.environ["CI_CONNECTOR_TOKEN"] not in row[1]; assert row[1] == "http://127.0.0.1:8098"'
+            python3 -c 'import os,sqlite3; row=sqlite3.connect("/data/agent_gateway.db").execute("SELECT protected_config,display_endpoint FROM connectors WHERE id = ?", (os.environ["CI_CONNECTOR_ID"],)).fetchone(); assert row is not None; assert os.environ["CI_CONNECTOR_TOKEN"] not in row[0]; assert os.environ["CI_CONNECTOR_TOKEN"] not in row[1]; assert row[1] == "http://127.0.0.1:8098"'
           curl --fail --silent \
             --request POST \
             --header "X-Ingress-Path: ${ingress_path}" \
