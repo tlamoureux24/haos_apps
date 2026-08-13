@@ -22,6 +22,7 @@ RUN python3 -m pip install \
 COPY alembic.ini /app/alembic.ini
 COPY migrations /app/migrations
 COPY src /app/src
+COPY logo.png /app/logo.png
 COPY run.sh /run.sh
 
 RUN chmod 755 /run.sh

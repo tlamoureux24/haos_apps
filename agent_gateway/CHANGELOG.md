@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+
+- Redesign the Ingress dashboard using the visual conventions established by
+  UniFi Log Explorer, adapted to the Agent Gateway navy, cyan and amber brand.
+- Add the Agent Gateway logo, compact navigation, clearer metrics, richer empty
+  and identity states, and improved responsive behavior.
+- Add a persistent local light/dark theme selector without external assets or
+  weakening the self-only Content Security Policy.
+
 ## 0.2.0
 
 - Add the first operational Ingress dashboard with service and identity totals.

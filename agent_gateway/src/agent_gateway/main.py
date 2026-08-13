@@ -87,10 +87,11 @@ async def admin_index(request: Request) -> HTMLResponse:
 <html lang="fr">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Agent Gateway</title><link rel="stylesheet" href="{safe_prefix}/admin/assets/admin.css"></head>
-<body><header><h1>Agent Gateway</h1><p>Plan de contrôle des agents et automatisations</p></header>
-<main class="shell" data-base="{safe_prefix}" data-csrf="{csrf_token}">
-<section class="summary"><div class="metric"><strong id="total">–</strong><span>Identités</span></div><div class="metric"><strong id="active">–</strong><span>Actives</span></div><div class="metric"><strong>Prêt</strong><span><a href="{safe_prefix}/health/ready">État du service</a></span></div></section>
-<div class="grid"><section class="panel"><h2>Nouvelle identité</h2><p class="muted">L’identifiant secret ne sera affiché qu’une seule fois.</p><form id="create"><label>Nom<input name="display_name" maxlength="120" required></label><label>Type<select name="identity_type"><option value="client">Client MCP</option><option value="event_source">Source d’événements</option><option value="scheduler">Planificateur</option></select></label><fieldset><legend>Permissions</legend><label><input type="checkbox" name="actions" value="permissions.effective.read">Lire ses permissions</label><label><input type="checkbox" name="actions" value="events.create">Créer des événements</label><label><input type="checkbox" name="actions" value="events.read">Lire les événements</label><label><input type="checkbox" name="actions" value="jobs.read">Lire les tâches</label><label><input type="checkbox" name="actions" value="reports.read">Lire les rapports</label></fieldset><button type="submit">Créer l’identité</button><p id="message" class="error"></p></form><aside id="credential" class="credential"><strong>Copiez cet identifiant maintenant</strong><code></code><span>Il ne sera plus affiché ensuite.</span></aside></section><section class="panel"><h2>Identités</h2><div id="identities"><p class="muted">Chargement…</p></div></section></div>
+<body><main class="app" data-base="{safe_prefix}" data-csrf="{csrf_token}">
+<header class="top"><a class="brand" href="{safe_prefix}/"><img src="{safe_prefix}/admin/assets/logo.png" alt=""><span>Agent Gateway<small>Control plane</small></span></a><nav class="nav" aria-label="Navigation"><a class="active" href="{safe_prefix}/">Vue d’ensemble</a><span class="future">Événements</span><span class="future">Tâches</span><span class="future">Rapports</span></nav><button id="theme" class="theme" type="button" aria-label="Changer de thème">☾</button></header>
+<section class="hero"><div><h1>Vue d’ensemble</h1><p>Gérez les identités et leurs autorisations d’accès à la passerelle.</p></div><div class="health"><i></i><a href="{safe_prefix}/health/ready">Service opérationnel</a></div></section>
+<section class="metrics"><article class="metric"><strong id="total">–</strong><span>Identités enregistrées</span></article><article class="metric"><strong id="active">–</strong><span>Identités actives</span></article><article class="metric amber"><strong id="revoked">–</strong><span>Identités révoquées</span></article></section>
+<div class="workspace"><section class="card"><div class="cardhead"><div><h2>Nouvelle identité</h2><p>Le secret ne sera affiché qu’une seule fois.</p></div></div><form id="create"><label>Nom<input name="display_name" maxlength="120" placeholder="Ex. Codex laptop" required></label><label>Type<select name="identity_type"><option value="client">Client MCP</option><option value="event_source">Source d’événements</option><option value="scheduler">Planificateur</option></select></label><fieldset><legend>Permissions de la passerelle</legend><label class="permission"><input type="checkbox" name="actions" value="permissions.effective.read"><span>Lire ses permissions<small>Inspecter les droits effectifs de cette identité</small></span></label><label class="permission"><input type="checkbox" name="actions" value="events.create"><span>Créer des événements<small>Soumettre des événements authentifiés</small></span></label><label class="permission"><input type="checkbox" name="actions" value="events.read"><span>Lire les événements</span></label><label class="permission"><input type="checkbox" name="actions" value="jobs.read"><span>Lire les tâches</span></label><label class="permission"><input type="checkbox" name="actions" value="reports.read"><span>Lire les rapports</span></label></fieldset><button class="primary" type="submit">Créer l’identité</button><p id="message" class="error"></p></form><aside id="credential" class="credential"><strong>Copiez cet identifiant maintenant</strong><code></code><span>Il ne pourra pas être récupéré plus tard.</span></aside></section><section class="card identities"><div class="cardhead"><div><h2>Identités</h2><p>Clients, sources et planificateurs autorisés.</p></div><span id="identity-count" class="count">–</span></div><div id="identities"><p class="loading">Chargement…</p></div></section></div>
 </main><script src="{safe_prefix}/admin/assets/admin.js" defer></script></body></html>"""
     return HTMLResponse(document)
 
@@ -103,6 +104,10 @@ async def admin_js(_: Request) -> Response:
     return Response(ADMIN_JS, media_type="application/javascript")
 
 
+async def admin_logo(_: Request) -> Response:
+    return Response(open("/app/logo.png", "rb").read(), media_type="image/png")
+
+
 async def not_found(_: Request, __: Exception) -> Response:
     return JSONResponse({"error": {"code": "not_found"}}, status_code=404)
 
@@ -111,6 +116,7 @@ route_handlers = {
     "/": admin_index,
     "/admin/assets/admin.css": admin_css,
     "/admin/assets/admin.js": admin_js,
+    "/admin/assets/logo.png": admin_logo,
     "/admin/api/v1/status": admin_status,
     "/admin/api/v1/identities": admin_create_identity,
     "/admin/api/v1/identities/revoke": admin_revoke_identity,
