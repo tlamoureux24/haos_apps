@@ -1,11 +1,8 @@
-ARG BASE_IMAGE_DIGEST=sha256:94ff231402a5e7ad2a82e261ad5fa4ffae7d7bb095c3febb2edbdf309c9b6aca
-FROM ghcr.io/home-assistant/base:latest@${BASE_IMAGE_DIGEST}
+FROM ghcr.io/home-assistant/base:latest
 
 ARG BUILD_VERSION
 ARG BUILD_ARCH
-ARG BASE_IMAGE_DIGEST
-
-ENV AGENT_GATEWAY_BASE_IMAGE_DIGEST="${BASE_IMAGE_DIGEST}"
+ARG BASE_IMAGE_DIGEST=unrecorded-local-build
 
 LABEL \
   io.hass.version="${BUILD_VERSION}" \

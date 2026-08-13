@@ -31,7 +31,6 @@ log_error() {
   printf '[Agent Gateway] ERROR: %s\n' "$*" >&2
 }
 
-log_info "Home Assistant base:latest resolved digest: ${AGENT_GATEWAY_BASE_IMAGE_DIGEST}"
 log_info "Initializing Agent Gateway database schema"
 su-exec agent-gateway:agent-gateway python3 -m agent_gateway.database initialize
 

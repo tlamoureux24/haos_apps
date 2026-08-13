@@ -42,10 +42,16 @@ jobs:
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_gateway/config.yaml)"
-          base_digest="$(sed -n 's/^ARG BASE_IMAGE_DIGEST=//p' agent_gateway/Dockerfile)"
-          docker build --pull \
+          docker pull ghcr.io/home-assistant/base:latest
+          base_reference="$(docker image inspect ghcr.io/home-assistant/base:latest \
+            --format '{{index .RepoDigests 0}}')"
+          base_digest="${base_reference##*@}"
+          test -n "${base_digest}"
+          test "${base_digest}" != "${base_reference}"
+          docker build \
             --build-arg BUILD_ARCH=amd64 \
             --build-arg "BUILD_VERSION=${version}" \
+            --build-arg "BASE_IMAGE_DIGEST=${base_digest}" \
             --tag "agent-gateway:${version}" \
             agent_gateway
           recorded_digest="$(docker image inspect "agent-gateway:${version}" \

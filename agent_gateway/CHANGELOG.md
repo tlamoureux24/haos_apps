@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.40.7
+
+- Restore `ghcr.io/home-assistant/base:latest` as the unpinned Docker base so
+  every new build follows the current Home Assistant base image.
+- Resolve and pull the current digest once at the start of each CI build, use
+  that local image consistently, and retain its digest with the App version
+  and source commit as a 90-day provenance artifact.
+- Keep the resolved digest as OCI metadata on the CI-built image without
+  turning traceability into a source-level version pin.
+
 ## 0.40.6
 
 - Replace broad read/write/lock access to all of `/run` with the four exact

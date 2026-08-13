@@ -41,7 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.40.6"',
+        'version: "0.40.7"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -58,17 +58,14 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "0.40.6"' not in package:
+    if '__version__ = "0.40.7"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
-    base_digest = "sha256:94ff231402a5e7ad2a82e261ad5fa4ffae7d7bb095c3febb2edbdf309c9b6aca"
-    if f"ARG BASE_IMAGE_DIGEST={base_digest}" not in dockerfile:
-        raise RuntimeError("Home Assistant base image must use the audited immutable digest")
-    if "FROM ghcr.io/home-assistant/base:latest@${BASE_IMAGE_DIGEST}" not in dockerfile:
-        raise RuntimeError("Home Assistant base tag and digest must remain explicit")
+    if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile:
+        raise RuntimeError("Home Assistant base image must continue to follow latest")
+    if "FROM ghcr.io/home-assistant/base:latest@" in dockerfile:
+        raise RuntimeError("Base image traceability must not pin future App builds")
     if 'org.opencontainers.image.base.digest="${BASE_IMAGE_DIGEST}"' not in dockerfile:
         raise RuntimeError("Base image digest must be recorded in OCI metadata")
-    if "Home Assistant base:latest resolved digest" not in launcher:
-        raise RuntimeError("Base image digest must be emitted in the startup log")
     if "ha_mcp" in config.lower():
         raise RuntimeError("No upstream MCP connector may be fixed in App configuration")
     if "document.querySelector(`#${name}`)" in admin_ui:
