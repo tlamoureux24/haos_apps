@@ -368,7 +368,7 @@ jobs:
             jq -e 'all(.tasks[]; .name != "ci_status_task")'
           echo "SMOKE_STAGE=generic-connector-ready"
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
-            http://127.0.0.1:18098/api/v1/events | jq -e '.events | length == 3'
+            http://127.0.0.1:18098/api/v1/events | jq -e '.events | length == 5'
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
             http://127.0.0.1:18098/api/v1/jobs | jq -e '.jobs | length == 3'
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
