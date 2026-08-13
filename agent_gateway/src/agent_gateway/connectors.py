@@ -12,6 +12,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 MAX_TOOLS = 200
 MAX_SCHEMA_BYTES = 16 * 1024
+MAX_RESULT_BYTES = 256 * 1024
 
 # Upstream client libraries may otherwise log full request URLs, whose path or
 # query can contain administrator-supplied credentials.
@@ -99,3 +100,29 @@ async def discover_streamable_http(url: str, bearer_token: str) -> list[dict[str
             }
         )
     return inventory
+
+
+async def invoke_streamable_http(
+    url: str, bearer_token: str, tool_name: str, arguments: dict[str, object]
+) -> dict[str, object]:
+    """Invoke one exact upstream tool and return a bounded protocol-neutral result."""
+    import anyio
+    import httpx
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamable_http_client
+
+    headers = {"Origin": connector_display_endpoint(url)}
+    if bearer_token:
+        headers["Authorization"] = f"Bearer {bearer_token}"
+    timeout = httpx.Timeout(20.0, read=20.0)
+    async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=False) as client:
+        with anyio.fail_after(25):
+            async with streamable_http_client(url, http_client=client) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    result = await session.call_tool(tool_name, arguments=arguments)
+    payload = result.model_dump(mode="json", by_alias=True, exclude_none=True)
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+    if len(encoded) > MAX_RESULT_BYTES:
+        raise ValueError("upstream_result_too_large")
+    return payload

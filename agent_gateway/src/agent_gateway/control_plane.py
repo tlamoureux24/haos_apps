@@ -741,6 +741,99 @@ class ControlPlane:
         ]
         return LeaseResult(job, token, lease_expires)
 
+    def active_capabilities(self, identity: AuthenticatedIdentity) -> list[dict[str, object]]:
+        """Return only virtual tools bound to this identity's one active lease."""
+        self.authorize(identity, "jobs.claim")
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT s.namespaced_name,t.description,t.input_schema_json,d.display_name AS task_name
+                FROM job_attempts a
+                JOIN jobs j ON j.id=a.job_id
+                JOIN task_revisions r ON r.id=j.task_revision_id
+                JOIN task_definitions d ON d.id=r.task_definition_id
+                JOIN task_tool_selections s ON s.task_revision_id=r.id
+                JOIN connectors c ON c.id=s.connector_id
+                JOIN connector_tools t ON t.connector_id=s.connector_id AND t.name=s.tool_name
+                WHERE a.identity_id=? AND a.finished_at IS NULL AND a.lease_expires_at>?
+                  AND j.state='leased' AND d.enabled=1 AND c.enabled=1 AND c.status='ready'
+                  AND t.schema_fingerprint=s.schema_fingerprint
+                ORDER BY s.namespaced_name
+                """,
+                (identity.identity_id, now),
+            ).fetchall()
+        return [
+            {
+                "name": row["namespaced_name"],
+                "description": f"Capacité autorisée pour la tâche {row['task_name']}. {row['description']}",
+                "input_schema": json.loads(row["input_schema_json"]),
+            }
+            for row in rows
+        ]
+
+    def resolve_active_capability(
+        self,
+        identity: AuthenticatedIdentity,
+        virtual_name: str,
+        arguments: dict[str, object],
+        correlation_id: str,
+    ) -> dict[str, object]:
+        """Resolve a virtual tool through the caller's current lease, failing closed."""
+        self.authorize(identity, "jobs.claim")
+        if not isinstance(arguments, dict) or len(canonical_json(arguments).encode()) > 32 * 1024:
+            raise ValueError("invalid_capability_arguments")
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT j.id AS job_id,r.id AS task_revision_id,s.connector_id,s.tool_name,
+                       s.schema_fingerprint,c.protected_config,t.input_schema_json,
+                       c.enabled AS connector_enabled,c.status AS connector_status,
+                       t.schema_fingerprint AS current_fingerprint
+                FROM job_attempts a
+                JOIN jobs j ON j.id=a.job_id
+                JOIN task_revisions r ON r.id=j.task_revision_id
+                JOIN task_definitions d ON d.id=r.task_definition_id
+                JOIN task_tool_selections s ON s.task_revision_id=r.id
+                JOIN connectors c ON c.id=s.connector_id
+                LEFT JOIN connector_tools t ON t.connector_id=s.connector_id AND t.name=s.tool_name
+                WHERE a.identity_id=? AND a.finished_at IS NULL AND a.lease_expires_at>?
+                  AND j.state='leased' AND d.enabled=1 AND s.namespaced_name=?
+                """,
+                (identity.identity_id, now, virtual_name),
+            ).fetchone()
+            if (
+                row is None
+                or not row["connector_enabled"]
+                or row["connector_status"] != "ready"
+                or row["current_fingerprint"] != row["schema_fingerprint"]
+            ):
+                self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="denied", reason_code="capability_not_available", correlation_id=correlation_id, metadata={})
+                raise AuthorizationError("capability_not_available")
+            validate_json_contract(arguments, json.loads(row["input_schema_json"]), "arguments")
+            self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="allowed", reason_code="upstream_call_authorized", correlation_id=correlation_id, metadata={"job_id": row["job_id"], "connector_id": row["connector_id"]})
+        url, bearer_token = reveal_connector_config(self.pepper, row["protected_config"])
+        return {
+            "job_id": row["job_id"],
+            "connector_id": row["connector_id"],
+            "tool_name": row["tool_name"],
+            "url": url,
+            "bearer_token": bearer_token,
+        }
+
+    def record_capability_result(
+        self,
+        identity: AuthenticatedIdentity,
+        virtual_name: str,
+        job_id: str,
+        connector_id: str,
+        succeeded: bool,
+        correlation_id: str,
+    ) -> None:
+        with connect(self.database_path) as connection:
+            self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.result", target_type="capability", target_id=virtual_name, decision="recorded", reason_code="upstream_succeeded" if succeeded else "upstream_failed", correlation_id=correlation_id, metadata={"job_id": job_id, "connector_id": connector_id})
+
     def _leased_attempt(self, connection, identity, job_id: str, lease_token: str):
         row = connection.execute(
             "SELECT * FROM job_attempts WHERE job_id=? AND finished_at IS NULL ORDER BY attempt_number DESC LIMIT 1",

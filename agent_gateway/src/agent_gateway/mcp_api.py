@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import anyio
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.server import Settings as FastMCPSettings
+from mcp.types import TextContent, Tool as MCPTool
 from starlette.responses import JSONResponse
 
 from agent_gateway import __version__
+from agent_gateway.connectors import invoke_streamable_http
 from agent_gateway.control_plane import AuthenticationError, AuthorizationError, ControlPlane
+from agent_gateway.redaction import redact
 
 
 TOOL_ACTIONS = {
@@ -60,12 +64,60 @@ class GovernedMCP(FastMCP):
     async def list_tools(self):
         identity = await anyio.to_thread.run_sync(self.current_identity)
         tools = await super().list_tools()
-        return [tool for tool in tools if TOOL_ACTIONS[tool.name] in identity.actions]
+        visible = [tool for tool in tools if TOOL_ACTIONS.get(tool.name) in identity.actions]
+        if "jobs.claim" in identity.actions:
+            capabilities = await anyio.to_thread.run_sync(self.control_plane.active_capabilities, identity)
+            visible.extend(
+                MCPTool(
+                    name=capability["name"],
+                    description=capability["description"],
+                    inputSchema=capability["input_schema"],
+                )
+                for capability in capabilities
+            )
+        return visible
 
     async def call_tool(self, name: str, arguments: dict[str, Any]):
         action = TOOL_ACTIONS.get(name)
         if action is None:
-            raise AuthorizationError("unknown_action")
+            identity = await anyio.to_thread.run_sync(self.current_identity)
+            context = self.get_context()
+            correlation_id = context.request_context.request.headers.get("x-request-id", "mcp-capability")
+            resolved = await anyio.to_thread.run_sync(
+                self.control_plane.resolve_active_capability,
+                identity,
+                name,
+                arguments,
+                correlation_id,
+            )
+            try:
+                result = await invoke_streamable_http(
+                    resolved["url"],
+                    resolved["bearer_token"],
+                    resolved["tool_name"],
+                    arguments,
+                )
+            except Exception as exc:
+                await anyio.to_thread.run_sync(
+                    self.control_plane.record_capability_result,
+                    identity,
+                    name,
+                    resolved["job_id"],
+                    resolved["connector_id"],
+                    False,
+                    correlation_id,
+                )
+                raise ValueError("upstream_call_failed") from exc
+            await anyio.to_thread.run_sync(
+                self.control_plane.record_capability_result,
+                identity,
+                name,
+                resolved["job_id"],
+                resolved["connector_id"],
+                True,
+                correlation_id,
+            )
+            return [TextContent(type="text", text=json.dumps(redact(result), ensure_ascii=False))]
         identity = await anyio.to_thread.run_sync(self.current_identity)
         self.control_plane.authorize(identity, action)
         return await super().call_tool(name, arguments)

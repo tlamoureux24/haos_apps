@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.22.0
+
+- Dynamically expose each task-selected capability as an individual virtual MCP
+  tool only while the authenticated identity owns that task's active lease.
+- Preserve the original input schema while routing collision-resistant virtual
+  names to exact connector/tool/fingerprint tuples without exposing endpoints,
+  credentials or unselected tools.
+- Invoke upstream Streamable HTTP MCP tools with bounded time and result size,
+  redact normalized results and audit authorization, success and failure.
+
 ## 0.21.0
 
 - Simplify task composition to agent instructions plus an exact selection of

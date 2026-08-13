@@ -83,6 +83,10 @@ leases = [claim for claim in claims if claim is not None]
 assert len(leases) == 1
 lease = leases[0]
 assert lease.job["id"] == first.job_id
+capabilities = control_plane.active_capabilities(worker)
+assert len(capabilities) == 1
+assert capabilities[0]["name"] == "connector/ci-connector/inspect"
+assert capabilities[0]["input_schema"] == {"type": "object"}
 assert control_plane.claim_job(worker, "ci-empty-claim") is None
 other_created = control_plane.create_identity(
     "CI other worker", "client", ["jobs.heartbeat"], "ci-create-other"
@@ -103,6 +107,7 @@ report_id = control_plane.complete_job(
     {"schema_version": 1, "summary": "CI complete", "findings": []},
     "ci-complete",
 )
+assert control_plane.active_capabilities(worker) == []
 assert control_plane.complete_job(
     worker,
     first.job_id,
