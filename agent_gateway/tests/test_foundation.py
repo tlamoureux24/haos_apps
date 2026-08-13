@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent_gateway.database import database_ready, initialize_database
+from agent_gateway.admin_ui import ADMIN_JS
 from agent_gateway.control_plane import ControlPlane, TaskExecutionActiveError, validate_json_contract
 from agent_gateway.connectors import connector_display_endpoint, validate_streamable_http_url
 from agent_gateway.policy import decide, validate_actions
@@ -29,6 +30,17 @@ class SettingsTests(unittest.TestCase):
         with patch.dict(os.environ, {"AGENT_GATEWAY_SURFACE": "both"}, clear=True):
             with self.assertRaises(RuntimeError):
                 load_settings()
+
+
+class InternationalizationTests(unittest.TestCase):
+    def test_admin_interface_supports_french_and_english(self) -> None:
+        self.assertIn("navigator.language", ADMIN_JS)
+        self.assertIn("agw-language", ADMIN_JS)
+        self.assertIn("MutationObserver", ADMIN_JS)
+        self.assertIn("'Vue d’ensemble':'Overview'", ADMIN_JS)
+        self.assertIn("'Connecteurs MCP':'MCP connectors'", ADMIN_JS)
+        self.assertIn("'Audit et rétention':'Audit and retention'", ADMIN_JS)
+        self.assertIn("en-GB", ADMIN_JS)
 
 
 class ConnectorContractTests(unittest.TestCase):
@@ -312,6 +324,9 @@ class TaskCompositionTests(unittest.TestCase):
             connector = control_plane.list_connectors()[0]
             self.assertFalse(connector["enabled"])
             self.assertIsNone(connector["archived_at"])
+            metrics = control_plane.status_counts()
+            self.assertEqual(metrics["events_24h"], 0)
+            self.assertEqual(metrics["failed_jobs_24h"], 0)
 
     def test_due_schedule_queues_once_and_skips_an_active_task(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

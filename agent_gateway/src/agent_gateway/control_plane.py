@@ -998,7 +998,10 @@ class ControlPlane:
                   (SELECT count(*) FROM jobs WHERE state='queued') AS queued_jobs,
                   (SELECT count(*) FROM jobs WHERE state='leased') AS running_jobs,
                   (SELECT count(*) FROM jobs WHERE state='dead_letter') AS dead_letter_jobs,
-                  (SELECT count(*) FROM reports) AS reports
+                  (SELECT count(*) FROM reports) AS reports,
+                  (SELECT count(*) FROM events WHERE received_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-24 hours')) AS events_24h,
+                  (SELECT count(*) FROM jobs WHERE state='completed' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-24 hours')) AS completed_jobs_24h,
+                  (SELECT count(*) FROM jobs WHERE state IN ('failed','dead_letter') AND updated_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-24 hours')) AS failed_jobs_24h
                 """
             ).fetchone()
         return {key: int(row[key]) for key in row.keys()}

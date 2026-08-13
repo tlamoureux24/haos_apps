@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.38.0
+
+- Add aggregated overview metrics for ready connectors, ready tasks, events
+  received over 24 hours and failed or dead-letter work over 24 hours.
+- Add a French and English Ingress interface with browser-language detection,
+  French fallback, localized dates and a persistent manual FR/EN selector.
+- Translate static and dynamically inserted administration controls, primary
+  states, confirmations, empty states and operational outcomes while leaving
+  MCP names and upstream data unchanged.
+- Add complete English and French App guides plus a bilingual Home Assistant
+  `DOCS.md` quick-start document.
+- Document Agent Gateway in both language sections of the repository README and
+  link both App guides from the repository support sections.
+- Add repository invariants and unit coverage for language selection,
+  documentation presence and the new bounded operational metrics.
+- Keep sensitive and write-capable operations explicitly deferred to a later
+  threat-review phase.
+
 ## 0.37.0
 
 - Add reversible archival for tasks and MCP connectors while preserving every

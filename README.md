@@ -28,6 +28,28 @@ https://github.com/tlamoureux24/haos_apps
 
 ### Apps disponibles
 
+#### Agent Gateway
+
+Passerelle expérimentale entre des agents authentifiés et un ou plusieurs
+serveurs MCP configurables.
+
+Fonctionnalités principales :
+
+- connecteurs MCP Streamable HTTP génériques et inventaires indépendants ;
+- tâches composées d’outils précis provenant d’un ou plusieurs connecteurs ;
+- outils virtuels uniques, même si plusieurs serveurs publient le même nom ;
+- exécutions manuelles, planifiées ou déclenchées par événements authentifiés ;
+- file persistante, rapports structurés, rétention et audit chaîné ;
+- archivage réversible des tâches et connecteurs sans perte d’historique ;
+- interface Ingress bilingue français/anglais avec métriques opérationnelles ;
+- secrets des connecteurs conservés dans la passerelle et jamais transmis aux agents.
+
+Les opérations en écriture ou correctives ne sont pas encore activées.
+
+Documentation détaillée :
+
+- [Documentation française](agent_gateway/README.fr.md)
+
 #### Studio Code Server + Codex
 
 App Home Assistant expérimentale fournissant un espace de développement persistant accessible exclusivement par l’Ingress authentifié de Home Assistant.
@@ -196,6 +218,7 @@ Si la nouvelle version n’apparaît pas :
 
 Pour comprendre le fonctionnement d’une App ou obtenir de l’aide, consulter d’abord sa documentation française :
 
+- [Agent Gateway](agent_gateway/README.fr.md)
 - [Rsync Manager](rsync_manager/README.fr.md)
 - [Studio Code Server + Codex](studio_code_server/README.fr.md)
 - [UniFi Autoblock](unifi_autoblock/README.fr.md)
@@ -231,6 +254,28 @@ https://github.com/tlamoureux24/haos_apps
 6. Install the desired App from the store.
 
 ### Available Apps
+
+#### Agent Gateway
+
+Experimental gateway between authenticated agents and one or more configurable
+MCP servers.
+
+Main features:
+
+- generic Streamable HTTP MCP connectors with independent inventories;
+- tasks composed from specific tools across one or several connectors;
+- unique virtual tools even when several servers publish the same name;
+- manual, scheduled, or authenticated event-driven executions;
+- persistent queue, structured reports, retention, and hash-chained audit;
+- reversible task and connector archival without losing history;
+- bilingual French/English Ingress interface with operational metrics;
+- connector secrets remain inside the gateway and are never sent to agents.
+
+Write-capable or corrective operations are not enabled yet.
+
+Detailed documentation:
+
+- [English documentation](agent_gateway/README.md)
 
 #### Studio Code Server + Codex
 
@@ -400,6 +445,7 @@ If the new version does not appear:
 
 For details or help with an App, consult its English documentation first:
 
+- [Agent Gateway](agent_gateway/README.md)
 - [Rsync Manager](rsync_manager/README.md)
 - [Studio Code Server + Codex](studio_code_server/README.md)
 - [UniFi Autoblock](unifi_autoblock/README.md)

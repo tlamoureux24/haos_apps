@@ -36,10 +36,11 @@ def main() -> int:
     application = (ROOT / "src/agent_gateway/main.py").read_text(encoding="utf-8")
     admin_ui = (ROOT / "src/agent_gateway/admin_ui.py").read_text(encoding="utf-8")
     fake_mcp = (ROOT / "scripts/fake_mcp_server.py").read_text(encoding="utf-8")
+    root_readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.37.0"',
+        'version: "0.38.0"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -62,6 +63,14 @@ def main() -> int:
         raise RuntimeError("Admin navigation must reject an empty URL fragment before selecting a view")
     if 'name="ha_get_addon"' not in fake_mcp or '"read_only": True' not in fake_mcp:
         raise RuntimeError("The multi-connector acceptance server must expose its harmless duplicate tool")
+    for document in (ROOT / "README.md", ROOT / "README.fr.md", ROOT / "DOCS.md"):
+        if not document.is_file():
+            raise RuntimeError(f"Missing Agent Gateway documentation: {document.name}")
+    if "agent_gateway/README.fr.md" not in root_readme or "agent_gateway/README.md" not in root_readme:
+        raise RuntimeError("The repository README must link both Agent Gateway languages")
+    for invariant in ("navigator.language", "agw-language", "MutationObserver", "'Vue d’ensemble':'Overview'"):
+        if invariant not in admin_ui:
+            raise RuntimeError(f"Missing administration internationalization invariant: {invariant}")
 
     if "privileged:" in config or "host_network:" in config:
         raise RuntimeError("Agent Gateway must not request privileged or host networking")

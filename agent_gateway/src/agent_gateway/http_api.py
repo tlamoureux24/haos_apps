@@ -105,14 +105,21 @@ async def audit_denial(
 async def admin_status(request: Request) -> JSONResponse:
     counts = await run_in_threadpool(request.app.state.control_plane.status_counts)
     connectors = await run_in_threadpool(request.app.state.control_plane.list_connectors)
+    tasks = await run_in_threadpool(request.app.state.control_plane.list_tasks)
     return JSONResponse(
         {
             "status": "ready",
             "surface": "admin",
             **counts,
             "connectors": {
-                "total": len(connectors),
-                "ready": sum(item["status"] == "ready" for item in connectors),
+                "total": sum(not item["archived_at"] for item in connectors),
+                "ready": sum(not item["archived_at"] and item["status"] == "ready" for item in connectors),
+                "archived": sum(bool(item["archived_at"]) for item in connectors),
+            },
+            "tasks": {
+                "total": sum(not item["archived_at"] for item in tasks),
+                "ready": sum(item["status"] == "ready" for item in tasks),
+                "archived": sum(bool(item["archived_at"]) for item in tasks),
             },
         }
     )
