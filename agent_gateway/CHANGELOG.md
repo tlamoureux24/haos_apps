@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.25.0
+
+- Notify MCP clients when task-scoped virtual tools appear after a claim or
+  disappear after completion/failure, using Streamable HTTP notifications.
+- Prevent duplicate manual executions for a task while one is queued or leased,
+  both transactionally and in the administration interface.
+- Let administrators immediately erase a newly issued identity secret from the
+  page after copying it.
+
 ## 0.24.0
 
 - Replace the identity status pill with the same compact green/red status dot

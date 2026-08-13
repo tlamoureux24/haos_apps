@@ -125,6 +125,10 @@ jobs:
             return 1
           }
 
+          mcp_result() {
+            sed -n 's/^data: //p' | jq -s 'map(select(has("id"))) | last'
+          }
+
           docker network create agent-gateway-smoke >/dev/null
           ingress_proxy_ip="$(docker network inspect agent-gateway-smoke --format '{{(index .IPAM.Config 0).Gateway}}')"
           docker run --detach \
@@ -152,7 +156,7 @@ jobs:
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/admin.js"'* ]]
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/logo.png"'* ]]
           [[ "${ingress_page}" == *'href="#audit"'* ]]
-          [[ "${ingress_page}" == *'Agent Gateway <b>v0.24.0</b>'* ]]
+          [[ "${ingress_page}" == *'Agent Gateway <b>v0.25.0</b>'* ]]
           curl --fail --silent \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/admin/api/v1/status | \
@@ -367,19 +371,19 @@ jobs:
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
-            http://127.0.0.1:18098/mcp | jq -e '.result.serverInfo.name == "Agent Gateway"'
+            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.serverInfo.name == "Agent Gateway"'
           curl --fail --silent --request POST \
             --header "Authorization: Bearer ${observer_credential}" \
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-            http://127.0.0.1:18098/mcp | jq -e '.result.tools | map(.name) == ["gateway_status_v1","permissions_get_effective_v1","events_list_v1","events_get_v1","jobs_list_v1","jobs_get_v1","reports_list_v1","reports_get_v1"]'
+            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.tools | map(.name) == ["gateway_status_v1","permissions_get_effective_v1","events_list_v1","events_get_v1","jobs_list_v1","jobs_get_v1","reports_list_v1","reports_get_v1"]'
           curl --fail --silent --request POST \
             --header "Authorization: Bearer ${observer_credential}" \
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"gateway_status_v1","arguments":{}}}' \
-            http://127.0.0.1:18098/mcp | jq -e '.result.structuredContent.status == "ready"'
+            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.structuredContent.status == "ready"'
           event_id="$(jq -er '.event_id' /tmp/event-first.json)"
           job_id="$(jq -er '.job_id' /tmp/event-first.json)"
           curl --fail --silent --request POST \
@@ -387,19 +391,19 @@ jobs:
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data "$(jq --null-input --compact-output --arg event_id "${event_id}" '{jsonrpc:"2.0",id:4,method:"tools/call",params:{name:"events_get_v1",arguments:{event_id:$event_id}}}')" \
-            http://127.0.0.1:18098/mcp | jq -e --arg event_id "${event_id}" '.result.structuredContent.event.id == $event_id'
+            http://127.0.0.1:18098/mcp | mcp_result | jq -e --arg event_id "${event_id}" '.result.structuredContent.event.id == $event_id'
           curl --fail --silent --request POST \
             --header "Authorization: Bearer ${observer_credential}" \
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data "$(jq --null-input --compact-output --arg job_id "${job_id}" '{jsonrpc:"2.0",id:5,method:"tools/call",params:{name:"jobs_get_v1",arguments:{job_id:$job_id}}}')" \
-            http://127.0.0.1:18098/mcp | jq -e --arg job_id "${job_id}" '.result.structuredContent.job.id == $job_id'
+            http://127.0.0.1:18098/mcp | mcp_result | jq -e --arg job_id "${job_id}" '.result.structuredContent.job.id == $job_id'
           curl --fail --silent --request POST \
             --header "Authorization: Bearer ${credential}" \
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":6,"method":"tools/list","params":{}}' \
-            http://127.0.0.1:18098/mcp | jq -e '.result.tools | map(.name) == ["permissions_get_effective_v1"]'
+            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.tools | map(.name) == ["permissions_get_effective_v1"]'
           worker_response="$(curl --fail --silent \
             --request POST \
             --header "X-Ingress-Path: ${ingress_path}" \
@@ -414,7 +418,7 @@ jobs:
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":7,"method":"tools/list","params":{}}' \
-            http://127.0.0.1:18098/mcp | jq -e '.result.tools | map(.name) == ["jobs_claim_v1","jobs_heartbeat_v1","jobs_complete_v1","jobs_fail_v1"]'
+            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.tools | map(.name) == ["jobs_claim_v1","jobs_heartbeat_v1","jobs_complete_v1","jobs_fail_v1"]'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --request POST \
             --header "X-Ingress-Path: ${ingress_path}" \

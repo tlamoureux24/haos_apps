@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent_gateway.database import database_ready, initialize_database
-from agent_gateway.control_plane import ControlPlane, validate_json_contract
+from agent_gateway.control_plane import ControlPlane, TaskExecutionActiveError, validate_json_contract
 from agent_gateway.connectors import connector_display_endpoint, validate_streamable_http_url
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
@@ -244,6 +244,9 @@ class TaskCompositionTests(unittest.TestCase):
             manual_job_id = control_plane.enqueue_manual_task(manual_task_id, {}, "test-manual-run")
             self.assertEqual(control_plane.get_job(manual_job_id)["state"], "queued")
             self.assertIsNone(control_plane.get_job(manual_job_id)["event_id"])
+            with self.assertRaisesRegex(TaskExecutionActiveError, "task_execution_active"):
+                control_plane.enqueue_manual_task(manual_task_id, {}, "test-manual-duplicate")
+            self.assertEqual(control_plane.list_tasks()[0]["active_job_count"], 1)
             self.assertEqual(control_plane.delete_task(manual_task_id, "test-delete-used"), "in_use")
 
     def test_task_requires_a_ready_connector_tool(self) -> None:

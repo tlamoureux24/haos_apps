@@ -52,7 +52,10 @@ class GovernedMCP(FastMCP):
             "Agent Gateway",
             instructions="Governed access to Agent Gateway jobs and state.",
             stateless_http=True,
-            json_response=True,
+            # Dynamic task capabilities require server notifications.  Keep the
+            # Streamable HTTP response open as SSE so clients can receive
+            # notifications/tools/list_changed alongside a tool result.
+            json_response=False,
             streamable_http_path="/mcp",
             host="0.0.0.0",
         )
@@ -190,12 +193,17 @@ def create_mcp(control_plane: ControlPlane) -> GovernedMCP:
         return {"job": job}
 
     @server.tool(name="jobs_claim_v1", structured_output=True)
-    def jobs_claim(ctx: Context) -> dict[str, object]:
+    async def jobs_claim(ctx: Context) -> dict[str, object]:
         """Atomically lease the oldest queued job eligible for this client."""
-        identity = control_plane.authenticate(request_token(ctx))
-        lease = control_plane.claim_job(identity, ctx.request_context.request.headers.get("x-request-id", "mcp-claim"))
+        identity = await anyio.to_thread.run_sync(control_plane.authenticate, request_token(ctx))
+        lease = await anyio.to_thread.run_sync(
+            control_plane.claim_job,
+            identity,
+            ctx.request_context.request.headers.get("x-request-id", "mcp-claim"),
+        )
         if lease is None:
             return {"claimed": False}
+        await ctx.session.send_tool_list_changed()
         return {"claimed": True, "job": lease.job, "lease_token": lease.lease_token, "lease_expires_at": lease.lease_expires_at}
 
     @server.tool(name="jobs_heartbeat_v1", structured_output=True)
@@ -206,17 +214,35 @@ def create_mcp(control_plane: ControlPlane) -> GovernedMCP:
         return {"job_id": job_id, "lease_expires_at": expires}
 
     @server.tool(name="jobs_complete_v1", structured_output=True)
-    def jobs_complete(job_id: str, lease_token: str, completion_key: str, report: dict[str, object], ctx: Context) -> dict[str, object]:
+    async def jobs_complete(job_id: str, lease_token: str, completion_key: str, report: dict[str, object], ctx: Context) -> dict[str, object]:
         """Complete an owned lease with one immutable redacted report."""
-        identity = control_plane.authenticate(request_token(ctx))
-        report_id = control_plane.complete_job(identity, job_id, lease_token, completion_key, report, "mcp-complete")
+        identity = await anyio.to_thread.run_sync(control_plane.authenticate, request_token(ctx))
+        report_id = await anyio.to_thread.run_sync(
+            control_plane.complete_job,
+            identity,
+            job_id,
+            lease_token,
+            completion_key,
+            report,
+            "mcp-complete",
+        )
+        await ctx.session.send_tool_list_changed()
         return {"job_id": job_id, "state": "completed", "report_id": report_id}
 
     @server.tool(name="jobs_fail_v1", structured_output=True)
-    def jobs_fail(job_id: str, lease_token: str, reason: str, retryable: bool, ctx: Context) -> dict[str, object]:
+    async def jobs_fail(job_id: str, lease_token: str, reason: str, retryable: bool, ctx: Context) -> dict[str, object]:
         """Finish an owned lease as failed with a bounded reason."""
-        identity = control_plane.authenticate(request_token(ctx))
-        state = control_plane.fail_job(identity, job_id, lease_token, reason, retryable, "mcp-fail")
+        identity = await anyio.to_thread.run_sync(control_plane.authenticate, request_token(ctx))
+        state = await anyio.to_thread.run_sync(
+            control_plane.fail_job,
+            identity,
+            job_id,
+            lease_token,
+            reason,
+            retryable,
+            "mcp-fail",
+        )
+        await ctx.session.send_tool_list_changed()
         return {"job_id": job_id, "state": state}
 
     @server.tool(name="reports_list_v1", structured_output=True)

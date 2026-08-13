@@ -32,6 +32,7 @@ from agent_gateway.control_plane import (
     ControlPlane,
     QueueFullError,
     RateLimitExceeded,
+    TaskExecutionActiveError,
     canonical_json,
 )
 from agent_gateway.security import token_credential_id
@@ -196,6 +197,8 @@ async def admin_run_task(request: Request) -> JSONResponse:
         return error_response(422, "task_not_ready", correlation_id)
     except QueueFullError:
         return error_response(503, "queue_full", correlation_id)
+    except TaskExecutionActiveError:
+        return error_response(409, "task_execution_active", correlation_id)
     return JSONResponse({"job_id": job_id, "status": "queued"}, status_code=201)
 
 

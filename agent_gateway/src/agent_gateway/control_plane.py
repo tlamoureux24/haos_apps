@@ -139,6 +139,10 @@ class QueueFullError(RuntimeError):
     pass
 
 
+class TaskExecutionActiveError(RuntimeError):
+    pass
+
+
 class RateLimitExceeded(RuntimeError):
     pass
 
@@ -233,11 +237,17 @@ class ControlPlane:
                     elif selection["current_fingerprint"] != selection["schema_fingerprint"]:
                         failures.append(f"tool_schema_changed:{selection['connector_name']}.{selection['tool_name']}")
                 status = "disabled" if not row["enabled"] else ("ready" if selections and not failures else "unavailable")
+                active_job_count = connection.execute(
+                    """SELECT count(*) FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id
+                       WHERE r.task_definition_id=? AND j.state IN ('queued','leased')""",
+                    (row["id"],),
+                ).fetchone()[0]
                 tasks.append(
                     {
                         **dict(row),
                         "enabled": bool(row["enabled"]),
                         "status": status,
+                        "active_job_count": active_job_count,
                         "dependency_failures": failures,
                         "tools": [
                             {
@@ -356,6 +366,12 @@ class ControlPlane:
             ).fetchone()
             if task is None:
                 raise ValueError("task_not_ready")
+            if connection.execute(
+                """SELECT 1 FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id
+                   WHERE r.task_definition_id=? AND j.state IN ('queued','leased') LIMIT 1""",
+                (task_id,),
+            ).fetchone() is not None:
+                raise TaskExecutionActiveError("task_execution_active")
             dependencies = connection.execute(
                 """SELECT s.schema_fingerprint,c.enabled,c.status,t.schema_fingerprint AS current_fingerprint
                    FROM task_tool_selections s JOIN connectors c ON c.id=s.connector_id
