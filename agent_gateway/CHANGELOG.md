@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0
+
+- Add an Ingress-only Connectors page with a bounded HA-MCP tool inventory for
+  selecting the real read-only Gatus allowlist.
+- Show only tool names, bounded descriptions and bounded input schemas; keep the
+  inventory absent from the public HTTP and MCP surfaces.
+- Return a bounded unavailable error when discovery fails without logging or
+  returning the private HA-MCP URL.
+
 ## 0.12.0
 
 - Add the protected private HA-MCP Streamable HTTP URL option using the same

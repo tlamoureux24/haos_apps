@@ -26,7 +26,7 @@ from agent_gateway.control_plane import (
     canonical_json,
 )
 from agent_gateway.security import token_credential_id
-from agent_gateway.ha_mcp import probe_ha_mcp
+from agent_gateway.ha_mcp import inventory_ha_mcp, probe_ha_mcp
 
 
 MAX_BODY_BYTES = 32 * 1024
@@ -97,6 +97,14 @@ async def admin_status(request: Request) -> JSONResponse:
 async def admin_list_identities(request: Request) -> JSONResponse:
     identities = await run_in_threadpool(request.app.state.control_plane.list_identities)
     return JSONResponse({"identities": identities})
+
+
+async def admin_ha_mcp_inventory(request: Request) -> JSONResponse:
+    try:
+        tools = await inventory_ha_mcp(request.app.state.ha_mcp_url)
+    except Exception:
+        return error_response(503, "ha_mcp_unavailable", request.state.correlation_id)
+    return JSONResponse({"tools": tools, "count": len(tools)})
 
 
 async def admin_list_events(request: Request) -> JSONResponse:

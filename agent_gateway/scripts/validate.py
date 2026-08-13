@@ -38,7 +38,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.12.0"',
+        'version: "0.13.0"',
         'ha_mcp_url: "password?"',
         "  - aarch64",
         "  - amd64",

@@ -30,3 +30,30 @@ async def probe_ha_mcp(url: str) -> dict[str, object]:
         return {"configured": True, "reachable": True, "tool_count": len(tools.tools)}
     except Exception:
         return {"configured": True, "reachable": False, "tool_count": 0}
+
+
+async def inventory_ha_mcp(url: str) -> list[dict[str, object]]:
+    """Return bounded discovery metadata for Ingress administrators only."""
+    if not url:
+        return []
+    import anyio
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamable_http_client
+
+    with anyio.fail_after(8):
+        async with streamable_http_client(url) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.list_tools()
+    inventory = []
+    for tool in result.tools[:100]:
+        schema = tool.inputSchema if isinstance(tool.inputSchema, dict) else {}
+        encoded = __import__("json").dumps(schema, ensure_ascii=False)
+        inventory.append(
+            {
+                "name": str(tool.name)[:160],
+                "description": str(tool.description or "")[:1000],
+                "input_schema": schema if len(encoded) <= 16_384 else {"truncated": True},
+            }
+        )
+    return inventory
