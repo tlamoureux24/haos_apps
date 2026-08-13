@@ -11,17 +11,14 @@ pepper_hex="$(su-exec agent-gateway:agent-gateway env PYTHONPATH=/app/src python
 if [ -f /data/options.json ]; then
   log_level="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("log_level", "info"))')"
   intake_rate_limit="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("intake_rate_limit_per_minute", 30))')"
-  ha_mcp_url="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("ha_mcp_url", ""))')"
 else
   log_level="${AGENT_GATEWAY_LOG_LEVEL:-info}"
   intake_rate_limit="${AGENT_GATEWAY_INTAKE_RATE_LIMIT:-30}"
-  ha_mcp_url="${AGENT_GATEWAY_HA_MCP_URL:-}"
 fi
 
 export AGENT_GATEWAY_DATA_DIR="${AGENT_GATEWAY_DATA_DIR:-/data}"
 export AGENT_GATEWAY_LOG_LEVEL="${log_level}"
 export AGENT_GATEWAY_INTAKE_RATE_LIMIT="${intake_rate_limit}"
-export AGENT_GATEWAY_HA_MCP_URL="${ha_mcp_url}"
 export AGENT_GATEWAY_CREDENTIAL_PEPPER_HEX="${pepper_hex}"
 export PYTHONPATH=/app/src
 

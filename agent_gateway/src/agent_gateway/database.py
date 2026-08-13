@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "3"
+SCHEMA_GENERATION = "4"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE gateway_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO gateway_metadata VALUES('application','agent_gateway');
-INSERT INTO gateway_metadata VALUES('schema_generation','3');
+INSERT INTO gateway_metadata VALUES('schema_generation','4');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -42,13 +42,6 @@ CREATE TABLE task_revisions(
   max_attempts INTEGER NOT NULL,created_at TEXT NOT NULL,
   FOREIGN KEY(task_definition_id) REFERENCES task_definitions(id),
   UNIQUE(task_definition_id,revision),CHECK(max_attempts BETWEEN 1 AND 10));
-INSERT INTO task_definitions VALUES('gatus-readonly','gatus_readonly_diagnostic','2026-08-13T00:00:00.000Z');
-INSERT INTO task_revisions VALUES(
-  'gatus-readonly-v1','gatus-readonly',1,
-  'Diagnostiquer en lecture seule l’indisponibilité signalée et produire un rapport structuré.',
-  '{"schema_version":1,"type":"gatus.endpoint_unavailable"}',
-  '{"schema_version":1,"required":["summary","observations"]}',3,
-  '2026-08-13T00:00:00.000Z');
 CREATE TABLE events(
   id TEXT PRIMARY KEY,source_identity_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,
   schema_version INTEGER NOT NULL,event_type TEXT NOT NULL,occurred_at TEXT NOT NULL,

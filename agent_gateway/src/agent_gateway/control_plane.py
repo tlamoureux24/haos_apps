@@ -26,7 +26,58 @@ from agent_gateway.security import (
 
 GENESIS_HASH = "0" * 64
 ALLOWED_IDENTITY_TYPES = frozenset({"client", "event_source", "scheduler"})
-ALLOWED_TASKS = frozenset({"gatus_readonly_diagnostic"})
+
+
+def validate_json_contract(value: object, schema: dict[str, object], path: str = "report") -> None:
+    """Validate the bounded JSON Schema subset produced by task definitions."""
+    expected = schema.get("type")
+    if expected is None and ("properties" in schema or "required" in schema):
+        expected = "object"
+    type_checks = {
+        "object": lambda item: isinstance(item, dict),
+        "array": lambda item: isinstance(item, list),
+        "string": lambda item: isinstance(item, str),
+        "integer": lambda item: isinstance(item, int) and not isinstance(item, bool),
+        "number": lambda item: isinstance(item, (int, float)) and not isinstance(item, bool),
+        "boolean": lambda item: isinstance(item, bool),
+        "null": lambda item: item is None,
+    }
+    if expected is not None:
+        check = type_checks.get(str(expected))
+        if check is None or not check(value):
+            raise ValueError(f"invalid_contract:{path}:type")
+    if isinstance(value, dict):
+        required = schema.get("required", [])
+        properties = schema.get("properties", {})
+        if not isinstance(required, list) or any(not isinstance(key, str) for key in required) or not isinstance(properties, dict):
+            raise ValueError("invalid_stored_report_schema")
+        if any(key not in value for key in required):
+            raise ValueError(f"invalid_contract:{path}:required")
+        if schema.get("additionalProperties") is False and any(key not in properties for key in value):
+            raise ValueError(f"invalid_contract:{path}:additional_property")
+        for key, child in value.items():
+            child_schema = properties.get(key)
+            if child_schema is not None:
+                if not isinstance(child_schema, dict):
+                    raise ValueError("invalid_stored_report_schema")
+                validate_json_contract(child, child_schema, f"{path}.{key}")
+    if isinstance(value, list):
+        maximum = schema.get("maxItems")
+        if maximum is not None and len(value) > int(maximum):
+            raise ValueError(f"invalid_contract:{path}:max_items")
+        item_schema = schema.get("items")
+        if item_schema is not None:
+            if not isinstance(item_schema, dict):
+                raise ValueError("invalid_stored_report_schema")
+            for index, child in enumerate(value):
+                validate_json_contract(child, item_schema, f"{path}[{index}]")
+    if isinstance(value, str):
+        minimum = schema.get("minLength")
+        maximum = schema.get("maxLength")
+        if minimum is not None and len(value) < int(minimum):
+            raise ValueError(f"invalid_contract:{path}:min_length")
+        if maximum is not None and len(value) > int(maximum):
+            raise ValueError(f"invalid_contract:{path}:max_length")
 
 
 def utc_now() -> str:
@@ -441,17 +492,7 @@ class ControlPlane:
 
     def complete_job(self, identity, job_id: str, lease_token: str, completion_key: str, report: dict[str, object], correlation_id: str) -> str:
         self.authorize(identity, "jobs.complete")
-        if (
-            not completion_key
-            or len(completion_key) > 160
-            or set(report) != {"schema_version", "summary", "observations"}
-            or report.get("schema_version") != 1
-            or not isinstance(report.get("summary"), str)
-            or not 1 <= len(report["summary"]) <= 2000
-            or not isinstance(report.get("observations"), list)
-            or len(report["observations"]) > 100
-            or len(canonical_json(report)) > 32 * 1024
-        ):
+        if not completion_key or len(completion_key) > 160 or not isinstance(report, dict) or len(canonical_json(report)) > 32 * 1024:
             raise ValueError("invalid_completion")
         now = utc_now()
         with connect(self.database_path) as connection:
@@ -460,8 +501,18 @@ class ControlPlane:
             if existing:
                 return existing["id"]
             attempt = self._leased_attempt(connection, identity, job_id, lease_token)
+            schema_row = connection.execute(
+                "SELECT t.report_schema_json FROM jobs j JOIN task_revisions t ON t.id=j.task_revision_id WHERE j.id=?",
+                (job_id,),
+            ).fetchone()
+            if schema_row is None:
+                raise ValueError("invalid_completion")
+            validate_json_contract(report, json.loads(schema_row["report_schema_json"]))
+            schema_version = report.get("schema_version", 1)
+            if not isinstance(schema_version, int) or isinstance(schema_version, bool):
+                raise ValueError("invalid_completion")
             report_id = str(uuid4())
-            connection.execute("INSERT INTO reports(id,job_id,schema_version,report_json,created_at) VALUES(?,?,?,?,?)", (report_id, job_id, 1, canonical_json(redact(report)), now))
+            connection.execute("INSERT INTO reports(id,job_id,schema_version,report_json,created_at) VALUES(?,?,?,?,?)", (report_id, job_id, schema_version, canonical_json(redact(report)), now))
             connection.execute("UPDATE job_attempts SET finished_at=?,outcome='completed',completion_key=? WHERE id=?", (now, completion_key, attempt["id"]))
             connection.execute("UPDATE jobs SET state='completed',updated_at=? WHERE id=? AND state='leased'", (now, job_id))
             self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.complete", target_type="job", target_id=job_id, decision="allowed", reason_code="completed", correlation_id=correlation_id, metadata={"report_id": report_id})
@@ -641,8 +692,6 @@ class ControlPlane:
         if not idempotency_key or len(idempotency_key) > 160:
             raise ValueError("Idempotency key must contain 1 to 160 characters")
         task_name = str(event.get("requested_task", ""))
-        if task_name not in ALLOWED_TASKS:
-            raise ValueError("Unknown requested task")
         now = utc_now()
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -652,6 +701,12 @@ class ControlPlane:
             ).fetchone()
             if existing:
                 return IntakeResult(existing["event_id"], existing["job_id"], True)
+            task_revision = connection.execute(
+                "SELECT r.id FROM task_revisions r JOIN task_definitions d ON d.id=r.task_definition_id WHERE d.name=? ORDER BY r.revision DESC LIMIT 1",
+                (task_name,),
+            ).fetchone()
+            if task_revision is None:
+                raise ValueError("Unknown requested task")
             window_started_at = now[:16] + ":00.000Z"
             rate = connection.execute(
                 "SELECT window_started_at,request_count FROM intake_rate_windows WHERE identity_id=?",
@@ -690,9 +745,6 @@ class ControlPlane:
                     payload,
                 ),
             )
-            task_revision = connection.execute("SELECT r.id FROM task_revisions r JOIN task_definitions d ON d.id=r.task_definition_id WHERE d.name=? ORDER BY r.revision DESC LIMIT 1", (task_name,)).fetchone()
-            if task_revision is None:
-                raise ValueError("Unknown task revision")
             connection.execute(
                 "INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
                 (job_id, event_id, task_name, "queued", identity.policy_revision_id, task_revision["id"], payload, now, now),

@@ -155,13 +155,12 @@ jobs:
           curl --fail --silent \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/admin/api/v1/status | \
-            jq -e '.connectors.ha_mcp == {"configured":false,"reachable":false,"tool_count":0}'
-          curl --fail --silent \
-            --header "X-Ingress-Path: /api/hassio_ingress/ci" \
-            http://127.0.0.1:18099/admin/api/v1/connectors/ha-mcp/tools | \
-            jq -e '.count == 0 and .tools == []'
+            jq -e '.connectors == {"total":0,"ready":0}'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
-            http://127.0.0.1:18098/admin/api/v1/connectors/ha-mcp/tools)" = "404"
+            --header "X-Ingress-Path: /api/hassio_ingress/ci" \
+            http://127.0.0.1:18099/admin/api/v1/connectors/legacy/tools)" = "404"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:18098/admin/api/v1/connectors/legacy/tools)" = "404"
           test "$(curl --silent --output /tmp/agent-gateway-logo.png --write-out '%{http_code}' \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/admin/assets/logo.png)" = "200"
@@ -209,7 +208,7 @@ jobs:
           occurred_at="$(date --utc +'%Y-%m-%dT%H:%M:%SZ')"
           event_payload="$(jq --null-input --compact-output \
             --arg occurred_at "${occurred_at}" \
-            '{schema_version:1,event_type:"gatus.endpoint_unavailable",occurred_at:$occurred_at,source:"home_assistant",subject:{entity_id:"binary_sensor.ci_api_connectivity"},attributes:{state:"off"},requested_task:"gatus_readonly_diagnostic"}')"
+            '{schema_version:1,event_type:"service.alert",occurred_at:$occurred_at,subject:{service_id:"ci-api-service"},attributes:{status:"unavailable"},requested_task:"inspect_service"}')"
           test "$(curl --silent --output /tmp/event-first.json --write-out '%{http_code}' \
             --request POST \
             --header "Authorization: Bearer ${credential}" \

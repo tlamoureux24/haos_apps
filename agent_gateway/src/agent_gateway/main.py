@@ -27,7 +27,6 @@ from agent_gateway.http_api import (
     admin_cancel_job,
     admin_list_reports,
     admin_list_audit,
-    admin_ha_mcp_inventory,
     admin_export_audit,
     admin_revoke_identity,
     admin_status,
@@ -106,9 +105,9 @@ async def admin_index(request: Request) -> HTMLResponse:
 <div class="workspace"><section class="card"><div class="cardhead"><div><h2>Nouvelle identité</h2><p>Le secret ne sera affiché qu’une seule fois.</p></div></div><form id="create"><label>Nom<input name="display_name" maxlength="120" placeholder="Ex. Codex laptop" required></label><label>Type<select name="identity_type"><option value="client">Client MCP</option><option value="event_source">Source d’événements</option><option value="scheduler">Planificateur</option></select></label><fieldset><legend>Permissions de la passerelle</legend><label class="permission"><input type="checkbox" name="actions" value="permissions.effective.read"><span>Lire ses permissions<small>Inspecter les droits effectifs de cette identité</small></span></label><label class="permission"><input type="checkbox" name="actions" value="events.create"><span>Créer des événements<small>Soumettre des événements authentifiés</small></span></label><label class="permission"><input type="checkbox" name="actions" value="events.read"><span>Lire les événements</span></label><label class="permission"><input type="checkbox" name="actions" value="jobs.read"><span>Lire les tâches</span></label><label class="permission"><input type="checkbox" name="actions" value="jobs.claim"><span>Traiter les tâches<small>Réclamer, maintenir, terminer ou échouer une tâche</small></span></label><input type="hidden" name="worker_actions" value="jobs.heartbeat,jobs.complete,jobs.fail"><label class="permission"><input type="checkbox" name="actions" value="reports.read"><span>Lire les rapports</span></label></fieldset><button class="primary" type="submit">Créer l’identité</button><p id="message" class="error"></p></form><aside id="credential" class="credential"><strong>Copiez cet identifiant maintenant</strong><code></code><span>Il ne pourra pas être récupéré plus tard.</span></aside></section><section class="card identities"><div class="cardhead"><div><h2>Identités</h2><p>Clients, sources et planificateurs autorisés.</p></div><span id="identity-count" class="count">–</span></div><div id="identities"><p class="loading">Chargement…</p></div></section></div>
  </section>
 <section id="events" class="view"><div class="pagehead"><h1>Événements</h1><p>Derniers événements authentifiés reçus par la passerelle.</p></div><section class="card"><div id="events-list" class="tablewrap loading">Chargement…</div></section></section>
-<section id="jobs" class="view"><div class="pagehead"><h1>Tâches</h1><p>File persistante des diagnostics demandés.</p></div><section class="card"><div id="jobs-list" class="tablewrap loading">Chargement…</div></section></section>
+<section id="jobs" class="view"><div class="pagehead"><h1>Tâches</h1><p>File persistante des travaux demandés à la passerelle.</p></div><section class="card"><div id="jobs-list" class="tablewrap loading">Chargement…</div></section></section>
 <section id="reports" class="view"><div class="pagehead"><h1>Rapports</h1><p>Résultats structurés et persistants produits par les agents.</p></div><section class="card"><div id="reports-list" class="tablewrap loading">Chargement…</div></section></section>
-<section id="connectors" class="view"><div class="pagehead"><h1>Connecteurs</h1><p>Inventaire administratif HA-MCP utilisé pour définir une liste blanche stricte.</p></div><section class="card"><div id="ha-mcp-tools" class="tablewrap loading">Chargement…</div></section></section>
+<section id="connectors" class="view"><div class="pagehead"><h1>Connecteurs MCP</h1><p>Les serveurs MCP externes seront ajoutés et administrés ici.</p></div><section class="card"><div class="empty"><div class="emptyicon">⌁</div><strong>Aucun connecteur</strong><p>Agent Gateway fonctionne sans connecteur. Leur configuration générique arrive dans la prochaine étape.</p></div></section></section>
 <section id="audit" class="view"><div class="pagehead split"><div><h1>Journal d’audit</h1><p>Décisions de sécurité chaînées et expurgées de la passerelle.</p></div><a class="export" href="{safe_prefix}/admin/api/v1/audit/export" download>Exporter JSONL v1</a></div><section class="card"><div id="audit-list" class="tablewrap loading">Chargement…</div></section></section>
 </main><script src="{safe_prefix}/admin/assets/admin.js" defer></script></body></html>"""
     return HTMLResponse(document)
@@ -136,7 +135,6 @@ route_handlers = {
     "/admin/assets/admin.js": admin_js,
     "/admin/assets/logo.png": admin_logo,
     "/admin/api/v1/status": admin_status,
-    "/admin/api/v1/connectors/ha-mcp/tools": admin_ha_mcp_inventory,
     "/admin/api/v1/identities": admin_create_identity,
     "/admin/api/v1/identities/revoke": admin_revoke_identity,
     "/admin/api/v1/events": admin_list_events,
@@ -191,4 +189,3 @@ app = Starlette(
     lifespan=lifespan,
 )
 app.state.control_plane = control_plane
-app.state.ha_mcp_url = settings.ha_mcp_url

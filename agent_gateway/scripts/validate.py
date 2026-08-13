@@ -38,8 +38,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.13.0"',
-        'ha_mcp_url: "password?"',
+        'version: "0.14.0"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -56,6 +55,8 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
+    if "ha_mcp" in config.lower():
+        raise RuntimeError("No upstream MCP connector may be fixed in App configuration")
     if "document.querySelector(`#${name}`)" in admin_ui:
         raise RuntimeError("Admin navigation must reject an empty URL fragment before selecting a view")
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.14.0
+
+- Reset the prototype around a connector-neutral gateway: remove the fixed
+  HA-MCP App option, health probe, inventory route and connector branding.
+- Remove every built-in Gatus task, event/source literal and Home Assistant
+  entity assumption; clean installations now start correctly with no task or
+  connector.
+- Accept bounded neutral event subjects and task names, resolve tasks only from
+  persisted definitions, and validate completed reports against each task's
+  stored report contract instead of one fixed diagnostic shape.
+- Keep the Connectors page as an explicit zero-connector state ahead of the
+  generic multi-MCP connector lifecycle implementation.
+
 ## 0.13.0
 
 - Add an Ingress-only Connectors page with a bounded HA-MCP tool inventory for

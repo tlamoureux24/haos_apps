@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent_gateway.database import database_ready, initialize_database
-from agent_gateway.ha_mcp import validate_private_url
+from agent_gateway.control_plane import validate_json_contract
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
 from agent_gateway.security import issue_credential, load_or_create_pepper, parse_and_verify_token
@@ -51,17 +51,6 @@ class SettingsTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 load_settings()
 
-    def test_accepts_private_ha_mcp_url(self) -> None:
-        self.assertEqual(
-            validate_private_url("http://homeassistant.local:8123/mcp/private_secret"),
-            "http://homeassistant.local:8123/mcp/private_secret",
-        )
-
-    def test_rejects_non_private_ha_mcp_url(self) -> None:
-        with self.assertRaises(ValueError):
-            validate_private_url("http://homeassistant.local:8123/mcp")
-
-
 class DatabaseReadinessTests(unittest.TestCase):
     def test_missing_database_is_not_ready(self) -> None:
         self.assertFalse(database_ready(Path("/definitely/missing/database.db")))
@@ -71,6 +60,11 @@ class DatabaseReadinessTests(unittest.TestCase):
             path = Path(directory) / "gateway.db"
             initialize_database(path)
             self.assertTrue(database_ready(path))
+            with sqlite3.connect(path) as connection:
+                self.assertEqual(
+                    connection.execute("SELECT count(*) FROM task_definitions").fetchone()[0],
+                    0,
+                )
 
     def test_incompatible_existing_schema_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -160,6 +154,21 @@ class RedactionTests(unittest.TestCase):
         self.assertEqual(redacted["authorization"], "[REDACTED]")
         self.assertEqual(redacted["safe"][0]["api_key"], "[REDACTED]")
         self.assertNotIn(issued.token, redacted["safe"][1])
+
+
+class TaskReportContractTests(unittest.TestCase):
+    def test_generic_report_shape_is_validated(self) -> None:
+        schema = {
+            "type": "object",
+            "required": ["result"],
+            "additionalProperties": False,
+            "properties": {"result": {"type": "string", "minLength": 1}},
+        }
+        validate_json_contract({"result": "healthy"}, schema)
+        with self.assertRaisesRegex(ValueError, "required"):
+            validate_json_contract({}, schema)
+        with self.assertRaisesRegex(ValueError, "additional_property"):
+            validate_json_contract({"result": "healthy", "unexpected": True}, schema)
 
 
 if __name__ == "__main__":

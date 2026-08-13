@@ -11,6 +11,24 @@ from agent_gateway.control_plane import AuthenticationError, ControlPlane, Lease
 
 database = Path("/data/agent_gateway.db")
 control_plane = ControlPlane(database, Path("/data/private"))
+with sqlite3.connect(database) as connection:
+    connection.execute(
+        "INSERT INTO task_definitions(id,name,created_at) VALUES(?,?,?)",
+        ("ci-inspection", "inspect_service", "2026-08-13T00:00:00.000Z"),
+    )
+    connection.execute(
+        "INSERT INTO task_revisions(id,task_definition_id,revision,objective,input_schema_json,report_schema_json,max_attempts,created_at) VALUES(?,?,?,?,?,?,?,?)",
+        (
+            "ci-inspection-v1",
+            "ci-inspection",
+            1,
+            "Inspect the supplied service and return a structured report.",
+            '{"type":"object"}',
+            '{"type":"object","required":["schema_version","summary","findings"],"additionalProperties":false,"properties":{"schema_version":{"type":"integer"},"summary":{"type":"string","minLength":1,"maxLength":2000},"findings":{"type":"array","maxItems":100}}}',
+            3,
+            "2026-08-13T00:00:00.000Z",
+        ),
+    )
 created = control_plane.create_identity(
     "CI Home Assistant events",
     "event_source",
@@ -20,12 +38,11 @@ created = control_plane.create_identity(
 identity = control_plane.authenticate(created.credential.token)
 event = {
     "schema_version": 1,
-    "event_type": "gatus.endpoint_unavailable",
+    "event_type": "service.alert",
     "occurred_at": "2026-08-12T15:00:00Z",
-    "source": "home_assistant",
-    "subject": {"entity_id": "binary_sensor.ci_connectivity"},
-    "attributes": {"state": "off"},
-    "requested_task": "gatus_readonly_diagnostic",
+    "subject": {"service_id": "ci-service"},
+    "attributes": {"status": "unavailable"},
+    "requested_task": "inspect_service",
 }
 with ThreadPoolExecutor(max_workers=8) as executor:
     results = list(
@@ -71,7 +88,7 @@ report_id = control_plane.complete_job(
     first.job_id,
     lease.lease_token,
     "ci-completion",
-    {"schema_version": 1, "summary": "CI complete", "observations": []},
+    {"schema_version": 1, "summary": "CI complete", "findings": []},
     "ci-complete",
 )
 assert control_plane.complete_job(
@@ -79,7 +96,7 @@ assert control_plane.complete_job(
     first.job_id,
     lease.lease_token,
     "ci-completion",
-    {"schema_version": 1, "summary": "CI complete", "observations": []},
+    {"schema_version": 1, "summary": "CI complete", "findings": []},
     "ci-complete-replay",
 ) == report_id
 failed = control_plane.ingest_event(identity, "ci-failure-key", event, "ci-failure-event")

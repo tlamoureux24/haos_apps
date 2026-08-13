@@ -5,9 +5,6 @@ configuration:
   intake_rate_limit_per_minute:
     name: Events per minute limit
     description: Maximum new events accepted per minute for each identity. Idempotent replays are not counted.
-  ha_mcp_url:
-    name: Private HA-MCP URL
-    description: Complete Streamable HTTP URL displayed by HA-MCP and ending in /private_<secret>. It remains protected and is never sent to agents.
 network:
   8098/tcp:
     name: MCP and event port
