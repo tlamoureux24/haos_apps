@@ -36,6 +36,9 @@ ALLOWED_IDENTITY_TYPES = frozenset({"client", "event_source", "scheduler"})
 
 def validate_json_contract(value: object, schema: dict[str, object], path: str = "report") -> None:
     """Validate the bounded JSON Schema subset produced by task definitions."""
+    choices = schema.get("enum")
+    if choices is not None and (not isinstance(choices, list) or value not in choices):
+        raise ValueError(f"invalid_contract:{path}:enum")
     expected = schema.get("type")
     if expected is None and ("properties" in schema or "required" in schema):
         expected = "object"
@@ -84,6 +87,13 @@ def validate_json_contract(value: object, schema: dict[str, object], path: str =
             raise ValueError(f"invalid_contract:{path}:min_length")
         if maximum is not None and len(value) > int(maximum):
             raise ValueError(f"invalid_contract:{path}:max_length")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        minimum = schema.get("minimum")
+        maximum = schema.get("maximum")
+        if minimum is not None and value < float(minimum):
+            raise ValueError(f"invalid_contract:{path}:minimum")
+        if maximum is not None and value > float(maximum):
+            raise ValueError(f"invalid_contract:{path}:maximum")
 
 
 def utc_now() -> str:

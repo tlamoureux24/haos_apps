@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.20.0
+
+- Replace raw JSON constraint editing with schema-driven fixed-parameter fields
+  using text, number, boolean and advertised-choice controls.
+- Keep complex parameters agent-controlled until a safe dedicated editor exists
+  instead of asking administrators to write protocol data manually.
+- Enforce advertised enum and numeric bounds for fixed arguments server-side.
+
 ## 0.19.0
 
 - Allow administrators to define bounded fixed arguments for each selected task
