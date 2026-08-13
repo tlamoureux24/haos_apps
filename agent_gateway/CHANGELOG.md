@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.31.0
+
+- Add an explicit `Relancer` action for dead-letter executions in the Ingress
+  operations view.
+- Preserve the failed execution and all its attempts, while creating a fresh
+  queued job from the same immutable task revision and input.
+- Refuse relaunch when the task dependencies are unavailable, another execution
+  of the task is active, or the bounded queue is full, and audit every decision.
+
 ## 0.30.0
 
 - Add a configurable per-trigger cooldown from zero to seven days and expose

@@ -887,6 +887,68 @@ class ControlPlane:
             )
         return "cancelled"
 
+    def requeue_dead_letter(self, job_id: str, correlation_id: str) -> tuple[str, str | None]:
+        """Create a fresh job from a dead letter without rewriting its history."""
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            job = connection.execute(
+                """SELECT j.state,j.event_id,j.task_name,j.policy_revision_id,j.task_revision_id,j.input_json,
+                          d.id AS task_definition_id,d.enabled
+                   FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id
+                   JOIN task_definitions d ON d.id=r.task_definition_id
+                   WHERE j.id=?""",
+                (job_id,),
+            ).fetchone()
+            if job is None:
+                return "not_found", None
+            if job["state"] != "dead_letter":
+                return "not_requeueable", None
+            dependencies = connection.execute(
+                """SELECT s.schema_fingerprint,c.enabled,c.status,t.schema_fingerprint AS current_fingerprint
+                   FROM task_tool_selections s JOIN connectors c ON c.id=s.connector_id
+                   LEFT JOIN connector_tools t ON t.connector_id=s.connector_id AND t.name=s.tool_name
+                   WHERE s.task_revision_id=?""",
+                (job["task_revision_id"],),
+            ).fetchall()
+            if not job["enabled"] or not dependencies or any(
+                not item["enabled"]
+                or item["status"] != "ready"
+                or item["current_fingerprint"] != item["schema_fingerprint"]
+                for item in dependencies
+            ):
+                return "task_unavailable", None
+            if connection.execute(
+                """SELECT 1 FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id
+                   WHERE r.task_definition_id=? AND j.state IN ('queued','leased') LIMIT 1""",
+                (job["task_definition_id"],),
+            ).fetchone():
+                return "task_execution_active", None
+            queued = connection.execute(
+                "SELECT count(*) FROM jobs WHERE state IN ('queued','leased')"
+            ).fetchone()[0]
+            if queued >= self.queue_limit:
+                return "queue_full", None
+            new_job_id = str(uuid4())
+            connection.execute(
+                """INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at)
+                   VALUES(?,?,?,'queued',?,?,?,?,?)""",
+                (new_job_id, job["event_id"], job["task_name"], job["policy_revision_id"], job["task_revision_id"], job["input_json"], now, now),
+            )
+            self._append_audit(
+                connection,
+                actor_identity_id=None,
+                credential_id=None,
+                action="jobs.requeue",
+                target_type="job",
+                target_id=job_id,
+                decision="allowed",
+                reason_code="ingress_admin",
+                correlation_id=correlation_id,
+                metadata={"new_job_id": new_job_id},
+            )
+        return "queued", new_job_id
+
     def claim_job(self, identity: AuthenticatedIdentity, correlation_id: str) -> LeaseResult | None:
         self.authorize(identity, "jobs.claim")
         now_dt = datetime.now(UTC)

@@ -34,6 +34,7 @@ def exposed_paths(surface: str) -> tuple[str, ...]:
             "/admin/api/v1/events",
             "/admin/api/v1/jobs",
             "/admin/api/v1/jobs/cancel",
+            "/admin/api/v1/jobs/requeue",
             "/admin/api/v1/reports",
             "/admin/api/v1/audit",
             "/admin/api/v1/audit/export",

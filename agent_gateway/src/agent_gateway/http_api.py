@@ -425,6 +425,38 @@ async def admin_cancel_job(request: Request) -> JSONResponse:
     return JSONResponse({"job_id": contract.job_id, "state": "cancelled"})
 
 
+async def admin_requeue_job(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        await audit_denial(request, "jobs.requeue", "csrf_failed")
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, JobCancelRequest)
+        result, new_job_id = await run_in_threadpool(
+            request.app.state.control_plane.requeue_dead_letter,
+            contract.job_id,
+            correlation_id,
+        )
+    except OverflowError:
+        await audit_denial(request, "jobs.requeue", "body_too_large")
+        return error_response(413, "body_too_large", correlation_id)
+    except (ValueError, ValidationError):
+        await audit_denial(request, "jobs.requeue", "invalid_request")
+        return error_response(422, "invalid_request", correlation_id)
+    errors = {
+        "not_found": (404, "job_not_found"),
+        "not_requeueable": (409, "job_not_requeueable"),
+        "task_unavailable": (409, "task_unavailable"),
+        "task_execution_active": (409, "task_execution_active"),
+        "queue_full": (503, "queue_full"),
+    }
+    if result in errors:
+        status, code = errors[result]
+        await audit_denial(request, "jobs.requeue", code)
+        return error_response(status, code, correlation_id)
+    return JSONResponse({"source_job_id": contract.job_id, "job_id": new_job_id, "state": "queued"}, status_code=201)
+
+
 async def admin_list_reports(request: Request) -> JSONResponse:
     reports = await run_in_threadpool(request.app.state.control_plane.list_reports)
     return JSONResponse({"reports": reports, "limit": 100})

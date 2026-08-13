@@ -168,6 +168,16 @@ for attempt_number in range(2, 4):
     else:
         assert state == "dead_letter"
 
+requeue_state, requeued_job_id = control_plane.requeue_dead_letter(
+    failed.job_id, "ci-dead-letter-requeue"
+)
+assert requeue_state == "queued" and requeued_job_id
+blocked_state, blocked_job_id = control_plane.requeue_dead_letter(
+    failed.job_id, "ci-dead-letter-requeue-active"
+)
+assert blocked_state == "task_execution_active" and blocked_job_id is None
+assert control_plane.cancel_job(requeued_job_id, "ci-requeued-cancel") == "cancelled"
+
 try:
     control_plane.authenticate(created.credential.token[:-1] + "x")
 except AuthenticationError:
@@ -177,7 +187,8 @@ else:
 
 with sqlite3.connect(database) as connection:
     assert connection.execute("SELECT count(*) FROM events").fetchone()[0] == 4
-    assert connection.execute("SELECT count(*) FROM jobs").fetchone()[0] == 2
-    assert {row[0] for row in connection.execute("SELECT state FROM jobs")} == {"completed", "dead_letter"}
+    assert connection.execute("SELECT count(*) FROM jobs").fetchone()[0] == 3
+    assert {row[0] for row in connection.execute("SELECT state FROM jobs")} == {"completed", "dead_letter", "cancelled"}
     assert connection.execute("SELECT count(*) FROM reports").fetchone()[0] == 1
     assert connection.execute("SELECT count(*) FROM job_attempts").fetchone()[0] == 4
+    assert connection.execute("SELECT count(*) FROM job_attempts WHERE job_id=?", (requeued_job_id,)).fetchone()[0] == 0
