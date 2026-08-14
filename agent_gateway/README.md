@@ -46,7 +46,7 @@ API; expose it only on a trusted LAN or VPN.
    then select **Test and add**.
 2. Open **Tasks**, write the instructions sent to the agent and select only the
    connector tools required by that task.
-3. Open **Overview**, create an MCP client identity with job-processing and
+3. Open **Identities**, create an MCP client identity with job-processing and
    report permissions, then copy its one-time credential.
 4. Configure the MCP client with `http://HOME_ASSISTANT_IP:8098/mcp` and send
    the credential as a Bearer token.

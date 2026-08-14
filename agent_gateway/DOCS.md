@@ -7,7 +7,7 @@
 Agent Gateway relie des agents authentifiés à des outils choisis dans un ou
 plusieurs serveurs MCP. Commencez par ajouter un connecteur dans
 **Connecteurs**, composez une tâche dans **Tâches**, puis créez une identité
-Client MCP dans **Vue d’ensemble**. Son identifiant n’est affiché qu’une fois.
+Client MCP dans **Identités**. Son identifiant n’est affiché qu’une fois.
 
 Le port `8098` dessert MCP et l’API d’événements authentifiée. Ne le publier que
 sur un réseau local ou VPN de confiance. L’administration reste confinée à
@@ -27,7 +27,7 @@ Guide complet : [documentation française](README.fr.md).
 
 Agent Gateway connects authenticated agents to selected tools from one or more
 MCP servers. First add a connector under **Connectors**, compose a task under
-**Tasks**, then create an MCP client identity from **Overview**. Its credential
+**Tasks**, then create an MCP client identity from **Identities**. Its credential
 is displayed only once.
 
 Port `8098` serves MCP and the authenticated event API. Publish it only on a

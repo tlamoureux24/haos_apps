@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.42.0
+
+- Start the administration information-architecture redesign with a stable
+  two-row header, a horizontally scrollable navigation row and wider use of
+  the available Home Assistant Ingress viewport.
+- Move identity administration out of Overview into a dedicated top-level
+  page and keep Overview consultative.
+- Introduce the reusable responsive administration drawer with dialog
+  semantics, focus trapping and restoration, Escape and overlay handling, and
+  background-scroll prevention.
+- Protect one-time credentials against accidental dismissal: closing the
+  drawer requires explicit confirmation until the credential is acknowledged.
+- Preserve French/English localization, dark theme and narrow-screen behavior,
+  and add regression coverage for the new identity workflow.
+
 ## 0.41.0
 
 - Replace the one-window grace implementation with one durable incident engine

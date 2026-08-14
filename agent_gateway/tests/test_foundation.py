@@ -43,6 +43,31 @@ class InternationalizationTests(unittest.TestCase):
         self.assertIn("en-GB", ADMIN_JS)
 
 
+class AdministrationInterfaceTests(unittest.TestCase):
+    def test_identity_administration_uses_a_dedicated_accessible_drawer(self) -> None:
+        main_source = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "agent_gateway"
+            / "main.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('class="site-header"', main_source)
+        self.assertIn('class="nav-scroll"', main_source)
+        self.assertIn('data-view="identities-view"', main_source)
+        self.assertIn('id="identity-create-open"', main_source)
+        self.assertIn('role="dialog" aria-modal="true"', main_source)
+        self.assertIn('aria-labelledby="drawer-title"', main_source)
+
+    def test_identity_credential_requires_acknowledgement_or_confirmation(self) -> None:
+        self.assertIn("credentialBox.classList.contains('show')&&!force", ADMIN_JS)
+        self.assertIn("if(!confirm(warning))return false", ADMIN_JS)
+        self.assertIn("document.querySelector('#credential-dismiss').onclick", ADMIN_JS)
+        self.assertIn("drawerReturnFocus?.focus()", ADMIN_JS)
+        self.assertIn("event.key==='Escape'", ADMIN_JS)
+        self.assertIn("document.body.classList.add('drawer-open')", ADMIN_JS)
+
+
 class ConnectorContractTests(unittest.TestCase):
     def test_accepts_generic_streamable_http_endpoint(self) -> None:
         url = "https://mcp.example.test:8443/custom/path?tenant=one"

@@ -48,7 +48,7 @@ l’exposer que sur un LAN ou VPN de confiance.
    cliquer sur **Tester et ajouter**.
 2. Dans **Tâches**, écrire les instructions transmises à l’agent et sélectionner
    uniquement les outils nécessaires à cette tâche.
-3. Dans **Vue d’ensemble**, créer une identité Client MCP avec les permissions
+3. Dans **Identités**, créer une identité Client MCP avec les permissions
    de traitement et de rapport, puis copier son identifiant affiché une fois.
 4. Configurer le client MCP avec `http://IP_HOME_ASSISTANT:8098/mcp` et envoyer
    cet identifiant comme jeton Bearer.
