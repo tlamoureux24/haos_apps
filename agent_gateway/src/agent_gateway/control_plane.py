@@ -1081,8 +1081,13 @@ class ControlPlane:
                   (SELECT count(*) FROM jobs WHERE state='dead_letter') AS dead_letter_jobs,
                   (SELECT count(*) FROM event_incidents WHERE state='pending') AS pending_incidents,
                   (SELECT count(*) FROM event_incidents WHERE state='blocked') AS blocked_incidents,
+                  (SELECT count(*) FROM event_mappings) AS event_mappings,
+                  (SELECT count(*) FROM event_mappings WHERE enabled=1) AS active_event_mappings,
+                  (SELECT count(*) FROM schedules) AS schedules,
+                  (SELECT count(*) FROM schedules WHERE enabled=1) AS active_schedules,
                   (SELECT count(*) FROM reports) AS reports,
                   (SELECT count(*) FROM events WHERE received_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-24 hours')) AS events_24h,
+                  (SELECT count(*) FROM reports WHERE created_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-24 hours')) AS reports_24h,
                   (SELECT count(*) FROM jobs WHERE state='completed' AND updated_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-24 hours')) AS completed_jobs_24h,
                   (SELECT count(*) FROM jobs WHERE state IN ('failed','dead_letter') AND updated_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-24 hours')) AS failed_jobs_24h
                 """
@@ -1093,11 +1098,13 @@ class ControlPlane:
         with connect(self.database_path) as connection:
             rows = connection.execute(
                 """
-                SELECT j.id,j.event_id,j.task_name,j.state,j.created_at,j.updated_at,
+                SELECT j.id,j.event_id,j.task_name,d.display_name AS task_display_name,j.state,j.created_at,j.updated_at,
                        count(DISTINCT r.id) AS report_count,count(DISTINCT a.id) AS attempt_count,
                        (SELECT a2.outcome FROM job_attempts a2 WHERE a2.job_id=j.id ORDER BY a2.attempt_number DESC LIMIT 1) AS last_attempt_outcome,
                        (SELECT a2.failure_reason FROM job_attempts a2 WHERE a2.job_id=j.id ORDER BY a2.attempt_number DESC LIMIT 1) AS last_failure_reason
-                FROM jobs j LEFT JOIN reports r ON r.job_id=j.id
+                FROM jobs j JOIN task_revisions tr ON tr.id=j.task_revision_id
+                JOIN task_definitions d ON d.id=tr.task_definition_id
+                LEFT JOIN reports r ON r.job_id=j.id
                 LEFT JOIN job_attempts a ON a.job_id=j.id
                 GROUP BY j.id ORDER BY j.created_at DESC LIMIT ?
                 """,
@@ -1489,8 +1496,10 @@ class ControlPlane:
             rows = connection.execute(
                 """
                 SELECT r.id,r.job_id,r.schema_version,r.report_json,r.created_at,
-                       r.supersedes_id,j.task_name
+                       r.supersedes_id,j.task_name,d.display_name AS task_display_name
                 FROM reports r JOIN jobs j ON j.id=r.job_id
+                JOIN task_revisions tr ON tr.id=j.task_revision_id
+                JOIN task_definitions d ON d.id=tr.task_definition_id
                 ORDER BY r.created_at DESC LIMIT ?
                 """,
                 (min(max(limit, 1), 100),),
@@ -1503,6 +1512,7 @@ class ControlPlane:
                 "created_at": row["created_at"],
                 "supersedes_id": row["supersedes_id"],
                 "task_name": row["task_name"],
+                "task_display_name": row["task_display_name"],
                 "report": redact(json.loads(row["report_json"])),
             }
             for row in rows
@@ -1513,8 +1523,10 @@ class ControlPlane:
             row = connection.execute(
                 """
                 SELECT r.id,r.job_id,r.schema_version,r.report_json,r.created_at,
-                       r.supersedes_id,j.task_name
-                FROM reports r JOIN jobs j ON j.id=r.job_id WHERE r.id=?
+                       r.supersedes_id,j.task_name,d.display_name AS task_display_name
+                FROM reports r JOIN jobs j ON j.id=r.job_id
+                JOIN task_revisions tr ON tr.id=j.task_revision_id
+                JOIN task_definitions d ON d.id=tr.task_definition_id WHERE r.id=?
                 """,
                 (report_id,),
             ).fetchone()
@@ -1527,6 +1539,7 @@ class ControlPlane:
             "created_at": row["created_at"],
             "supersedes_id": row["supersedes_id"],
             "task_name": row["task_name"],
+            "task_display_name": row["task_display_name"],
             "report": redact(json.loads(row["report_json"])),
         }
 

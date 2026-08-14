@@ -22,8 +22,8 @@ Documentation anglaise : [README.md](README.md).
 - leases persistants, nouvelles tentatives, dead letters et rapports lisibles ;
 - archivage réversible des tâches et connecteurs sans supprimer l’historique ;
 - rétention bornée et vérification de la chaîne d’audit append-only ;
-- interface Ingress française et anglaise avec détection du navigateur et
-  sélecteur manuel mémorisé ;
+- interface Ingress française et anglaise avec cockpit opérationnel, panneaux
+  de configuration séparés, détection du navigateur et sélecteur mémorisé ;
 - métriques opérationnelles agrégées, sans secret ni label à forte cardinalité.
 
 Agent Gateway n’intègre pas de modèle et n’exécute pas seul un agent. Un client

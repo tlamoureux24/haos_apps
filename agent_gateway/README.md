@@ -20,8 +20,8 @@ French documentation: [README.fr.md](README.fr.md).
 - persistent leases, retries, dead letters and human-readable reports;
 - reversible task and connector archival without deleting history;
 - bounded operational-data retention and verified append-only audit chain;
-- French and English Ingress interface with browser detection and a persistent
-  manual selector;
+- French and English Ingress interface with an operational cockpit, separated
+  configuration drawers, browser detection and a persistent manual selector;
 - aggregated operational metrics without secrets or high-cardinality labels.
 
 Agent Gateway does not embed a model and does not run an agent by itself. An

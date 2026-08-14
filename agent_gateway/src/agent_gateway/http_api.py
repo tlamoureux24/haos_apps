@@ -106,21 +106,43 @@ async def admin_status(request: Request) -> JSONResponse:
     counts = await run_in_threadpool(request.app.state.control_plane.status_counts)
     connectors = await run_in_threadpool(request.app.state.control_plane.list_connectors)
     tasks = await run_in_threadpool(request.app.state.control_plane.list_tasks)
+    mappings = await run_in_threadpool(request.app.state.control_plane.list_event_mappings)
+    schedules = await run_in_threadpool(request.app.state.control_plane.list_schedules)
+    audit = await run_in_threadpool(request.app.state.control_plane.verify_audit_chain)
+    active_connectors = [item for item in connectors if not item["archived_at"]]
+    active_tasks = [item for item in tasks if not item["archived_at"]]
     return JSONResponse(
         {
             "status": "ready",
             "surface": "admin",
             **counts,
             "connectors": {
-                "total": sum(not item["archived_at"] for item in connectors),
-                "ready": sum(not item["archived_at"] and item["status"] == "ready" for item in connectors),
+                "total": len(active_connectors),
+                "ready": sum(item["status"] == "ready" for item in active_connectors),
+                "unavailable": sum(item["enabled"] and item["status"] != "ready" for item in active_connectors),
+                "disabled": sum(not item["enabled"] for item in active_connectors),
                 "archived": sum(bool(item["archived_at"]) for item in connectors),
             },
             "tasks": {
-                "total": sum(not item["archived_at"] for item in tasks),
-                "ready": sum(item["status"] == "ready" for item in tasks),
+                "total": len(active_tasks),
+                "ready": sum(item["status"] == "ready" for item in active_tasks),
+                "unavailable": sum(item["enabled"] and item["status"] != "ready" for item in active_tasks),
+                "disabled": sum(not item["enabled"] for item in active_tasks),
                 "archived": sum(bool(item["archived_at"]) for item in tasks),
             },
+            "triggers": {
+                "total": len(mappings),
+                "active": sum(item["status"] == "active" for item in mappings),
+                "suspended": sum(item["status"] == "suspended" for item in mappings),
+                "disabled": sum(item["status"] == "paused" for item in mappings),
+            },
+            "schedules": {
+                "total": len(schedules),
+                "active": sum(item["status"] == "active" for item in schedules),
+                "suspended": sum(item["status"] == "suspended" for item in schedules),
+                "disabled": sum(item["status"] == "paused" for item in schedules),
+            },
+            "audit": audit,
         }
     )
 

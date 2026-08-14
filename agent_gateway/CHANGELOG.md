@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.43.0
+
+- Turn Overview into a read-only operational cockpit with linked cards for
+  connectors, tasks, identities, triggers, schedules, recent events and
+  reports, active jobs, grace incidents, dead letters and audit-chain health.
+- Extend the single bounded administration status response with dashboard
+  aggregates that distinguish unavailable resources from deliberately
+  disabled or archived ones.
+- Move task composition, connector creation, trigger and schedule creation or
+  editing, and retention configuration into the reusable administration
+  drawer; keep their resource lists and operational state full width.
+- Add a wider responsive drawer variant for task and trigger workflows and
+  close configuration drawers after successful submission.
+- Show human task names and a human-readable event association in primary
+  execution and report tables instead of internal slugs and UUIDs.
+- Preserve the bilingual, dark-theme and narrow-screen behavior and extend UI
+  and aggregate-status regression coverage.
+
 ## 0.42.0
 
 - Start the administration information-architecture redesign with a stable

@@ -63,9 +63,57 @@ class AdministrationInterfaceTests(unittest.TestCase):
         self.assertIn("credentialBox.classList.contains('show')&&!force", ADMIN_JS)
         self.assertIn("if(!confirm(warning))return false", ADMIN_JS)
         self.assertIn("document.querySelector('#credential-dismiss').onclick", ADMIN_JS)
-        self.assertIn("drawerReturnFocus?.focus()", ADMIN_JS)
+        self.assertIn("restoreTarget?.focus()", ADMIN_JS)
         self.assertIn("event.key==='Escape'", ADMIN_JS)
         self.assertIn("document.body.classList.add('drawer-open')", ADMIN_JS)
+
+    def test_operational_cockpit_and_configuration_drawers_are_wired(self) -> None:
+        main_source = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "agent_gateway"
+            / "main.py"
+        ).read_text(encoding="utf-8")
+
+        for metric in (
+            "metric-connectors",
+            "metric-triggers",
+            "metric-schedules",
+            "metric-active-jobs",
+            "metric-incidents",
+            "metric-audit",
+        ):
+            self.assertIn(f'id="{metric}"', main_source)
+        for form in (
+            "task-create",
+            "mapping-create",
+            "schedule-create",
+            "connector-create",
+            "retention-form",
+        ):
+            self.assertIn(f"'{form}'", ADMIN_JS)
+        self.assertIn("drawer.classList.toggle('wide'", ADMIN_JS)
+
+
+class AdministrationStatusTests(unittest.TestCase):
+    def test_cockpit_status_distinguishes_unavailable_and_disabled_resources(self) -> None:
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "agent_gateway"
+            / "http_api.py"
+        ).read_text(encoding="utf-8")
+
+        for key in (
+            '"unavailable"',
+            '"disabled"',
+            '"archived"',
+            '"triggers"',
+            '"schedules"',
+            '"suspended"',
+            '"audit"',
+        ):
+            self.assertIn(key, source)
 
 
 class ConnectorContractTests(unittest.TestCase):
@@ -347,7 +395,12 @@ class TaskCompositionTests(unittest.TestCase):
             self.assertIsNone(connector["archived_at"])
             metrics = control_plane.status_counts()
             self.assertEqual(metrics["events_24h"], 0)
+            self.assertEqual(metrics["reports_24h"], 0)
             self.assertEqual(metrics["failed_jobs_24h"], 0)
+            self.assertEqual(metrics["event_mappings"], 0)
+            self.assertEqual(metrics["active_event_mappings"], 0)
+            self.assertEqual(metrics["schedules"], 0)
+            self.assertEqual(metrics["active_schedules"], 0)
 
     def test_due_schedule_queues_once_and_skips_an_active_task(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
