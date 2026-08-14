@@ -292,7 +292,18 @@ jobs:
           curl --fail --silent \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/admin/api/v1/status | \
-            jq -e '.connectors == {"total":0,"ready":0,"archived":0} and .tasks == {"total":0,"ready":0,"archived":0} and .events_24h == 0 and .failed_jobs_24h == 0'
+            jq -e '
+              .status == "ready" and
+              .surface == "admin" and
+              .connectors == {"total":0,"ready":0,"unavailable":0,"disabled":0,"archived":0} and
+              .tasks == {"total":0,"ready":0,"unavailable":0,"disabled":0,"archived":0} and
+              .triggers == {"total":0,"active":0,"suspended":0,"disabled":0} and
+              .schedules == {"total":0,"active":0,"suspended":0,"disabled":0} and
+              .events_24h == 0 and
+              .reports_24h == 0 and
+              .failed_jobs_24h == 0 and
+              .audit == {"valid":true,"entries":0,"failed_sequence":null}
+            '
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/admin/api/v1/connectors/legacy/tools)" = "404"
