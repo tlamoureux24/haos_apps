@@ -15,7 +15,8 @@ French documentation: [README.fr.md](README.fr.md).
 - tasks composed from selected tools across one or several connectors;
 - authenticated MCP clients and authenticated event sources;
 - manual, scheduled and event-driven executions;
-- cooldown, grace period and recovery events for event triggers;
+- cooldown and durable grace incidents for event triggers, with either simple
+  mapping-level recovery or bounded aggregation and recovery by stable subject;
 - persistent leases, retries, dead letters and human-readable reports;
 - reversible task and connector archival without deleting history;
 - bounded operational-data retention and verified append-only audit chain;
@@ -75,10 +76,26 @@ volume and are included in cold Home Assistant backups. The default retention
 policy keeps terminal operational data for 90 days. Queued or leased work,
 configuration and audit entries are never removed by retention.
 
-The App currently uses narrowly scoped direct SQLite schema upgrades because
-real acceptance-test data is now retained. Unknown schema generations fail
-closed. No separate configuration export/import is planned while Home
-Assistant backups cover coherent recovery.
+During the current single-tester development stage, schema-breaking releases
+require removal of App data and a clean reinstall; they do not carry migration
+code for disposable data. Unknown schema generations fail closed with a clear
+reinstall requirement. A preservation policy will be introduced only when real
+non-disposable data exists. No separate configuration export/import is planned
+while Home Assistant backups cover coherent recovery.
+
+## Grace incidents and subject correlation
+
+A trigger with a grace period can use **Simple** correlation or **Aggregated by
+subject** correlation. Aggregated mode requires every alert and recovery to
+carry the same non-empty, stable `subject` object for one resource. Changing
+observations belong in `attributes`. The first alert fixes the deadline;
+additional subjects do not extend it. Recoveries remove only their matching
+subject, and one job is created at expiry for all subjects still active.
+
+Incidents and their subject counts remain visible under **Triggers**. Promotion
+is atomic and bounded; an incident that cannot be queued after bounded retries
+becomes visibly blocked and can be retried by an administrator. Incoming events
+remain individually retained and audited.
 
 ## Security boundaries
 
@@ -115,4 +132,3 @@ Stop the server and remove any temporary firewall rule after the test.
 - there are no write-operation approvals yet;
 - multi-instance/high-availability deployment is not supported;
 - the App remains experimental and is not intended for internet exposure.
-

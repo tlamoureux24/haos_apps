@@ -17,7 +17,8 @@ Documentation anglaise : [README.md](README.md).
 - tâches composées d’outils choisis dans un ou plusieurs connecteurs ;
 - clients MCP et sources d’événements authentifiés ;
 - exécutions manuelles, planifiées ou déclenchées par événement ;
-- cooldown, délai de grâce et événement de rétablissement par déclencheur ;
+- cooldown et incidents de grâce durables par déclencheur, avec rétablissement
+  global simple ou agrégation bornée et rétablissement par sujet stable ;
 - leases persistants, nouvelles tentatives, dead letters et rapports lisibles ;
 - archivage réversible des tâches et connecteurs sans supprimer l’historique ;
 - rétention bornée et vérification de la chaîne d’audit append-only ;
@@ -79,10 +80,30 @@ rétention conserve par défaut les données opérationnelles terminées pendant
 jours. Les travaux en attente ou loués, la configuration et l’audit ne sont
 jamais supprimés par cette rétention.
 
-Des évolutions SQLite directes et étroitement ciblées préservent désormais les
-données des tests réels. Une génération inconnue est refusée. Aucun export ou
-import de configuration séparé n’est prévu tant que les sauvegardes Home
-Assistant couvrent la restauration cohérente.
+Pendant la phase actuelle de développement avec un seul testeur, les versions
+qui changent le schéma imposent la suppression des données de l’App et une
+réinstallation propre ; elles n’embarquent pas de migrations destinées à des
+données jetables. Une génération inconnue est refusée avec une demande claire
+de réinstallation. Une politique de préservation sera introduite seulement
+lorsque de vraies données non jetables existeront. Aucun export ou import de
+configuration séparé n’est prévu tant que les sauvegardes Home Assistant
+couvrent la restauration cohérente.
+
+## Incidents de grâce et corrélation des sujets
+
+Un déclencheur avec délai de grâce propose une corrélation **Simple** ou
+**Agrégée par sujet**. Le mode agrégé exige que chaque alerte et chaque
+rétablissement portent le même objet `subject`, stable et non vide, pour une
+ressource. Les observations variables vont dans `attributes`. La première
+alerte fixe l’échéance ; les sujets suivants ne la prolongent pas. Un
+rétablissement retire uniquement le sujet correspondant et, à l’échéance, un
+seul travail est créé avec tous les sujets encore actifs.
+
+Les incidents et leur nombre de sujets restent visibles dans
+**Déclencheurs**. Leur promotion est atomique et bornée. Un incident impossible
+à mettre en file après le nombre maximal de tentatives devient visiblement
+bloqué et peut être relancé par un administrateur. Chaque événement entrant
+reste conservé individuellement et audité.
 
 ## Frontières de sécurité
 
@@ -117,4 +138,3 @@ Arrêter le serveur et retirer toute règle temporaire de pare-feu après le tes
 - les approbations d’opérations en écriture ne sont pas encore implémentées ;
 - le déploiement multi-instance ou haute disponibilité n’est pas pris en charge ;
 - l’App reste expérimentale et ne doit pas être exposée sur Internet.
-

@@ -41,7 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.40.7"',
+        'version: "0.41.0"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -58,7 +58,7 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "0.40.7"' not in package:
+    if '__version__ = "0.41.0"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile:
         raise RuntimeError("Home Assistant base image must continue to follow latest")

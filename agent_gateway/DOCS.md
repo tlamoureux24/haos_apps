@@ -16,6 +16,11 @@ l’Ingress Home Assistant.
 L’interface détecte le français ou l’anglais du navigateur, utilise le français
 comme repli et propose un bouton **FR/EN** mémorisé localement.
 
+Un déclencheur avec délai de grâce peut corréler tout le déclencheur ou agréger
+plusieurs sujets stables dans un incident unique. En mode agrégé, chaque alerte
+et rétablissement doit fournir un objet `subject` non vide ; l’échéance initiale
+ne se prolonge pas et un seul travail contient les sujets encore actifs.
+
 Guide complet : [documentation française](README.fr.md).
 
 ## English
@@ -31,5 +36,9 @@ trusted LAN or VPN. Administration remains confined to Home Assistant Ingress.
 The interface detects the browser’s French or English preference, falls back to
 French, and provides a locally remembered **FR/EN** button.
 
-Full guide: [English documentation](README.md).
+A trigger with a grace period can correlate the whole trigger or aggregate
+several stable subjects into one incident. In aggregated mode every alert and
+recovery must provide a non-empty `subject` object; the initial deadline never
+extends and one job contains the subjects that remain active.
 
+Full guide: [English documentation](README.md).

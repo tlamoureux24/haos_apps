@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from agent_gateway.database import database_ready, initialize_database
 from agent_gateway.admin_ui import ADMIN_JS
-from agent_gateway.control_plane import ControlPlane, TaskExecutionActiveError, validate_json_contract
+from agent_gateway.control_plane import MAX_INCIDENT_SUBJECTS, ControlPlane, TaskExecutionActiveError, validate_json_contract
 from agent_gateway.connectors import connector_display_endpoint, validate_streamable_http_url
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
@@ -111,19 +111,15 @@ class DatabaseReadinessTests(unittest.TestCase):
                 initialize_database(path)
             self.assertFalse(database_ready(path))
 
-    def test_generation_six_is_upgraded_without_data_loss(self) -> None:
+    def test_old_generation_requires_clean_reinstall(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "gateway.db"
             initialize_database(path)
             with sqlite3.connect(path) as connection:
-                connection.execute("DROP TABLE event_mappings")
-                connection.execute("DROP TABLE schedules")
-                connection.execute("UPDATE gateway_metadata SET value='6' WHERE key='schema_generation'")
-            initialize_database(path)
-            self.assertTrue(database_ready(path))
-            with sqlite3.connect(path) as connection:
-                self.assertEqual(connection.execute("SELECT count(*) FROM schedules").fetchone()[0], 0)
-                self.assertEqual(connection.execute("SELECT count(*) FROM event_mappings").fetchone()[0], 0)
+                connection.execute("UPDATE gateway_metadata SET value='13' WHERE key='schema_generation'")
+            with self.assertRaisesRegex(RuntimeError, "remove_app_data"):
+                initialize_database(path)
+            self.assertFalse(database_ready(path))
 
 
 class PublicSurfaceTests(unittest.TestCase):
@@ -390,6 +386,195 @@ class TaskCompositionTests(unittest.TestCase):
             with sqlite3.connect(path) as connection:
                 self.assertEqual(connection.execute("SELECT id FROM jobs").fetchall(), [("active-job",)])
             self.assertTrue(control_plane.verify_audit_chain()["valid"])
+
+
+class MultiSubjectIncidentTests(unittest.TestCase):
+    def _setup(self, root: Path) -> tuple[ControlPlane, object, str]:
+        path = root / "gateway.db"
+        initialize_database(path)
+        control_plane = ControlPlane(path, root / "private", intake_rate_limit_per_minute=600)
+        connector_id = "10000000-0000-0000-0000-000000000001"
+        with sqlite3.connect(path) as connection:
+            connection.execute(
+                "INSERT INTO connectors(id,display_name,transport,protected_config,display_endpoint,status,enabled,created_at,updated_at,inventory_revision) VALUES(?,?,?,?,?,'ready',1,?,?,1)",
+                (connector_id, "Example MCP", "streamable_http", "protected", "https://mcp.example.test", "2026-08-13T00:00:00Z", "2026-08-13T00:00:00Z"),
+            )
+            connection.execute(
+                "INSERT INTO connector_tools(connector_id,name,description,input_schema_json,schema_fingerprint,discovered_at) VALUES(?,?,?,?,?,?)",
+                (connector_id, "inspect", "Inspect", '{"type":"object"}', "a" * 64, "2026-08-13T00:00:00Z"),
+            )
+        task_id = control_plane.create_task("Incident", "incident", "Inspect incident.", 3, [{"connector_id": connector_id, "tool_name": "inspect"}], "test-task")
+        created = control_plane.create_identity("Event source", "event_source", ["events.create"], "test-source")
+        identity = control_plane.authenticate(created.credential.token)
+        mapping_id = control_plane.create_event_mapping(
+            "Aggregate alerts", identity.identity_id, "service.alert", task_id, 0, 1,
+            "service.recovered", "attributes", "aggregate_by_subject", "test-mapping",
+        )
+        return control_plane, identity, mapping_id
+
+    @staticmethod
+    def _event(event_type: str, subject: str, status: str = "unavailable") -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "event_type": event_type,
+            "occurred_at": "2026-08-14T08:00:00Z",
+            "subject": {"entity_id": subject},
+            "attributes": {"status": status},
+        }
+
+    def test_recovery_removes_only_its_subject_and_promotes_one_aggregate_job(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            control_plane, identity, mapping_id = self._setup(root)
+            for name in ("camera_1", "camera_2", "camera_3"):
+                result = control_plane.ingest_event(identity, f"alert-{name}", self._event("service.alert", name), f"alert-{name}")
+                self.assertIn(result.outcome, {"grace_started", "grace_subject_added"})
+            unknown = control_plane.ingest_event(identity, "recover-unknown", self._event("service.recovered", "camera_9", "available"), "recover-unknown")
+            self.assertEqual(unknown.outcome, "recovery_subject_unknown")
+            for name in ("camera_1", "camera_2"):
+                recovered = control_plane.ingest_event(identity, f"recover-{name}", self._event("service.recovered", name, "available"), f"recover-{name}")
+                self.assertEqual(recovered.outcome, "subject_recovered")
+            mapping = control_plane.list_event_mappings()[0]
+            self.assertEqual(mapping["active_subject_count"], 1)
+            with sqlite3.connect(root / "gateway.db") as connection:
+                connection.execute("UPDATE event_incidents SET due_at='2000-01-01T00:00:00.000Z',next_attempt_at='2000-01-01T00:00:00.000Z' WHERE mapping_id=?", (mapping_id,))
+            self.assertEqual(control_plane.run_due_event_triggers(), 1)
+            jobs = control_plane.list_jobs()
+            self.assertEqual(len(jobs), 1)
+            job = control_plane.get_job(jobs[0]["id"])
+            self.assertEqual(job["input"]["kind"], "aggregated_event_incident")
+            self.assertEqual(job["input"]["subjects"], [{"attributes": {"status": "unavailable"}, "subject": {"entity_id": "camera_3"}}])
+            self.assertEqual(len(control_plane.list_events()), 6)
+
+    def test_all_subjects_recover_without_job_and_repeated_alert_updates_member(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            control_plane, identity, _ = self._setup(root)
+            started = control_plane.ingest_event(identity, "alert-1", self._event("service.alert", "camera_1"), "alert-1")
+            due_at = control_plane.list_event_mappings()[0]["pending_due_at"]
+            repeated = control_plane.ingest_event(identity, "alert-2", self._event("service.alert", "camera_1", "still_unavailable"), "alert-2")
+            self.assertEqual(repeated.outcome, "grace_subject_updated")
+            self.assertEqual(control_plane.list_event_mappings()[0]["pending_due_at"], due_at)
+            recovered = control_plane.ingest_event(identity, "recover-1", self._event("service.recovered", "camera_1", "available"), "recover-1")
+            self.assertEqual(recovered.outcome, "incident_resolved")
+            self.assertIsNone(control_plane.list_event_mappings()[0]["incident_id"])
+            self.assertEqual(control_plane.run_due_event_triggers(), 0)
+            self.assertEqual(control_plane.list_jobs(), [])
+            self.assertEqual(started.outcome, "grace_started")
+
+    def test_concurrent_due_promotion_creates_exactly_one_job(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            control_plane, identity, mapping_id = self._setup(root)
+            control_plane.ingest_event(identity, "alert", self._event("service.alert", "camera_1"), "alert")
+            with sqlite3.connect(root / "gateway.db") as connection:
+                connection.execute("UPDATE event_incidents SET due_at='2000-01-01T00:00:00.000Z',next_attempt_at='2000-01-01T00:00:00.000Z' WHERE mapping_id=?", (mapping_id,))
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                results = list(executor.map(lambda _: control_plane.run_due_event_triggers(), range(8)))
+            self.assertEqual(sum(results), 1)
+            self.assertEqual(len(control_plane.list_jobs()), 1)
+
+    def test_concurrent_alerts_keep_one_member_per_subject(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            control_plane, identity, _ = self._setup(root)
+            subjects = [f"camera_{index % 8}" for index in range(32)]
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                list(executor.map(
+                    lambda item: control_plane.ingest_event(identity, f"alert-{item[0]}", self._event("service.alert", item[1]), f"alert-{item[0]}"),
+                    enumerate(subjects),
+                ))
+            mapping = control_plane.list_event_mappings()[0]
+            self.assertEqual(mapping["active_subject_count"], 8)
+            with sqlite3.connect(root / "gateway.db") as connection:
+                self.assertEqual(connection.execute("SELECT count(*) FROM event_incident_subjects").fetchone()[0], 8)
+                self.assertEqual(connection.execute("SELECT count(*) FROM events").fetchone()[0], 32)
+
+    def test_recovery_promotion_race_is_atomic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            control_plane, identity, mapping_id = self._setup(root)
+            for name in ("camera_1", "camera_2"):
+                control_plane.ingest_event(identity, f"alert-{name}", self._event("service.alert", name), f"alert-{name}")
+            with sqlite3.connect(root / "gateway.db") as connection:
+                connection.execute("UPDATE event_incidents SET due_at='2000-01-01T00:00:00.000Z',next_attempt_at='2000-01-01T00:00:00.000Z' WHERE mapping_id=?", (mapping_id,))
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                future_recovery = executor.submit(control_plane.ingest_event, identity, "recover-camera-1", self._event("service.recovered", "camera_1", "available"), "recover-camera-1")
+                future_promotion = executor.submit(control_plane.run_due_event_triggers)
+                recovery = future_recovery.result()
+                future_promotion.result()
+            self.assertIn(recovery.outcome, {"subject_recovered", "recovery_recorded"})
+            self.assertEqual(len(control_plane.list_jobs()), 1)
+            self.assertIsNone(control_plane.list_event_mappings()[0]["incident_id"])
+            subjects = {item["subject"]["entity_id"] for item in control_plane.get_job(control_plane.list_jobs()[0]["id"])["input"]["subjects"]}
+            self.assertIn(subjects, ({"camera_2"}, {"camera_1", "camera_2"}))
+
+    def test_alert_recovery_race_keeps_a_consistent_incident(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            control_plane, identity, _ = self._setup(root)
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                alert = executor.submit(
+                    control_plane.ingest_event,
+                    identity,
+                    "race-alert",
+                    self._event("service.alert", "camera_1"),
+                    "race-alert",
+                )
+                recovery = executor.submit(
+                    control_plane.ingest_event,
+                    identity,
+                    "race-recovery",
+                    self._event("service.recovered", "camera_1", "available"),
+                    "race-recovery",
+                )
+                outcomes = {alert.result().outcome, recovery.result().outcome}
+            self.assertIn("grace_started", outcomes)
+            self.assertTrue(outcomes & {"incident_resolved", "recovery_recorded"})
+            mapping = control_plane.list_event_mappings()[0]
+            self.assertIn(mapping["active_subject_count"], (0, 1))
+            self.assertEqual(mapping["incident_id"] is None, mapping["active_subject_count"] == 0)
+            with sqlite3.connect(root / "gateway.db") as connection:
+                self.assertEqual(connection.execute("SELECT count(*) FROM events").fetchone()[0], 2)
+
+    def test_aggregate_subject_is_required_and_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            control_plane, identity, _ = self._setup(root)
+            missing = self._event("service.alert", "camera_1")
+            missing["subject"] = {}
+            with self.assertRaisesRegex(ValueError, "aggregate_subject_required"):
+                control_plane.ingest_event(identity, "missing", missing, "missing")
+            oversized = self._event("service.alert", "camera_1")
+            oversized["subject"] = {"entity_id": "x" * 5000}
+            rejected = control_plane.ingest_event(identity, "oversized", oversized, "oversized")
+            self.assertEqual(rejected.outcome, "aggregate_subject_too_large")
+            for index in range(MAX_INCIDENT_SUBJECTS):
+                control_plane.ingest_event(identity, f"bounded-{index}", self._event("service.alert", f"camera_{index}"), f"bounded-{index}")
+            overflow = control_plane.ingest_event(identity, "bounded-overflow", self._event("service.alert", "camera_overflow"), "bounded-overflow")
+            self.assertEqual(overflow.outcome, "incident_subject_limit")
+            self.assertEqual(control_plane.list_event_mappings()[0]["active_subject_count"], MAX_INCIDENT_SUBJECTS)
+            with sqlite3.connect(root / "gateway.db") as connection:
+                self.assertEqual(connection.execute("SELECT count(*) FROM events").fetchone()[0], MAX_INCIDENT_SUBJECTS + 2)
+
+    def test_unpromotable_incident_becomes_visible_and_retryable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            control_plane, identity, mapping_id = self._setup(root)
+            control_plane.ingest_event(identity, "alert", self._event("service.alert", "camera_1"), "alert")
+            task_id = control_plane.list_tasks()[0]["id"]
+            control_plane.enqueue_manual_task(task_id, {}, "manual-blocker")
+            for _ in range(10):
+                with sqlite3.connect(root / "gateway.db") as connection:
+                    connection.execute("UPDATE event_incidents SET due_at='2000-01-01T00:00:00.000Z',next_attempt_at='2000-01-01T00:00:00.000Z' WHERE mapping_id=?", (mapping_id,))
+                control_plane.run_due_event_triggers()
+            mapping = control_plane.list_event_mappings()[0]
+            self.assertEqual(mapping["incident_state"], "blocked")
+            self.assertEqual(mapping["last_block_reason"], "task_execution_active")
+            self.assertTrue(control_plane.retry_event_incident(mapping_id, "retry"))
+            mapping = control_plane.list_event_mappings()[0]
+            self.assertEqual(mapping["incident_state"], "pending")
+            self.assertEqual(mapping["promotion_attempts"], 0)
 
 
 if __name__ == "__main__":

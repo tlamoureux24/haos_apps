@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.41.0
+
+- Replace the one-window grace implementation with one durable incident engine
+  shared by simple mapping-level and bounded subject-aggregation modes.
+- Require a stable non-empty subject in aggregated mode, retain every accepted
+  alert and recovery, update repeated subjects without extending the original
+  deadline, and treat unknown recoveries as audited no-ops.
+- Promote all subjects still active at expiry into one deterministic versioned
+  job input while preventing duplicate jobs under concurrent promotion.
+- Bound subject count, subject size, aggregate input size and promotion retries;
+  expose exhausted incidents and their blocking reason in the trigger view with
+  an explicit administrator retry action.
+- Replace the disposable development schema directly at generation 14 without
+  migration code; this release requires App removal with data deletion and a
+  clean reinstall.
+
 ## 0.40.7
 
 - Restore `ghcr.io/home-assistant/base:latest` as the unpinned Docker base so

@@ -309,7 +309,7 @@ async def admin_create_event_mapping(request: Request) -> JSONResponse:
         return error_response(403, "csrf_failed", correlation_id)
     try:
         contract = await json_contract(request, EventMappingCreateRequest)
-        mapping_id = await run_in_threadpool(request.app.state.control_plane.create_event_mapping, contract.display_name, contract.source_identity_id, contract.event_type, contract.task_id, contract.cooldown_minutes, contract.grace_minutes, contract.recovery_event_type, contract.input_mode, correlation_id)
+        mapping_id = await run_in_threadpool(request.app.state.control_plane.create_event_mapping, contract.display_name, contract.source_identity_id, contract.event_type, contract.task_id, contract.cooldown_minutes, contract.grace_minutes, contract.recovery_event_type, contract.input_mode, contract.correlation_mode, correlation_id)
     except sqlite3.IntegrityError:
         return error_response(409, "event_mapping_exists", correlation_id)
     except (OverflowError, ValueError, ValidationError):
@@ -323,7 +323,7 @@ async def admin_update_event_mapping(request: Request) -> JSONResponse:
         return error_response(403, "csrf_failed", correlation_id)
     try:
         contract = await json_contract(request, EventMappingUpdateRequest)
-        found = await run_in_threadpool(request.app.state.control_plane.update_event_mapping, contract.mapping_id, contract.display_name, contract.source_identity_id, contract.event_type, contract.task_id, contract.cooldown_minutes, contract.grace_minutes, contract.recovery_event_type, contract.input_mode, correlation_id)
+        found = await run_in_threadpool(request.app.state.control_plane.update_event_mapping, contract.mapping_id, contract.display_name, contract.source_identity_id, contract.event_type, contract.task_id, contract.cooldown_minutes, contract.grace_minutes, contract.recovery_event_type, contract.input_mode, contract.correlation_mode, correlation_id)
     except sqlite3.IntegrityError:
         return error_response(409, "event_mapping_exists", correlation_id)
     except (OverflowError, ValueError, ValidationError):
@@ -341,6 +341,18 @@ async def admin_set_event_mapping_enabled(request: Request) -> JSONResponse:
         return error_response(422, "invalid_event_mapping", correlation_id)
     found = await run_in_threadpool(request.app.state.control_plane.set_event_mapping_enabled, contract.mapping_id, contract.enabled, correlation_id)
     return JSONResponse({"mapping_id": contract.mapping_id, "status": "active" if contract.enabled else "paused"}) if found else error_response(404, "event_mapping_not_found", correlation_id)
+
+
+async def admin_retry_event_incident(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, EventMappingIdRequest)
+    except (OverflowError, ValidationError):
+        return error_response(422, "invalid_event_mapping", correlation_id)
+    found = await run_in_threadpool(request.app.state.control_plane.retry_event_incident, contract.mapping_id, correlation_id)
+    return JSONResponse({"mapping_id": contract.mapping_id, "status": "pending"}) if found else error_response(409, "incident_not_blocked", correlation_id)
 
 
 async def admin_delete_event_mapping(request: Request) -> JSONResponse:

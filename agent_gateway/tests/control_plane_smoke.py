@@ -49,7 +49,7 @@ created = control_plane.create_identity(
 )
 identity = control_plane.authenticate(created.credential.token)
 mapping_id = control_plane.create_event_mapping(
-    "CI service alerts", identity.identity_id, "service.alert", "ci-inspection", 0, 0, None, "full_event", "ci-create-mapping"
+    "CI service alerts", identity.identity_id, "service.alert", "ci-inspection", 0, 0, None, "full_event", "simple", "ci-create-mapping"
 )
 event = {
     "schema_version": 1,
@@ -189,7 +189,7 @@ assert grace_cancelled.job_id is None and grace_cancelled.outcome == "grace_canc
 grace_restarted = control_plane.ingest_event(identity, "ci-grace-restart", event, "ci-grace-restart")
 assert grace_restarted.job_id is None and grace_restarted.outcome == "grace_started"
 with sqlite3.connect(database) as connection:
-    connection.execute("UPDATE pending_event_triggers SET due_at='2000-01-01T00:00:00.000Z' WHERE mapping_id=?", (mapping_id,))
+    connection.execute("UPDATE event_incidents SET due_at='2000-01-01T00:00:00.000Z',next_attempt_at='2000-01-01T00:00:00.000Z' WHERE mapping_id=?", (mapping_id,))
 assert control_plane.run_due_event_triggers() == 1
 grace_job = next(job for job in control_plane.list_jobs() if job["event_id"] == grace_restarted.event_id)
 assert grace_job["state"] == "queued"

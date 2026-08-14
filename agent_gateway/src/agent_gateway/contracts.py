@@ -149,6 +149,7 @@ class EventMappingCreateRequest(StrictContract):
     grace_minutes: int = Field(default=0, ge=0, le=1440)
     recovery_event_type: str | None = Field(default=None, max_length=120, pattern=r"^[a-z][a-z0-9_.-]*$")
     input_mode: Literal["full_event", "subject", "attributes"] = "full_event"
+    correlation_mode: Literal["simple", "aggregate_by_subject"] = "simple"
 
 
 class EventMappingIdRequest(StrictContract):
