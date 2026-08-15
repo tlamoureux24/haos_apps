@@ -122,6 +122,9 @@ reste conservé individuellement et audité.
 - les schémas d’entrée MCP admis utilisent JSON Schema Draft 2020-12 et sont
   intégralement appliqués avant tout appel amont ; contrainte, format, dialecte
   inconnu ou référence externe provoque un refus fermé ;
+- un connecteur joignable dont le schéma ne peut pas être admis passe à l’état
+  `invalid` avec son `last_error_code` précis, tandis qu’une panne de transport
+  reste `unreachable` ;
 - chaque appel est résolu par révision de tâche, connecteur, outil et empreinte
   de schéma ;
 - un agent ne reçoit ni le secret original ni l’inventaire complet d’un connecteur ;

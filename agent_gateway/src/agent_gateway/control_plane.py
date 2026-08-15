@@ -14,6 +14,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agent_gateway.connectors import (
+    SCHEMA_REJECTION_CODES,
     connector_display_endpoint,
     protect_connector_config,
     reveal_connector_config,
@@ -806,14 +807,16 @@ class ControlPlane:
             if row is None:
                 return False
             if inventory is None:
-                connection.execute("UPDATE connectors SET status='unreachable',updated_at=?,last_checked_at=?,last_error_code=? WHERE id=?", (now, now, error_code or "connection_failed", connector_id))
-                reason = "unreachable"
+                persisted_error = error_code or "connection_failed"
+                status = "invalid" if persisted_error in SCHEMA_REJECTION_CODES else "unreachable"
+                connection.execute("UPDATE connectors SET status=?,updated_at=?,last_checked_at=?,last_error_code=? WHERE id=?", (status, now, now, persisted_error, connector_id))
+                reason = "schema_rejected" if status == "invalid" else "unreachable"
             else:
                 status = "ready" if row["enabled"] else "disabled"
                 connection.execute("UPDATE connectors SET status=?,updated_at=?,last_checked_at=?,last_error_code=NULL,inventory_revision=inventory_revision+1 WHERE id=?", (status, now, now, connector_id))
                 self._replace_connector_tools(connection, connector_id, inventory, now)
                 reason = "inventory_refreshed"
-            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.check", target_type="connector", target_id=connector_id, decision="recorded", reason_code=reason, correlation_id=correlation_id, metadata={"tool_count": len(inventory or [])})
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.check", target_type="connector", target_id=connector_id, decision="recorded", reason_code=reason, correlation_id=correlation_id, metadata={"tool_count": len(inventory or []), "error_code": error_code})
         return True
 
     def set_connector_enabled(self, connector_id: str, enabled: bool, correlation_id: str) -> bool:

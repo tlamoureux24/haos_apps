@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.46.2
+
+- Preserve fail-closed MCP schema rejection causes across connector creation,
+  refresh and reactivation instead of reporting them as network failures.
+- Mark reachable connectors with inadmissible schemas as `invalid`, retain the
+  precise machine code in `last_error_code` and log only safe diagnostic
+  context.
+- Show a bilingual administrator-facing explanation and technical error code
+  directly on unavailable connector cards and during connector creation.
+
 ## 0.46.1
 
 - Enforce admitted MCP input schemas with the Draft 2020-12 reference

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import asyncio
 import base64
 import json
 import sqlite3
@@ -9,12 +10,23 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from agent_gateway.database import database_ready, initialize_database
 from agent_gateway.admin_ui import ADMIN_CSS, ADMIN_JS
 from agent_gateway.control_plane import MAX_INCIDENT_SUBJECTS, ControlPlane, TaskExecutionActiveError, validate_json_contract
-from agent_gateway.connectors import connector_display_endpoint, validate_streamable_http_url
+from agent_gateway.connectors import (
+    ConnectorSchemaRejected,
+    connector_display_endpoint,
+    validate_discovered_tool_schema,
+    validate_streamable_http_url,
+)
+from agent_gateway.http_api import (
+    admin_check_connector,
+    admin_create_connector,
+    admin_set_connector_enabled,
+)
 from agent_gateway.json_contracts import validate_json_schema
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
@@ -113,6 +125,17 @@ class AdministrationInterfaceTests(unittest.TestCase):
         self.assertIn("taskInputSchema", ADMIN_JS)
         self.assertIn("renderArgumentSummary", ADMIN_JS)
 
+    def test_connector_cards_render_bilingual_schema_rejection_reasons(self) -> None:
+        for contract in (
+            "connectorErrorPresentation",
+            "connector.last_error_code",
+            "unsupported_json_schema_keyword",
+            "Schéma MCP refusé — mot-clé JSON Schema non pris en charge",
+            "MCP schema rejected — unsupported JSON Schema keyword",
+            "Code :",
+        ):
+            self.assertIn(contract, ADMIN_JS)
+
 
 class AdministrationStatusTests(unittest.TestCase):
     def test_cockpit_status_distinguishes_unavailable_and_disabled_resources(self) -> None:
@@ -172,6 +195,146 @@ class ConnectorContractTests(unittest.TestCase):
         ):
             with self.assertRaises(RuntimeError):
                 load_settings()
+
+    def test_discovery_wraps_schema_rejections_with_safe_tool_context(self) -> None:
+        cases = (
+            ({"type": "object", "customConstraint": True}, "unsupported_json_schema_keyword"),
+            ({"$schema": "http://json-schema.org/draft-07/schema#"}, "unsupported_json_schema_dialect"),
+            ({"type": "string", "format": "private-format"}, "unsupported_json_schema_format"),
+            ({"$ref": "https://example.test/schema.json"}, "unsupported_external_json_schema_reference"),
+            ({"type": "not-a-type"}, "invalid_json_schema"),
+            ({"description": "x" * (16 * 1024)}, "upstream_tool_schema_too_large"),
+        )
+        for schema, code in cases:
+            with self.subTest(code=code), self.assertRaises(ConnectorSchemaRejected) as raised:
+                validate_discovered_tool_schema("inspect", schema)
+            self.assertEqual(raised.exception.code, code)
+            self.assertEqual(raised.exception.tool_name, "inspect")
+
+
+class ConnectorDiscoveryVisibilityTests(unittest.TestCase):
+    @staticmethod
+    async def _inline_threadpool(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    def _run(self, handler, request):
+        with patch(
+            "agent_gateway.http_api.run_in_threadpool", new=self._inline_threadpool
+        ):
+            return asyncio.run(handler(request))
+
+    class Request:
+        def __init__(self, control_plane: ControlPlane, payload: dict[str, object]) -> None:
+            self.state = SimpleNamespace(correlation_id="test-correlation")
+            self.app = SimpleNamespace(state=SimpleNamespace(control_plane=control_plane))
+            self.cookies = {"agw_csrf": "csrf"}
+            self.headers = {"content-type": "application/json", "x-csrf-token": "csrf"}
+            self._body = json.dumps(payload).encode()
+
+        async def body(self) -> bytes:
+            return self._body
+
+    def _connector(self, root: Path) -> tuple[ControlPlane, str]:
+        root.mkdir(parents=True, exist_ok=True)
+        database_path = root / "gateway.db"
+        initialize_database(database_path)
+        control_plane = ControlPlane(database_path, root / "private")
+        connector_id = control_plane.create_connector(
+            "Test MCP",
+            "https://mcp.example.test/mcp",
+            "super-secret-bearer-token",
+            [{"name": "inspect", "description": "Inspect", "input_schema": {"type": "object"}, "schema_fingerprint": "a" * 64}],
+            "setup",
+        )
+        return control_plane, connector_id
+
+    def test_network_failure_remains_unreachable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            control_plane, connector_id = self._connector(Path(directory))
+            request = self.Request(control_plane, {"connector_id": connector_id})
+            with patch(
+                "agent_gateway.http_api.discover_streamable_http",
+                new=AsyncMock(side_effect=OSError("network failed")),
+            ):
+                response = self._run(admin_check_connector, request)
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(json.loads(response.body)["error"]["code"], "connector_unreachable")
+            connector = control_plane.list_connectors()[0]
+            self.assertEqual(connector["status"], "unreachable")
+            self.assertEqual(connector["last_error_code"], "connection_failed")
+
+    def test_schema_rejections_remain_precise_in_admin_api_and_persistence(self) -> None:
+        codes = (
+            "unsupported_json_schema_keyword",
+            "unsupported_json_schema_dialect",
+            "unsupported_json_schema_format",
+            "unsupported_external_json_schema_reference",
+            "invalid_json_schema",
+            "upstream_tool_schema_too_large",
+        )
+        for code in codes:
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as directory:
+                control_plane, connector_id = self._connector(Path(directory))
+                request = self.Request(control_plane, {"connector_id": connector_id})
+                rejection = ConnectorSchemaRejected(code, "inspect")
+                with self.assertLogs("agent_gateway.connectors", level="WARNING") as logs, patch(
+                    "agent_gateway.http_api.discover_streamable_http",
+                    new=AsyncMock(side_effect=rejection),
+                ):
+                    response = self._run(admin_check_connector, request)
+                self.assertEqual(response.status_code, 422)
+                self.assertEqual(json.loads(response.body)["error"]["code"], code)
+                connector = control_plane.list_connectors()[0]
+                self.assertEqual(connector["status"], "invalid")
+                self.assertEqual(connector["last_error_code"], code)
+                logged = "\n".join(logs.output)
+                self.assertIn(f"error={code}", logged)
+                self.assertIn("tool='inspect'", logged)
+                self.assertNotIn("super-secret-bearer-token", logged)
+                self.assertNotIn("inputSchema", logged)
+
+    def test_creation_and_reactivation_return_precise_schema_error(self) -> None:
+        rejection = ConnectorSchemaRejected("unsupported_json_schema_keyword", "inspect")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database_path = root / "gateway.db"
+            initialize_database(database_path)
+            control_plane = ControlPlane(database_path, root / "private")
+            create = self.Request(
+                control_plane,
+                {
+                    "display_name": "Rejected MCP",
+                    "url": "https://mcp.example.test/mcp",
+                    "bearer_token": "creation-secret-token",
+                },
+            )
+            with self.assertLogs("agent_gateway.connectors", level="WARNING") as logs, patch(
+                "agent_gateway.http_api.discover_streamable_http",
+                new=AsyncMock(side_effect=rejection),
+            ):
+                response = self._run(admin_create_connector, create)
+            self.assertEqual(response.status_code, 422)
+            self.assertEqual(
+                json.loads(response.body)["error"]["code"],
+                "unsupported_json_schema_keyword",
+            )
+            self.assertEqual(control_plane.list_connectors(), [])
+            self.assertNotIn("creation-secret-token", "\n".join(logs.output))
+
+            control_plane, connector_id = self._connector(root / "existing")
+            control_plane.set_connector_enabled(connector_id, False, "disable")
+            enable = self.Request(control_plane, {"connector_id": connector_id, "enabled": True})
+            with self.assertLogs("agent_gateway.connectors", level="WARNING") as enable_logs, patch(
+                "agent_gateway.http_api.discover_streamable_http",
+                new=AsyncMock(side_effect=rejection),
+            ):
+                response = self._run(admin_set_connector_enabled, enable)
+            self.assertEqual(response.status_code, 422)
+            connector = control_plane.list_connectors()[0]
+            self.assertFalse(connector["enabled"])
+            self.assertEqual(connector["status"], "invalid")
+            self.assertEqual(connector["last_error_code"], "unsupported_json_schema_keyword")
+            self.assertNotIn("super-secret-bearer-token", "\n".join(enable_logs.output))
 
 class DatabaseReadinessTests(unittest.TestCase):
     def test_missing_database_is_not_ready(self) -> None:

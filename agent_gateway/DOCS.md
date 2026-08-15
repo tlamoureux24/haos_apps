@@ -17,6 +17,9 @@ valeurs sensibles sont protégées au repos et ne sont jamais réaffichées.
 Les schémas d’entrée MCP admis suivent JSON Schema Draft 2020-12, avec
 références locales uniquement. Une contrainte, un format ou un dialecte non
 pris en charge est refusé explicitement avant tout appel au serveur MCP.
+Un serveur joignable qui publie un schéma refusé apparaît comme **invalide**
+dans **Connecteurs**, avec une explication et le code technique exact. Une
+erreur de transport reste distinguée comme connecteur inaccessible.
 
 Le port `8098` dessert MCP et l’API d’événements authentifiée. Ne le publier que
 sur un réseau local ou VPN de confiance. L’administration reste confinée à
@@ -47,6 +50,9 @@ displayed again.
 Admitted MCP input schemas follow JSON Schema Draft 2020-12 with local
 references only. An unsupported constraint, format or dialect is rejected
 explicitly before any MCP server call.
+A reachable server publishing a rejected schema appears as **invalid** under
+**Connectors**, with an explanation and the exact technical code. Transport
+failures remain separately identified as unreachable connectors.
 
 Port `8098` serves MCP and the authenticated event API. Publish it only on a
 trusted LAN or VPN. Administration remains confined to Home Assistant Ingress.

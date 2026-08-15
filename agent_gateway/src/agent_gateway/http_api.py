@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import logging
 import sqlite3
 from datetime import UTC, datetime, timedelta
 
@@ -36,7 +37,11 @@ from agent_gateway.contracts import (
     RetentionPolicyRequest,
     RetentionRunRequest,
 )
-from agent_gateway.connectors import discover_streamable_http, validate_streamable_http_url
+from agent_gateway.connectors import (
+    ConnectorSchemaRejected,
+    discover_streamable_http,
+    validate_streamable_http_url,
+)
 from agent_gateway.control_plane import (
     AuthenticatedIdentity,
     AuthenticationError,
@@ -51,6 +56,19 @@ from agent_gateway.security import token_credential_id
 
 
 MAX_BODY_BYTES = 32 * 1024
+LOGGER = logging.getLogger("agent_gateway.connectors")
+
+
+def log_schema_rejection(
+    connector: str, error: ConnectorSchemaRejected, correlation_id: str
+) -> None:
+    LOGGER.warning(
+        "MCP connector schema rejected connector=%r tool=%r error=%s correlation_id=%r",
+        connector,
+        error.tool_name or "-",
+        error.code,
+        correlation_id,
+    )
 
 
 def error_response(status: int, code: str, correlation_id: str) -> JSONResponse:
@@ -406,6 +424,9 @@ async def admin_create_connector(request: Request) -> JSONResponse:
             tools,
             correlation_id,
         )
+    except ConnectorSchemaRejected as error:
+        log_schema_rejection(contract.display_name, error, correlation_id)
+        return error_response(422, error.code, correlation_id)
     except OverflowError:
         return error_response(413, "body_too_large", correlation_id)
     except (ValueError, ValidationError):
@@ -435,6 +456,16 @@ async def admin_check_connector(request: Request) -> JSONResponse:
             return error_response(404, "connector_not_found", correlation_id)
         try:
             tools = await discover_streamable_http(*config)
+        except ConnectorSchemaRejected as error:
+            log_schema_rejection(contract.connector_id, error, correlation_id)
+            await run_in_threadpool(
+                request.app.state.control_plane.refresh_connector,
+                contract.connector_id,
+                None,
+                error.code,
+                correlation_id,
+            )
+            return error_response(422, error.code, correlation_id)
         except Exception:
             await run_in_threadpool(request.app.state.control_plane.refresh_connector, contract.connector_id, None, "connection_failed", correlation_id)
             return error_response(503, "connector_unreachable", correlation_id)
@@ -457,7 +488,24 @@ async def admin_set_connector_enabled(request: Request) -> JSONResponse:
                 return error_response(404, "connector_not_found", correlation_id)
             try:
                 tools = await discover_streamable_http(*config)
+            except ConnectorSchemaRejected as error:
+                log_schema_rejection(contract.connector_id, error, correlation_id)
+                await run_in_threadpool(
+                    request.app.state.control_plane.refresh_connector,
+                    contract.connector_id,
+                    None,
+                    error.code,
+                    correlation_id,
+                )
+                return error_response(422, error.code, correlation_id)
             except Exception:
+                await run_in_threadpool(
+                    request.app.state.control_plane.refresh_connector,
+                    contract.connector_id,
+                    None,
+                    "connection_failed",
+                    correlation_id,
+                )
                 return error_response(503, "connector_unreachable", correlation_id)
         found = await run_in_threadpool(request.app.state.control_plane.set_connector_enabled, contract.connector_id, contract.enabled, correlation_id)
         if found and tools is not None:

@@ -15,12 +15,48 @@ from agent_gateway.json_contracts import validate_json_schema
 MAX_TOOLS = 200
 MAX_SCHEMA_BYTES = 16 * 1024
 MAX_RESULT_BYTES = 256 * 1024
+SCHEMA_REJECTION_CODES = frozenset(
+    {
+        "unsupported_json_schema_keyword",
+        "unsupported_json_schema_dialect",
+        "unsupported_json_schema_format",
+        "unsupported_external_json_schema_reference",
+        "upstream_tool_schema_too_large",
+        "invalid_json_schema",
+    }
+)
 
 # Upstream client libraries may otherwise log full request URLs, whose path or
 # query can contain administrator-supplied credentials.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("mcp.client.streamable_http").setLevel(logging.WARNING)
+
+
+class ConnectorSchemaRejected(ValueError):
+    """A reachable MCP server published a schema that cannot be admitted safely."""
+
+    def __init__(self, code: str, tool_name: str = "") -> None:
+        self.code = code if code in SCHEMA_REJECTION_CODES else "invalid_json_schema"
+        self.tool_name = tool_name[:160]
+        super().__init__(self.code)
+
+
+def validate_discovered_tool_schema(tool_name: str, schema: dict[str, object]) -> str:
+    """Return the canonical schema encoding or preserve a safe rejection cause."""
+    try:
+        encoded = json.dumps(
+            schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
+    except (TypeError, ValueError) as exc:
+        raise ConnectorSchemaRejected("invalid_json_schema", tool_name) from exc
+    if len(encoded.encode()) > MAX_SCHEMA_BYTES:
+        raise ConnectorSchemaRejected("upstream_tool_schema_too_large", tool_name)
+    try:
+        validate_json_schema(schema)
+    except ValueError as exc:
+        raise ConnectorSchemaRejected(str(exc), tool_name) from exc
+    return encoded
 
 
 def validate_streamable_http_url(value: str) -> str:
@@ -89,13 +125,11 @@ async def discover_streamable_http(url: str, bearer_token: str) -> list[dict[str
     inventory: list[dict[str, object]] = []
     for tool in result.tools[:MAX_TOOLS]:
         schema = tool.inputSchema if isinstance(tool.inputSchema, dict) else {}
-        encoded = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        if len(encoded.encode()) > MAX_SCHEMA_BYTES:
-            raise ValueError("upstream_tool_schema_too_large")
-        validate_json_schema(schema)
+        tool_name = str(tool.name)[:160]
+        encoded = validate_discovered_tool_schema(tool_name, schema)
         inventory.append(
             {
-                "name": str(tool.name)[:160],
+                "name": tool_name,
                 "description": str(tool.description or "")[:2000],
                 "input_schema": schema,
                 "schema_fingerprint": hashlib.sha256(encoded.encode()).hexdigest(),

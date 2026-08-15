@@ -114,6 +114,9 @@ remain individually retained and audited.
 - admitted MCP input schemas use JSON Schema Draft 2020-12 and are enforced in
   full before an upstream call; unknown constraints, formats, dialects and
   external references fail closed;
+- reachable connectors whose schemas cannot be admitted are marked `invalid`
+  with their precise `last_error_code`, while transport failures remain
+  `unreachable`;
 - tool invocation is resolved by task revision, connector, tool and schema
   fingerprint;
 - an agent never receives the original connector credential or unrestricted
