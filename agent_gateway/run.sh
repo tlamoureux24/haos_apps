@@ -24,11 +24,13 @@ export AGENT_GATEWAY_CREDENTIAL_PEPPER_HEX="${pepper_hex}"
 export PYTHONPATH=/app/src
 
 log_info() {
-  printf '[Agent Gateway] INFO: %s\n' "$*"
+  timestamp="$(python3 -c 'from datetime import datetime; print(datetime.now().astimezone().isoformat(timespec="seconds"))')"
+  printf '%s [Agent Gateway] INFO: %s\n' "${timestamp}" "$*"
 }
 
 log_error() {
-  printf '[Agent Gateway] ERROR: %s\n' "$*" >&2
+  timestamp="$(python3 -c 'from datetime import datetime; print(datetime.now().astimezone().isoformat(timespec="seconds"))')"
+  printf '%s [Agent Gateway] ERROR: %s\n' "${timestamp}" "$*" >&2
 }
 
 log_info "Initializing Agent Gateway database schema"
@@ -50,13 +52,15 @@ trap stop_servers TERM INT EXIT
 log_info "Starting private Ingress administration listener"
 su-exec agent-gateway:agent-gateway env AGENT_GATEWAY_SURFACE=admin \
   python3 -m uvicorn agent_gateway.main:app --host 0.0.0.0 --port 8099 \
-  --no-access-log --log-level "${log_level}" &
+  --no-access-log --log-level "${log_level}" \
+  --log-config /app/src/agent_gateway/uvicorn_logging.json &
 admin_pid=$!
 
 log_info "Starting authenticated MCP and event listener"
 su-exec agent-gateway:agent-gateway env AGENT_GATEWAY_SURFACE=public \
   python3 -m uvicorn agent_gateway.main:app --host 0.0.0.0 --port 8098 \
-  --no-access-log --log-level "${log_level}" &
+  --no-access-log --log-level "${log_level}" \
+  --log-config /app/src/agent_gateway/uvicorn_logging.json &
 public_pid=$!
 
 while true; do

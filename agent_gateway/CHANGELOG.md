@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.44.0
+
+- Add timezone-aware ISO timestamps to Agent Gateway launcher messages and to
+  both Uvicorn listeners without widening the minimal AppArmor profile.
+
 ## 0.43.0
 
 - Turn Overview into a read-only operational cockpit with linked cards for
