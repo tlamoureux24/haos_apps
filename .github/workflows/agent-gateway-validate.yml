@@ -302,7 +302,14 @@ jobs:
               .events_24h == 0 and
               .reports_24h == 0 and
               .failed_jobs_24h == 0 and
-              .audit == {"valid":true,"entries":0,"failed_sequence":null}
+              .audit.valid == true and
+              .audit.state == "valid" and
+              .audit.entries == 0 and
+              .audit.verified_entries == 0 and
+              .audit.pending_entries == 0 and
+              .audit.failed_sequence == null and
+              (.audit.verified_at | type) == "string" and
+              (.audit.full_verified_at | type) == "string"
             '
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
