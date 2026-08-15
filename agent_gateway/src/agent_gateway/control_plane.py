@@ -38,6 +38,8 @@ MAX_INCIDENT_SUBJECTS = 100
 MAX_SUBJECT_JSON_BYTES = 4096
 MAX_AGGREGATE_INPUT_BYTES = 128 * 1024
 MAX_PROMOTION_ATTEMPTS = 10
+AUDIT_INCREMENTAL_BATCH_SIZE = 1000
+AUDIT_FULL_VERIFICATION_INTERVAL = timedelta(hours=24)
 
 
 def validate_json_contract(value: object, schema: dict[str, object], path: str = "report") -> None:
@@ -1599,6 +1601,226 @@ class ControlPlane:
             expected_previous = row["entry_hash"]
         return {"valid": True, "entries": len(rows), "failed_sequence": None}
 
+    @staticmethod
+    def _metadata_json(connection: sqlite3.Connection, key: str) -> dict[str, object] | None:
+        row = connection.execute("SELECT value FROM gateway_metadata WHERE key=?", (key,)).fetchone()
+        if row is None:
+            return None
+        try:
+            value = json.loads(row["value"])
+        except (TypeError, ValueError):
+            return None
+        return value if isinstance(value, dict) else None
+
+    @staticmethod
+    def _set_metadata_json(connection: sqlite3.Connection, key: str, value: dict[str, object]) -> None:
+        connection.execute(
+            "INSERT INTO gateway_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, canonical_json(value)),
+        )
+
+    def _audit_row_hash_is_valid(self, row: sqlite3.Row) -> bool:
+        material = canonical_json({
+            "id": row["id"], "occurred_at": row["occurred_at"],
+            "actor_identity_id": row["actor_identity_id"], "credential_id": row["credential_id"],
+            "action": row["action"], "target_type": row["target_type"], "target_id": row["target_id"],
+            "decision": row["decision"], "reason_code": row["reason_code"],
+            "correlation_id": row["correlation_id"], "metadata_json": row["metadata_json"],
+            "previous_hash": row["previous_hash"],
+        })
+        expected_hash = hmac.new(self.pepper, material.encode("utf-8"), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(row["entry_hash"], expected_hash)
+
+    def _audit_checkpoint_is_authenticated(self, checkpoint: dict[str, object]) -> bool:
+        supplied = str(checkpoint.get("checkpoint_hmac", ""))
+        material = canonical_json({
+            "domain": "agent-gateway-audit-checkpoint-v1",
+            "sequence": checkpoint.get("sequence"),
+            "entry_hash": checkpoint.get("entry_hash"),
+            "verified_at": checkpoint.get("verified_at"),
+            "full_verified_at": checkpoint.get("full_verified_at"),
+        })
+        expected = hmac.new(self.pepper, material.encode("utf-8"), hashlib.sha256).hexdigest()
+        return bool(supplied) and hmac.compare_digest(supplied, expected)
+
+    def _sign_audit_checkpoint(self, checkpoint: dict[str, object]) -> dict[str, object]:
+        material = canonical_json({
+            "domain": "agent-gateway-audit-checkpoint-v1",
+            "sequence": checkpoint.get("sequence"),
+            "entry_hash": checkpoint.get("entry_hash"),
+            "verified_at": checkpoint.get("verified_at"),
+            "full_verified_at": checkpoint.get("full_verified_at"),
+        })
+        return {
+            **checkpoint,
+            "checkpoint_hmac": hmac.new(
+                self.pepper, material.encode("utf-8"), hashlib.sha256
+            ).hexdigest(),
+        }
+
+    def audit_status(self) -> dict[str, object]:
+        """Return a bounded operational snapshot; never traverse the audit chain."""
+        with connect(self.database_path) as connection:
+            checkpoint = self._metadata_json(connection, "audit_valid_checkpoint")
+            operation = self._metadata_json(connection, "audit_verification_state") or {}
+            head = connection.execute(
+                "SELECT sequence,entry_hash FROM audit_entries ORDER BY sequence DESC LIMIT 1"
+            ).fetchone()
+        entries = int(head["sequence"]) if head else 0
+        try:
+            verified = int(checkpoint.get("sequence", -1)) if checkpoint else -1
+        except (TypeError, ValueError):
+            verified = -1
+        checkpoint_hash = str(checkpoint.get("entry_hash", "")) if checkpoint else ""
+        head_hash = str(head["entry_hash"]) if head else GENESIS_HASH
+        state = str(operation.get("state", "unverified"))
+        checkpoint_authenticated = bool(checkpoint and self._audit_checkpoint_is_authenticated(checkpoint))
+        if checkpoint is None:
+            state = "verifying" if state == "verifying" else "unverified"
+        elif not checkpoint_authenticated:
+            state = "checkpoint_inconsistent"
+        elif entries < verified or (entries == verified and head_hash != checkpoint_hash):
+            state = "checkpoint_inconsistent"
+        elif state not in {"invalid", "verifying"}:
+            state = "valid" if entries == verified else "pending"
+        pending = max(entries - max(verified, 0), 0)
+        return {
+            "valid": state == "valid",
+            "state": state,
+            "entries": entries,
+            "verified_entries": max(verified, 0),
+            "pending_entries": pending,
+            "failed_sequence": operation.get("failed_sequence"),
+            "verified_at": checkpoint.get("verified_at") if checkpoint else None,
+            "full_verified_at": checkpoint.get("full_verified_at") if checkpoint else None,
+        }
+
+    def _audit_anchor_is_valid(
+        self, connection: sqlite3.Connection, checkpoint: dict[str, object]
+    ) -> tuple[bool, sqlite3.Row | None]:
+        if not self._audit_checkpoint_is_authenticated(checkpoint):
+            return False, None
+        sequence = int(checkpoint.get("sequence", -1))
+        checkpoint_hash = str(checkpoint.get("entry_hash", ""))
+        if sequence == 0:
+            return checkpoint_hash == GENESIS_HASH, None
+        row = connection.execute(
+            """SELECT sequence,id,occurred_at,actor_identity_id,credential_id,action,
+                      target_type,target_id,decision,reason_code,correlation_id,
+                      metadata_json,previous_hash,entry_hash
+               FROM audit_entries WHERE sequence=?""",
+            (sequence,),
+        ).fetchone()
+        if row is None or not hmac.compare_digest(str(row["entry_hash"]), checkpoint_hash):
+            return False, row
+        previous = connection.execute(
+            "SELECT sequence,entry_hash FROM audit_entries WHERE sequence<? ORDER BY sequence DESC LIMIT 1",
+            (sequence,),
+        ).fetchone()
+        expected_previous = GENESIS_HASH if sequence == 1 else (str(previous["entry_hash"]) if previous and int(previous["sequence"]) == sequence - 1 else "")
+        return bool(expected_previous) and hmac.compare_digest(str(row["previous_hash"]), expected_previous) and self._audit_row_hash_is_valid(row), row
+
+    def _store_audit_verification_state(
+        self, state: str, *, failed_sequence: int | None = None, reason: str | None = None
+    ) -> None:
+        with connect(self.database_path) as connection:
+            self._set_metadata_json(connection, "audit_verification_state", {
+                "state": state,
+                "updated_at": utc_now(),
+                "failed_sequence": failed_sequence,
+                "reason": reason,
+            })
+
+    def _replace_audit_checkpoint(self, result: dict[str, object], *, full: bool) -> None:
+        if not result["valid"]:
+            raise ValueError("invalid_audit_checkpoint")
+        sequence = int(result["entries"])
+        with connect(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT entry_hash FROM audit_entries WHERE sequence=?", (sequence,)
+            ).fetchone() if sequence else None
+            previous = self._metadata_json(connection, "audit_valid_checkpoint") or {}
+            now = utc_now()
+            checkpoint = self._sign_audit_checkpoint({
+                "sequence": sequence,
+                "entry_hash": str(row["entry_hash"]) if row else GENESIS_HASH,
+                "verified_at": now,
+                "full_verified_at": now if full else previous.get("full_verified_at"),
+            })
+            self._set_metadata_json(connection, "audit_valid_checkpoint", checkpoint)
+            self._set_metadata_json(connection, "audit_verification_state", {
+                "state": "valid", "updated_at": now,
+                "failed_sequence": None, "reason": None,
+            })
+
+    def maintain_audit_verification(self, force_full: bool = False) -> dict[str, object]:
+        """Verify outside request paths while preserving the last known-good checkpoint."""
+        with connect(self.database_path) as connection:
+            checkpoint = self._metadata_json(connection, "audit_valid_checkpoint")
+            operation = self._metadata_json(connection, "audit_verification_state") or {}
+        full_due = (
+            force_full
+            or checkpoint is None
+            or not self._audit_checkpoint_is_authenticated(checkpoint)
+            or operation.get("state") in {"invalid", "verifying"}
+        )
+        if checkpoint and checkpoint.get("full_verified_at"):
+            try:
+                last_full = datetime.fromisoformat(str(checkpoint["full_verified_at"]).replace("Z", "+00:00"))
+                full_due = full_due or datetime.now(UTC) - last_full >= AUDIT_FULL_VERIFICATION_INTERVAL
+            except ValueError:
+                full_due = True
+        elif checkpoint:
+            full_due = True
+        if full_due:
+            self._store_audit_verification_state("verifying", reason="full_verification")
+            result = self.verify_audit_chain()
+            if result["valid"]:
+                self._replace_audit_checkpoint(result, full=True)
+            else:
+                self._store_audit_verification_state(
+                    "invalid", failed_sequence=result.get("failed_sequence"), reason="full_verification_failed"
+                )
+            return self.audit_status()
+
+        assert checkpoint is not None
+        with connect(self.database_path) as connection:
+            anchor_valid, anchor = self._audit_anchor_is_valid(connection, checkpoint)
+            if anchor_valid:
+                rows = connection.execute(
+                    """SELECT sequence,id,occurred_at,actor_identity_id,credential_id,action,
+                              target_type,target_id,decision,reason_code,correlation_id,
+                              metadata_json,previous_hash,entry_hash
+                       FROM audit_entries WHERE sequence>? ORDER BY sequence LIMIT ?""",
+                    (int(checkpoint["sequence"]), AUDIT_INCREMENTAL_BATCH_SIZE),
+                ).fetchall()
+            else:
+                rows = []
+        expected_sequence = int(checkpoint["sequence"])
+        expected_previous = str(checkpoint["entry_hash"])
+        incremental_valid = anchor_valid
+        failed_sequence: int | None = int(anchor["sequence"]) if anchor is not None and not anchor_valid else None
+        for row in rows:
+            expected_sequence += 1
+            if int(row["sequence"]) != expected_sequence or not hmac.compare_digest(str(row["previous_hash"]), expected_previous) or not self._audit_row_hash_is_valid(row):
+                incremental_valid = False
+                failed_sequence = int(row["sequence"])
+                break
+            expected_previous = str(row["entry_hash"])
+        if not incremental_valid:
+            self._store_audit_verification_state("verifying", failed_sequence=failed_sequence, reason="checkpoint_or_anchor_inconsistent")
+            result = self.verify_audit_chain()
+            if result["valid"]:
+                self._replace_audit_checkpoint(result, full=True)
+            else:
+                self._store_audit_verification_state(
+                    "invalid", failed_sequence=result.get("failed_sequence"), reason="full_verification_failed"
+                )
+            return self.audit_status()
+        if rows:
+            self._replace_audit_checkpoint({"valid": True, "entries": expected_sequence}, full=False)
+        return self.audit_status()
+
     def retention_status(self) -> dict[str, object]:
         with connect(self.database_path) as connection:
             values = {row["key"]: row["value"] for row in connection.execute(
@@ -1610,7 +1832,7 @@ class ControlPlane:
         preview = self._retention_preview(retention_days, batch_size)
         return {"retention_days": retention_days, "batch_size": batch_size, "automatic": automatic,
                 "last_run_at": values.get("retention_last_run_at"), "preview": preview,
-                "audit": self.verify_audit_chain()}
+                "audit": self.audit_status()}
 
     def _retention_preview(self, retention_days: int, batch_size: int) -> dict[str, int]:
         cutoff = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat(timespec="milliseconds").replace("+00:00", "Z")

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.45.0
+
+- Make cockpit and retention audit health reads strictly bounded: neither
+  request path traverses or recalculates the audit chain.
+- Persist the last valid audit checkpoint separately from transient
+  verification state, revalidate its HMAC anchor before every incremental
+  advance and verify new entries in bounded batches.
+- Fall back immediately to a full verification when a checkpoint, anchor or
+  suffix is inconsistent, while preserving the last valid checkpoint until a
+  complete verification succeeds.
+- Run full verification outside page loads at administration startup, every
+  24 hours and on explicit administrator request; expose valid, pending,
+  verifying, unverified and invalid states in the bilingual interface.
+
 ## 0.44.0
 
 - Add timezone-aware ISO timestamps to Agent Gateway launcher messages and to

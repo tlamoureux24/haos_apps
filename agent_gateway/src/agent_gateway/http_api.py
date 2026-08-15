@@ -108,7 +108,7 @@ async def admin_status(request: Request) -> JSONResponse:
     tasks = await run_in_threadpool(request.app.state.control_plane.list_tasks)
     mappings = await run_in_threadpool(request.app.state.control_plane.list_event_mappings)
     schedules = await run_in_threadpool(request.app.state.control_plane.list_schedules)
-    audit = await run_in_threadpool(request.app.state.control_plane.verify_audit_chain)
+    audit = await run_in_threadpool(request.app.state.control_plane.audit_status)
     active_connectors = [item for item in connectors if not item["archived_at"]]
     active_tasks = [item for item in tasks if not item["archived_at"]]
     return JSONResponse(
@@ -607,6 +607,25 @@ async def admin_export_audit(request: Request) -> Response:
 async def admin_retention_status(request: Request) -> JSONResponse:
     status = await run_in_threadpool(request.app.state.control_plane.retention_status)
     return JSONResponse(status)
+
+
+async def admin_verify_audit(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    await run_in_threadpool(
+        request.app.state.control_plane.record_audit,
+        actor_identity_id=None,
+        credential_id=None,
+        action="audit.verify",
+        decision="allowed",
+        reason_code="ingress_admin",
+        correlation_id=correlation_id,
+    )
+    status = await run_in_threadpool(
+        request.app.state.control_plane.maintain_audit_verification, True
+    )
+    return JSONResponse({"audit": status})
 
 
 async def admin_update_retention(request: Request) -> JSONResponse:

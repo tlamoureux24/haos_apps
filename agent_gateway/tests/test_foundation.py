@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -464,6 +465,123 @@ class TaskCompositionTests(unittest.TestCase):
             with sqlite3.connect(path) as connection:
                 self.assertEqual(connection.execute("SELECT id FROM jobs").fetchall(), [("active-job",)])
             self.assertTrue(control_plane.verify_audit_chain()["valid"])
+
+
+class AuditVerificationCheckpointTests(unittest.TestCase):
+    @staticmethod
+    def _record(control_plane: ControlPlane, suffix: str) -> None:
+        control_plane.record_audit(
+            actor_identity_id=None,
+            credential_id=None,
+            action=f"test.{suffix}",
+            decision="recorded",
+            reason_code="test",
+            correlation_id=suffix,
+        )
+
+    def test_cockpit_and_retention_status_never_run_a_full_verification(self) -> None:
+        http_source = (
+            Path(__file__).resolve().parents[1] / "src" / "agent_gateway" / "http_api.py"
+        ).read_text(encoding="utf-8")
+        admin_status_source = http_source.split("async def admin_status", 1)[1].split(
+            "async def admin_list_identities", 1
+        )[0]
+        self.assertNotIn("verify_audit_chain", admin_status_source)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            control_plane.maintain_audit_verification(force_full=True)
+            with patch.object(control_plane, "verify_audit_chain", side_effect=AssertionError("unbounded read")):
+                self.assertTrue(control_plane.audit_status()["valid"])
+                self.assertTrue(control_plane.retention_status()["audit"]["valid"])
+
+    def test_incremental_verification_revalidates_anchor_and_advances_only_over_new_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            self._record(control_plane, "one")
+            initial = control_plane.maintain_audit_verification(force_full=True)
+            self.assertEqual(initial["state"], "valid")
+            full_verified_at = initial["full_verified_at"]
+            self._record(control_plane, "two")
+            pending = control_plane.audit_status()
+            self.assertEqual(pending["state"], "pending")
+            self.assertEqual(pending["pending_entries"], 1)
+            with patch.object(control_plane, "verify_audit_chain", side_effect=AssertionError("full scan")):
+                current = control_plane.maintain_audit_verification()
+            self.assertEqual(current["state"], "valid")
+            self.assertEqual(current["verified_entries"], 2)
+            self.assertEqual(current["full_verified_at"], full_verified_at)
+
+    def test_anchor_failure_runs_full_verification_and_preserves_last_valid_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            self._record(control_plane, "one")
+            control_plane.maintain_audit_verification(force_full=True)
+            with sqlite3.connect(path) as connection:
+                checkpoint_before = connection.execute(
+                    "SELECT value FROM gateway_metadata WHERE key='audit_valid_checkpoint'"
+                ).fetchone()[0]
+                connection.execute("UPDATE audit_entries SET metadata_json='{\"tampered\":true}' WHERE sequence=1")
+            with patch.object(control_plane, "verify_audit_chain", wraps=control_plane.verify_audit_chain) as full:
+                status = control_plane.maintain_audit_verification()
+            self.assertEqual(full.call_count, 1)
+            self.assertEqual(status["state"], "invalid")
+            self.assertFalse(status["valid"])
+            with sqlite3.connect(path) as connection:
+                checkpoint_after = connection.execute(
+                    "SELECT value FROM gateway_metadata WHERE key='audit_valid_checkpoint'"
+                ).fetchone()[0]
+            self.assertEqual(checkpoint_after, checkpoint_before)
+
+    def test_invalid_state_cannot_be_cleared_by_a_later_incremental_append(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            self._record(control_plane, "one")
+            control_plane.maintain_audit_verification(force_full=True)
+            with sqlite3.connect(path) as connection:
+                connection.execute("UPDATE audit_entries SET action='tampered' WHERE sequence=1")
+            self.assertEqual(control_plane.maintain_audit_verification()["state"], "invalid")
+            self._record(control_plane, "two")
+            with patch.object(control_plane, "verify_audit_chain", wraps=control_plane.verify_audit_chain) as full:
+                status = control_plane.maintain_audit_verification()
+            self.assertEqual(full.call_count, 1)
+            self.assertEqual(status["state"], "invalid")
+
+    def test_checkpoint_metadata_tampering_cannot_define_an_incremental_trust_anchor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            self._record(control_plane, "one")
+            control_plane.maintain_audit_verification(force_full=True)
+            with sqlite3.connect(path) as connection:
+                checkpoint = json.loads(connection.execute(
+                    "SELECT value FROM gateway_metadata WHERE key='audit_valid_checkpoint'"
+                ).fetchone()[0])
+                checkpoint["sequence"] = 0
+                checkpoint["entry_hash"] = "0" * 64
+                connection.execute(
+                    "UPDATE gateway_metadata SET value=? WHERE key='audit_valid_checkpoint'",
+                    (json.dumps(checkpoint),),
+                )
+            self.assertEqual(control_plane.audit_status()["state"], "checkpoint_inconsistent")
+            with patch.object(control_plane, "verify_audit_chain", wraps=control_plane.verify_audit_chain) as full:
+                status = control_plane.maintain_audit_verification()
+            self.assertEqual(full.call_count, 1)
+            self.assertEqual(status["state"], "valid")
+            self.assertEqual(status["verified_entries"], 1)
 
 
 class MultiSubjectIncidentTests(unittest.TestCase):

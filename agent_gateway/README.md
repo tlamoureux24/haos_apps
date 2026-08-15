@@ -106,7 +106,12 @@ remain individually retained and audited.
   fingerprint;
 - an agent never receives the original connector credential or unrestricted
   connector inventory;
-- audit records are hash-chained and can be verified from the interface.
+- audit records are HMAC-chained and can be verified from the interface;
+- the cockpit never traverses the chain: it reads bounded state while the
+  authenticated anchor is revalidated before each incremental advance;
+- a full verification runs at startup, every 24 hours, on request, and
+  immediately after any inconsistency without replacing the last valid
+  checkpoint when it fails.
 
 Write-capable or corrective operations remain deferred pending a separate
 threat review, explicit approvals, and fail-safe policy design.

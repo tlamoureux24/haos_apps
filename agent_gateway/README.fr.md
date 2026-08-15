@@ -113,7 +113,12 @@ reste conservé individuellement et audité.
 - chaque appel est résolu par révision de tâche, connecteur, outil et empreinte
   de schéma ;
 - un agent ne reçoit ni le secret original ni l’inventaire complet d’un connecteur ;
-- les entrées d’audit sont chaînées par hachage et vérifiables dans l’interface.
+- les entrées d’audit sont chaînées par HMAC et vérifiables dans l’interface ;
+- le cockpit ne parcourt jamais la chaîne : il lit un état borné, tandis que
+  l’ancre authentifiée est revalidée avant chaque progression incrémentale ;
+- un contrôle intégral s’exécute au démarrage, toutes les 24 heures, sur demande
+  et immédiatement après toute incohérence, sans écraser le dernier checkpoint
+  valide lorsqu’il échoue.
 
 Les opérations correctives ou en écriture restent différées jusqu’à une revue
 de menace, des approbations explicites et des règles qui échouent de façon sûre.
