@@ -405,7 +405,8 @@ Minimal Home Assistant App based on the official AdGuard Home Docker image for f
 
 Main features:
 
-- official AdGuard Home release pinned and automatically tracked by the repository;
+- official AdGuard Home image pinned to a stable release;
+- App version aligned as `<AdGuard Home version>-<revision>`;
 - TCP/UDP DNS and the administration interface enabled by default;
 - separate optional ports for DoH, DoH3, DoT, DoQ, DNSCrypt, and diagnostics;
 - bridge networking without `host_network`, Ingress, or Supervisor APIs;
