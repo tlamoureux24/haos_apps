@@ -27,6 +27,7 @@ from agent_gateway.fixed_arguments import (
     merge_arguments,
     parse_constraints,
 )
+from agent_gateway.json_contracts import validate_json_contract, validate_json_schema
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
 from agent_gateway.security import (
@@ -47,58 +48,6 @@ MAX_AGGREGATE_INPUT_BYTES = 128 * 1024
 MAX_PROMOTION_ATTEMPTS = 10
 AUDIT_INCREMENTAL_BATCH_SIZE = 1000
 AUDIT_FULL_VERIFICATION_INTERVAL = timedelta(hours=24)
-
-
-def validate_json_contract(value: object, schema: dict[str, object], path: str = "report") -> None:
-    """Validate the bounded JSON Schema subset produced by task definitions."""
-    expected = schema.get("type")
-    if expected is None and ("properties" in schema or "required" in schema):
-        expected = "object"
-    type_checks = {
-        "object": lambda item: isinstance(item, dict),
-        "array": lambda item: isinstance(item, list),
-        "string": lambda item: isinstance(item, str),
-        "integer": lambda item: isinstance(item, int) and not isinstance(item, bool),
-        "number": lambda item: isinstance(item, (int, float)) and not isinstance(item, bool),
-        "boolean": lambda item: isinstance(item, bool),
-        "null": lambda item: item is None,
-    }
-    if expected is not None:
-        check = type_checks.get(str(expected))
-        if check is None or not check(value):
-            raise ValueError(f"invalid_contract:{path}:type")
-    if isinstance(value, dict):
-        required = schema.get("required", [])
-        properties = schema.get("properties", {})
-        if not isinstance(required, list) or any(not isinstance(key, str) for key in required) or not isinstance(properties, dict):
-            raise ValueError("invalid_stored_report_schema")
-        if any(key not in value for key in required):
-            raise ValueError(f"invalid_contract:{path}:required")
-        if schema.get("additionalProperties") is False and any(key not in properties for key in value):
-            raise ValueError(f"invalid_contract:{path}:additional_property")
-        for key, child in value.items():
-            child_schema = properties.get(key)
-            if child_schema is not None:
-                if not isinstance(child_schema, dict):
-                    raise ValueError("invalid_stored_report_schema")
-                validate_json_contract(child, child_schema, f"{path}.{key}")
-    if isinstance(value, list):
-        maximum = schema.get("maxItems")
-        if maximum is not None and len(value) > int(maximum):
-            raise ValueError(f"invalid_contract:{path}:max_items")
-        item_schema = schema.get("items")
-        if item_schema is not None:
-            if not isinstance(item_schema, dict):
-                raise ValueError("invalid_stored_report_schema")
-            for index, child in enumerate(value):
-                validate_json_contract(child, item_schema, f"{path}[{index}]")
-    if isinstance(value, str):
-        minimum = schema.get("minLength")
-        maximum = schema.get("maxLength")
-        if minimum is not None and len(value) < int(minimum):
-            raise ValueError(f"invalid_contract:{path}:min_length")
-        if maximum is not None and len(value) > int(maximum):
-            raise ValueError(f"invalid_contract:{path}:max_length")
 
 
 def utc_now() -> str:
@@ -322,6 +271,7 @@ class ControlPlane:
                 ).fetchone()
                 if row is None or not row["enabled"] or row["status"] != "ready":
                     raise ValueError("task_connector_not_ready")
+                validate_json_schema(json.loads(row["input_schema_json"]))
                 constraints = build_constraints(
                     self.pepper,
                     json.loads(row["input_schema_json"]),

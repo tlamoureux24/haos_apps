@@ -9,6 +9,8 @@ import json
 import logging
 from urllib.parse import urlsplit, urlunsplit
 
+from agent_gateway.json_contracts import validate_json_schema
+
 
 MAX_TOOLS = 200
 MAX_SCHEMA_BYTES = 16 * 1024
@@ -89,8 +91,8 @@ async def discover_streamable_http(url: str, bearer_token: str) -> list[dict[str
         schema = tool.inputSchema if isinstance(tool.inputSchema, dict) else {}
         encoded = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         if len(encoded.encode()) > MAX_SCHEMA_BYTES:
-            schema = {"truncated": True}
-            encoded = '{"truncated":true}'
+            raise ValueError("upstream_tool_schema_too_large")
+        validate_json_schema(schema)
         inventory.append(
             {
                 "name": str(tool.name)[:160],

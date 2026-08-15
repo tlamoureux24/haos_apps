@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.46.1
+
+- Enforce admitted MCP input schemas with the Draft 2020-12 reference
+  validator before discovery, task composition and every upstream invocation.
+- Apply `enum`, `const`, numeric bounds, `pattern`, formats, compositions,
+  object and array constraints in both standard and fixed-argument modes.
+- Reject invalid schemas, unknown keywords, unsupported dialects or formats,
+  external references and oversized schemas explicitly instead of ignoring or
+  truncating their constraints.
+
 ## 0.46.0
 
 - Add optional `fixed_arguments_v1` restrictions to each selected task tool:

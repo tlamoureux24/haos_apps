@@ -41,7 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.46.0"',
+        'version: "0.46.1"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -58,8 +58,10 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "0.46.0"' not in package:
+    if '__version__ = "0.46.1"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
+    if "jsonschema[format-nongpl]==4.26.0" not in requirements:
+        raise RuntimeError("MCP input schemas must retain the pinned reference validator")
     logging_config = ROOT / "src/agent_gateway/uvicorn_logging.json"
     if not logging_config.is_file() or "%(asctime)s" not in logging_config.read_text(encoding="utf-8"):
         raise RuntimeError("Uvicorn logs must retain an explicit timestamp")

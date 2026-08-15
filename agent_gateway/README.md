@@ -111,6 +111,9 @@ remain individually retained and audited.
 - sensitive fixed arguments are encrypted at rest and always redacted;
 - fixed arguments are absent from the virtual schema, cannot be overridden by
   an agent, and are injected only after validation of the reduced call;
+- admitted MCP input schemas use JSON Schema Draft 2020-12 and are enforced in
+  full before an upstream call; unknown constraints, formats, dialects and
+  external references fail closed;
 - tool invocation is resolved by task revision, connector, tool and schema
   fingerprint;
 - an agent never receives the original connector credential or unrestricted

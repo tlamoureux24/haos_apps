@@ -14,6 +14,9 @@ défaut. Le volet facultatif **Restreindre cet outil** permet de partir d’un
 appel exemple valide : les propriétés fixes ordinaires ou sensibles sont
 retirées du schéma visible par l’agent et réinjectées par la passerelle. Les
 valeurs sensibles sont protégées au repos et ne sont jamais réaffichées.
+Les schémas d’entrée MCP admis suivent JSON Schema Draft 2020-12, avec
+références locales uniquement. Une contrainte, un format ou un dialecte non
+pris en charge est refusé explicitement avant tout appel au serveur MCP.
 
 Le port `8098` dessert MCP et l’API d’événements authentifiée. Ne le publier que
 sur un réseau local ou VPN de confiance. L’administration reste confinée à
@@ -41,6 +44,9 @@ In the new-task drawer every tool remains **Standard** by default. The optional
 sensitive fixed properties are removed from the agent-visible schema and
 injected by the gateway. Sensitive values are protected at rest and never
 displayed again.
+Admitted MCP input schemas follow JSON Schema Draft 2020-12 with local
+references only. An unsupported constraint, format or dialect is rejected
+explicitly before any MCP server call.
 
 Port `8098` serves MCP and the authenticated event API. Publish it only on a
 trusted LAN or VPN. Administration remains confined to Home Assistant Ingress.

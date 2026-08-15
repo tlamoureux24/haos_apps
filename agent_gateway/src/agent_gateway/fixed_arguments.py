@@ -48,7 +48,7 @@ def build_virtual_schema(upstream_schema: dict[str, Any], editable: set[str]) ->
         "type": "object",
         "properties": {name: copy.deepcopy(properties[name]) for name in properties if name in editable},
     }
-    for metadata in ("title", "description"):
+    for metadata in ("$defs", "$id", "$schema", "definitions", "title", "description"):
         if metadata in upstream_schema:
             virtual[metadata] = copy.deepcopy(upstream_schema[metadata])
     required = upstream_schema.get("required", [])
@@ -102,13 +102,20 @@ def build_constraints(
         for name, rule in argument_rules.items()
         if rule == "fixed_sensitive"
     }
+    virtual_schema = build_virtual_schema(upstream_schema, editable)
+    reduced_example = {
+        name: copy.deepcopy(example_arguments[name])
+        for name in editable
+        if name in example_arguments
+    }
+    validate(reduced_example, virtual_schema, "example_arguments")
     return {
         "mode": FIXED_ARGUMENTS_MODE,
         "editable": sorted(editable),
         "fixed_ordinary": ordinary,
         "fixed_sensitive_names": sorted(sensitive),
         "protected_fixed_sensitive": _protect_sensitive(pepper, sensitive) if sensitive else "",
-        "virtual_schema": build_virtual_schema(upstream_schema, editable),
+        "virtual_schema": virtual_schema,
     }
 
 

@@ -15,6 +15,7 @@ from agent_gateway.database import database_ready, initialize_database
 from agent_gateway.admin_ui import ADMIN_CSS, ADMIN_JS
 from agent_gateway.control_plane import MAX_INCIDENT_SUBJECTS, ControlPlane, TaskExecutionActiveError, validate_json_contract
 from agent_gateway.connectors import connector_display_endpoint, validate_streamable_http_url
+from agent_gateway.json_contracts import validate_json_schema
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
 from agent_gateway.security import issue_credential, load_or_create_pepper, parse_and_verify_token
@@ -301,6 +302,68 @@ class TaskReportContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "additional_property"):
             validate_json_contract({"result": "healthy", "unexpected": True}, schema)
 
+    def test_common_mcp_json_schema_constraints_are_enforced(self) -> None:
+        schema = {
+            "type": "object",
+            "required": ["mode", "target", "count", "label", "occurred_at", "tags"],
+            "additionalProperties": False,
+            "properties": {
+                "mode": {"enum": ["inspect", "status"]},
+                "target": {"const": "gatus"},
+                "count": {"type": "integer", "minimum": 1, "maximum": 10},
+                "label": {"type": "string", "pattern": "^safe-[a-z]+$"},
+                "occurred_at": {"type": "string", "format": "date-time"},
+                "tags": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": True},
+            },
+        }
+        valid = {
+            "mode": "inspect",
+            "target": "gatus",
+            "count": 5,
+            "label": "safe-test",
+            "occurred_at": "2026-08-15T10:00:00+02:00",
+            "tags": ["icmp"],
+        }
+        validate_json_contract(valid, schema)
+        for key, invalid, keyword in (
+            ("mode", "delete", "enum"),
+            ("target", "another", "const"),
+            ("count", 0, "minimum"),
+            ("count", 11, "maximum"),
+            ("label", "unsafe", "pattern"),
+            ("occurred_at", "not-a-date", "format"),
+            ("tags", [], "min_items"),
+            ("tags", ["icmp", "icmp"], "uniqueItems"),
+        ):
+            payload = {**valid, key: invalid}
+            with self.subTest(keyword=keyword), self.assertRaisesRegex(ValueError, keyword):
+                validate_json_contract(payload, schema)
+
+    def test_compositions_and_local_references_are_applied(self) -> None:
+        schema = {
+            "$defs": {"name": {"type": "string", "pattern": "^[a-z]+$"}},
+            "type": "object",
+            "properties": {
+                "name": {"anyOf": [{"$ref": "#/$defs/name"}, {"type": "null"}]}
+            },
+            "required": ["name"],
+            "additionalProperties": False,
+        }
+        validate_json_contract({"name": "gatus"}, schema)
+        validate_json_contract({"name": None}, schema)
+        with self.assertRaisesRegex(ValueError, "anyOf"):
+            validate_json_contract({"name": "Gatus"}, schema)
+
+    def test_unknown_keywords_dialects_formats_and_external_refs_fail_closed(self) -> None:
+        for schema, reason in (
+            ({"type": "string", "customConstraint": True}, "keyword"),
+            ({"$schema": "http://json-schema.org/draft-07/schema#", "type": "string"}, "dialect"),
+            ({"type": "string", "format": "private-format"}, "format"),
+            ({"$ref": "https://example.test/schema.json"}, "reference"),
+        ):
+            with self.subTest(reason=reason), self.assertRaisesRegex(ValueError, reason):
+                validate_json_schema(schema)
+
 
 class TaskCompositionTests(unittest.TestCase):
     def test_fixed_arguments_are_hidden_injected_and_independent_per_connector(self) -> None:
@@ -311,13 +374,14 @@ class TaskCompositionTests(unittest.TestCase):
             control_plane = ControlPlane(path, root / "private")
             schema = {
                 "type": "object",
-                "required": ["addon", "action", "token"],
+                "required": ["addon", "action", "token", "limit", "label"],
                 "additionalProperties": False,
                 "properties": {
-                    "addon": {"type": "string", "minLength": 1},
-                    "action": {"type": "string", "minLength": 1},
-                    "token": {"type": "string", "minLength": 1},
-                    "limit": {"type": "integer"},
+                    "addon": {"type": "string", "const": "gatus"},
+                    "action": {"type": "string", "enum": ["inspect"]},
+                    "token": {"type": "string", "pattern": "^secret-[a-z]+$"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 10},
+                    "label": {"type": "string", "pattern": "^safe-[a-z]+$"},
                 },
             }
             restricted_connector = "10000000-0000-0000-0000-000000000001"
@@ -335,7 +399,7 @@ class TaskCompositionTests(unittest.TestCase):
                         "INSERT INTO connector_tools(connector_id,name,description,input_schema_json,schema_fingerprint,discovered_at) VALUES(?,?,?,?,?,?)",
                         (connector_id, "manage", "Manage one resource", json.dumps(schema), "a" * 64, "2026-08-15T00:00:00Z"),
                     )
-            secret = "fixed-sensitive-value"
+            secret = "secret-fixedvalue"
             class FakeFernet:
                 def encrypt(self, value: bytes) -> bytes:
                     return base64.urlsafe_b64encode(value)
@@ -354,11 +418,19 @@ class TaskCompositionTests(unittest.TestCase):
                             "connector_id": restricted_connector,
                             "tool_name": "manage",
                             "argument_mode": "fixed_arguments_v1",
-                            "example_arguments": {"addon": "gatus", "action": "inspect", "token": secret},
+                            "example_arguments": {
+                                "addon": "gatus",
+                                "action": "inspect",
+                                "token": secret,
+                                "limit": 5,
+                                "label": "safe-test",
+                            },
                             "argument_rules": {
                                 "addon": "fixed_ordinary",
                                 "action": "editable",
                                 "token": "fixed_sensitive",
+                                "limit": "fixed_ordinary",
+                                "label": "editable",
                             },
                         },
                         {"connector_id": standard_connector, "tool_name": "manage"},
@@ -393,9 +465,12 @@ class TaskCompositionTests(unittest.TestCase):
                 schemas[restricted["namespaced_name"]],
                 {
                     "type": "object",
-                    "required": ["action"],
+                    "required": ["action", "label"],
                     "additionalProperties": False,
-                    "properties": {"action": {"type": "string", "minLength": 1}},
+                    "properties": {
+                        "action": {"type": "string", "enum": ["inspect"]},
+                        "label": {"type": "string", "pattern": "^safe-[a-z]+$"},
+                    },
                 },
             )
             self.assertEqual(schemas[standard["namespaced_name"]], schema)
@@ -406,20 +481,63 @@ class TaskCompositionTests(unittest.TestCase):
                 control_plane.resolve_active_capability(
                     worker,
                     restricted["namespaced_name"],
-                    {"action": "inspect", "addon": "another"},
+                    {"action": "inspect", "label": "safe-test", "addon": "another"},
                     "override",
                 )
+            for capability, arguments in (
+                (standard["namespaced_name"], {"addon": "other", "action": "inspect", "token": secret, "limit": 5, "label": "safe-test"}),
+                (standard["namespaced_name"], {"addon": "gatus", "action": "delete", "token": secret, "limit": 5, "label": "safe-test"}),
+                (standard["namespaced_name"], {"addon": "gatus", "action": "inspect", "token": secret, "limit": 11, "label": "safe-test"}),
+                (standard["namespaced_name"], {"addon": "gatus", "action": "inspect", "token": secret, "limit": 5, "label": "unsafe"}),
+                (restricted["namespaced_name"], {"action": "delete", "label": "safe-test"}),
+                (restricted["namespaced_name"], {"action": "inspect", "label": "unsafe"}),
+            ):
+                with self.subTest(capability=capability, arguments=arguments), patch(
+                    "agent_gateway.control_plane.reveal_connector_config"
+                ) as reveal:
+                    with self.assertRaisesRegex(ValueError, "invalid_capability_arguments"):
+                        control_plane.resolve_active_capability(worker, capability, arguments, "invalid")
+                    reveal.assert_not_called()
             with patch("agent_gateway.fixed_arguments.connector_fernet", return_value=FakeFernet()), patch(
                 "agent_gateway.control_plane.reveal_connector_config",
                 return_value=("https://restricted.example.test/mcp", ""),
             ):
                 resolved = control_plane.resolve_active_capability(
-                    worker, restricted["namespaced_name"], {"action": "inspect"}, "invoke"
+                    worker,
+                    restricted["namespaced_name"],
+                    {"action": "inspect", "label": "safe-test"},
+                    "invoke",
                 )
             self.assertEqual(
                 resolved["arguments"],
-                {"addon": "gatus", "action": "inspect", "token": secret},
+                {
+                    "addon": "gatus",
+                    "action": "inspect",
+                    "token": secret,
+                    "limit": 5,
+                    "label": "safe-test",
+                },
             )
+            original_constraints = json.loads(stored)
+            for fixed_name, invalid_value in (("addon", "other"), ("limit", 11)):
+                tampered = json.loads(json.dumps(original_constraints))
+                tampered["fixed_ordinary"][fixed_name] = invalid_value
+                with sqlite3.connect(path) as connection:
+                    connection.execute(
+                        "UPDATE task_tool_selections SET constraints_json=? WHERE connector_id=?",
+                        (json.dumps(tampered), restricted_connector),
+                    )
+                with self.subTest(merged=fixed_name), patch(
+                    "agent_gateway.fixed_arguments.connector_fernet", return_value=FakeFernet()
+                ), patch("agent_gateway.control_plane.reveal_connector_config") as reveal:
+                    with self.assertRaisesRegex(ValueError, "invalid_capability_arguments"):
+                        control_plane.resolve_active_capability(
+                            worker,
+                            restricted["namespaced_name"],
+                            {"action": "inspect", "label": "safe-test"},
+                            "tampered",
+                        )
+                    reveal.assert_not_called()
             self.assertNotIn(secret, json.dumps(control_plane.list_audit_entries()))
 
     def test_fixed_arguments_reject_invalid_examples_and_schema_changes_fail_closed(self) -> None:
