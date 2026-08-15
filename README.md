@@ -160,7 +160,8 @@ Fonctionnalités principales :
 - version officielle Gatus épinglée et mise à jour automatiquement dans le dépôt ;
 - contrôles ICMP exécutés sans root et sans capacité `NET_RAW` ;
 - configuration éditable dans le dossier `addon_config` dédié ;
-- identifiants SMS Free Mobile et paramètres SMTP injectés depuis les options privées ;
+- identifiants SMS Free Mobile, paramètres SMTP et jeton Home Assistant facultatif injectés depuis les options privées ;
+- publication facultative des alertes Gatus dans Home Assistant via les événements `gatus_alert` ;
 - aucun secret dans le fichier Gatus ou dans le dépôt GitHub ;
 - interface locale sur le port 8080, sans Ingress ;
 - profil AppArmor, watchdog interne et sauvegarde à froid ;
@@ -387,7 +388,8 @@ Main features:
 - official Gatus release pinned and automatically tracked by the repository;
 - ICMP checks run without root or the `NET_RAW` capability;
 - editable configuration in the dedicated `addon_config` folder;
-- Free Mobile SMS credentials and SMTP settings injected from private options;
+- Free Mobile SMS credentials, SMTP settings, and an optional Home Assistant token injected from private options;
+- optional publication of Gatus alerts to Home Assistant as `gatus_alert` events;
 - no secrets stored in the Gatus file or GitHub repository;
 - local interface on port 8080 without Ingress;
 - AppArmor profile, internal watchdog, and cold backups;
@@ -403,8 +405,7 @@ Minimal Home Assistant App based on the official AdGuard Home Docker image for f
 
 Main features:
 
-- official AdGuard Home image pinned to a stable release;
-- App version aligned as `<AdGuard Home version>-<revision>`;
+- official AdGuard Home release pinned and automatically tracked by the repository;
 - TCP/UDP DNS and the administration interface enabled by default;
 - separate optional ports for DoH, DoH3, DoT, DoQ, DNSCrypt, and diagnostics;
 - bridge networking without `host_network`, Ingress, or Supervisor APIs;
