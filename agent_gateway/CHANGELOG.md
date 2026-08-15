@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.45.2
+
+- Reserve a stable root scrollbar gutter so taller administration views no
+  longer shift the header and content horizontally.
+
 ## 0.45.1
 
 - Keep a confirmed invalid audit state stable during ordinary 60-second worker

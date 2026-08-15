@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent_gateway.database import database_ready, initialize_database
-from agent_gateway.admin_ui import ADMIN_JS
+from agent_gateway.admin_ui import ADMIN_CSS, ADMIN_JS
 from agent_gateway.control_plane import MAX_INCIDENT_SUBJECTS, ControlPlane, TaskExecutionActiveError, validate_json_contract
 from agent_gateway.connectors import connector_display_endpoint, validate_streamable_http_url
 from agent_gateway.policy import decide, validate_actions
@@ -45,6 +45,9 @@ class InternationalizationTests(unittest.TestCase):
 
 
 class AdministrationInterfaceTests(unittest.TestCase):
+    def test_root_reserves_a_stable_scrollbar_gutter(self) -> None:
+        self.assertIn("html{scrollbar-gutter:stable}", ADMIN_CSS)
+
     def test_identity_administration_uses_a_dedicated_accessible_drawer(self) -> None:
         main_source = (
             Path(__file__).resolve().parents[1]
