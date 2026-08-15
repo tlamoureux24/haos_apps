@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.45.1
+
+- Keep a confirmed invalid audit state stable during ordinary 60-second worker
+  passes instead of repeating an unbounded full-chain scan every minute.
+- Retry a full verification only on administration startup, explicit manual
+  request, the 24-hour deadline, or recovery from an interrupted `verifying`
+  state.
+
 ## 0.45.0
 
 - Make cockpit and retention audit health reads strictly bounded: neither

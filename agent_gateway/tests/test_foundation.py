@@ -541,7 +541,7 @@ class AuditVerificationCheckpointTests(unittest.TestCase):
                 ).fetchone()[0]
             self.assertEqual(checkpoint_after, checkpoint_before)
 
-    def test_invalid_state_cannot_be_cleared_by_a_later_incremental_append(self) -> None:
+    def test_invalid_state_stays_quiet_until_an_authorized_full_verification(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             path = root / "gateway.db"
@@ -553,6 +553,49 @@ class AuditVerificationCheckpointTests(unittest.TestCase):
                 connection.execute("UPDATE audit_entries SET action='tampered' WHERE sequence=1")
             self.assertEqual(control_plane.maintain_audit_verification()["state"], "invalid")
             self._record(control_plane, "two")
+            with patch.object(control_plane, "verify_audit_chain", side_effect=AssertionError("unexpected periodic full scan")):
+                status = control_plane.maintain_audit_verification()
+            self.assertEqual(status["state"], "invalid")
+            with patch.object(control_plane, "verify_audit_chain", wraps=control_plane.verify_audit_chain) as full:
+                status = control_plane.maintain_audit_verification(force_full=True)
+            self.assertEqual(full.call_count, 1)
+            self.assertEqual(status["state"], "invalid")
+
+    def test_interrupted_verification_is_resumed_by_the_periodic_worker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            self._record(control_plane, "one")
+            control_plane.maintain_audit_verification(force_full=True)
+            control_plane._store_audit_verification_state("verifying", reason="interrupted")
+            with patch.object(control_plane, "verify_audit_chain", wraps=control_plane.verify_audit_chain) as full:
+                status = control_plane.maintain_audit_verification()
+            self.assertEqual(full.call_count, 1)
+            self.assertEqual(status["state"], "valid")
+
+    def test_invalid_state_is_rechecked_at_the_full_verification_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            self._record(control_plane, "one")
+            control_plane.maintain_audit_verification(force_full=True)
+            with sqlite3.connect(path) as connection:
+                connection.execute("UPDATE audit_entries SET action='tampered' WHERE sequence=1")
+            self.assertEqual(control_plane.maintain_audit_verification()["state"], "invalid")
+            with sqlite3.connect(path) as connection:
+                checkpoint = json.loads(connection.execute(
+                    "SELECT value FROM gateway_metadata WHERE key='audit_valid_checkpoint'"
+                ).fetchone()[0])
+                checkpoint["full_verified_at"] = "2000-01-01T00:00:00.000Z"
+                checkpoint = control_plane._sign_audit_checkpoint(checkpoint)
+                connection.execute(
+                    "UPDATE gateway_metadata SET value=? WHERE key='audit_valid_checkpoint'",
+                    (json.dumps(checkpoint),),
+                )
             with patch.object(control_plane, "verify_audit_chain", wraps=control_plane.verify_audit_chain) as full:
                 status = control_plane.maintain_audit_verification()
             self.assertEqual(full.call_count, 1)

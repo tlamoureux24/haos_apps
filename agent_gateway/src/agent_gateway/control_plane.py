@@ -1762,7 +1762,7 @@ class ControlPlane:
             force_full
             or checkpoint is None
             or not self._audit_checkpoint_is_authenticated(checkpoint)
-            or operation.get("state") in {"invalid", "verifying"}
+            or operation.get("state") == "verifying"
         )
         if checkpoint and checkpoint.get("full_verified_at"):
             try:
@@ -1772,6 +1772,8 @@ class ControlPlane:
                 full_due = True
         elif checkpoint:
             full_due = True
+        if operation.get("state") == "invalid" and not full_due:
+            return self.audit_status()
         if full_due:
             self._store_audit_verification_state("verifying", reason="full_verification")
             result = self.verify_audit_chain()
