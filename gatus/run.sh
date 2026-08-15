@@ -39,6 +39,7 @@ GATUS_EMAIL_PASSWORD="$(read_optional_option 'email_password')"
 GATUS_EMAIL_HOST="$(read_optional_option 'email_host')"
 GATUS_EMAIL_PORT="${email_port}"
 GATUS_EMAIL_TO="$(read_optional_option 'email_to')"
+GATUS_HOMEASSISTANT_TOKEN="$(read_optional_option 'homeassistant_token')"
 GATUS_LOG_LEVEL="$(read_optional_option 'log_level')"
 GATUS_LOG_LEVEL="${GATUS_LOG_LEVEL:-INFO}"
 GATUS_CONFIG_PATH="${CONFIG_PATH}"
@@ -51,6 +52,7 @@ export GATUS_EMAIL_PASSWORD
 export GATUS_EMAIL_HOST
 export GATUS_EMAIL_PORT
 export GATUS_EMAIL_TO
+export GATUS_HOMEASSISTANT_TOKEN
 export GATUS_LOG_LEVEL
 export GATUS_CONFIG_PATH
 
