@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.36.0-8 - 2026-08-15
+
+- Add an optional private `homeassistant_token` App option for Gatus' native Home Assistant alert provider.
+- Export the token as `GATUS_HOMEASSISTANT_TOKEN` without making Home Assistant alerting mandatory.
+- Document the optional `homeassistant` provider and `gatus_alert` event path while keeping all alert providers disabled by default.
+
 ## 5.36.0-7 - 2026-07-18
 
 - Include the endpoint name and resolved alert state in the Free Mobile SMS message.
