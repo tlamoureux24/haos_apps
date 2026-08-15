@@ -13,13 +13,13 @@ release is based on Gatus 5.36.0.
 
 - official binary extracted from ghcr.io/twin/gatus;
 - editable Gatus configuration in the dedicated addon_config folder;
-- SMS and SMTP secrets stored in private App options;
+- optional SMS, SMTP and Home Assistant secrets stored in private App options;
 - no secret in config.yaml or the GitHub repository;
 - local web interface on port 8080;
 - internal Supervisor watchdog;
 - cold Home Assistant backups;
 - custom AppArmor profile;
-- no Home Assistant or Supervisor API access;
+- no mandatory Home Assistant access: Gatus' Home Assistant alert provider remains optional;
 - no privileged mode, host networking or NET_RAW capability.
 
 Since Gatus 5.31.0, ICMP checks support unprivileged pings when Gatus does not
@@ -46,10 +46,13 @@ enable in config.yaml:
 - email_password;
 - email_host;
 - email_port;
-- email_to.
+- email_to;
+- homeassistant_token, only when Gatus' `homeassistant` provider is enabled.
 
 With no alert provider enabled, the App starts without any of these values.
 In particular, leave email_port empty while the email provider is disabled.
+The homeassistant_token option may also remain empty while the Home Assistant
+provider is unused.
 
 On first start, the App automatically creates:
 
@@ -66,7 +69,7 @@ at startup.
 
 ## Secrets
 
-The Gatus file only references these variables:
+The Gatus file may reference these variables:
 
     ${GATUS_SMS_USER}
     ${GATUS_SMS_PASSWORD}
@@ -76,10 +79,45 @@ The Gatus file only references these variables:
     ${GATUS_EMAIL_HOST}
     ${GATUS_EMAIL_PORT}
     ${GATUS_EMAIL_TO}
+    ${GATUS_HOMEASSISTANT_TOKEN}
 
 The launcher populates them from Supervisor options. They are never written to
 addon_config, embedded in the image or printed to logs. Supervisor retains them
 in private App data so they survive restarts and are included in backups.
+
+## Optional Home Assistant alerts
+
+Gatus includes a native `homeassistant` provider. When enabled, it publishes a
+Home Assistant `gatus_alert` event when an alert is triggered and, with
+`send-on-resolved: true`, when it recovers.
+
+To use it:
+
+1. create a Home Assistant access token appropriate for this use;
+2. store it in the App's private `homeassistant_token` option;
+3. restart the App so `GATUS_HOMEASSISTANT_TOKEN` is available;
+4. explicitly add the `homeassistant` provider to your Gatus config.yaml;
+5. add `type: homeassistant` only to endpoints that should publish these events.
+
+Example:
+
+    alerting:
+      homeassistant:
+        url: "http://HOME_ASSISTANT_IP:8123"
+        token: "${GATUS_HOMEASSISTANT_TOKEN}"
+        default-alert:
+          send-on-resolved: true
+          failure-threshold: 2
+          success-threshold: 2
+
+Then on an endpoint:
+
+    alerts:
+      - type: homeassistant
+
+This feature is completely optional. Adding the private App option does not
+enable anything by itself, and the initial configuration keeps every alert
+provider disabled.
 
 ## Access
 
@@ -100,7 +138,7 @@ The supplied configuration:
 
 - replaces deprecated disable-monitoring-lock with concurrency: 0;
 - leaves every alert provider disabled;
-- includes commented examples for email and the Free Mobile SMS API;
+- includes commented examples for email, the Free Mobile SMS API and the Home Assistant provider;
 - provides only the local loopback endpoint required for startup.
 
 The template is copied only when config.yaml does not exist. App updates never

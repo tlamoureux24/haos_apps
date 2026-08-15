@@ -23,6 +23,9 @@ configuration:
   email_to:
     name: "Destinataire e-mail"
     description: "Facultatif. Adresse qui recevra les alertes Gatus."
+  homeassistant_token:
+    name: "Jeton Home Assistant"
+    description: "Facultatif. Jeton d'accès longue durée utilisé uniquement si le fournisseur d'alertes Home Assistant de Gatus est activé dans config.yaml."
   log_level:
     name: "Niveau de journalisation"
     description: "Verbosité des journaux Gatus."

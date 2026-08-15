@@ -7,21 +7,33 @@ stocke sa configuration dans le dossier addon_config dédié.
 
 ### Configuration privée
 
-Les identifiants SMS Free Mobile et les paramètres SMTP sont saisis dans
-l'onglet Configuration de l'App. Le lanceur les injecte comme variables
-d'environnement ; ils ne figurent jamais dans le fichier Gatus.
+Les identifiants SMS Free Mobile, les paramètres SMTP et l'option facultative
+Home Assistant sont saisis dans l'onglet Configuration de l'App. Le lanceur les
+injecte comme variables d'environnement ; ils ne figurent jamais directement
+dans le fichier Gatus.
 
 Options facultatives, à renseigner uniquement pour les fournisseurs activés :
 
 - sms_user et sms_password ;
 - email_from, email_username et email_password ;
-- email_host, email_port et email_to.
+- email_host, email_port et email_to ;
+- homeassistant_token, uniquement pour le fournisseur `homeassistant` de Gatus.
 
 L'App peut démarrer sans aucune de ces options lorsqu'aucun fournisseur
-d'alerte n'est activé dans config.yaml.
-Laissez email_port vide lorsque les alertes e-mail sont désactivées.
+d'alerte correspondant n'est activé dans config.yaml. L'option Home Assistant
+n'active rien à elle seule : elle rend seulement la variable
+`GATUS_HOMEASSISTANT_TOKEN` disponible pour une configuration Gatus qui choisit
+de l'utiliser.
 
 Après une modification de ces options, redémarrez l'App.
+
+### Alertes Home Assistant facultatives
+
+Le fournisseur natif `homeassistant` de Gatus peut publier des événements
+`gatus_alert` dans Home Assistant. Il reste entièrement facultatif : ajoutez-le
+dans `alerting` et avec `type: homeassistant` uniquement sur les endpoints qui
+doivent l'utiliser. La configuration initiale continue de laisser tous les
+fournisseurs d'alerte désactivés.
 
 ### Fichier Gatus
 
@@ -54,21 +66,30 @@ its configuration in the dedicated addon_config folder.
 
 ### Private configuration
 
-Free Mobile SMS credentials and SMTP settings are entered in the App
-Configuration tab. The launcher injects them as environment variables; they
-never appear in the Gatus file.
+Free Mobile SMS credentials, SMTP settings and the optional Home Assistant
+option are entered in the App Configuration tab. The launcher injects them as
+environment variables; they never need to appear directly in the Gatus file.
 
 Optional options, required only for enabled providers:
 
 - sms_user and sms_password;
 - email_from, email_username and email_password;
-- email_host, email_port and email_to.
+- email_host, email_port and email_to;
+- homeassistant_token, only for Gatus' `homeassistant` provider.
 
-The App can start without any of these options when no alert provider is
-enabled in config.yaml.
-Leave email_port empty while email alerts are disabled.
+The App can start without any of these options when the corresponding alert
+providers are disabled in config.yaml. The Home Assistant option does not
+enable anything by itself: it only makes `GATUS_HOMEASSISTANT_TOKEN` available
+to a Gatus configuration that chooses to use it.
 
 Restart the App after changing these options.
+
+### Optional Home Assistant alerts
+
+Gatus' native `homeassistant` provider can publish `gatus_alert` events to Home
+Assistant. It remains fully optional: add it under `alerting` and use
+`type: homeassistant` only on endpoints that should send those events. The
+initial configuration continues to keep every alert provider disabled.
 
 ### Gatus file
 

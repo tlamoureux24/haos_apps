@@ -24,6 +24,7 @@ SECRET_VARIABLES = (
     "GATUS_EMAIL_HOST",
     "GATUS_EMAIL_PORT",
     "GATUS_EMAIL_TO",
+    "GATUS_HOMEASSISTANT_TOKEN",
 )
 
 
@@ -82,6 +83,8 @@ def main() -> int:
         "    read_only: false",
         '  email_port: ""',
         "  email_port: str?",
+        '  homeassistant_token: ""',
+        "  homeassistant_token: password?",
     )
     for item in required_config:
         if item not in config:
@@ -123,6 +126,8 @@ def main() -> int:
     sms_message = "&msg=[ENDPOINT_NAME] : [ALERT_TRIGGERED_OR_RESOLVED]"
     if sms_message not in sample:
         raise RuntimeError("Free Mobile URL must include the endpoint name and alert state")
+    if "#   homeassistant:" not in sample or "#       - type: homeassistant" not in sample:
+        raise RuntimeError("Initial configuration must document optional Home Assistant alerting")
 
     for variable in SECRET_VARIABLES:
         placeholder = "${" + variable + "}"
@@ -141,7 +146,7 @@ def main() -> int:
         raise RuntimeError("Alert provider options must remain optional")
     if "NET_RAW" in config or "NET_RAW" in launcher:
         raise RuntimeError("Gatus must use unprivileged ICMP without NET_RAW")
-    if re.search(r"bashio::log\.[a-z]+.*GATUS_(?:SMS|EMAIL)", launcher):
+    if re.search(r"bashio::log\.[a-z]+.*GATUS_(?:SMS|EMAIL|HOMEASSISTANT)", launcher):
         raise RuntimeError("Launcher must not log secret environment variables")
 
     for filename, expected in EXPECTED_ASSETS.items():

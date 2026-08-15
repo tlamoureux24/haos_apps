@@ -37,6 +37,16 @@ ui:
 #       send-on-resolved: true
 #       failure-threshold: 2
 #       success-threshold: 2
+#
+#   # Home Assistant event notifications.
+#   # Set homeassistant_token in the App options before enabling this provider.
+#   homeassistant:
+#     url: "http://HOME_ASSISTANT_IP:8123"
+#     token: "${GATUS_HOMEASSISTANT_TOKEN}"
+#     default-alert:
+#       send-on-resolved: true
+#       failure-threshold: 2
+#       success-threshold: 2
 
 endpoints:
   # Required local startup check. Replace it with your own endpoints.
@@ -56,6 +66,7 @@ endpoints:
 #     alerts:
 #       - type: email
 #       - type: custom
+#       - type: homeassistant
 #
 #   - name: Example HTTPS
 #     url: "https://example.com"

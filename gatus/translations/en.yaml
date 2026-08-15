@@ -23,6 +23,9 @@ configuration:
   email_to:
     name: "Email recipient"
     description: "Optional. Address that will receive Gatus alerts."
+  homeassistant_token:
+    name: "Home Assistant token"
+    description: "Optional. Long-lived access token used only when Gatus' Home Assistant alert provider is enabled in config.yaml."
   log_level:
     name: "Log level"
     description: "Gatus log verbosity."
