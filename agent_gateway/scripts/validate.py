@@ -41,7 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.45.2"',
+        'version: "0.46.0"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -58,7 +58,7 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "0.45.2"' not in package:
+    if '__version__ = "0.46.0"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
     logging_config = ROOT / "src/agent_gateway/uvicorn_logging.json"
     if not logging_config.is_file() or "%(asctime)s" not in logging_config.read_text(encoding="utf-8"):

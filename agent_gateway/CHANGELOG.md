@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.46.0
+
+- Add optional `fixed_arguments_v1` restrictions to each selected task tool:
+  agent-editable top-level properties remain visible while ordinary and
+  sensitive fixed properties disappear from the virtual MCP schema.
+- Validate an administrator example call, persist restrictions per immutable
+  task revision, inject fixed values server-side and validate the merged call
+  again before invoking the exact upstream tool.
+- Protect sensitive fixed values at rest with the existing private encryption
+  primitive and redact them from administrative details and audit output while
+  keeping ordinary fixed values inspectable.
+- Add the collapsed bilingual fixed-argument editor to the existing wide task
+  drawer and show each configured effective capability in the task list.
+
 ## 0.45.2
 
 - Reserve a stable root scrollbar gutter so taller administration views no

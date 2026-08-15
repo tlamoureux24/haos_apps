@@ -20,6 +20,13 @@ from agent_gateway.connectors import (
     validate_streamable_http_url,
 )
 from agent_gateway.database import connect
+from agent_gateway.fixed_arguments import (
+    administrative_summary,
+    build_constraints,
+    effective_schema,
+    merge_arguments,
+    parse_constraints,
+)
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
 from agent_gateway.security import (
@@ -225,7 +232,7 @@ class ControlPlane:
             for row in rows:
                 selections = connection.execute(
                     """
-                    SELECT s.connector_id,s.tool_name,s.namespaced_name,s.schema_fingerprint,
+                    SELECT s.connector_id,s.tool_name,s.namespaced_name,s.schema_fingerprint,s.constraints_json,
                            c.display_name AS connector_name,c.enabled AS connector_enabled,c.status AS connector_status,
                            t.schema_fingerprint AS current_fingerprint
                     FROM task_tool_selections s
@@ -264,6 +271,9 @@ class ControlPlane:
                                 "connector_name": item["connector_name"],
                                 "tool_name": item["tool_name"],
                                 "namespaced_name": item["namespaced_name"],
+                                "argument_exposure": administrative_summary(
+                                    parse_constraints(item["constraints_json"])
+                                ),
                             }
                             for item in selections
                         ],
@@ -277,7 +287,7 @@ class ControlPlane:
         name: str,
         objective: str,
         max_attempts: int,
-        selections: list[dict[str, str]],
+        selections: list[dict[str, object]],
         correlation_id: str,
     ) -> str:
         if not selections or not 1 <= max_attempts <= 10:
@@ -303,7 +313,8 @@ class ControlPlane:
             for selection in selections:
                 row = connection.execute(
                     """
-                    SELECT c.id AS connector_id,c.status,c.enabled,t.name,t.schema_fingerprint
+                    SELECT c.id AS connector_id,c.status,c.enabled,t.name,t.schema_fingerprint,
+                           t.input_schema_json
                     FROM connectors c JOIN connector_tools t ON t.connector_id=c.id
                     WHERE c.id=? AND t.name=?
                     """,
@@ -311,7 +322,15 @@ class ControlPlane:
                 ).fetchone()
                 if row is None or not row["enabled"] or row["status"] != "ready":
                     raise ValueError("task_connector_not_ready")
-                resolved.append(row)
+                constraints = build_constraints(
+                    self.pepper,
+                    json.loads(row["input_schema_json"]),
+                    str(selection.get("argument_mode", "standard")),
+                    selection.get("example_arguments", {}),
+                    selection.get("argument_rules", {}),
+                    validate_json_contract,
+                )
+                resolved.append((row, constraints))
             connection.execute(
                 "INSERT INTO task_definitions(id,name,display_name,enabled,created_at) VALUES(?,?,?,?,?)",
                 (task_id, name.strip(), display_name.strip(), 1, now),
@@ -320,15 +339,23 @@ class ControlPlane:
                 "INSERT INTO task_revisions(id,task_definition_id,revision,objective,input_schema_json,report_schema_json,max_attempts,created_at) VALUES(?,?,?,?,?,?,?,?)",
                 (revision_id, task_id, 1, objective.strip(), '{"type":"object"}', canonical_json(report_schema), max_attempts, now),
             )
-            for row in resolved:
+            for row, constraints in resolved:
                 digest = hashlib.sha256(f"{revision_id}:{row['connector_id']}:{row['name']}".encode()).hexdigest()[:12]
                 safe_tool_name = "".join(character if character.isalnum() else "_" for character in row["name"]).strip("_")[:80] or "tool"
                 virtual_name = f"task_{task_id.replace('-', '')[:12]}__{safe_tool_name}__{digest}"
                 connection.execute(
                     "INSERT INTO task_tool_selections(task_revision_id,connector_id,tool_name,schema_fingerprint,namespaced_name,constraints_json) VALUES(?,?,?,?,?,?)",
-                    (revision_id, row["connector_id"], row["name"], row["schema_fingerprint"], virtual_name, "{}"),
+                    (
+                        revision_id,
+                        row["connector_id"],
+                        row["name"],
+                        row["schema_fingerprint"],
+                        virtual_name,
+                        canonical_json(constraints),
+                    ),
                 )
-            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.create", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"tool_count": len(resolved)})
+            summaries = [administrative_summary(constraints) for _, constraints in resolved]
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="tasks.create", target_type="task", target_id=task_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"tool_count": len(resolved), "argument_exposure": summaries})
         return task_id
 
     def set_task_enabled(self, task_id: str, enabled: bool, correlation_id: str) -> bool:
@@ -1275,7 +1302,7 @@ class ControlPlane:
         with connect(self.database_path) as connection:
             task = connection.execute("SELECT objective,input_schema_json,report_schema_json FROM task_revisions WHERE id=?", (job["task_revision_id"],)).fetchone()
             capabilities = connection.execute(
-                """SELECT s.namespaced_name,t.input_schema_json
+                """SELECT s.namespaced_name,s.constraints_json,t.input_schema_json
                    FROM task_tool_selections s JOIN connector_tools t
                      ON t.connector_id=s.connector_id AND t.name=s.tool_name
                    WHERE s.task_revision_id=? ORDER BY s.namespaced_name""",
@@ -1287,7 +1314,10 @@ class ControlPlane:
         job["allowed_capabilities"] = [
             {
                 "name": item["namespaced_name"],
-                "input_schema": json.loads(item["input_schema_json"]),
+                "input_schema": effective_schema(
+                    json.loads(item["input_schema_json"]),
+                    parse_constraints(item["constraints_json"]),
+                ),
             }
             for item in capabilities
         ]
@@ -1300,7 +1330,8 @@ class ControlPlane:
         with connect(self.database_path) as connection:
             rows = connection.execute(
                 """
-                SELECT s.namespaced_name,t.description,t.input_schema_json,d.display_name AS task_name
+                SELECT s.namespaced_name,s.constraints_json,t.description,t.input_schema_json,
+                       d.display_name AS task_name
                 FROM job_attempts a
                 JOIN jobs j ON j.id=a.job_id
                 JOIN task_revisions r ON r.id=j.task_revision_id
@@ -1319,7 +1350,10 @@ class ControlPlane:
             {
                 "name": row["namespaced_name"],
                 "description": f"Capacité autorisée pour la tâche {row['task_name']}. {row['description']}",
-                "input_schema": json.loads(row["input_schema_json"]),
+                "input_schema": effective_schema(
+                    json.loads(row["input_schema_json"]),
+                    parse_constraints(row["constraints_json"]),
+                ),
             }
             for row in rows
         ]
@@ -1340,7 +1374,8 @@ class ControlPlane:
                 return []
             rows = connection.execute(
                 """
-                SELECT s.namespaced_name,t.description,t.input_schema_json,d.display_name AS task_name
+                SELECT s.namespaced_name,s.constraints_json,t.description,t.input_schema_json,
+                       d.display_name AS task_name
                 FROM task_revisions r
                 JOIN task_definitions d ON d.id=r.task_definition_id
                 JOIN task_tool_selections s ON s.task_revision_id=r.id
@@ -1356,7 +1391,10 @@ class ControlPlane:
             {
                 "name": row["namespaced_name"],
                 "description": f"Capacité de la prochaine tâche {row['task_name']}; réclamez d'abord son exécution. {row['description']}",
-                "input_schema": json.loads(row["input_schema_json"]),
+                "input_schema": effective_schema(
+                    json.loads(row["input_schema_json"]),
+                    parse_constraints(row["constraints_json"]),
+                ),
             }
             for row in rows
         ]
@@ -1377,7 +1415,7 @@ class ControlPlane:
             row = connection.execute(
                 """
                 SELECT j.id AS job_id,r.id AS task_revision_id,s.connector_id,s.tool_name,
-                       s.schema_fingerprint,c.protected_config,t.input_schema_json,
+                       s.schema_fingerprint,s.constraints_json,c.protected_config,t.input_schema_json,
                        c.enabled AS connector_enabled,c.status AS connector_status,
                        t.schema_fingerprint AS current_fingerprint
                 FROM job_attempts a
@@ -1400,8 +1438,20 @@ class ControlPlane:
             ):
                 self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="denied", reason_code="capability_not_available", correlation_id=correlation_id, metadata={})
                 raise AuthorizationError("capability_not_available")
-            validate_json_contract(arguments, json.loads(row["input_schema_json"]), "arguments")
-            self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="allowed", reason_code="upstream_call_authorized", correlation_id=correlation_id, metadata={"job_id": row["job_id"], "connector_id": row["connector_id"]})
+            try:
+                constraints = parse_constraints(row["constraints_json"])
+                merged_arguments = merge_arguments(
+                    self.pepper,
+                    arguments,
+                    json.loads(row["input_schema_json"]),
+                    constraints,
+                    validate_json_contract,
+                )
+            except ValueError:
+                self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="denied", reason_code="invalid_capability_arguments", correlation_id=correlation_id, metadata={"job_id": row["job_id"], "connector_id": row["connector_id"]})
+                raise ValueError("invalid_capability_arguments") from None
+            summary = administrative_summary(constraints)
+            self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="allowed", reason_code="upstream_call_authorized", correlation_id=correlation_id, metadata={"job_id": row["job_id"], "connector_id": row["connector_id"], "argument_exposure": summary})
         url, bearer_token = reveal_connector_config(self.pepper, row["protected_config"])
         return {
             "job_id": row["job_id"],
@@ -1409,6 +1459,7 @@ class ControlPlane:
             "tool_name": row["tool_name"],
             "url": url,
             "bearer_token": bearer_token,
+            "arguments": merged_arguments,
         }
 
     def record_capability_result(

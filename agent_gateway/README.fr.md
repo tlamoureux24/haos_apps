@@ -15,6 +15,9 @@ Documentation anglaise : [README.md](README.md).
   facultative ;
 - inventaire indépendant par connecteur et noms d’outils virtuels sans collision ;
 - tâches composées d’outils choisis dans un ou plusieurs connecteurs ;
+- restrictions facultatives `fixed_arguments_v1` par outil, qui retirent des
+  arguments de premier niveau du schéma visible par l’agent et injectent dans
+  la passerelle leur valeur fixe ordinaire ou sensible protégée ;
 - clients MCP et sources d’événements authentifiés ;
 - exécutions manuelles, planifiées ou déclenchées par événement ;
 - cooldown et incidents de grâce durables par déclencheur, avec rétablissement
@@ -47,7 +50,10 @@ l’exposer que sur un LAN ou VPN de confiance.
 1. Dans **Connecteurs**, saisir un nom et l’URL Streamable HTTP `/mcp`, puis
    cliquer sur **Tester et ajouter**.
 2. Dans **Tâches**, écrire les instructions transmises à l’agent et sélectionner
-   uniquement les outils nécessaires à cette tâche.
+   uniquement les outils nécessaires à cette tâche. Conserver le mode
+   **Standard**, ou déplier **Restreindre cet outil** pour configurer un appel
+   exemple valide et classer certains arguments de premier niveau comme
+   modifiables par l’agent, fixes ordinaires ou fixes sensibles.
 3. Dans **Identités**, créer une identité Client MCP avec les permissions
    de traitement et de rapport, puis copier son identifiant affiché une fois.
 4. Configurer le client MCP avec `http://IP_HOME_ASSISTANT:8098/mcp` et envoyer
@@ -110,6 +116,9 @@ reste conservé individuellement et audité.
 - les listeners tournent sous un utilisateur non privilégié avec AppArmor ;
 - l’administration est isolée du listener public MCP/événements ;
 - les secrets des connecteurs sont chiffrés et ne sont jamais transmis aux agents ;
+- les arguments fixes sensibles sont chiffrés au repos et toujours expurgés ;
+- les arguments fixes sont absents du schéma virtuel, impossibles à remplacer
+  par l’agent et injectés seulement après validation de l’appel réduit ;
 - chaque appel est résolu par révision de tâche, connecteur, outil et empreinte
   de schéma ;
 - un agent ne reçoit ni le secret original ni l’inventaire complet d’un connecteur ;

@@ -47,6 +47,19 @@ class ConnectorArchivedRequest(ConnectorIdRequest):
 class TaskToolSelection(StrictContract):
     connector_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
     tool_name: str = Field(min_length=1, max_length=160)
+    argument_mode: Literal["standard", "fixed_arguments_v1"] = "standard"
+    example_arguments: dict[str, Any] = Field(default_factory=dict, max_length=100)
+    argument_rules: dict[
+        str, Literal["editable", "fixed_ordinary", "fixed_sensitive"]
+    ] = Field(default_factory=dict, max_length=100)
+
+    @model_validator(mode="after")
+    def valid_argument_configuration(self):
+        if any(not key or len(key) > 160 for key in (*self.example_arguments, *self.argument_rules)):
+            raise ValueError("invalid argument property")
+        if self.argument_mode == "standard" and (self.example_arguments or self.argument_rules):
+            raise ValueError("standard mode cannot configure arguments")
+        return self
 
 
 class TaskCreateRequest(StrictContract):

@@ -100,7 +100,7 @@ class GovernedMCP(FastMCP):
                     resolved["url"],
                     resolved["bearer_token"],
                     resolved["tool_name"],
-                    arguments,
+                    resolved["arguments"],
                 )
             except Exception as exc:
                 await anyio.to_thread.run_sync(

@@ -9,6 +9,12 @@ plusieurs serveurs MCP. Commencez par ajouter un connecteur dans
 **Connecteurs**, composez une tâche dans **Tâches**, puis créez une identité
 Client MCP dans **Identités**. Son identifiant n’est affiché qu’une fois.
 
+Dans le panneau d’une nouvelle tâche, chaque outil reste **Standard** par
+défaut. Le volet facultatif **Restreindre cet outil** permet de partir d’un
+appel exemple valide : les propriétés fixes ordinaires ou sensibles sont
+retirées du schéma visible par l’agent et réinjectées par la passerelle. Les
+valeurs sensibles sont protégées au repos et ne sont jamais réaffichées.
+
 Le port `8098` dessert MCP et l’API d’événements authentifiée. Ne le publier que
 sur un réseau local ou VPN de confiance. L’administration reste confinée à
 l’Ingress Home Assistant.
@@ -29,6 +35,12 @@ Agent Gateway connects authenticated agents to selected tools from one or more
 MCP servers. First add a connector under **Connectors**, compose a task under
 **Tasks**, then create an MCP client identity from **Identities**. Its credential
 is displayed only once.
+
+In the new-task drawer every tool remains **Standard** by default. The optional
+**Restrict this tool** section starts from a valid example call: ordinary or
+sensitive fixed properties are removed from the agent-visible schema and
+injected by the gateway. Sensitive values are protected at rest and never
+displayed again.
 
 Port `8098` serves MCP and the authenticated event API. Publish it only on a
 trusted LAN or VPN. Administration remains confined to Home Assistant Ingress.

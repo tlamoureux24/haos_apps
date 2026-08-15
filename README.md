@@ -37,6 +37,8 @@ Fonctionnalités principales :
 
 - connecteurs MCP Streamable HTTP génériques et inventaires indépendants ;
 - tâches composées d’outils précis provenant d’un ou plusieurs connecteurs ;
+- restrictions facultatives d’arguments fixes par outil, avec valeurs sensibles
+  chiffrées et retirées du schéma exposé à l’agent ;
 - outils virtuels uniques, même si plusieurs serveurs publient le même nom ;
 - exécutions manuelles, planifiées ou déclenchées par événements authentifiés ;
 - file persistante, rapports structurés, rétention et audit chaîné ;
@@ -265,6 +267,8 @@ Main features:
 
 - generic Streamable HTTP MCP connectors with independent inventories;
 - tasks composed from specific tools across one or several connectors;
+- optional per-tool fixed arguments, with sensitive values encrypted and
+  removed from the schema exposed to the agent;
 - unique virtual tools even when several servers publish the same name;
 - manual, scheduled, or authenticated event-driven executions;
 - persistent queue, structured reports, retention, and hash-chained audit;

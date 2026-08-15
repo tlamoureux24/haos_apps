@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import base64
 import json
 import sqlite3
 import tempfile
@@ -97,6 +98,19 @@ class AdministrationInterfaceTests(unittest.TestCase):
         ):
             self.assertIn(f"'{form}'", ADMIN_JS)
         self.assertIn("drawer.classList.toggle('wide'", ADMIN_JS)
+
+    def test_task_drawer_contains_the_optional_fixed_argument_editor(self) -> None:
+        for contract in (
+            "fixed_arguments_v1",
+            "Restreindre cet outil",
+            "fixed_ordinary",
+            "fixed_sensitive",
+            "example_arguments",
+            "parseArgumentValue",
+        ):
+            self.assertIn(contract, ADMIN_JS)
+        self.assertIn("taskInputSchema", ADMIN_JS)
+        self.assertIn("renderArgumentSummary", ADMIN_JS)
 
 
 class AdministrationStatusTests(unittest.TestCase):
@@ -289,6 +303,168 @@ class TaskReportContractTests(unittest.TestCase):
 
 
 class TaskCompositionTests(unittest.TestCase):
+    def test_fixed_arguments_are_hidden_injected_and_independent_per_connector(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            schema = {
+                "type": "object",
+                "required": ["addon", "action", "token"],
+                "additionalProperties": False,
+                "properties": {
+                    "addon": {"type": "string", "minLength": 1},
+                    "action": {"type": "string", "minLength": 1},
+                    "token": {"type": "string", "minLength": 1},
+                    "limit": {"type": "integer"},
+                },
+            }
+            restricted_connector = "10000000-0000-0000-0000-000000000001"
+            standard_connector = "10000000-0000-0000-0000-000000000002"
+            with sqlite3.connect(path) as connection:
+                for connector_id, name in (
+                    (restricted_connector, "Restricted MCP"),
+                    (standard_connector, "Standard MCP"),
+                ):
+                    connection.execute(
+                        "INSERT INTO connectors(id,display_name,transport,protected_config,display_endpoint,status,enabled,created_at,updated_at,inventory_revision) VALUES(?,?,?,?,?,'ready',1,?,?,1)",
+                        (connector_id, name, "streamable_http", "protected", "https://example.test", "2026-08-15T00:00:00Z", "2026-08-15T00:00:00Z"),
+                    )
+                    connection.execute(
+                        "INSERT INTO connector_tools(connector_id,name,description,input_schema_json,schema_fingerprint,discovered_at) VALUES(?,?,?,?,?,?)",
+                        (connector_id, "manage", "Manage one resource", json.dumps(schema), "a" * 64, "2026-08-15T00:00:00Z"),
+                    )
+            secret = "fixed-sensitive-value"
+            class FakeFernet:
+                def encrypt(self, value: bytes) -> bytes:
+                    return base64.urlsafe_b64encode(value)
+
+                def decrypt(self, value: bytes) -> bytes:
+                    return base64.urlsafe_b64decode(value)
+
+            with patch("agent_gateway.fixed_arguments.connector_fernet", return_value=FakeFernet()):
+                task_id = control_plane.create_task(
+                    "Scoped management",
+                    "scoped_management",
+                    "Manage only the configured resource.",
+                    1,
+                    [
+                        {
+                            "connector_id": restricted_connector,
+                            "tool_name": "manage",
+                            "argument_mode": "fixed_arguments_v1",
+                            "example_arguments": {"addon": "gatus", "action": "inspect", "token": secret},
+                            "argument_rules": {
+                                "addon": "fixed_ordinary",
+                                "action": "editable",
+                                "token": "fixed_sensitive",
+                            },
+                        },
+                        {"connector_id": standard_connector, "tool_name": "manage"},
+                    ],
+                    "task-create",
+                )
+            task = control_plane.list_tasks()[0]
+            restricted = next(tool for tool in task["tools"] if tool["connector_id"] == restricted_connector)
+            standard = next(tool for tool in task["tools"] if tool["connector_id"] == standard_connector)
+            self.assertEqual(restricted["argument_exposure"]["fixed"]["addon"]["value"], "gatus")
+            self.assertEqual(
+                restricted["argument_exposure"]["fixed"]["token"],
+                {"classification": "sensitive", "protected": True},
+            )
+            self.assertEqual(standard["argument_exposure"]["mode"], "standard")
+            with sqlite3.connect(path) as connection:
+                stored = connection.execute(
+                    "SELECT constraints_json FROM task_tool_selections WHERE connector_id=?",
+                    (restricted_connector,),
+                ).fetchone()[0]
+            self.assertNotIn(secret, stored)
+            self.assertIn('"gatus"', stored)
+
+            job_id = control_plane.enqueue_manual_task(task_id, {}, "task-run")
+            created = control_plane.create_identity(
+                "Worker", "client", ["jobs.claim", "jobs.heartbeat", "jobs.complete", "jobs.fail"], "worker"
+            )
+            worker = control_plane.authenticate(created.credential.token)
+            advertised = control_plane.next_queued_capabilities(worker)
+            schemas = {item["name"]: item["input_schema"] for item in advertised}
+            self.assertEqual(
+                schemas[restricted["namespaced_name"]],
+                {
+                    "type": "object",
+                    "required": ["action"],
+                    "additionalProperties": False,
+                    "properties": {"action": {"type": "string", "minLength": 1}},
+                },
+            )
+            self.assertEqual(schemas[standard["namespaced_name"]], schema)
+            lease = control_plane.claim_job(worker, "claim")
+            self.assertIsNotNone(lease)
+            self.assertEqual(lease.job["id"], job_id)
+            with self.assertRaisesRegex(ValueError, "invalid_capability_arguments"):
+                control_plane.resolve_active_capability(
+                    worker,
+                    restricted["namespaced_name"],
+                    {"action": "inspect", "addon": "another"},
+                    "override",
+                )
+            with patch("agent_gateway.fixed_arguments.connector_fernet", return_value=FakeFernet()), patch(
+                "agent_gateway.control_plane.reveal_connector_config",
+                return_value=("https://restricted.example.test/mcp", ""),
+            ):
+                resolved = control_plane.resolve_active_capability(
+                    worker, restricted["namespaced_name"], {"action": "inspect"}, "invoke"
+                )
+            self.assertEqual(
+                resolved["arguments"],
+                {"addon": "gatus", "action": "inspect", "token": secret},
+            )
+            self.assertNotIn(secret, json.dumps(control_plane.list_audit_entries()))
+
+    def test_fixed_arguments_reject_invalid_examples_and_schema_changes_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "gateway.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            connector_id = "10000000-0000-0000-0000-000000000001"
+            with sqlite3.connect(path) as connection:
+                connection.execute(
+                    "INSERT INTO connectors(id,display_name,transport,protected_config,display_endpoint,status,enabled,created_at,updated_at,inventory_revision) VALUES(?,?,?,?,?,'ready',1,?,?,1)",
+                    (connector_id, "Example MCP", "streamable_http", "protected", "https://example.test", "2026-08-15T00:00:00Z", "2026-08-15T00:00:00Z"),
+                )
+                connection.execute(
+                    "INSERT INTO connector_tools(connector_id,name,description,input_schema_json,schema_fingerprint,discovered_at) VALUES(?,?,?,?,?,?)",
+                    (connector_id, "inspect", "Inspect", json.dumps({
+                        "type": "object",
+                        "required": ["target"],
+                        "additionalProperties": False,
+                        "properties": {"target": {"type": "string"}, "verbose": {"type": "boolean"}},
+                    }), "a" * 64, "2026-08-15T00:00:00Z"),
+                )
+            selection = {
+                "connector_id": connector_id,
+                "tool_name": "inspect",
+                "argument_mode": "fixed_arguments_v1",
+                "example_arguments": {},
+                "argument_rules": {"target": "fixed_ordinary"},
+            }
+            with self.assertRaises(ValueError):
+                control_plane.create_task("Invalid", "invalid", "Invalid.", 1, [selection], "invalid")
+            selection["example_arguments"] = {"target": "service"}
+            task_id = control_plane.create_task("Valid", "valid", "Valid.", 1, [selection], "valid")
+            control_plane.enqueue_manual_task(task_id, {}, "run")
+            worker_created = control_plane.create_identity("Worker", "client", ["jobs.claim"], "worker")
+            worker = control_plane.authenticate(worker_created.credential.token)
+            self.assertEqual(len(control_plane.next_queued_capabilities(worker)), 1)
+            with sqlite3.connect(path) as connection:
+                connection.execute(
+                    "UPDATE connector_tools SET schema_fingerprint=? WHERE connector_id=? AND name='inspect'",
+                    ("b" * 64, connector_id),
+                )
+            self.assertEqual(control_plane.next_queued_capabilities(worker), [])
+
     def test_task_dependencies_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

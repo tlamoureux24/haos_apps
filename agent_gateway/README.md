@@ -13,6 +13,9 @@ French documentation: [README.fr.md](README.fr.md).
 - generic Streamable HTTP MCP connectors, with optional Bearer authentication;
 - independent connector inventories and collision-free virtual tool names;
 - tasks composed from selected tools across one or several connectors;
+- optional per-tool `fixed_arguments_v1` restrictions that remove selected
+  top-level arguments from the agent-visible schema and inject their ordinary
+  or protected sensitive values inside the gateway;
 - authenticated MCP clients and authenticated event sources;
 - manual, scheduled and event-driven executions;
 - cooldown and durable grace incidents for event triggers, with either simple
@@ -45,7 +48,10 @@ API; expose it only on a trusted LAN or VPN.
 1. Open **Connectors**, enter a display name and a Streamable HTTP `/mcp` URL,
    then select **Test and add**.
 2. Open **Tasks**, write the instructions sent to the agent and select only the
-   connector tools required by that task.
+   connector tools required by that task. Leave each tool in **Standard** mode,
+   or expand **Restrict this tool** to configure a valid example call and mark
+   selected top-level properties as agent-editable, ordinary fixed, or
+   sensitive fixed.
 3. Open **Identities**, create an MCP client identity with job-processing and
    report permissions, then copy its one-time credential.
 4. Configure the MCP client with `http://HOME_ASSISTANT_IP:8098/mcp` and send
@@ -102,6 +108,9 @@ remain individually retained and audited.
 - the application listeners run as an unprivileged user under AppArmor;
 - administration is isolated from the public MCP/event listener;
 - connector secrets are encrypted at rest and never exposed to agents;
+- sensitive fixed arguments are encrypted at rest and always redacted;
+- fixed arguments are absent from the virtual schema, cannot be overridden by
+  an agent, and are injected only after validation of the reduced call;
 - tool invocation is resolved by task revision, connector, tool and schema
   fingerprint;
 - an agent never receives the original connector credential or unrestricted
