@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.46.5
+
+- Commit denied capability-invocation audit entries before returning
+  `invalid_capability_arguments` or `capability_not_available` to the client.
+- Keep rejected arguments and sensitive fixed values out of durable audit
+  metadata while preserving a valid chained audit trail.
+
 ## 0.46.4
 
 - Treat textual keys inside a sensitive fixed JSON object as transient

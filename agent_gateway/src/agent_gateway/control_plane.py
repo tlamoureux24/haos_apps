@@ -1362,8 +1362,11 @@ class ControlPlane:
         """Resolve a virtual tool through the caller's current lease, failing closed."""
         self.authorize(identity, "jobs.claim")
         if not isinstance(arguments, dict) or len(canonical_json(arguments).encode()) > 32 * 1024:
+            with connect(self.database_path) as connection:
+                self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="denied", reason_code="invalid_capability_arguments", correlation_id=correlation_id, metadata={})
             raise ValueError("invalid_capability_arguments")
         now = utc_now()
+        denied_error: Exception | None = None
         with connect(self.database_path) as connection:
             row = connection.execute(
                 """
@@ -1390,21 +1393,25 @@ class ControlPlane:
                 or row["current_fingerprint"] != row["schema_fingerprint"]
             ):
                 self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="denied", reason_code="capability_not_available", correlation_id=correlation_id, metadata={})
-                raise AuthorizationError("capability_not_available")
-            try:
-                constraints = parse_constraints(row["constraints_json"])
-                merged_arguments, sensitive_values = merge_arguments_with_sensitive_values(
-                    self.pepper,
-                    arguments,
-                    json.loads(row["input_schema_json"]),
-                    constraints,
-                    validate_json_contract,
-                )
-            except ValueError:
-                self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="denied", reason_code="invalid_capability_arguments", correlation_id=correlation_id, metadata={"job_id": row["job_id"], "connector_id": row["connector_id"]})
-                raise ValueError("invalid_capability_arguments") from None
-            summary = administrative_summary(constraints)
-            self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="allowed", reason_code="upstream_call_authorized", correlation_id=correlation_id, metadata={"job_id": row["job_id"], "connector_id": row["connector_id"], "argument_exposure": summary})
+                denied_error = AuthorizationError("capability_not_available")
+            else:
+                try:
+                    constraints = parse_constraints(row["constraints_json"])
+                    merged_arguments, sensitive_values = merge_arguments_with_sensitive_values(
+                        self.pepper,
+                        arguments,
+                        json.loads(row["input_schema_json"]),
+                        constraints,
+                        validate_json_contract,
+                    )
+                except ValueError:
+                    self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="denied", reason_code="invalid_capability_arguments", correlation_id=correlation_id, metadata={"job_id": row["job_id"], "connector_id": row["connector_id"]})
+                    denied_error = ValueError("invalid_capability_arguments")
+                else:
+                    summary = administrative_summary(constraints)
+                    self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="allowed", reason_code="upstream_call_authorized", correlation_id=correlation_id, metadata={"job_id": row["job_id"], "connector_id": row["connector_id"], "argument_exposure": summary})
+        if denied_error is not None:
+            raise denied_error from None
         url, bearer_token = reveal_connector_config(self.pepper, row["protected_config"])
         return {
             "job_id": row["job_id"],

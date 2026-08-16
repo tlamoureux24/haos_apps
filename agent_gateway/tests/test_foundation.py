@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, patch
 
 from agent_gateway.database import database_ready, initialize_database
 from agent_gateway.admin_ui import ADMIN_CSS, ADMIN_JS
-from agent_gateway.control_plane import MAX_INCIDENT_SUBJECTS, ControlPlane, TaskExecutionActiveError, validate_json_contract
+from agent_gateway.control_plane import AuthorizationError, MAX_INCIDENT_SUBJECTS, ControlPlane, TaskExecutionActiveError, validate_json_contract
 from agent_gateway.connectors import (
     ConnectorSchemaRejected,
     connector_display_endpoint,
@@ -685,6 +685,21 @@ class TaskCompositionTests(unittest.TestCase):
                     {"action": "inspect", "label": "safe-test", "addon": "another"},
                     "override",
                 )
+            sensitive_override = "ATTACKER-SENSITIVE-OVERRIDE"
+            with self.assertRaisesRegex(ValueError, "invalid_capability_arguments"):
+                control_plane.resolve_active_capability(
+                    worker,
+                    restricted["namespaced_name"],
+                    {"action": "inspect", "label": "safe-test", "token": sensitive_override},
+                    "override-sensitive",
+                )
+            with self.assertRaisesRegex(AuthorizationError, "capability_not_available"):
+                control_plane.resolve_active_capability(
+                    worker,
+                    "missing_virtual_capability",
+                    {},
+                    "capability-unavailable",
+                )
             for capability, arguments in (
                 (standard["namespaced_name"], {"addon": "other", "action": "inspect", "token": secret, "limit": 5, "label": "safe-test"}),
                 (standard["namespaced_name"], {"addon": "gatus", "action": "delete", "token": secret, "limit": 5, "label": "safe-test"}),
@@ -740,7 +755,25 @@ class TaskCompositionTests(unittest.TestCase):
                             "tampered",
                         )
                     reveal.assert_not_called()
-            self.assertNotIn(secret, json.dumps(control_plane.list_audit_entries()))
+            audit_entries = control_plane.list_audit_entries(limit=10_000)
+            denials = {
+                entry["correlation_id"]: entry
+                for entry in audit_entries
+                if entry["decision"] == "denied"
+            }
+            self.assertEqual(denials["override"]["reason_code"], "invalid_capability_arguments")
+            self.assertEqual(
+                denials["override-sensitive"]["reason_code"],
+                "invalid_capability_arguments",
+            )
+            self.assertEqual(
+                denials["capability-unavailable"]["reason_code"],
+                "capability_not_available",
+            )
+            serialized_audit = json.dumps(audit_entries)
+            self.assertNotIn(secret, serialized_audit)
+            self.assertNotIn(sensitive_override, serialized_audit)
+            self.assertTrue(control_plane.verify_audit_chain()["valid"])
 
     def test_fixed_arguments_reject_invalid_examples_and_schema_changes_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
