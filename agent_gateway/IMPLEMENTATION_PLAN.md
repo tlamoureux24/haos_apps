@@ -143,6 +143,16 @@ event/report/audit details, prevents overlapping refreshes and exposes a
 bilingual age for each successful operational refresh. This is a client-only
 UX change and does not alter APIs, persistence or authorization.
 
+The real HAOS 0.46.8 acceptance is complete. The App upgraded and started
+cleanly; bilingual freshness indicators were observed on the intended
+operational views; Executions refreshed on its 5-second cadence and Audit on its
+10-second cadence; Audit polling stayed suspended while an entry detail or the
+retention drawer was open and resumed on the next scheduled cycle after closing;
+hiding and restoring the browser tab caused the expected immediate return
+refresh; and browser Network inspection confirmed a new targeted `connectors`
+request immediately when navigating back to Connectors without F5. The
+administration refresh lot is therefore accepted on HAOS through 0.46.8.
+
 The next release sequence is therefore:
 
 1. finish the public-release compatibility and threat-model gates listed below.
@@ -337,7 +347,7 @@ Acceptance criteria:
 The earlier generic per-field policy-editor direction is abandoned. Agent
 Gateway implements only one deliberately small, generic restriction mechanism:
 
-- `standard` remains the default and exposes the selected upstream tool schema
+- `standard` remains the default and exposes the selected upstream input schema
   unchanged;
 - optional `fixed_arguments_v1` starts from one administrator-supplied valid
   example call;
