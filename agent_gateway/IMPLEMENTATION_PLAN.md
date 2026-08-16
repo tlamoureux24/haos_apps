@@ -161,6 +161,13 @@ integration test with two independent FastMCP servers exposing the same upstream
 correct origin. The next release work is therefore packaging/release publication
 rather than another capability or authorization feature.
 
+Development is formally closed at the 0.46.8 public-release cutoff. From this
+point onward, persisted identities, connectors, task revisions, triggers,
+schedules, events, jobs, reports, audit state and other App data are
+non-disposable. Future persistence changes must preserve supported existing
+installations through an explicit, tested upgrade path; routine App-data removal
+or a clean reinstall is no longer permitted as a schema-upgrade strategy.
+
 ## Phase 0 — executable security baseline (completed foundation)
 
 Keep and continue testing:
@@ -169,7 +176,8 @@ Keep and continue testing:
 - unprivileged runtime and least-privilege AppArmor profile;
 - writable paths restricted to App data and runtime temporary directories;
 - separate listeners and non-sensitive liveness/readiness endpoints;
-- direct initialization of the current development SQLite schema;
+- fresh-install initialization of the current SQLite schema, with every future
+  incompatible persistence change required to provide a data-preserving upgrade;
 - redaction, correlation IDs, graceful shutdown and bilingual metadata;
 - CI validation, container build and smoke tests.
 
@@ -230,8 +238,9 @@ Acceptance criteria:
 - connector secrets remain excluded from logs, reports, exports and MCP output;
 - the existing identity, queue, lease, report and audit suites still pass.
 
-This phase requires an announced App uninstall with data removal and clean
-reinstall because the development database contains no useful user data.
+This phase historically required an announced App uninstall with data removal and
+clean reinstall because the development database contained no useful user data.
+That development-only policy is superseded by the post-0.46.8 preservation rule.
 
 ## Phase 4 — administrator-managed MCP connectors
 
@@ -469,9 +478,10 @@ Acceptance criteria:
   write-capable tool is governed by the same rules as any other selected tool;
 - the full job, capability and report trail is understandable from the UI.
 
-Persistent identities, task definitions and jobs become non-disposable only
-when an explicit testing or user-retention phase begins. Until then the clean
-schema policy below applies even though the manual workflow is functional.
+The public-release cutoff after 0.46.8 starts the non-disposable data phase.
+Persistent identities, connector configuration, task definitions and revisions,
+triggers, schedules, jobs, reports and audit state must survive supported
+upgrades according to the data-preservation policy below.
 
 ## Phase 8 — generic triggers and schedules
 
@@ -596,11 +606,12 @@ the mapping's existing input mode determines its associated data:
 The simple mode is emitted through the same envelope-building path with one
 member wherever compatibility permits. Existing queue bounds, task readiness,
 tool fingerprints, cooldown, retention and audit invariants continue to apply.
-The SQLite schema is replaced directly for this evolution; no migration or
-legacy compatibility path is implemented. Acceptance uses an App uninstall
-with data removal followed by a clean reinstall. Schema, dispatcher behavior,
-UI status and tests are delivered together in version 0.41.0 before the
-administration-interface restructuring.
+The SQLite schema was replaced directly for this historical development
+evolution; no migration or legacy compatibility path was implemented. Acceptance
+used an App uninstall with data removal followed by a clean reinstall. That
+pre-release practice is superseded by the post-0.46.8 data-preservation policy.
+Schema, dispatcher behavior, UI status and tests were delivered together in
+version 0.41.0 before the administration-interface restructuring.
 
 ## Phase 9 — security hardening and release readiness
 
@@ -674,8 +685,9 @@ Keep and complete:
 - secret protection and redaction across connector storage, MCP output, logs,
   reports, errors and audit metadata;
 - additional transports/connectors only through the generic connector contract;
-- a future schema-upgrade policy only after real non-disposable user data exists
-  and preserving it becomes an explicit requirement.
+- data-preserving schema upgrades for every future incompatible persistence
+  change, with upgrade tests against supported prior schema generations and
+  fail-closed behavior on unsafe or unknown source states.
 
 Write-capable, corrective or administratively powerful upstream tools are not a
 separate authorization class and are not deferred merely because they can modify
@@ -806,20 +818,29 @@ These gates verify the existing authorization model; they do not introduce a
 second read/write classifier, risk engine or per-invocation approval layer.
 Future releases must preserve these proofs as non-regression requirements.
 
-## Schema policy during the current development stage
+## Schema and data-preservation policy after development
 
-Agent Gateway currently has no users and its sole test installation contains no
-data that must survive a schema change. During this stage, schema-breaking
-functional increments replace the fresh SQLite schema directly and require an
-App uninstall with data removal followed by a clean reinstall. They must not
-ship migrations, legacy compatibility branches, Alembic, SQLAlchemy or another
-upgrade framework merely to preserve disposable development data.
+Development is closed at version 0.46.8 and persisted Agent Gateway data is
+non-disposable from this point forward. Existing 0.46.8 installations form the
+first persistence baseline. Fresh installations may still create the current
+schema directly, but any future release that changes persisted structure must
+provide an explicit, deterministic and tested upgrade path from every supported
+prior generation whose users are expected to upgrade. An ordinary upgrade must
+never require App uninstall, App-data removal or a clean reinstall.
 
-An existing database with an incompatible schema continues to fail closed with
-a clear clean-reinstall instruction; it is never altered partially or accepted
-silently. A data-preserving upgrade policy will be designed only when real
-non-disposable test or user data exists and preservation becomes an explicit
-requirement.
+Upgrade logic must be transactional, or otherwise designed so a failure cannot
+leave a partially converted database. It must preserve security properties,
+protected secrets, immutable task revisions, retained operational history and
+audit-chain integrity. An unsupported or unsafe source schema must fail closed
+before destructive modification, with clear backup/recovery instructions for the
+operator. Schema-changing releases must test the relevant prior-to-current
+upgrade paths in CI in addition to fresh-install initialization.
+
+This policy does not mandate a particular migration framework. Upgrade code
+should remain as small and bounded as the change requires; Alembic, SQLAlchemy
+or another framework should be introduced only if a future schema evolution
+justifies that dependency. What is mandatory is preservation of supported user
+data and a reproducible upgrade path.
 
 ## Deferred by design
 
