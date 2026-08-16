@@ -43,6 +43,12 @@ Le port `8098` dessert MCP et l’API d’événements authentifiée. Ne le publ
 sur un réseau local ou VPN de confiance. L’administration reste confinée à
 l’Ingress Home Assistant.
 
+Depuis la clôture du développement en 0.46.8, les données persistantes sont
+considérées comme non jetables. Toute future évolution incompatible du schéma
+doit fournir un chemin de mise à niveau explicite et testé qui préserve les
+données ; supprimer les données de l’App et réinstaller proprement n’est plus une
+stratégie normale de mise à jour.
+
 L’interface détecte le français ou l’anglais du navigateur, utilise le français
 comme repli et propose un bouton **FR/EN** mémorisé localement. Chaque vue
 recharge ses propres données dès son ouverture. Les vues opérationnelles se
@@ -101,6 +107,11 @@ revoking it at the MCP server remains an upstream operation when required.
 
 Port `8098` serves MCP and the authenticated event API. Publish it only on a
 trusted LAN or VPN. Administration remains confined to Home Assistant Ingress.
+
+Since development closed at 0.46.8, persisted data is considered non-disposable.
+Any future incompatible schema change must provide an explicit, tested upgrade
+path that preserves existing data; deleting App data and performing a clean
+reinstall is no longer a normal upgrade strategy.
 
 The interface detects the browser’s French or English preference, falls back to
 French, and provides a locally remembered **FR/EN** button. Each view reloads
