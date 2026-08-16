@@ -31,7 +31,10 @@ https://github.com/tlamoureux24/haos_apps
 #### Agent Gateway
 
 Passerelle expérimentale entre des agents authentifiés et un ou plusieurs
-serveurs MCP configurables.
+serveurs MCP configurables. Elle agit comme un pare-feu applicatif MCP
+deny-by-default : la configuration explicite de l’administrateur constitue
+l’autorisation, et seuls les outils et arguments compris dans l’enveloppe exacte
+de la tâche sont exposés à l’agent.
 
 Fonctionnalités principales :
 
@@ -40,13 +43,13 @@ Fonctionnalités principales :
 - restrictions facultatives d’arguments fixes par outil, avec valeurs sensibles
   chiffrées et retirées du schéma exposé à l’agent ;
 - outils virtuels uniques, même si plusieurs serveurs publient le même nom ;
+- autorisation deny-by-default fondée sur la sélection explicite des capacités,
+  sans classe spéciale imposée selon qu’un outil lit ou modifie l’état amont ;
 - exécutions manuelles, planifiées ou déclenchées par événements authentifiés ;
 - file persistante, rapports structurés, rétention et audit chaîné ;
 - archivage réversible des tâches et connecteurs sans perte d’historique ;
 - interface Ingress bilingue français/anglais avec métriques opérationnelles ;
 - secrets des connecteurs conservés dans la passerelle et jamais transmis aux agents.
-
-Les opérations en écriture ou correctives ne sont pas encore activées.
 
 Documentation détaillée :
 
@@ -261,7 +264,9 @@ https://github.com/tlamoureux24/haos_apps
 #### Agent Gateway
 
 Experimental gateway between authenticated agents and one or more configurable
-MCP servers.
+MCP servers. It acts as a deny-by-default MCP application firewall: explicit
+administrator configuration is the authorization decision, and only tools and
+arguments inside the task's exact capability envelope are exposed to the agent.
 
 Main features:
 
@@ -270,13 +275,14 @@ Main features:
 - optional per-tool fixed arguments, with sensitive values encrypted and
   removed from the schema exposed to the agent;
 - unique virtual tools even when several servers publish the same name;
+- deny-by-default authorization based on explicit capability selection, without
+  a special authorization class merely because an upstream tool reads or
+  modifies state;
 - manual, scheduled, or authenticated event-driven executions;
 - persistent queue, structured reports, retention, and hash-chained audit;
 - reversible task and connector archival without losing history;
 - bilingual French/English Ingress interface with operational metrics;
 - connector secrets remain inside the gateway and are never sent to agents.
-
-Write-capable or corrective operations are not enabled yet.
 
 Detailed documentation:
 
