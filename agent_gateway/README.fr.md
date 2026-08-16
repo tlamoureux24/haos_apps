@@ -130,14 +130,17 @@ rétention conserve par défaut les données opérationnelles terminées pendant
 jours. Les travaux en attente ou loués, la configuration et l’audit ne sont
 jamais supprimés par cette rétention.
 
-Pendant la phase actuelle de développement avec un seul testeur, les versions
-qui changent le schéma imposent la suppression des données de l’App et une
-réinstallation propre ; elles n’embarquent pas de migrations destinées à des
-données jetables. Une génération inconnue est refusée avec une demande claire
-de réinstallation. Une politique de préservation sera introduite seulement
-lorsque de vraies données non jetables existeront. Aucun export ou import de
-configuration séparé n’est prévu tant que les sauvegardes Home Assistant
-couvrent la restauration cohérente.
+Le développement est désormais clos et les données persistantes d’Agent Gateway
+sont considérées comme non jetables dès les installations existantes en 0.46.8.
+Toute future version qui modifie le schéma SQLite doit préserver les données
+existantes au moyen d’un chemin de mise à niveau explicite et testé. La
+suppression habituelle des données de l’App ou une réinstallation propre ne sont
+plus une stratégie acceptable pour faire évoluer le schéma. Si une base ne peut
+pas être mise à niveau de façon sûre, le démarrage doit échouer en mode fermé
+sans modification partielle et la version doit documenter le chemin de
+sauvegarde/récupération nécessaire. Aucun export ou import de configuration
+séparé n’est prévu tant que les sauvegardes Home Assistant couvrent la
+restauration cohérente.
 
 ## Incidents de grâce et corrélation des sujets
 
