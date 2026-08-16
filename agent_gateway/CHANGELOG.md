@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.46.7
+
+- Persist safe denied audit entries when connector endpoint changes or secret
+  rotations are rejected because a dependent execution is active.
+- Keep the refusal ahead of upstream discovery and connector mutation without
+  recording the requested endpoint, Bearer token or administrative payload.
+
 ## 0.46.6
 
 - Add bounded editing of connector display names and optional endpoint

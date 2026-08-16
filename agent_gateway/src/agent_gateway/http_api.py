@@ -110,6 +110,7 @@ async def audit_denial(
     reason_code: str,
     identity: AuthenticatedIdentity | None = None,
     token: str = "",
+    metadata: object | None = None,
 ) -> None:
     await run_in_threadpool(
         request.app.state.control_plane.record_audit,
@@ -119,7 +120,7 @@ async def audit_denial(
         decision="denied",
         reason_code=reason_code,
         correlation_id=request.state.correlation_id,
-        metadata={"path": request.url.path},
+        metadata=metadata if metadata is not None else {"path": request.url.path},
     )
 
 
@@ -500,6 +501,12 @@ async def admin_update_connector(request: Request) -> JSONResponse:
                 request.app.state.control_plane.connector_has_active_jobs,
                 contract.connector_id,
             ):
+                await audit_denial(
+                    request,
+                    "connectors.update",
+                    "connector_execution_active",
+                    metadata={"connector_id": contract.connector_id},
+                )
                 return error_response(409, "connector_execution_active", correlation_id)
             try:
                 tools = await discover_streamable_http(target_url, bearer_token)
@@ -526,6 +533,13 @@ async def admin_update_connector(request: Request) -> JSONResponse:
         return error_response(409, "connector_name_conflict", correlation_id)
     except ValueError as error:
         code = str(error)
+        if code == "connector_execution_active":
+            await audit_denial(
+                request,
+                "connectors.update",
+                code,
+                metadata={"connector_id": contract.connector_id},
+            )
         if code in {"connector_archived", "connector_execution_active", "connector_changed"}:
             return error_response(409, code, correlation_id)
         return error_response(422, "invalid_connector", correlation_id)
@@ -568,6 +582,12 @@ async def admin_rotate_connector_secret(request: Request) -> JSONResponse:
             request.app.state.control_plane.connector_has_active_jobs,
             contract.connector_id,
         ):
+            await audit_denial(
+                request,
+                "connectors.secret_rotate",
+                "connector_execution_active",
+                metadata={"connector_id": contract.connector_id},
+            )
             return error_response(409, "connector_execution_active", correlation_id)
         tools = None
         discovery_error = None
@@ -592,6 +612,13 @@ async def admin_rotate_connector_secret(request: Request) -> JSONResponse:
         return error_response(413, "body_too_large", correlation_id)
     except ValueError as error:
         code = str(error)
+        if code == "connector_execution_active":
+            await audit_denial(
+                request,
+                "connectors.secret_rotate",
+                code,
+                metadata={"connector_id": contract.connector_id},
+            )
         if code in {"connector_archived", "connector_execution_active", "connector_changed"}:
             return error_response(409, code, correlation_id)
         return error_response(422, "invalid_connector_secret", correlation_id)

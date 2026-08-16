@@ -106,7 +106,7 @@ valid chained audit trail. Versions 0.46.3 and 0.46.4 closed the upstream-echo
 redaction edge cases, and version 0.46.5 closed the transactional denied-audit
 rollback discovered by the real HAOS recipe.
 
-Version 0.46.6 implements bounded connector editing and explicit connector-
+Version 0.46.6 implemented bounded connector editing and explicit connector-
 secret rotation without a database-schema change. Ordinary edits never carry a
 Bearer token and retain the protected secret automatically. Endpoint replacement
 and explicit non-empty secret rotation rediscover the upstream inventory; a
@@ -117,10 +117,18 @@ Agent Gateway without claiming to revoke the old token at the upstream server.
 Administration responses expose only a `has_secret`
 boolean, and update/rotation audit entries contain safe metadata only.
 
+The real HAOS 0.46.6 acceptance validated connector editing, successful and
+failed secret rotation, fail-closed dependent tasks, recovery and secret
+non-disclosure. It also exposed one traceability defect: endpoint changes and
+secret rotations rejected while a dependent execution was active returned
+`connector_execution_active` before recording the denial. Version 0.46.7
+persists minimal `connectors.update` or `connectors.secret_rotate` denied audit
+entries before returning that unchanged refusal, without upstream discovery,
+connector mutation or requested endpoint/secret data in the audit.
+
 The next acceptance and release sequence is therefore:
 
-1. validate connector editing and rotation on HAOS, including
-   rediscovery, fail-closed dependency behavior, secret non-disclosure and audit;
+1. validate the 0.46.7 denied-audit traceability patch on HAOS;
 2. finish the public-release compatibility and threat-model gates listed below.
 
 ## Phase 0 — executable security baseline (completed foundation)
@@ -197,8 +205,9 @@ reinstall because the development database contains no useful user data.
 
 ## Phase 4 — administrator-managed MCP connectors
 
-Status: lifecycle implementation completed through 0.46.6; HAOS acceptance of
-editing and rotation remains pending. Generic HA-MCP and fake MCP
+Status: lifecycle implementation completed through 0.46.7; HAOS acceptance of
+editing and rotation passed on 0.46.6, with the denied-audit traceability patch
+awaiting acceptance on 0.46.7. Generic HA-MCP and fake MCP
 servers have been added through the same interface, and duplicate upstream tool
 names have been exercised without collision. Connector creation, checking,
 enable/disable, archival, inventory discovery and safe secret persistence are

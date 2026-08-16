@@ -600,17 +600,21 @@ class ConnectorDiscoveryVisibilityTests(unittest.TestCase):
                 "task",
             )
             control_plane.enqueue_manual_task(task_id, {}, "run")
+            rotate = self.Request(
+                control_plane,
+                {
+                    "connector_id": connector_id,
+                    "bearer_token": "RECOGNIZABLE-REFUSED-NEW-SECRET",
+                },
+            )
+            refused_endpoint = "https://RECOGNIZABLE-REFUSED-ENDPOINT.example.test/mcp"
             update = self.Request(
                 control_plane,
                 {
                     "connector_id": connector_id,
                     "display_name": "Test MCP",
-                    "url": "https://other.example.test/mcp",
+                    "url": refused_endpoint,
                 },
-            )
-            rotate = self.Request(
-                control_plane,
-                {"connector_id": connector_id, "bearer_token": "unused-new-secret"},
             )
             with patch(
                 "agent_gateway.http_api.discover_streamable_http", new=AsyncMock()
@@ -624,16 +628,43 @@ class ConnectorDiscoveryVisibilityTests(unittest.TestCase):
                     },
                 )
                 rename_response = self._run(admin_update_connector, rename)
+                connector_before = control_plane.list_connectors()[0]
+                config_before = control_plane.connector_connection_config(connector_id)
+                tools_before = control_plane.list_connector_tools(connector_id)
                 update_response = self._run(admin_update_connector, update)
                 rotate_response = self._run(admin_rotate_connector_secret, rotate)
             self.assertEqual(rename_response.status_code, 200)
             self.assertEqual(update_response.status_code, 409)
             self.assertEqual(rotate_response.status_code, 409)
+            self.assertEqual(
+                json.loads(update_response.body)["error"]["code"],
+                "connector_execution_active",
+            )
+            self.assertEqual(
+                json.loads(rotate_response.body)["error"]["code"],
+                "connector_execution_active",
+            )
             discover.assert_not_awaited()
             self.assertEqual(
                 control_plane.connector_connection_config(connector_id),
-                ("https://mcp.example.test/mcp", "super-secret-bearer-token"),
+                config_before,
             )
+            self.assertEqual(control_plane.list_connectors()[0], connector_before)
+            self.assertEqual(control_plane.list_connector_tools(connector_id), tools_before)
+            denials = [
+                entry
+                for entry in control_plane.list_audit_entries()
+                if entry["decision"] == "denied"
+                and entry["reason_code"] == "connector_execution_active"
+            ]
+            self.assertEqual(
+                {entry["action"] for entry in denials},
+                {"connectors.update", "connectors.secret_rotate"},
+            )
+            audit_text = json.dumps(denials)
+            self.assertNotIn(refused_endpoint, audit_text)
+            self.assertNotIn("RECOGNIZABLE-REFUSED-NEW-SECRET", audit_text)
+            self.assertTrue(control_plane.verify_audit_chain()["valid"])
 
 class DatabaseReadinessTests(unittest.TestCase):
     def test_missing_database_is_not_ready(self) -> None:
