@@ -44,7 +44,15 @@ sur un réseau local ou VPN de confiance. L’administration reste confinée à
 l’Ingress Home Assistant.
 
 L’interface détecte le français ou l’anglais du navigateur, utilise le français
-comme repli et propose un bouton **FR/EN** mémorisé localement.
+comme repli et propose un bouton **FR/EN** mémorisé localement. Chaque vue
+recharge ses propres données dès son ouverture. Les vues opérationnelles se
+réactualisent ensuite automatiquement : **Exécutions** toutes les 5 secondes et
+**Vue d’ensemble**, **Événements**, **Rapports** et **Audit** toutes les
+10 secondes, avec un indicateur « Actualisé il y a… ». Cette actualisation est
+suspendue si l’onglet est masqué, si un panneau d’administration est ouvert ou
+si un détail est déplié dans **Événements**, **Rapports** ou **Audit** ; elle
+reprend automatiquement ensuite et le retour sur un onglet masqué actualise
+immédiatement la vue active.
 
 Un déclencheur avec délai de grâce peut corréler tout le déclencheur ou agréger
 plusieurs sujets stables dans un incident unique. En mode agrégé, chaque alerte
@@ -93,7 +101,14 @@ Port `8098` serves MCP and the authenticated event API. Publish it only on a
 trusted LAN or VPN. Administration remains confined to Home Assistant Ingress.
 
 The interface detects the browser’s French or English preference, falls back to
-French, and provides a locally remembered **FR/EN** button.
+French, and provides a locally remembered **FR/EN** button. Each view reloads
+its own data as soon as it is opened. Operational views then refresh
+automatically: **Executions** every 5 seconds and **Overview**, **Events**,
+**Reports**, and **Audit** every 10 seconds, with an “Updated … ago” indicator.
+Automatic refresh is suspended while the browser tab is hidden, an
+administration drawer is open, or a detail is expanded in **Events**,
+**Reports**, or **Audit**; it resumes automatically afterwards, and returning to
+a hidden tab immediately refreshes the active view.
 
 A trigger with a grace period can correlate the whole trigger or aggregate
 several stable subjects into one incident. In aggregated mode every alert and
