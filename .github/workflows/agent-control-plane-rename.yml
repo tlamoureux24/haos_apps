@@ -43,6 +43,15 @@ jobs:
               ("agent-gateway", "agent-control-plane"),
               ("Agent Gateway", "Agent Control Plane"),
               ("gateway.status.read", "control_plane.status.read"),
+              ("gateway_status_v1", "control_plane_status_v1"),
+              ("gateway_status", "control_plane_status"),
+              ("gateway_actions", "control_plane_actions"),
+              ("gateway_metadata", "control_plane_metadata"),
+              ("gateway.db", "control_plane.db"),
+              ("gateway-action", "control-plane-action"),
+              ("gateway actions", "control-plane actions"),
+              ("gateway permissions", "control-plane permissions"),
+              ("Gateway permissions", "Control Plane permissions"),
               ("agw_", "acp_"),
               ("agw-", "acp-"),
           )
@@ -117,6 +126,27 @@ jobs:
               raise SystemExit("brand subtitle CSS rule not found exactly once")
           ui.write_text(text, encoding="utf-8")
 
+          ui_replacements = {
+              "Gérez les identités et leurs autorisations d’accès à la passerelle.": "Gérez les identités et leurs autorisations d’accès au plan de contrôle.",
+              "Permissions de la passerelle": "Permissions du plan de contrôle",
+              "Consultez l’état opérationnel de la passerelle.": "Consultez l’état opérationnel du plan de contrôle.",
+              "Derniers événements authentifiés reçus par la passerelle.": "Derniers événements authentifiés reçus par le plan de contrôle.",
+              "File persistante des travaux demandés à la passerelle.": "File persistante des travaux demandés au plan de contrôle.",
+              "Reçus par la passerelle": "Reçus par le plan de contrôle",
+              "Manage identities and their gateway access permissions.": "Manage identities and their Control Plane access permissions.",
+              "Review the gateway operational state.": "Review the Control Plane operational state.",
+              "Latest authenticated events received by the gateway.": "Latest authenticated events received by the Control Plane.",
+              "Persistent queue of work requested from the gateway.": "Persistent queue of work requested from the Control Plane.",
+              "Received by the gateway": "Received by the Control Plane",
+              "L’ancien secret ne sera plus stocké ni utilisé par la Gateway.": "L’ancien secret ne sera plus stocké ni utilisé par Agent Control Plane.",
+              "The old secret will no longer be stored or used by the Gateway.": "The old secret will no longer be stored or used by Agent Control Plane.",
+          }
+          for path in (main, ui):
+              text = path.read_text(encoding="utf-8")
+              for old, new in ui_replacements.items():
+                  text = text.replace(old, new)
+              path.write_text(text, encoding="utf-8")
+
           print("Changed text files:")
           for item in changed:
               print(f"  {item}")
@@ -134,6 +164,16 @@ jobs:
             'agent[ _-]?gateway|AGENT_GATEWAY|AgentGateway|agw[-_]' \
             .; then
             echo "Old Agent Gateway identity still present"
+            exit 1
+          fi
+
+          echo "=== Old contract residue (must be empty) ==="
+          if grep -RInE \
+            --exclude='*.png' \
+            --exclude-dir=.git \
+            'gateway_status|gateway_actions|gateway_metadata|gateway\.status\.read|gateway\.db' \
+            agent_control_plane README.md .github/workflows/agent-control-plane-validate.yml; then
+            echo "Old gateway contract identity still present"
             exit 1
           fi
 
