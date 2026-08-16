@@ -135,6 +135,14 @@ and the complete 23-entry audit chain verified successfully after the test. The
 bounded connector-editing and explicit secret-rotation lot is therefore accepted
 through 0.46.7.
 
+Version 0.46.8 adds a bounded administration refresh layer before the release
+gates: navigation reloads only the selected view, and only the overview,
+events, executions, reports and audit views poll while active. Polling pauses
+for hidden browser tabs and open administration drawers, preserves expanded
+event/report/audit details, prevents overlapping refreshes and exposes a
+bilingual age for each successful operational refresh. This is a client-only
+UX change and does not alter APIs, persistence or authorization.
+
 The next release sequence is therefore:
 
 1. finish the public-release compatibility and threat-model gates listed below.

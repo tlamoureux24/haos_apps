@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.46.8
+
+- Refresh each administration view immediately on navigation using only its
+  targeted data loader.
+- Poll only the active operational view at bounded intervals, with suspension
+  for hidden browser tabs, open administration drawers and expanded details.
+- Display a bilingual, per-view age for the last successful refresh on the
+  overview, events, executions, reports and audit views.
+
 ## 0.46.7
 
 - Persist safe denied audit entries when connector endpoint changes or secret

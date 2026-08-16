@@ -65,6 +65,39 @@ class AdministrationInterfaceTests(unittest.TestCase):
     def test_root_reserves_a_stable_scrollbar_gutter(self) -> None:
         self.assertIn("html{scrollbar-gutter:stable}", ADMIN_CSS)
 
+    def test_navigation_and_bounded_polling_use_targeted_view_loaders(self) -> None:
+        main_source = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "agent_gateway"
+            / "main.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "const viewLoaders={overview:refresh,'identities-view':loadIdentities,"
+            "events:loadEvents,tasks:loadTaskComposer,triggers:loadMappings,"
+            "schedules:loadSchedules,jobs:loadJobs,reports:loadReports,"
+            "connectors:loadConnectors,audit:loadAuditPage}",
+            ADMIN_JS,
+        )
+        self.assertIn(
+            "const autoRefreshIntervals={overview:10000,events:10000,jobs:5000,"
+            "reports:10000,audit:10000}",
+            ADMIN_JS,
+        )
+        self.assertNotIn("loadOperationalViews", ADMIN_JS)
+        self.assertIn("document.visibilityState!=='visible'", ADMIN_JS)
+        self.assertIn("!drawerShell.hidden", ADMIN_JS)
+        self.assertIn("#${view} details[open]", ADMIN_JS)
+        self.assertIn("viewRefreshes.has(view)", ADMIN_JS)
+        self.assertIn("if(document.visibilityState==='visible')refreshActiveView()", ADMIN_JS)
+        for view in ("overview", "events", "jobs", "reports", "audit"):
+            self.assertIn(f'data-freshness="{view}"', main_source)
+        self.assertIn("Actualisé à l’instant", ADMIN_JS)
+        self.assertIn("Actualisé il y a ${seconds} s", ADMIN_JS)
+        self.assertIn("Updated just now", ADMIN_JS)
+        self.assertIn("Updated ${seconds}s ago", ADMIN_JS)
+
     def test_identity_administration_uses_a_dedicated_accessible_drawer(self) -> None:
         main_source = (
             Path(__file__).resolve().parents[1]
