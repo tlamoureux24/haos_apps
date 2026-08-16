@@ -8,6 +8,6 @@ venv/
 .env
 *.log
 
-# Agent Gateway local design and hand-off documents
-/agent_gateway/PROJECT_BRIEF.md
-/agent_gateway/docs/adr/0001-control-plane-foundation.md
+# Agent Control Plane local design and hand-off documents
+/agent_control_plane/PROJECT_BRIEF.md
+/agent_control_plane/docs/adr/0001-control-plane-foundation.md

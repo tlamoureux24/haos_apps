@@ -28,9 +28,9 @@ https://github.com/tlamoureux24/haos_apps
 
 ### Apps disponibles
 
-#### Agent Gateway
+#### Agent Control Plane
 
-Passerelle stable entre des agents authentifiés et un ou plusieurs
+Plan de contrôle stable entre des agents authentifiés et un ou plusieurs
 serveurs MCP configurables. Elle agit comme un pare-feu applicatif MCP
 deny-by-default : la configuration explicite de l’administrateur constitue
 l’autorisation, et seuls les outils et arguments compris dans l’enveloppe exacte
@@ -54,7 +54,7 @@ Fonctionnalités principales :
 
 Documentation détaillée :
 
-- [Documentation française](agent_gateway/README.fr.md)
+- [Documentation française](agent_control_plane/README.fr.md)
 
 #### Studio Code Server + Codex
 
@@ -225,7 +225,7 @@ Si la nouvelle version n’apparaît pas :
 
 Pour comprendre le fonctionnement d’une App ou obtenir de l’aide, consulter d’abord sa documentation française :
 
-- [Agent Gateway](agent_gateway/README.fr.md)
+- [Agent Control Plane](agent_control_plane/README.fr.md)
 - [Rsync Manager](rsync_manager/README.fr.md)
 - [Studio Code Server + Codex](studio_code_server/README.fr.md)
 - [UniFi Autoblock](unifi_autoblock/README.fr.md)
@@ -262,9 +262,9 @@ https://github.com/tlamoureux24/haos_apps
 
 ### Available Apps
 
-#### Agent Gateway
+#### Agent Control Plane
 
-Stable gateway between authenticated agents and one or more configurable
+Stable control plane between authenticated agents and one or more configurable
 MCP servers. It acts as a deny-by-default MCP application firewall: explicit
 administrator configuration is the authorization decision, and only tools and
 arguments inside the task's exact capability envelope are exposed to the agent.
@@ -288,7 +288,7 @@ Main features:
 
 Detailed documentation:
 
-- [English documentation](agent_gateway/README.md)
+- [English documentation](agent_control_plane/README.md)
 
 #### Studio Code Server + Codex
 
@@ -459,7 +459,7 @@ If the new version does not appear:
 
 For details or help with an App, consult its English documentation first:
 
-- [Agent Gateway](agent_gateway/README.md)
+- [Agent Control Plane](agent_control_plane/README.md)
 - [Rsync Manager](rsync_manager/README.md)
 - [Studio Code Server + Codex](studio_code_server/README.md)
 - [UniFi Autoblock](unifi_autoblock/README.md)
