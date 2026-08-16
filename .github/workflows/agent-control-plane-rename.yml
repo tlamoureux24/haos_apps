@@ -1,4 +1,4 @@
-name: Audit Agent Control Plane rename
+name: Apply Agent Control Plane rename
 
 on:
   push:
@@ -6,13 +6,12 @@ on:
       - main
     paths:
       - ".github/workflows/agent-control-plane-rename.yml"
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit-rename:
+  apply-rename:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -20,7 +19,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Apply rename in working tree
+      - name: Apply complete rename
         shell: bash
         run: |
           set -euo pipefail
@@ -52,11 +51,14 @@ jobs:
               ("gateway actions", "control-plane actions"),
               ("gateway permissions", "control-plane permissions"),
               ("Gateway permissions", "Control Plane permissions"),
+              ("replaces_gateway_copy", "replaces_control_plane_copy"),
+              ("Return the gateway version", "Return the control plane version"),
+              ("deny-by-default gateway policy", "deny-by-default control-plane policy"),
+              ("Read the governed gateway status.", "Read the governed control-plane status."),
               ("agw_", "acp_"),
               ("agw-", "acp-"),
           )
 
-          changed = []
           for path in sorted(Path(".").rglob("*")):
               if not path.is_file() or ".git" in path.parts:
                   continue
@@ -72,7 +74,6 @@ jobs:
                   updated = updated.replace(old, new)
               if updated != text:
                   path.write_text(updated, encoding="utf-8")
-                  changed.append(str(path))
 
           config = Path("agent_control_plane/config.yaml")
           text = config.read_text(encoding="utf-8")
@@ -115,9 +116,7 @@ jobs:
           subtitle = "<small>Control plane</small>"
           if text.count(subtitle) != 1:
               raise SystemExit(f"expected exactly one header subtitle, found {text.count(subtitle)}")
-          text = text.replace(subtitle, "", 1)
-          main.write_text(text, encoding="utf-8")
-          print(f"Removed header subtitle: {subtitle}")
+          main.write_text(text.replace(subtitle, "", 1), encoding="utf-8")
 
           ui = Path("agent_control_plane/src/agent_control_plane/admin_ui.py")
           text = ui.read_text(encoding="utf-8")
@@ -146,44 +145,22 @@ jobs:
               for old, new in ui_replacements.items():
                   text = text.replace(old, new)
               path.write_text(text, encoding="utf-8")
-
-          print("Changed text files:")
-          for item in changed:
-              print(f"  {item}")
           PY
 
-          echo "=== Diff stat ==="
-          git diff --stat
-          echo "=== Diff check ==="
           git diff --check
 
-          echo "=== Old identity residue (must be empty) ==="
-          if grep -RInEi \
-            --exclude='*.png' \
-            --exclude-dir=.git \
-            'agent[ _-]?gateway|AGENT_GATEWAY|AgentGateway|agw[-_]' \
-            .; then
+          if grep -RInEi --exclude='*.png' --exclude-dir=.git \
+            'agent[ _-]?gateway|AGENT_GATEWAY|AgentGateway|agw[-_]' .; then
             echo "Old Agent Gateway identity still present"
             exit 1
           fi
 
-          echo "=== Old contract residue (must be empty) ==="
-          if grep -RInE \
-            --exclude='*.png' \
-            --exclude-dir=.git \
+          if grep -RInE --exclude='*.png' --exclude-dir=.git \
             'gateway_status|gateway_actions|gateway_metadata|gateway\.status\.read|gateway\.db' \
             agent_control_plane README.md .github/workflows/agent-control-plane-validate.yml; then
             echo "Old gateway contract identity still present"
             exit 1
           fi
-
-          echo "=== Remaining generic gateway references (review only) ==="
-          grep -RInEi \
-            --exclude='*.png' \
-            --exclude-dir=.git \
-            '\bgateway\b|gateway[_\.-]' \
-            agent_control_plane README.md .github/workflows/agent-control-plane-validate.yml \
-            || true
 
       - name: Validate renamed metadata and source
         shell: bash
@@ -193,8 +170,18 @@ jobs:
             --requirement agent_control_plane/requirements.txt
           python3 agent_control_plane/scripts/validate.py
           bash -n agent_control_plane/run.sh
-          python3 -m compileall -q \
-            agent_control_plane/src \
-            agent_control_plane/tests
+          python3 -m compileall -q agent_control_plane/src agent_control_plane/tests
           PYTHONPATH=agent_control_plane/src \
             python3 -m unittest discover -s agent_control_plane/tests -v
+
+      - name: Commit rename atomically
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/agent-control-plane-rename.yml
+          git add -A
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "refactor(agent-control-plane): finalize product rename"
+          git push origin HEAD:main
