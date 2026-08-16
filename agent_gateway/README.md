@@ -16,6 +16,10 @@ presented as read, write, or administrative.
 
 French documentation: [README.fr.md](README.fr.md).
 
+Public release references: [MCP compatibility](MCP_COMPATIBILITY.md),
+[threat model](THREAT_MODEL.md), [implementation plan](IMPLEMENTATION_PLAN.md),
+and [changelog](CHANGELOG.md).
+
 ## Current capabilities
 
 - generic Streamable HTTP MCP connectors, with optional Bearer authentication;
