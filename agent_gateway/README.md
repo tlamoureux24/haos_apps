@@ -125,12 +125,14 @@ volume and are included in cold Home Assistant backups. The default retention
 policy keeps terminal operational data for 90 days. Queued or leased work,
 configuration and audit entries are never removed by retention.
 
-During the current single-tester development stage, schema-breaking releases
-require removal of App data and a clean reinstall; they do not carry migration
-code for disposable data. Unknown schema generations fail closed with a clear
-reinstall requirement. A preservation policy will be introduced only when real
-non-disposable data exists. No separate configuration export/import is planned
-while Home Assistant backups cover coherent recovery.
+Development is now closed and persisted Agent Gateway data is considered
+non-disposable starting with existing 0.46.8 installations. Any future release
+that changes the SQLite schema must preserve existing data through an explicit,
+tested upgrade path. Routine App-data deletion or a clean reinstall is no longer
+an acceptable schema-upgrade strategy. If a database cannot be upgraded safely,
+startup must fail closed without partially altering it and the release must
+document the required backup/recovery path. No separate configuration
+export/import is planned while Home Assistant backups cover coherent recovery.
 
 ## Grace incidents and subject correlation
 
