@@ -153,9 +153,13 @@ refresh; and browser Network inspection confirmed a new targeted `connectors`
 request immediately when navigating back to Connectors without F5. The
 administration refresh lot is therefore accepted on HAOS through 0.46.8.
 
-The next release sequence is therefore:
-
-1. finish the public-release compatibility and threat-model gates listed below.
+The public-release compatibility, threat-model and verifiability gates are now
+complete. The repository contains the bilingual compatibility statement and
+threat-model matrix, and CI run `31954133521` passed 72 tests including a real
+integration test with two independent FastMCP servers exposing the same upstream
+`ha_get_addon` name and routing both distinct virtual capabilities to their
+correct origin. The next release work is therefore packaging/release publication
+rather than another capability or authorization feature.
 
 ## Phase 0 — executable security baseline (completed foundation)
 
@@ -768,22 +772,39 @@ followed by a clean data-removal reinstall of 0.46.5.
 
 ## Release gates
 
-Before a public release, the repository must also contain:
+Status: **completed** for the current public-release scope.
 
-- bilingual README, documentation, changelog and App translations;
-- operator documentation for connector creation, secret rotation, task
-  composition, client identity setup, network exposure, backup and recovery;
-- a compatibility statement listing supported MCP transports/protocol versions;
-- a threat-model matrix connecting every boundary to automated or documented
-  manual verification and treating explicit administrator configuration as the
-  source of capability authorization;
-- tests using at least two independent fake MCP servers and overlapping tool
-  names;
-- proof that no connector, vendor, task domain or write capability is enabled by
-  default;
-- proof that every executable upstream capability can be traced to an explicit
-  administrator-selected task/tool configuration, and that invocation fails
-  closed when no such configuration exists.
+The repository now contains and continuously exercises the required release
+evidence:
+
+- bilingual `README.md`, `README.fr.md`, `DOCS.md`, `CHANGELOG.md` and App
+  translations;
+- operator guidance for connector creation, secret rotation, task composition,
+  client identity setup, trusted-LAN/VPN exposure, backup and recovery;
+- `MCP_COMPATIBILITY.md`, which states the supported Streamable HTTP transport,
+  pinned MCP SDK/protocol scope, authentication model and explicit unsupported
+  features without claiming untested conformance;
+- `THREAT_MODEL.md`, which connects each trust boundary to its implemented
+  control and automated, HAOS or documented operator proof while preserving the
+  rule that explicit administrator configuration is capability authorization;
+- `tests/test_multi_connector_integration.py`, which launches two independent
+  FastMCP processes exposing the same `ha_get_addon` upstream name, verifies two
+  distinct virtual capabilities and proves that each invocation is routed to
+  the correct connector; CI run `31954133521` passed this test as part of a
+  complete 72-test green run;
+- clean-install and smoke-test proof that no connector, vendor, task domain or
+  write capability is enabled by default: the fresh schema contains zero
+  connectors/tasks/identities and App configuration contains no fixed HA-MCP or
+  Gatus dependency;
+- control-plane and MCP smoke proof that an executable upstream capability is
+  derived only from an explicit persisted task/tool selection and remains
+  non-invocable without the matching active lease; missing, unselected,
+  disabled, stale-fingerprint or otherwise invalid capability contexts fail
+  closed with `capability_not_available` or task-unavailable outcomes.
+
+These gates verify the existing authorization model; they do not introduce a
+second read/write classifier, risk engine or per-invocation approval layer.
+Future releases must preserve these proofs as non-regression requirements.
 
 ## Schema policy during the current development stage
 
