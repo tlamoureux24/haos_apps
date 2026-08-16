@@ -17,6 +17,10 @@ séparée selon qu’un outil est présenté comme lecture, écriture ou adminis
 
 Documentation anglaise : [README.md](README.md).
 
+Références de publication : [compatibilité MCP](MCP_COMPATIBILITY.md),
+[modèle de menace](THREAT_MODEL.md), [plan d’implémentation](IMPLEMENTATION_PLAN.md)
+et [changelog](CHANGELOG.md).
+
 ## Fonctionnalités actuelles
 
 - connecteurs MCP Streamable HTTP génériques, avec authentification Bearer
