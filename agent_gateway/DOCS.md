@@ -60,6 +60,8 @@ et rétablissement doit fournir un objet `subject` non vide ; l’échéance ini
 ne se prolonge pas et un seul travail contient les sujets encore actifs.
 
 Guide complet : [documentation française](README.fr.md).
+Références de publication : [compatibilité MCP](MCP_COMPATIBILITY.md),
+[modèle de menace](THREAT_MODEL.md) et [plan d’implémentation](IMPLEMENTATION_PLAN.md).
 
 ## English
 
@@ -116,3 +118,5 @@ recovery must provide a non-empty `subject` object; the initial deadline never
 extends and one job contains the subjects that remain active.
 
 Full guide: [English documentation](README.md).
+Public release references: [MCP compatibility](MCP_COMPATIBILITY.md),
+[threat model](THREAT_MODEL.md), and [implementation plan](IMPLEMENTATION_PLAN.md).
