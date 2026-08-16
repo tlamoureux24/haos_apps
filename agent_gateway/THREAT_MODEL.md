@@ -24,8 +24,7 @@ de risque qui contredirait cette décision administrative.
 
 Ce document décrit les frontières réellement implémentées. Les preuves marquées
 **Automatique** sont exercées par les tests Python ou la CI ; **HAOS** désigne
-une recette manuelle déjà exécutée sur l’App réelle ; **À compléter** identifie
-un gate de release qui reste à matérialiser.
+une recette manuelle déjà exécutée sur l’App réelle.
 
 ### Matrice des frontières
 
@@ -35,7 +34,7 @@ un gate de release qui reste à matérialiser.
 | Navigateur administrateur → listener d’administration | Accès direct à l’API admin, contournement d’Ingress ou requête de mutation forgée | Listener admin séparé ; IP du proxy Ingress exigée ; contexte `X-Ingress-Path` exigé ; mutations protégées par cookie+header CSRF comparés en temps constant ; CSP, `no-store`, `nosniff`, `no-referrer` | **Automatique** — `main.py`, `http_api.py`, `surfaces.py`, tests de surface et smoke CI |
 | Client réseau → surface publique MCP/événements | Appel sans identité, credential malformé/forgé/révoqué ou escalade d’action | Bearer opaque ; secret non stocké en clair, vérificateur HMAC avec pepper ; révocation des credentials ; permissions explicites et deny-by-default ; listener public ne contient aucune route d’administration | **Automatique** — `security.py`, `policy.py`, `mcp_api.py`, `surfaces.py`, `CredentialTests`, `PolicyTests`, smoke CI |
 | Identité → actions de la passerelle | Une identité obtient une action non accordée | Liste fermée de `KNOWN_ACTIONS` ; action inconnue ou absente de la politique refusée ; création d’identité persiste exactement les actions sélectionnées | **Automatique** — `policy.py`, `control_plane.py`, `PolicyTests` |
-| Inventaire MCP amont → autorisation | La simple découverte d’un outil accorde un droit ou une collision de noms mélange deux connecteurs | L’inventaire est uniquement un catalogue administrateur ; une tâche exige au moins un outil d’un connecteur `ready` ; sélection persistée par connecteur+outil+empreinte ; nom virtuel unique dérivé de la tâche et de la sélection | **Automatique/HAOS** — `create_task`, tests de dépendances ; collision de noms déjà exercée en recette. **À compléter** : lancer deux serveurs MCP factices indépendants dans la CI pour fermer explicitement ce gate |
+| Inventaire MCP amont → autorisation | La simple découverte d’un outil accorde un droit ou une collision de noms mélange deux connecteurs | L’inventaire est uniquement un catalogue administrateur ; une tâche exige au moins un outil d’un connecteur `ready` ; sélection persistée par connecteur+outil+empreinte ; nom virtuel unique dérivé de la tâche et de la sélection | **Automatique + HAOS** — `test_multi_connector_integration.py` lance deux processus FastMCP indépendants exposant tous deux `ha_get_addon`, compose une tâche avec les deux sélections, vérifie deux noms virtuels distincts, résout chaque capacité sous lease et confirme que chaque appel atteint son serveur d’origine ; la collision avait aussi été acceptée en recette HAOS |
 | Tâche/worker → invocation d’une capacité | Appel d’un outil non sélectionné, appel avant réclamation, réutilisation pour un autre travail ou après expiration | Publication limitée aux outils de la tâche ; invocation exige une tentative active appartenant à l’identité et un job `leased` ; résolution exacte par nom virtuel ; connecteur `ready`, activé, empreinte inchangée ; refus `capability_not_available` sinon | **Automatique** — `control_plane.py`, `control_plane_smoke.py`, tests `fixed_arguments_v1`/capability dans `test_foundation.py` |
 | Worker → lease de job | Vol de lease, double claim, prolongation indéfinie ou concurrence | Claim transactionnel `BEGIN IMMEDIATE` ; un lease actif par identité ; token de lease vérifié par HMAC ; propriété de l’identité vérifiée ; expiration 5 min avec plafond 30 min ; retries bornés puis dead letter | **Automatique** — `claim_job`, `_leased_attempt`, `control_plane_smoke.py`, tests concurrents |
 | Arguments agent → appel MCP amont | Injection d’un argument caché, inconnu ou hors schéma | Validation du schéma virtuel ; `additionalProperties: false` pour `fixed_arguments_v1` ; valeurs fixes injectées côté serveur après validation ; tentative de fournir une propriété cachée refusée ; objet fusionné revalidé contre le schéma amont complet | **Automatique + HAOS** — `fixed_arguments.py`, `json_contracts.py`, tests complets et recette HAOS 0.46.5 |
@@ -89,15 +88,14 @@ Les propriétés suivantes doivent rester vraies à chaque release :
 - La haute disponibilité multi-instance, l’exposition Internet directe et un
   rôle d’authorization server OAuth restent hors périmètre de cette release.
 
-### Gate encore ouvert
+### Statut des gates de menace
 
-La matrice elle-même est maintenant documentée. Le seul élément de preuve
-explicitement identifié ici comme encore ouvert est le gate du plan demandant
-**deux serveurs MCP factices indépendants exposant un nom d’outil identique dans
-un test reproductible**. Le dépôt possède déjà le fixture
-`scripts/fake_mcp_server.py` et la collision a été acceptée en recette ; la
-prochaine étape consiste à rendre cette preuve automatique et indépendante dans
-la CI, sans modifier le modèle d’autorisation.
+La matrice de menace est documentée et ses frontières de release disposent
+maintenant d’une preuve automatique, HAOS ou opérateur explicite. Le gate
+multi-connecteur est fermé par `test_multi_connector_integration.py` : la CI
+lance deux serveurs MCP factices indépendants avec le même outil amont,
+vérifie leurs deux capacités virtuelles distinctes et confirme le routage de
+chaque invocation vers le bon serveur. Le run CI `31954133521` est vert.
 
 ## English
 
@@ -118,8 +116,7 @@ would override that administrator decision.
 
 This document records implemented trust boundaries. **Automated** evidence is
 exercised by Python tests or CI; **HAOS** denotes an already executed manual
-acceptance on the real App; **To complete** marks a release gate that still needs
-an explicit reproducible proof.
+acceptance on the real App.
 
 ### Boundary matrix
 
@@ -129,7 +126,7 @@ an explicit reproducible proof.
 | Administrator browser → admin listener | Direct admin API access, Ingress bypass, or forged mutation | Separate admin listener; expected Ingress proxy IP and `X-Ingress-Path` required; mutations require matching CSRF cookie/header; CSP, `no-store`, `nosniff`, `no-referrer` | **Automated** — `main.py`, `http_api.py`, `surfaces.py`, surface tests and CI smoke |
 | Network client → public MCP/event surface | Missing, malformed, forged, or revoked credential; gateway-action escalation | Opaque Bearer; plaintext secret not retained, HMAC verifier with pepper; credential revocation; explicit deny-by-default actions; no admin routes on public listener | **Automated** — `security.py`, `policy.py`, `mcp_api.py`, `surfaces.py`, credential/policy tests and CI smoke |
 | Identity → gateway actions | Identity receives an action it was not granted | Closed `KNOWN_ACTIONS`; unknown or absent actions denied; identity creation persists exactly selected actions | **Automated** — `policy.py`, `control_plane.py`, `PolicyTests` |
-| Upstream inventory → authorization | Discovery grants capability or duplicate tool names collide across connectors | Inventory is administrative metadata only; task requires a selected tool from a ready connector; selection persists connector+tool+fingerprint; virtual name is unique to task/selection | **Automated/HAOS** — task dependency tests and accepted duplicate-name recipe. **To complete**: run two independent fake MCP servers in CI |
+| Upstream inventory → authorization | Discovery grants capability or duplicate tool names collide across connectors | Inventory is administrative metadata only; task requires a selected tool from a ready connector; selection persists connector+tool+fingerprint; virtual name is unique to task/selection | **Automated + HAOS** — `test_multi_connector_integration.py` launches two independent FastMCP processes that both expose `ha_get_addon`, composes one task with both selections, verifies two distinct virtual names, resolves each capability under the lease, and confirms that each call reaches its original server; duplicate names had also passed HAOS acceptance |
 | Task/worker → capability invocation | Invoke unselected tool, invoke before claim, reuse for another job, or invoke after expiry | Only task tools are advertised; resolution requires an identity-owned active lease and leased job; exact virtual name; enabled/ready connector; unchanged fingerprint; otherwise `capability_not_available` | **Automated** — `control_plane.py`, `control_plane_smoke.py`, capability/fixed-argument tests |
 | Worker → job lease | Lease theft, double claim, unbounded extension, race | Transactional claim; one active lease per identity; HMAC lease token; identity ownership check; 5-minute lease capped at 30 minutes; bounded retry/dead-letter | **Automated** — `claim_job`, `_leased_attempt`, `control_plane_smoke.py`, concurrency tests |
 | Agent arguments → upstream call | Hidden/unknown/out-of-schema argument injection | Effective-schema validation; `additionalProperties: false` for fixed mode; server-side fixed-value injection; hidden property submission rejected; merged call revalidated against full admitted upstream schema | **Automated + HAOS** — `fixed_arguments.py`, `json_contracts.py`, complete tests and 0.46.5 HAOS acceptance |
@@ -178,11 +175,11 @@ an explicit reproducible proof.
 - Multi-instance HA, direct Internet exposure, and acting as an OAuth
   authorization server remain outside this release scope.
 
-### Remaining open gate
+### Threat-gate status
 
-The matrix itself is now documented. The only evidence item explicitly left
-open here is the plan requirement for **two independent fake MCP servers exposing
-an overlapping upstream tool name in a reproducible test**. The repository
-already contains `scripts/fake_mcp_server.py`, and duplicate-name behavior has
-passed acceptance; the next release-gate step is to make that proof independent
-and automatic in CI without changing the authorization model.
+The threat matrix is documented and every release boundary now has automated,
+HAOS, or explicit operator evidence. The multi-connector gate is closed by
+`test_multi_connector_integration.py`: CI launches two independent fake MCP
+servers with the same upstream tool, verifies distinct virtual capabilities,
+and confirms that each invocation is routed to the correct server. CI run
+`31954133521` completed successfully.
