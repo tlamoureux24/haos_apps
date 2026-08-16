@@ -101,7 +101,7 @@ A reasoning model does not need to speak MCP itself; Agent Execution Plane handl
 
 Agent Execution Plane owns its reasoning/model-provider configuration because invoking a model is its core technical responsibility.
 
-The administrator may configure multiple local or remote model profiles, for example an Ollama model and one or more cloud models.
+The first release supports two provider adapter families: **Ollama-compatible** endpoints and **OpenAI-compatible** endpoints. Multiple model profiles may be configured across either family, including local and remote endpoints.
 
 Each model profile has at least these administrator-controlled properties:
 
@@ -200,7 +200,7 @@ If every enabled compatible model fails technically before any MCP action occurs
 
 ## 11. Per-model timeout
 
-Each model profile has its own configurable timeout.
+Each model profile has its own configurable timeout. A newly created model profile uses **5 minutes by default** unless the administrator chooses another value.
 
 The timeout covers that model's **entire attempt on the job**, from the start of the attempt until the model returns its final result or the attempt cannot continue. It does not reset at each reasoning turn or MCP exchange.
 
@@ -365,11 +365,11 @@ Before implementation begins, remaining work should stay concrete and limited to
 
 1. the exact Agent Control Plane integration endpoints/credentials using its existing job/MCP/report contracts;
 2. exact standalone API payloads and authentication;
-3. the provider-adapter interface and first provider implementations;
+3. the provider-adapter interface for the validated Ollama-compatible and OpenAI-compatible provider families;
 4. exact technical definitions used to distinguish pre-MCP provider failure from post-MCP failure;
 5. the exact MCP client/session mechanics for the supplied capability surface;
 6. model-profile UI fields and provider-specific configuration fields;
-7. exact timeout ranges/defaults;
+7. the allowed configurable timeout range around the validated **5-minute default**;
 8. exact persistence schema for active-interruption and pending-result recovery;
 9. HAOS listener/network/AppArmor boundaries;
 10. bounded logs, redaction and UI state presentation;
