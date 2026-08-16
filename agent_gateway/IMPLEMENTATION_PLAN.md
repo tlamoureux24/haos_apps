@@ -126,10 +126,18 @@ persists minimal `connectors.update` or `connectors.secret_rotate` denied audit
 entries before returning that unchanged refusal, without upstream discovery,
 connector mutation or requested endpoint/secret data in the audit.
 
-The next acceptance and release sequence is therefore:
+The real HAOS 0.46.7 acceptance is complete. The App upgraded and started
+cleanly with the existing 0.46.6 recipe data, both blocked connector mutations
+continued to return `connector_execution_active`, and each refusal produced the
+expected durable denied audit entry. The requested endpoint and Bearer token
+were not applied or disclosed, the connector and inventory remained unchanged,
+and the complete 23-entry audit chain verified successfully after the test. The
+bounded connector-editing and explicit secret-rotation lot is therefore accepted
+through 0.46.7.
 
-1. validate the 0.46.7 denied-audit traceability patch on HAOS;
-2. finish the public-release compatibility and threat-model gates listed below.
+The next release sequence is therefore:
+
+1. finish the public-release compatibility and threat-model gates listed below.
 
 ## Phase 0 — executable security baseline (completed foundation)
 
@@ -205,14 +213,15 @@ reinstall because the development database contains no useful user data.
 
 ## Phase 4 — administrator-managed MCP connectors
 
-Status: lifecycle implementation completed through 0.46.7; HAOS acceptance of
-editing and rotation passed on 0.46.6, with the denied-audit traceability patch
-awaiting acceptance on 0.46.7. Generic HA-MCP and fake MCP
-servers have been added through the same interface, and duplicate upstream tool
-names have been exercised without collision. Connector creation, checking,
-enable/disable, archival, inventory discovery and safe secret persistence are
-implemented. Bounded connector editing and explicit credential rotation are
-implemented without exposing an existing endpoint path/query or Bearer token.
+Status: lifecycle implementation completed and accepted on HAOS through 0.46.7.
+The full editing and rotation recipe passed on 0.46.6, and the denied-audit
+traceability patch passed its focused HAOS acceptance on 0.46.7. Generic HA-MCP
+and fake MCP servers have been added through the same interface, and duplicate
+upstream tool names have been exercised without collision. Connector creation,
+checking, enable/disable, archival, inventory discovery and safe secret
+persistence are implemented. Bounded connector editing and explicit credential
+rotation are implemented without exposing an existing endpoint path/query or
+Bearer token.
 
 Deliverables:
 
@@ -617,7 +626,13 @@ textual keys contained inside sensitive fixed JSON objects. Version 0.46.5 makes
 durable by committing them before the normalized error escapes the transaction;
 rejected arguments are never written to audit metadata and the chained audit
 remains valid. The complete fixed-argument path through 0.46.5 has passed its
-real HAOS recipe and a subsequent clean-install startup acceptance.
+real HAOS recipe and a subsequent clean-install startup acceptance. Version
+0.46.7 closes the remaining connector-mutation traceability gap by persisting
+minimal denied audit entries for active-execution endpoint changes and secret
+rotations before returning `connector_execution_active`. Its focused HAOS
+acceptance confirms both denials are durable, contain no requested endpoint or
+secret data, cause no connector mutation or upstream rediscovery, and preserve
+a valid complete audit chain.
 
 Keep and complete:
 
