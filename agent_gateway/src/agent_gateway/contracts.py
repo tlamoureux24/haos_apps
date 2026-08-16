@@ -36,6 +36,15 @@ class ConnectorIdRequest(StrictContract):
     connector_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
 
 
+class ConnectorUpdateRequest(ConnectorIdRequest):
+    display_name: str = Field(min_length=1, max_length=120)
+    url: str | None = Field(default=None, max_length=2048)
+
+
+class ConnectorSecretRotationRequest(ConnectorIdRequest):
+    bearer_token: str = Field(min_length=1, max_length=4096)
+
+
 class ConnectorEnabledRequest(ConnectorIdRequest):
     enabled: bool
 

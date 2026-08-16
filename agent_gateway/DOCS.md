@@ -28,6 +28,17 @@ Un serveur joignable qui publie un schéma refusé apparaît comme **invalide**
 dans **Connecteurs**, avec une explication et le code technique exact. Une
 erreur de transport reste distinguée comme connecteur inaccessible.
 
+Un connecteur actif peut être renommé ou recevoir un nouvel endpoint sans être
+supprimé. Une édition ordinaire conserve automatiquement son secret. L’action
+séparée **Rotation du secret** exige une nouvelle valeur non vide ; le secret
+actuel n’est jamais renvoyé ou prérempli. Un nouvel endpoint ou secret est
+redécouvert avant que le connecteur redevienne prêt. En cas d’échec, le dernier
+inventaire reste consultable mais le connecteur et ses tâches dépendantes
+restent indisponibles ; une rotation échouée ne remplace pas le secret stocké.
+Après une rotation réussie, Agent Gateway ne stocke et
+n’utilise plus l’ancien secret ; sa révocation côté serveur MCP reste à effectuer
+sur ce serveur si nécessaire.
+
 Le port `8098` dessert MCP et l’API d’événements authentifiée. Ne le publier que
 sur un réseau local ou VPN de confiance. L’administration reste confinée à
 l’Ingress Home Assistant.
@@ -67,6 +78,16 @@ explicitly before any MCP server call.
 A reachable server publishing a rejected schema appears as **invalid** under
 **Connectors**, with an explanation and the exact technical code. Transport
 failures remain separately identified as unreachable connectors.
+
+An active connector can be renamed or assigned a replacement endpoint without
+deleting it. Ordinary edits automatically retain its secret. The separate
+**Rotate secret** action requires a non-empty replacement; the current secret
+is never returned or prefilled. A new endpoint or secret is rediscovered before
+the connector becomes ready again. On failure the last inventory remains
+inspectable, while the connector and dependent tasks stay unavailable; a failed
+rotation does not replace the stored secret. After a successful rotation Agent
+Gateway no longer stores or uses the old secret;
+revoking it at the MCP server remains an upstream operation when required.
 
 Port `8098` serves MCP and the authenticated event API. Publish it only on a
 trusted LAN or VPN. Administration remains confined to Home Assistant Ingress.

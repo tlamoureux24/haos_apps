@@ -25,7 +25,9 @@ from agent_gateway.connectors import (
 from agent_gateway.http_api import (
     admin_check_connector,
     admin_create_connector,
+    admin_rotate_connector_secret,
     admin_set_connector_enabled,
+    admin_update_connector,
 )
 from agent_gateway.json_contracts import validate_json_schema
 from agent_gateway.mcp_api import capability_result_content
@@ -136,6 +138,26 @@ class AdministrationInterfaceTests(unittest.TestCase):
             "Code :",
         ):
             self.assertIn(contract, ADMIN_JS)
+
+    def test_connector_editing_and_secret_rotation_are_separate_bilingual_actions(self) -> None:
+        main_source = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "agent_gateway"
+            / "main.py"
+        ).read_text(encoding="utf-8")
+        for contract in (
+            'id="connector-edit"',
+            'id="connector-rotate-secret"',
+            'autocomplete="new-password"',
+            "/admin/api/v1/connectors/update",
+            "/admin/api/v1/connectors/rotate-secret",
+        ):
+            self.assertIn(contract, main_source + ADMIN_JS)
+        self.assertIn("The current secret is retained automatically and is never displayed.", ADMIN_JS)
+        self.assertIn("The existing secret cannot be displayed.", ADMIN_JS)
+        self.assertIn("url:url||null", ADMIN_JS)
+        self.assertNotIn("connector.bearer_token", ADMIN_JS)
 
 
 class AdministrationStatusTests(unittest.TestCase):
@@ -336,6 +358,282 @@ class ConnectorDiscoveryVisibilityTests(unittest.TestCase):
             self.assertEqual(connector["status"], "invalid")
             self.assertEqual(connector["last_error_code"], "unsupported_json_schema_keyword")
             self.assertNotIn("super-secret-bearer-token", "\n".join(enable_logs.output))
+
+    def test_ordinary_edit_preserves_secret_and_name_only_skips_discovery(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            control_plane, connector_id = self._connector(Path(directory))
+            with sqlite3.connect(control_plane.database_path) as connection:
+                protected_before = connection.execute(
+                    "SELECT protected_config FROM connectors WHERE id=?", (connector_id,)
+                ).fetchone()[0]
+            request = self.Request(
+                control_plane,
+                {"connector_id": connector_id, "display_name": "Renamed MCP", "url": None},
+            )
+            with patch(
+                "agent_gateway.http_api.discover_streamable_http", new=AsyncMock()
+            ) as discover:
+                response = self._run(admin_update_connector, request)
+            self.assertEqual(response.status_code, 200)
+            discover.assert_not_awaited()
+            self.assertEqual(
+                control_plane.connector_connection_config(connector_id),
+                ("https://mcp.example.test/mcp", "super-secret-bearer-token"),
+            )
+            with sqlite3.connect(control_plane.database_path) as connection:
+                protected_after = connection.execute(
+                    "SELECT protected_config FROM connectors WHERE id=?", (connector_id,)
+                ).fetchone()[0]
+            self.assertEqual(protected_before, protected_after)
+            connector = control_plane.list_connectors()[0]
+            self.assertEqual(connector["display_name"], "Renamed MCP")
+            self.assertTrue(connector["has_secret"])
+            serialized = json.dumps(connector) + response.body.decode()
+            self.assertNotIn("super-secret-bearer-token", serialized)
+            self.assertTrue(control_plane.verify_audit_chain()["valid"])
+
+            no_secret_id = control_plane.create_connector(
+                "No secret MCP",
+                "https://open.example.test/mcp",
+                "",
+                [],
+                "no-secret",
+            )
+            no_secret = next(
+                item for item in control_plane.list_connectors() if item["id"] == no_secret_id
+            )
+            self.assertFalse(no_secret["has_secret"])
+
+    def test_secret_rotation_replaces_gateway_copy_without_disclosure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            control_plane, connector_id = self._connector(Path(directory))
+            old_secret = "super-secret-bearer-token"
+            new_secret = "new-rotated-secret-token"
+            stale_url, stale_secret, stale_protected = control_plane.connector_change_config(
+                connector_id
+            )
+            inventory = [
+                {
+                    "name": "inspect",
+                    "description": "Inspect",
+                    "input_schema": {"type": "object"},
+                    "schema_fingerprint": "a" * 64,
+                }
+            ]
+            request = self.Request(
+                control_plane,
+                {"connector_id": connector_id, "bearer_token": new_secret},
+            )
+            with patch(
+                "agent_gateway.http_api.discover_streamable_http",
+                new=AsyncMock(return_value=inventory),
+            ) as discover:
+                response = self._run(admin_rotate_connector_secret, request)
+            self.assertEqual(response.status_code, 200)
+            discover.assert_awaited_once_with("https://mcp.example.test/mcp", new_secret)
+            self.assertEqual(
+                control_plane.connector_connection_config(connector_id),
+                ("https://mcp.example.test/mcp", new_secret),
+            )
+            check = self.Request(control_plane, {"connector_id": connector_id})
+            with patch(
+                "agent_gateway.http_api.discover_streamable_http",
+                new=AsyncMock(return_value=inventory),
+            ) as rediscover:
+                check_response = self._run(admin_check_connector, check)
+            self.assertEqual(check_response.status_code, 200)
+            rediscover.assert_awaited_once_with(
+                "https://mcp.example.test/mcp", new_secret
+            )
+            public_objects = json.dumps(
+                {
+                    "response": json.loads(response.body),
+                    "connectors": control_plane.list_connectors(),
+                    "audit": control_plane.list_audit_entries(),
+                    "tasks": control_plane.list_tasks(),
+                }
+            )
+            self.assertNotIn(old_secret, public_objects)
+            self.assertNotIn(new_secret, public_objects)
+            with sqlite3.connect(control_plane.database_path) as connection:
+                database_text = " ".join(
+                    str(value)
+                    for row in connection.iterdump()
+                    for value in (row,)
+                )
+            self.assertNotIn(old_secret, database_text)
+            self.assertNotIn(new_secret, database_text)
+            empty_rotation = self.Request(
+                control_plane, {"connector_id": connector_id, "bearer_token": ""}
+            )
+            empty_response = self._run(admin_rotate_connector_secret, empty_rotation)
+            self.assertEqual(empty_response.status_code, 422)
+            self.assertEqual(control_plane.connector_connection_config(connector_id)[1], new_secret)
+            with self.assertRaisesRegex(ValueError, "connector_changed"):
+                control_plane.update_connector(
+                    connector_id,
+                    "Stale endpoint edit",
+                    "https://stale.example.test/mcp",
+                    stale_secret,
+                    stale_protected,
+                    True,
+                    inventory,
+                    None,
+                    "stale-update",
+                )
+            self.assertEqual(stale_url, "https://mcp.example.test/mcp")
+            self.assertEqual(control_plane.connector_connection_config(connector_id)[1], new_secret)
+            self.assertTrue(control_plane.verify_audit_chain()["valid"])
+
+    def test_endpoint_and_rotation_failures_are_persisted_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            control_plane, connector_id = self._connector(Path(directory))
+            task_id = control_plane.create_task(
+                "Inspect",
+                "inspect",
+                "Inspect the service.",
+                1,
+                [{"connector_id": connector_id, "tool_name": "inspect"}],
+                "task",
+            )
+            update = self.Request(
+                control_plane,
+                {
+                    "connector_id": connector_id,
+                    "display_name": "Moved MCP",
+                    "url": "https://moved.example.test/mcp",
+                },
+            )
+            with patch(
+                "agent_gateway.http_api.discover_streamable_http",
+                new=AsyncMock(side_effect=OSError("private network detail")),
+            ):
+                response = self._run(admin_update_connector, update)
+            self.assertEqual(response.status_code, 503)
+            connector = control_plane.list_connectors()[0]
+            self.assertEqual(connector["status"], "unreachable")
+            self.assertEqual(connector["last_error_code"], "connection_failed")
+            self.assertEqual(connector["tool_count"], 1)
+            self.assertEqual(control_plane.list_tasks()[0]["status"], "unavailable")
+            self.assertEqual(
+                control_plane.connector_connection_config(connector_id),
+                ("https://moved.example.test/mcp", "super-secret-bearer-token"),
+            )
+
+            new_secret = "rejected-new-secret"
+            rotate = self.Request(
+                control_plane,
+                {"connector_id": connector_id, "bearer_token": new_secret},
+            )
+            rejection = ConnectorSchemaRejected(
+                "unsupported_json_schema_keyword", "inspect"
+            )
+            with self.assertLogs("agent_gateway.connectors", level="WARNING") as logs, patch(
+                "agent_gateway.http_api.discover_streamable_http",
+                new=AsyncMock(side_effect=rejection),
+            ):
+                response = self._run(admin_rotate_connector_secret, rotate)
+            self.assertEqual(response.status_code, 422)
+            connector = control_plane.list_connectors()[0]
+            self.assertEqual(connector["status"], "invalid")
+            self.assertEqual(
+                connector["last_error_code"], "unsupported_json_schema_keyword"
+            )
+            self.assertEqual(
+                control_plane.connector_connection_config(connector_id)[1],
+                "super-secret-bearer-token",
+            )
+            self.assertNotIn(new_secret, "\n".join(logs.output))
+
+            inventory = [
+                {
+                    "name": "inspect",
+                    "description": "Inspect",
+                    "input_schema": {"type": "object"},
+                    "schema_fingerprint": "a" * 64,
+                }
+            ]
+            check = self.Request(control_plane, {"connector_id": connector_id})
+            with patch(
+                "agent_gateway.http_api.discover_streamable_http",
+                new=AsyncMock(return_value=inventory),
+            ):
+                response = self._run(admin_check_connector, check)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(control_plane.list_tasks()[0]["id"], task_id)
+            self.assertEqual(control_plane.list_tasks()[0]["status"], "ready")
+            changed_inventory = [{**inventory[0], "schema_fingerprint": "b" * 64}]
+            changed = self.Request(
+                control_plane,
+                {
+                    "connector_id": connector_id,
+                    "display_name": "Moved again MCP",
+                    "url": "https://moved-again.example.test/mcp",
+                },
+            )
+            with patch(
+                "agent_gateway.http_api.discover_streamable_http",
+                new=AsyncMock(return_value=changed_inventory),
+            ):
+                response = self._run(admin_update_connector, changed)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(control_plane.list_connectors()[0]["status"], "ready")
+            self.assertEqual(control_plane.list_tasks()[0]["status"], "unavailable")
+            self.assertIn(
+                "tool_schema_changed:Moved again MCP.inspect",
+                control_plane.list_tasks()[0]["dependency_failures"],
+            )
+            audit_text = json.dumps(control_plane.list_audit_entries())
+            self.assertNotIn("super-secret-bearer-token", audit_text)
+            self.assertNotIn(new_secret, audit_text)
+            self.assertTrue(control_plane.verify_audit_chain()["valid"])
+
+    def test_endpoint_change_and_rotation_are_blocked_during_active_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            control_plane, connector_id = self._connector(Path(directory))
+            task_id = control_plane.create_task(
+                "Inspect",
+                "inspect",
+                "Inspect the service.",
+                1,
+                [{"connector_id": connector_id, "tool_name": "inspect"}],
+                "task",
+            )
+            control_plane.enqueue_manual_task(task_id, {}, "run")
+            update = self.Request(
+                control_plane,
+                {
+                    "connector_id": connector_id,
+                    "display_name": "Test MCP",
+                    "url": "https://other.example.test/mcp",
+                },
+            )
+            rotate = self.Request(
+                control_plane,
+                {"connector_id": connector_id, "bearer_token": "unused-new-secret"},
+            )
+            with patch(
+                "agent_gateway.http_api.discover_streamable_http", new=AsyncMock()
+            ) as discover:
+                rename = self.Request(
+                    control_plane,
+                    {
+                        "connector_id": connector_id,
+                        "display_name": "Renamed during execution",
+                        "url": None,
+                    },
+                )
+                rename_response = self._run(admin_update_connector, rename)
+                update_response = self._run(admin_update_connector, update)
+                rotate_response = self._run(admin_rotate_connector_secret, rotate)
+            self.assertEqual(rename_response.status_code, 200)
+            self.assertEqual(update_response.status_code, 409)
+            self.assertEqual(rotate_response.status_code, 409)
+            discover.assert_not_awaited()
+            self.assertEqual(
+                control_plane.connector_connection_config(connector_id),
+                ("https://mcp.example.test/mcp", "super-secret-bearer-token"),
+            )
 
 class DatabaseReadinessTests(unittest.TestCase):
     def test_missing_database_is_not_ready(self) -> None:

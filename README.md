@@ -49,7 +49,8 @@ Fonctionnalités principales :
 - file persistante, rapports structurés, rétention et audit chaîné ;
 - archivage réversible des tâches et connecteurs sans perte d’historique ;
 - interface Ingress bilingue français/anglais avec métriques opérationnelles ;
-- secrets des connecteurs conservés dans la passerelle et jamais transmis aux agents.
+- secrets des connecteurs conservés dans la passerelle, modifiables uniquement
+  par une rotation explicite et jamais transmis aux agents.
 
 Documentation détaillée :
 
@@ -282,7 +283,8 @@ Main features:
 - persistent queue, structured reports, retention, and hash-chained audit;
 - reversible task and connector archival without losing history;
 - bilingual French/English Ingress interface with operational metrics;
-- connector secrets remain inside the gateway and are never sent to agents.
+- connector secrets remain inside the gateway, can only be replaced through an
+  explicit rotation, and are never sent to agents.
 
 Detailed documentation:
 

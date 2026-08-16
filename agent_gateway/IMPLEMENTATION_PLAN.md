@@ -106,14 +106,22 @@ valid chained audit trail. Versions 0.46.3 and 0.46.4 closed the upstream-echo
 redaction edge cases, and version 0.46.5 closed the transactional denied-audit
 rollback discovered by the real HAOS recipe.
 
-The next implementation and acceptance sequence is therefore:
+Version 0.46.6 implements bounded connector editing and explicit connector-
+secret rotation without a database-schema change. Ordinary edits never carry a
+Bearer token and retain the protected secret automatically. Endpoint replacement
+and explicit non-empty secret rotation rediscover the upstream inventory; a
+transport or schema failure preserves the previous inventory but makes the
+connector and dependent tasks fail closed; a failed rotation does not replace
+the stored secret. Successful rotation replaces the copy stored and used by
+Agent Gateway without claiming to revoke the old token at the upstream server.
+Administration responses expose only a `has_secret`
+boolean, and update/rotation audit entries contain safe metadata only.
 
-1. complete bounded connector editing and explicit connector-secret rotation;
-2. validate that connector-editing/rotation behavior on HAOS, including
+The next acceptance and release sequence is therefore:
+
+1. validate connector editing and rotation on HAOS, including
    rediscovery, fail-closed dependency behavior, secret non-disclosure and audit;
-3. synchronize the repository documentation with the authorization model above
-   and finish the public-release compatibility and threat-model gates listed
-   below.
+2. finish the public-release compatibility and threat-model gates listed below.
 
 ## Phase 0 — executable security baseline (completed foundation)
 
@@ -189,12 +197,13 @@ reinstall because the development database contains no useful user data.
 
 ## Phase 4 — administrator-managed MCP connectors
 
-Status: core lifecycle completed and accepted. Generic HA-MCP and fake MCP
+Status: lifecycle implementation completed through 0.46.6; HAOS acceptance of
+editing and rotation remains pending. Generic HA-MCP and fake MCP
 servers have been added through the same interface, and duplicate upstream tool
 names have been exercised without collision. Connector creation, checking,
 enable/disable, archival, inventory discovery and safe secret persistence are
-implemented. Full connector editing and explicit credential rotation are the
-next bounded follow-up work.
+implemented. Bounded connector editing and explicit credential rotation are
+implemented without exposing an existing endpoint path/query or Bearer token.
 
 Deliverables:
 

@@ -134,21 +134,28 @@ class ControlPlane:
         with connect(self.database_path) as connection:
             rows = connection.execute(
                 """
-                SELECT c.id,c.display_name,c.transport,c.display_endpoint,c.status,c.enabled,c.archived_at,
+                SELECT c.id,c.display_name,c.transport,c.protected_config,c.display_endpoint,c.status,c.enabled,c.archived_at,
                        c.created_at,c.updated_at,c.last_checked_at,c.last_error_code,
                        c.inventory_revision,count(t.name) AS tool_count
                 FROM connectors c LEFT JOIN connector_tools t ON t.connector_id=c.id
                 GROUP BY c.id ORDER BY c.display_name COLLATE NOCASE
                 """
             ).fetchall()
-        return [
-            {
-                **dict(row),
-                "enabled": bool(row["enabled"]),
-                "has_secret": True,
-            }
-            for row in rows
-        ]
+        connectors = []
+        for row in rows:
+            item = dict(row)
+            protected = item.pop("protected_config")
+            try:
+                _, bearer_token = reveal_connector_config(self.pepper, protected)
+                has_secret = bool(bearer_token)
+            except ValueError:
+                # A corrupt protected payload is never exposed. Treat its secret
+                # state as opaque while the existing connection path fails closed.
+                has_secret = True
+            item["enabled"] = bool(row["enabled"])
+            item["has_secret"] = has_secret
+            connectors.append(item)
+        return connectors
 
     def list_connector_tools(self, connector_id: str) -> list[dict[str, object]]:
         with connect(self.database_path) as connection:
@@ -799,6 +806,166 @@ class ControlPlane:
             row = connection.execute("SELECT protected_config FROM connectors WHERE id=?", (connector_id,)).fetchone()
         return None if row is None else reveal_connector_config(self.pepper, row["protected_config"])
 
+    def connector_change_config(self, connector_id: str) -> tuple[str, str, str] | None:
+        with connect(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT protected_config,archived_at FROM connectors WHERE id=?",
+                (connector_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            if row["archived_at"] is not None:
+                raise ValueError("connector_archived")
+        url, bearer_token = reveal_connector_config(self.pepper, row["protected_config"])
+        return url, bearer_token, row["protected_config"]
+
+    def connector_has_active_jobs(self, connector_id: str) -> bool:
+        with connect(self.database_path) as connection:
+            return self._connector_has_active_jobs(connection, connector_id)
+
+    def update_connector(
+        self,
+        connector_id: str,
+        display_name: str,
+        url: str,
+        bearer_token: str,
+        expected_protected_config: str,
+        endpoint_changed: bool,
+        inventory: list[dict[str, object]] | None,
+        error_code: str | None,
+        correlation_id: str,
+    ) -> bool:
+        name = display_name.strip()
+        if not name:
+            raise ValueError("invalid_connector_name")
+        normalized_url = validate_streamable_http_url(url)
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT display_name,protected_config,enabled,archived_at FROM connectors WHERE id=?", (connector_id,)
+            ).fetchone()
+            if row is None:
+                return False
+            if row["archived_at"] is not None:
+                raise ValueError("connector_archived")
+            if endpoint_changed and self._connector_has_active_jobs(connection, connector_id):
+                raise ValueError("connector_execution_active")
+            if endpoint_changed and not hmac.compare_digest(
+                row["protected_config"], expected_protected_config
+            ):
+                raise ValueError("connector_changed")
+            fields = ["display_name"] if name != row["display_name"] else []
+            if endpoint_changed:
+                fields.append("endpoint")
+                protected = protect_connector_config(self.pepper, normalized_url, bearer_token)
+                if inventory is None:
+                    persisted_error = error_code or "connection_failed"
+                    status = "invalid" if persisted_error in SCHEMA_REJECTION_CODES else "unreachable"
+                    connection.execute(
+                        """UPDATE connectors SET display_name=?,protected_config=?,display_endpoint=?,status=?,
+                           updated_at=?,last_checked_at=?,last_error_code=? WHERE id=?""",
+                        (name, protected, connector_display_endpoint(normalized_url), status, now, now, persisted_error, connector_id),
+                    )
+                    reason = "schema_rejected" if status == "invalid" else "unreachable"
+                else:
+                    status = "ready" if row["enabled"] else "disabled"
+                    connection.execute(
+                        """UPDATE connectors SET display_name=?,protected_config=?,display_endpoint=?,status=?,
+                           updated_at=?,last_checked_at=?,last_error_code=NULL,inventory_revision=inventory_revision+1 WHERE id=?""",
+                        (name, protected, connector_display_endpoint(normalized_url), status, now, now, connector_id),
+                    )
+                    self._replace_connector_tools(connection, connector_id, inventory, now)
+                    reason = "configuration_updated"
+            else:
+                connection.execute(
+                    "UPDATE connectors SET display_name=?,updated_at=? WHERE id=?",
+                    (name, now, connector_id),
+                )
+                reason = "configuration_updated"
+            self._append_audit(
+                connection,
+                actor_identity_id=None,
+                credential_id=None,
+                action="connectors.update",
+                target_type="connector",
+                target_id=connector_id,
+                decision="allowed" if error_code is None else "recorded",
+                reason_code=reason,
+                correlation_id=correlation_id,
+                metadata={
+                    "changed_fields": fields,
+                    "rediscovered": endpoint_changed,
+                    "tool_count": len(inventory or []) if endpoint_changed else None,
+                    "error_code": error_code,
+                },
+            )
+        return True
+
+    def rotate_connector_secret(
+        self,
+        connector_id: str,
+        url: str,
+        bearer_token: str,
+        expected_protected_config: str,
+        inventory: list[dict[str, object]] | None,
+        error_code: str | None,
+        correlation_id: str,
+    ) -> bool:
+        if not bearer_token:
+            raise ValueError("invalid_connector_secret")
+        normalized_url = validate_streamable_http_url(url)
+        protected = protect_connector_config(self.pepper, normalized_url, bearer_token)
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT protected_config,enabled,archived_at FROM connectors WHERE id=?", (connector_id,)
+            ).fetchone()
+            if row is None:
+                return False
+            if row["archived_at"] is not None:
+                raise ValueError("connector_archived")
+            if self._connector_has_active_jobs(connection, connector_id):
+                raise ValueError("connector_execution_active")
+            if not hmac.compare_digest(row["protected_config"], expected_protected_config):
+                raise ValueError("connector_changed")
+            if inventory is None:
+                persisted_error = error_code or "connection_failed"
+                status = "invalid" if persisted_error in SCHEMA_REJECTION_CODES else "unreachable"
+                connection.execute(
+                    """UPDATE connectors SET status=?,updated_at=?,last_checked_at=?,
+                       last_error_code=? WHERE id=?""",
+                    (status, now, now, persisted_error, connector_id),
+                )
+                reason = "schema_rejected" if status == "invalid" else "unreachable"
+            else:
+                status = "ready" if row["enabled"] else "disabled"
+                connection.execute(
+                    """UPDATE connectors SET protected_config=?,status=?,updated_at=?,last_checked_at=?,
+                       last_error_code=NULL,inventory_revision=inventory_revision+1 WHERE id=?""",
+                    (protected, status, now, now, connector_id),
+                )
+                self._replace_connector_tools(connection, connector_id, inventory, now)
+                reason = "secret_rotated"
+            self._append_audit(
+                connection,
+                actor_identity_id=None,
+                credential_id=None,
+                action="connectors.secret_rotate",
+                target_type="connector",
+                target_id=connector_id,
+                decision="allowed" if error_code is None else "recorded",
+                reason_code=reason,
+                correlation_id=correlation_id,
+                metadata={
+                    "secret_replaced": inventory is not None,
+                    "tool_count": len(inventory or []),
+                    "error_code": error_code,
+                },
+            )
+        return True
+
     def refresh_connector(self, connector_id: str, inventory: list[dict[str, object]] | None, error_code: str | None, correlation_id: str) -> bool:
         now = utc_now()
         with connect(self.database_path) as connection:
@@ -835,12 +1002,7 @@ class ControlPlane:
             connection.execute("BEGIN IMMEDIATE")
             if connection.execute("SELECT 1 FROM connectors WHERE id=?", (connector_id,)).fetchone() is None:
                 return False
-            active = connection.execute(
-                """SELECT 1 FROM jobs j JOIN task_tool_selections s ON s.task_revision_id=j.task_revision_id
-                   WHERE s.connector_id=? AND j.state IN ('queued','leased') LIMIT 1""",
-                (connector_id,),
-            ).fetchone()
-            if archived and active:
+            if archived and self._connector_has_active_jobs(connection, connector_id):
                 raise ValueError("connector_execution_active")
             connection.execute("UPDATE connectors SET enabled=0,status='disabled',archived_at=?,updated_at=? WHERE id=?", (now if archived else None, now, connector_id))
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.archive" if archived else "connectors.restore", target_type="connector", target_id=connector_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
@@ -857,6 +1019,14 @@ class ControlPlane:
                 return "not_found"
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="connectors.delete", target_type="connector", target_id=connector_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
         return "deleted"
+
+    @staticmethod
+    def _connector_has_active_jobs(connection: sqlite3.Connection, connector_id: str) -> bool:
+        return connection.execute(
+            """SELECT 1 FROM jobs j JOIN task_tool_selections s ON s.task_revision_id=j.task_revision_id
+               WHERE s.connector_id=? AND j.state IN ('queued','leased') LIMIT 1""",
+            (connector_id,),
+        ).fetchone() is not None
 
     @staticmethod
     def _replace_connector_tools(connection: sqlite3.Connection, connector_id: str, inventory: list[dict[str, object]], now: str) -> None:

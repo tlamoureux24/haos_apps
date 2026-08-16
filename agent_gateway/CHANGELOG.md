@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.46.6
+
+- Add bounded editing of connector display names and optional endpoint
+  replacement without ever returning the protected endpoint or Bearer token.
+- Preserve the existing Bearer token during ordinary edits and provide a
+  separate explicit action to configure or rotate it.
+- Rediscover connectors after endpoint replacement or secret rotation, retain
+  the previous inventory on failure and make dependent tasks fail closed until
+  their exact tool fingerprints are available again.
+- Audit connector updates and secret rotations using safe metadata only, and
+  expose only whether a connector currently has a configured secret.
+
 ## 0.46.5
 
 - Commit denied capability-invocation audit entries before returning

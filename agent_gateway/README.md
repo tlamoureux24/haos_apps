@@ -76,6 +76,23 @@ restored in a disabled state and must be explicitly reactivated. Agent Gateway
 refuses to archive a task or connector while related work is queued or leased.
 Archiving a task also pauses its schedules and event triggers.
 
+An active connector can be edited without deleting its tasks. Ordinary editing
+can change its display name and optionally replace its endpoint; leaving the new
+endpoint empty retains the protected endpoint and Bearer token already stored by
+the gateway. The existing endpoint path/query and Bearer token are never
+returned to the browser. Use the separate **Rotate secret** action to configure
+or replace a Bearer token. A blank rotation is rejected and never clears the
+current secret implicitly.
+
+Endpoint replacement and secret rotation always run MCP initialization and tool
+discovery again. Network or schema failure retains the last inventory for
+inspection but marks the connector unavailable. Dependent tasks fail closed
+until the connector is ready and every selected tool still has its recorded
+fingerprint. A failed rotation does not replace the stored secret. A successful
+rotation replaces the gateway's protected copy; the
+old secret is no longer stored or used by Agent Gateway. Revoking that token at
+the upstream server remains an upstream administration operation.
+
 ## Language
 
 On first use the interface follows a supported browser preference (`fr` or

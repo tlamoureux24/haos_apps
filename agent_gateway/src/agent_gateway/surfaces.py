@@ -16,6 +16,8 @@ def exposed_paths(surface: str) -> tuple[str, ...]:
             "/admin/api/v1/status",
             "/admin/api/v1/connectors",
             "/admin/api/v1/connectors/check",
+            "/admin/api/v1/connectors/update",
+            "/admin/api/v1/connectors/rotate-secret",
             "/admin/api/v1/connectors/delete",
             "/admin/api/v1/connectors/enabled",
             "/admin/api/v1/connectors/archived",

@@ -14,6 +14,8 @@ from starlette.responses import JSONResponse, Response
 
 from agent_gateway.contracts import (
     ConnectorCreateRequest,
+    ConnectorUpdateRequest,
+    ConnectorSecretRotationRequest,
     ConnectorEnabledRequest,
     ConnectorArchivedRequest,
     ConnectorIdRequest,
@@ -38,6 +40,7 @@ from agent_gateway.contracts import (
     RetentionRunRequest,
 )
 from agent_gateway.connectors import (
+    SCHEMA_REJECTION_CODES,
     ConnectorSchemaRejected,
     discover_streamable_http,
     validate_streamable_http_url,
@@ -473,6 +476,146 @@ async def admin_check_connector(request: Request) -> JSONResponse:
     except (OverflowError, ValueError, ValidationError):
         return error_response(422, "invalid_request", correlation_id)
     return JSONResponse({"connector_id": contract.connector_id, "status": "ready", "tool_count": len(tools)})
+
+
+async def admin_update_connector(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, ConnectorUpdateRequest)
+        config = await run_in_threadpool(
+            request.app.state.control_plane.connector_change_config,
+            contract.connector_id,
+        )
+        if config is None:
+            return error_response(404, "connector_not_found", correlation_id)
+        current_url, bearer_token, expected_protected_config = config
+        target_url = validate_streamable_http_url(contract.url) if contract.url else current_url
+        endpoint_changed = target_url != current_url
+        tools = None
+        discovery_error = None
+        if endpoint_changed:
+            if await run_in_threadpool(
+                request.app.state.control_plane.connector_has_active_jobs,
+                contract.connector_id,
+            ):
+                return error_response(409, "connector_execution_active", correlation_id)
+            try:
+                tools = await discover_streamable_http(target_url, bearer_token)
+            except ConnectorSchemaRejected as error:
+                discovery_error = error.code
+                log_schema_rejection(contract.connector_id, error, correlation_id)
+            except Exception:
+                discovery_error = "connection_failed"
+        found = await run_in_threadpool(
+            request.app.state.control_plane.update_connector,
+            contract.connector_id,
+            contract.display_name,
+            target_url,
+            bearer_token,
+            expected_protected_config,
+            endpoint_changed,
+            tools,
+            discovery_error,
+            correlation_id,
+        )
+    except OverflowError:
+        return error_response(413, "body_too_large", correlation_id)
+    except sqlite3.IntegrityError:
+        return error_response(409, "connector_name_conflict", correlation_id)
+    except ValueError as error:
+        code = str(error)
+        if code in {"connector_archived", "connector_execution_active", "connector_changed"}:
+            return error_response(409, code, correlation_id)
+        return error_response(422, "invalid_connector", correlation_id)
+    except ValidationError:
+        return error_response(422, "invalid_connector", correlation_id)
+    if not found:
+        return error_response(404, "connector_not_found", correlation_id)
+    if discovery_error in SCHEMA_REJECTION_CODES:
+        return error_response(422, discovery_error, correlation_id)
+    if discovery_error:
+        return error_response(503, "connector_unreachable", correlation_id)
+    connector = next(
+        item
+        for item in await run_in_threadpool(request.app.state.control_plane.list_connectors)
+        if item["id"] == contract.connector_id
+    )
+    return JSONResponse(
+        {
+            "connector_id": contract.connector_id,
+            "status": connector["status"],
+            "tool_count": connector["tool_count"],
+        }
+    )
+
+
+async def admin_rotate_connector_secret(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, ConnectorSecretRotationRequest)
+        config = await run_in_threadpool(
+            request.app.state.control_plane.connector_change_config,
+            contract.connector_id,
+        )
+        if config is None:
+            return error_response(404, "connector_not_found", correlation_id)
+        url, _, expected_protected_config = config
+        if await run_in_threadpool(
+            request.app.state.control_plane.connector_has_active_jobs,
+            contract.connector_id,
+        ):
+            return error_response(409, "connector_execution_active", correlation_id)
+        tools = None
+        discovery_error = None
+        try:
+            tools = await discover_streamable_http(url, contract.bearer_token)
+        except ConnectorSchemaRejected as error:
+            discovery_error = error.code
+            log_schema_rejection(contract.connector_id, error, correlation_id)
+        except Exception:
+            discovery_error = "connection_failed"
+        found = await run_in_threadpool(
+            request.app.state.control_plane.rotate_connector_secret,
+            contract.connector_id,
+            url,
+            contract.bearer_token,
+            expected_protected_config,
+            tools,
+            discovery_error,
+            correlation_id,
+        )
+    except OverflowError:
+        return error_response(413, "body_too_large", correlation_id)
+    except ValueError as error:
+        code = str(error)
+        if code in {"connector_archived", "connector_execution_active", "connector_changed"}:
+            return error_response(409, code, correlation_id)
+        return error_response(422, "invalid_connector_secret", correlation_id)
+    except ValidationError:
+        return error_response(422, "invalid_connector_secret", correlation_id)
+    if not found:
+        return error_response(404, "connector_not_found", correlation_id)
+    if discovery_error in SCHEMA_REJECTION_CODES:
+        return error_response(422, discovery_error, correlation_id)
+    if discovery_error:
+        return error_response(503, "connector_unreachable", correlation_id)
+    connector = next(
+        item
+        for item in await run_in_threadpool(request.app.state.control_plane.list_connectors)
+        if item["id"] == contract.connector_id
+    )
+    return JSONResponse(
+        {
+            "connector_id": contract.connector_id,
+            "status": connector["status"],
+            "tool_count": connector["tool_count"],
+            "has_secret": connector["has_secret"],
+        }
+    )
 
 
 async def admin_set_connector_enabled(request: Request) -> JSONResponse:

@@ -79,6 +79,24 @@ explicite. Agent Gateway refuse l’archivage tant qu’un travail associé est 
 attente ou loué. Archiver une tâche met aussi en pause ses planifications et ses
 déclencheurs.
 
+Un connecteur actif peut être modifié sans supprimer ses tâches. L’édition
+ordinaire peut changer son nom et, facultativement, remplacer son endpoint ;
+laisser la nouvelle URL vide conserve automatiquement l’endpoint protégé et le
+jeton Bearer déjà stockés par la passerelle. Le chemin ou la query de l’endpoint
+existant et son jeton Bearer ne sont jamais renvoyés au navigateur. L’action
+séparée **Rotation du secret** permet d’ajouter ou remplacer un jeton Bearer. Une
+rotation vide est refusée et ne supprime jamais implicitement le secret actuel.
+
+Le remplacement de l’endpoint et la rotation du secret relancent toujours
+l’initialisation MCP et la découverte des outils. Une panne réseau ou un schéma
+refusé conserve le dernier inventaire pour inspection, mais rend le connecteur
+indisponible. Les tâches dépendantes échouent alors de façon fermée jusqu’à ce
+que le connecteur soit prêt et que chaque outil conserve exactement son
+empreinte enregistrée. Une rotation échouée ne remplace pas le secret stocké.
+Après une rotation réussie, l’ancienne valeur n’est plus
+stockée ni utilisée par Agent Gateway. Sa révocation auprès du serveur MCP reste
+une opération d’administration de ce serveur amont.
+
 ## Langue
 
 Au premier affichage, l’interface suit la préférence `fr` ou `en` du navigateur
