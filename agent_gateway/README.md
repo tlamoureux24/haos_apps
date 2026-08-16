@@ -6,6 +6,14 @@ virtual tools selected for a task, keeps upstream credentials inside the
 gateway, queues executions durably, and stores structured reports and an
 append-only audit trail.
 
+It acts as a generic application firewall for MCP: deny by default, explicit
+administrator configuration is the authorization decision. A discovered tool
+that is not selected remains unusable; a tool explicitly selected in a valid
+task is authorized only within the exact envelope of that task, revision,
+identity, effective schema, and optional argument restrictions. Agent Gateway
+does not create a separate authorization class based on whether a tool is
+presented as read, write, or administrative.
+
 French documentation: [README.fr.md](README.fr.md).
 
 ## Current capabilities
@@ -107,6 +115,12 @@ remain individually retained and audited.
 
 - the application listeners run as an unprivileged user under AppArmor;
 - administration is isolated from the public MCP/event listener;
+- discovery of a tool grants no execution right;
+- only tools explicitly selected in the valid task revision are exposed and
+  invocable by the authorized identity;
+- explicit administrator selection of a tool is its authorization, regardless
+  of any semantic read, write, or administrative label;
+- any tool or argument outside the configured capability envelope is rejected;
 - connector secrets are encrypted at rest and never exposed to agents;
 - sensitive fixed arguments are encrypted at rest and always redacted;
 - fixed arguments are absent from the virtual schema, cannot be overridden by
@@ -128,8 +142,10 @@ remain individually retained and audited.
   immediately after any inconsistency without replacing the last valid
   checkpoint when it fails.
 
-Write-capable or corrective operations remain deferred pending a separate
-threat review, explicit approvals, and fail-safe policy design.
+The security model does not rely on a second transactional approval step: the
+gateway strictly enforces the policy explicitly configured by the administrator
+and fails closed whenever it can no longer prove that an invocation remains
+inside that envelope.
 
 ## Test MCP server
 
@@ -149,6 +165,5 @@ Stop the server and remove any temporary firewall rule after the test.
 
 - Streamable HTTP is the only connector transport currently supported;
 - no autonomous worker is bundled: an external MCP client must process jobs;
-- there are no write-operation approvals yet;
 - multi-instance/high-availability deployment is not supported;
 - the App remains experimental and is not intended for internet exposure.
