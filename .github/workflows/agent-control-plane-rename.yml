@@ -44,6 +44,7 @@ jobs:
               ("Agent Gateway", "Agent Control Plane"),
               ("gateway.status.read", "control_plane.status.read"),
               ("agw_", "acp_"),
+              ("agw-", "acp-"),
           )
 
           changed = []
@@ -90,7 +91,7 @@ jobs:
           text = changelog.read_text(encoding="utf-8")
           marker = "## 0.46.8\n\n"
           note = (
-              "- Rename the product and Home Assistant App identity from Agent Gateway to "
+              "- Finalize the pre-production product and Home Assistant App identity as "
               "Agent Control Plane before persistent production configuration begins; no "
               "user-data migration is required at this cutoff.\n"
           )
@@ -100,25 +101,21 @@ jobs:
               text = text.replace(marker, marker + note, 1)
           changelog.write_text(text, encoding="utf-8")
 
+          main = Path("agent_control_plane/src/agent_control_plane/main.py")
+          text = main.read_text(encoding="utf-8")
+          subtitle = "<small>Control plane</small>"
+          if text.count(subtitle) != 1:
+              raise SystemExit(f"expected exactly one header subtitle, found {text.count(subtitle)}")
+          text = text.replace(subtitle, "", 1)
+          main.write_text(text, encoding="utf-8")
+          print(f"Removed header subtitle: {subtitle}")
+
           ui = Path("agent_control_plane/src/agent_control_plane/admin_ui.py")
           text = ui.read_text(encoding="utf-8")
-          brand_index = text.find('class="brand"')
-          if brand_index < 0:
-              raise SystemExit("brand element not found")
-          small_start = text.find("<small>", brand_index)
-          small_end = text.find("</small>", small_start)
-          if small_start < 0 or small_end < 0 or small_start - brand_index > 800:
-              raise SystemExit("brand subtitle not found")
-          small_end += len("</small>")
-          removed = text[small_start:small_end]
-          if "control plane" not in removed.lower():
-              raise SystemExit(f"unexpected brand subtitle: {removed!r}")
-          text = text[:small_start] + text[small_end:]
           text, css_count = re.subn(r"\.brand small\{[^}]*\}", "", text, count=1)
           if css_count != 1:
               raise SystemExit("brand subtitle CSS rule not found exactly once")
           ui.write_text(text, encoding="utf-8")
-          print(f"Removed header subtitle: {removed}")
 
           print("Changed text files:")
           for item in changed:
@@ -134,7 +131,7 @@ jobs:
           if grep -RInEi \
             --exclude='*.png' \
             --exclude-dir=.git \
-            'agent[ _-]?gateway|AGENT_GATEWAY|AgentGateway|agw_' \
+            'agent[ _-]?gateway|AGENT_GATEWAY|AgentGateway|agw[-_]' \
             .; then
             echo "Old Agent Gateway identity still present"
             exit 1
@@ -144,7 +141,7 @@ jobs:
           grep -RInEi \
             --exclude='*.png' \
             --exclude-dir=.git \
-            '\bgateway\b|gateway\.' \
+            '\bgateway\b|gateway[_\.-]' \
             agent_control_plane README.md .github/workflows/agent-control-plane-validate.yml \
             || true
 
