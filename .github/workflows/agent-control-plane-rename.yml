@@ -1,0 +1,163 @@
+name: Audit Agent Control Plane rename
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/agent-control-plane-rename.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-rename:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Apply rename in working tree
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git mv agent_gateway agent_control_plane
+          git mv agent_control_plane/src/agent_gateway agent_control_plane/src/agent_control_plane
+          git mv .github/workflows/agent-gateway-validate.yml .github/workflows/agent-control-plane-validate.yml
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          replacements = (
+              ("AGENT_GATEWAY", "AGENT_CONTROL_PLANE"),
+              ("AgentGateway", "AgentControlPlane"),
+              ("agentGateway", "agentControlPlane"),
+              ("Agent-Gateway", "Agent-Control-Plane"),
+              ("X-Agent-Gateway", "X-Agent-Control-Plane"),
+              ("agent_gateway", "agent_control_plane"),
+              ("agent-gateway", "agent-control-plane"),
+              ("Agent Gateway", "Agent Control Plane"),
+              ("gateway.status.read", "control_plane.status.read"),
+              ("agw_", "acp_"),
+          )
+
+          changed = []
+          for path in sorted(Path(".").rglob("*")):
+              if not path.is_file() or ".git" in path.parts:
+                  continue
+              data = path.read_bytes()
+              if b"\x00" in data:
+                  continue
+              try:
+                  text = data.decode("utf-8")
+              except UnicodeDecodeError:
+                  continue
+              updated = text
+              for old, new in replacements:
+                  updated = updated.replace(old, new)
+              if updated != text:
+                  path.write_text(updated, encoding="utf-8")
+                  changed.append(str(path))
+
+          config = Path("agent_control_plane/config.yaml")
+          text = config.read_text(encoding="utf-8")
+          old_description = 'description: "Governed automation gateway for MCP-compatible agents"'
+          new_description = 'description: "Governed control plane for MCP-compatible agents"'
+          if old_description not in text:
+              raise SystemExit("expected App description not found")
+          config.write_text(text.replace(old_description, new_description, 1), encoding="utf-8")
+
+          root_readme = Path("README.md")
+          text = root_readme.read_text(encoding="utf-8")
+          text = text.replace(
+              "Passerelle stable entre des agents authentifiés et un ou plusieurs\nserveurs MCP configurables.",
+              "Plan de contrôle stable entre des agents authentifiés et un ou plusieurs\nserveurs MCP configurables.",
+              1,
+          )
+          text = text.replace(
+              "Stable gateway between authenticated agents and one or more configurable\nMCP servers.",
+              "Stable control plane between authenticated agents and one or more configurable\nMCP servers.",
+              1,
+          )
+          root_readme.write_text(text, encoding="utf-8")
+
+          changelog = Path("agent_control_plane/CHANGELOG.md")
+          text = changelog.read_text(encoding="utf-8")
+          marker = "## 0.46.8\n\n"
+          note = (
+              "- Rename the product and Home Assistant App identity from Agent Gateway to "
+              "Agent Control Plane before persistent production configuration begins; no "
+              "user-data migration is required at this cutoff.\n"
+          )
+          if marker not in text:
+              raise SystemExit("0.46.8 changelog marker not found")
+          if note not in text:
+              text = text.replace(marker, marker + note, 1)
+          changelog.write_text(text, encoding="utf-8")
+
+          ui = Path("agent_control_plane/src/agent_control_plane/admin_ui.py")
+          text = ui.read_text(encoding="utf-8")
+          brand_index = text.find('class="brand"')
+          if brand_index < 0:
+              raise SystemExit("brand element not found")
+          small_start = text.find("<small>", brand_index)
+          small_end = text.find("</small>", small_start)
+          if small_start < 0 or small_end < 0 or small_start - brand_index > 800:
+              raise SystemExit("brand subtitle not found")
+          small_end += len("</small>")
+          removed = text[small_start:small_end]
+          if "control plane" not in removed.lower():
+              raise SystemExit(f"unexpected brand subtitle: {removed!r}")
+          text = text[:small_start] + text[small_end:]
+          text, css_count = re.subn(r"\.brand small\{[^}]*\}", "", text, count=1)
+          if css_count != 1:
+              raise SystemExit("brand subtitle CSS rule not found exactly once")
+          ui.write_text(text, encoding="utf-8")
+          print(f"Removed header subtitle: {removed}")
+
+          print("Changed text files:")
+          for item in changed:
+              print(f"  {item}")
+          PY
+
+          echo "=== Diff stat ==="
+          git diff --stat
+          echo "=== Diff check ==="
+          git diff --check
+
+          echo "=== Old identity residue (must be empty) ==="
+          if grep -RInEi \
+            --exclude='*.png' \
+            --exclude-dir=.git \
+            'agent[ _-]?gateway|AGENT_GATEWAY|AgentGateway|agw_' \
+            .; then
+            echo "Old Agent Gateway identity still present"
+            exit 1
+          fi
+
+          echo "=== Remaining generic gateway references (review only) ==="
+          grep -RInEi \
+            --exclude='*.png' \
+            --exclude-dir=.git \
+            '\bgateway\b|gateway\.' \
+            agent_control_plane README.md .github/workflows/agent-control-plane-validate.yml \
+            || true
+
+      - name: Validate renamed metadata and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check \
+            --requirement agent_control_plane/requirements.txt
+          python3 agent_control_plane/scripts/validate.py
+          bash -n agent_control_plane/run.sh
+          python3 -m compileall -q \
+            agent_control_plane/src \
+            agent_control_plane/tests
+          PYTHONPATH=agent_control_plane/src \
+            python3 -m unittest discover -s agent_control_plane/tests -v
