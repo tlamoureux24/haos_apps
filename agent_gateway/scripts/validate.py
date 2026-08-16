@@ -281,7 +281,6 @@ def main() -> int:
 
     ignored_documents = (
         "/agent_gateway/PROJECT_BRIEF.md",
-        "/agent_gateway/IMPLEMENTATION_PLAN.md",
         "/agent_gateway/docs/adr/0001-control-plane-foundation.md",
     )
     ignore = (REPOSITORY_ROOT / ".gitignore").read_text(encoding="utf-8")
