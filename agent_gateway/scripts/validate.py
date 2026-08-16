@@ -41,11 +41,11 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_gateway"',
-        'version: "0.46.2"',
+        'version: "0.46.3"',
         "  - aarch64",
         "  - amd64",
         "init: false",
-        "stage: experimental",
+        "stage: stable",
         "apparmor: true",
         "tmpfs: true",
         "backup: cold",
@@ -58,7 +58,7 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "0.46.2"' not in package:
+    if '__version__ = "0.46.3"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
     if "jsonschema[format-nongpl]==4.26.0" not in requirements:
         raise RuntimeError("MCP input schemas must retain the pinned reference validator")

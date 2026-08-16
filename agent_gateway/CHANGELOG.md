@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.46.3
+
+- Redact every transient `fixed_sensitive` value recursively from upstream MCP
+  results, including nested innocent keys, structured content and substrings.
+- Preserve ordinary fixed values and standard tool behavior while keeping the
+  existing key-name and credential redaction protections.
+- Promote Agent Gateway metadata and active French/English documentation from
+  experimental to stable.
+
 ## 0.46.2
 
 - Preserve fail-closed MCP schema rejection causes across connector creation,

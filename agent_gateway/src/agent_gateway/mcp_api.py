@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Iterable
 
 import anyio
 from mcp.server.fastmcp import Context, FastMCP
@@ -36,6 +36,14 @@ TOOL_ACTIONS = {
 # under Python 3.14. Rebuild after the SDK module is fully loaded, before its
 # BaseSettings instance reads any source.
 FastMCPSettings.model_rebuild()
+
+
+def capability_result_content(
+    result: Any, sensitive_values: Iterable[Any] = ()
+) -> list[TextContent]:
+    """Serialize an upstream result only after transient value-aware redaction."""
+    safe_result = redact(result, sensitive_values)
+    return [TextContent(type="text", text=json.dumps(safe_result, ensure_ascii=False))]
 
 
 def request_token(context: Context) -> str:
@@ -102,7 +110,7 @@ class GovernedMCP(FastMCP):
                     resolved["tool_name"],
                     resolved["arguments"],
                 )
-            except Exception as exc:
+            except Exception:
                 await anyio.to_thread.run_sync(
                     self.control_plane.record_capability_result,
                     identity,
@@ -112,7 +120,9 @@ class GovernedMCP(FastMCP):
                     False,
                     correlation_id,
                 )
-                raise ValueError("upstream_call_failed") from exc
+                # Do not retain an upstream exception that may echo injected
+                # sensitive arguments in an ASGI traceback or application log.
+                raise ValueError("upstream_call_failed") from None
             await anyio.to_thread.run_sync(
                 self.control_plane.record_capability_result,
                 identity,
@@ -122,7 +132,7 @@ class GovernedMCP(FastMCP):
                 True,
                 correlation_id,
             )
-            return [TextContent(type="text", text=json.dumps(redact(result), ensure_ascii=False))]
+            return capability_result_content(result, resolved.get("sensitive_values", ()))
         identity = await anyio.to_thread.run_sync(self.current_identity)
         self.control_plane.authorize(identity, action)
         return await super().call_tool(name, arguments)

@@ -151,9 +151,23 @@ def merge_arguments(
     validate,
 ) -> dict[str, Any]:
     """Validate the reduced surface, inject fixed values, then validate upstream."""
+    merged, _ = merge_arguments_with_sensitive_values(
+        pepper, arguments, upstream_schema, constraints, validate
+    )
+    return merged
+
+
+def merge_arguments_with_sensitive_values(
+    pepper: bytes,
+    arguments: dict[str, Any],
+    upstream_schema: dict[str, Any],
+    constraints: dict[str, Any],
+    validate,
+) -> tuple[dict[str, Any], list[Any]]:
+    """Merge arguments and return sensitive values for transient result redaction."""
     if constraints.get("mode") != FIXED_ARGUMENTS_MODE:
         validate(arguments, upstream_schema, "arguments")
-        return copy.deepcopy(arguments)
+        return copy.deepcopy(arguments), []
     validate(arguments, effective_schema(upstream_schema, constraints), "arguments")
     ordinary = constraints.get("fixed_ordinary", {})
     sensitive_names = constraints.get("fixed_sensitive_names", [])
@@ -170,7 +184,7 @@ def merge_arguments(
     merged.update(copy.deepcopy(ordinary))
     merged.update(copy.deepcopy(sensitive))
     validate(merged, upstream_schema, "upstream_arguments")
-    return merged
+    return merged, [copy.deepcopy(value) for value in sensitive.values()]
 
 
 def administrative_summary(constraints: dict[str, Any]) -> dict[str, Any]:

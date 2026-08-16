@@ -1,6 +1,6 @@
 # Agent Gateway
 
-Agent Gateway est une App Home Assistant expérimentale qui sert d’intermédiaire
+Agent Gateway est une App Home Assistant stable qui sert d’intermédiaire
 entre des agents authentifiés et un ou plusieurs serveurs MCP externes. Elle
 n’expose que les outils virtuels sélectionnés pour une tâche, conserve les
 identifiants des serveurs en amont dans la passerelle, met les exécutions en file
@@ -131,7 +131,8 @@ reste conservé individuellement et audité.
   écriture ou administration ;
 - tout outil ou argument situé hors de l’enveloppe configurée est refusé ;
 - les secrets des connecteurs sont chiffrés et ne sont jamais transmis aux agents ;
-- les arguments fixes sensibles sont chiffrés au repos et toujours expurgés ;
+- les arguments fixes sensibles sont chiffrés au repos puis expurgés par nom de
+  clé et par valeur transitoire de toute réponse amont avant remise à un agent ;
 - les arguments fixes sont absents du schéma virtuel, impossibles à remplacer
   par l’agent et injectés seulement après validation de l’appel réduit ;
 - les schémas d’entrée MCP admis utilisent JSON Schema Draft 2020-12 et sont
@@ -173,4 +174,5 @@ Arrêter le serveur et retirer toute règle temporaire de pare-feu après le tes
 - Streamable HTTP est le seul transport de connecteur pris en charge ;
 - aucun worker autonome n’est fourni : un client MCP externe traite la file ;
 - le déploiement multi-instance ou haute disponibilité n’est pas pris en charge ;
-- l’App reste expérimentale et ne doit pas être exposée sur Internet.
+- l’exposition directe sur Internet n’est pas prise en charge ; utiliser un LAN
+  ou VPN de confiance.

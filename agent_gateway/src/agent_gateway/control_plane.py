@@ -25,7 +25,7 @@ from agent_gateway.fixed_arguments import (
     administrative_summary,
     build_constraints,
     effective_schema,
-    merge_arguments,
+    merge_arguments_with_sensitive_values,
     parse_constraints,
 )
 from agent_gateway.json_contracts import validate_json_contract, validate_json_schema
@@ -1393,7 +1393,7 @@ class ControlPlane:
                 raise AuthorizationError("capability_not_available")
             try:
                 constraints = parse_constraints(row["constraints_json"])
-                merged_arguments = merge_arguments(
+                merged_arguments, sensitive_values = merge_arguments_with_sensitive_values(
                     self.pepper,
                     arguments,
                     json.loads(row["input_schema_json"]),
@@ -1413,6 +1413,7 @@ class ControlPlane:
             "url": url,
             "bearer_token": bearer_token,
             "arguments": merged_arguments,
+            "sensitive_values": sensitive_values,
         }
 
     def record_capability_result(

@@ -28,6 +28,7 @@ from agent_gateway.http_api import (
     admin_set_connector_enabled,
 )
 from agent_gateway.json_contracts import validate_json_schema
+from agent_gateway.mcp_api import capability_result_content
 from agent_gateway.policy import decide, validate_actions
 from agent_gateway.redaction import redact
 from agent_gateway.security import issue_credential, load_or_create_pepper, parse_and_verify_token
@@ -450,6 +451,36 @@ class RedactionTests(unittest.TestCase):
         self.assertEqual(redacted["safe"][0]["api_key"], "[REDACTED]")
         self.assertNotIn(issued.token, redacted["safe"][1])
 
+    def test_transient_sensitive_values_are_redacted_by_value(self) -> None:
+        secret = "SECRET-FIXED-8264"
+        ordinary = "recette-fixed-args"
+        result = {
+            "content": [
+                {"type": "text", "text": f"source={secret}; slug={ordinary}"},
+            ],
+            "structuredContent": {
+                "innocent": {"requested_source": secret},
+                "ordinary": ordinary,
+                f"echo-{secret}": "key is also protected",
+            },
+        }
+        content = capability_result_content(result, [secret])
+        serialized = content[0].text
+        self.assertNotIn(secret, serialized)
+        self.assertIn("[REDACTED]", serialized)
+        self.assertIn(ordinary, serialized)
+
+    def test_non_string_sensitive_json_values_are_redacted_conservatively(self) -> None:
+        result = {
+            "nested": {"innocent": {"scope": ["private", 7]}},
+            "echoed_leaf": 7,
+            "unrelated_boolean": True,
+        }
+        redacted = redact(result, [{"scope": ["private", 7]}])
+        self.assertEqual(redacted["nested"]["innocent"], "[REDACTED]")
+        self.assertEqual(redacted["echoed_leaf"], "[REDACTED]")
+        self.assertIs(redacted["unrelated_boolean"], True)
+
 
 class TaskReportContractTests(unittest.TestCase):
     def test_generic_report_shape_is_validated(self) -> None:
@@ -681,6 +712,7 @@ class TaskCompositionTests(unittest.TestCase):
                     "label": "safe-test",
                 },
             )
+            self.assertEqual(resolved["sensitive_values"], [secret])
             original_constraints = json.loads(stored)
             for fixed_name, invalid_value in (("addon", "other"), ("limit", 11)):
                 tampered = json.loads(json.dumps(original_constraints))

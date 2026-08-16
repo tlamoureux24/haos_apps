@@ -30,7 +30,7 @@ https://github.com/tlamoureux24/haos_apps
 
 #### Agent Gateway
 
-Passerelle expérimentale entre des agents authentifiés et un ou plusieurs
+Passerelle stable entre des agents authentifiés et un ou plusieurs
 serveurs MCP configurables. Elle agit comme un pare-feu applicatif MCP
 deny-by-default : la configuration explicite de l’administrateur constitue
 l’autorisation, et seuls les outils et arguments compris dans l’enveloppe exacte
@@ -263,7 +263,7 @@ https://github.com/tlamoureux24/haos_apps
 
 #### Agent Gateway
 
-Experimental gateway between authenticated agents and one or more configurable
+Stable gateway between authenticated agents and one or more configurable
 MCP servers. It acts as a deny-by-default MCP application firewall: explicit
 administrator configuration is the authorization decision, and only tools and
 arguments inside the task's exact capability envelope are exposed to the agent.

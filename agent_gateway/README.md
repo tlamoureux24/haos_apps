@@ -1,6 +1,6 @@
 # Agent Gateway
 
-Agent Gateway is an experimental Home Assistant App that mediates work between
+Agent Gateway is a stable Home Assistant App that mediates work between
 authenticated agents and one or more external MCP servers. It exposes only the
 virtual tools selected for a task, keeps upstream credentials inside the
 gateway, queues executions durably, and stores structured reports and an
@@ -122,7 +122,8 @@ remain individually retained and audited.
   of any semantic read, write, or administrative label;
 - any tool or argument outside the configured capability envelope is rejected;
 - connector secrets are encrypted at rest and never exposed to agents;
-- sensitive fixed arguments are encrypted at rest and always redacted;
+- sensitive fixed arguments are encrypted at rest and redacted by key and by
+  transient value from every upstream result before it reaches an agent;
 - fixed arguments are absent from the virtual schema, cannot be overridden by
   an agent, and are injected only after validation of the reduced call;
 - admitted MCP input schemas use JSON Schema Draft 2020-12 and are enforced in
@@ -166,4 +167,4 @@ Stop the server and remove any temporary firewall rule after the test.
 - Streamable HTTP is the only connector transport currently supported;
 - no autonomous worker is bundled: an external MCP client must process jobs;
 - multi-instance/high-availability deployment is not supported;
-- the App remains experimental and is not intended for internet exposure.
+- direct internet exposure is not supported; use a trusted LAN or VPN.
