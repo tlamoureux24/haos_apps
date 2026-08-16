@@ -7,6 +7,14 @@ identifiants des serveurs en amont dans la passerelle, met les exécutions en fi
 de façon persistante et stocke des rapports structurés ainsi qu’un journal
 d’audit append-only.
 
+Elle fonctionne comme un pare-feu applicatif générique pour MCP : deny-by-default,
+la configuration explicite de l’administrateur constitue l’autorisation. Un outil
+découvert mais non sélectionné reste inutilisable ; un outil explicitement
+sélectionné dans une tâche valide est autorisé uniquement dans l’enveloppe exacte
+de cette tâche, de sa révision, de l’identité, du schéma effectif et des éventuelles
+restrictions d’arguments. Agent Gateway ne crée pas de classe d’autorisation
+séparée selon qu’un outil est présenté comme lecture, écriture ou administration.
+
 Documentation anglaise : [README.md](README.md).
 
 ## Fonctionnalités actuelles
@@ -115,6 +123,13 @@ reste conservé individuellement et audité.
 
 - les listeners tournent sous un utilisateur non privilégié avec AppArmor ;
 - l’administration est isolée du listener public MCP/événements ;
+- la découverte d’un outil n’accorde aucun droit d’exécution ;
+- seuls les outils explicitement sélectionnés dans la révision de tâche valide
+  sont exposés et invocables par l’identité autorisée ;
+- la sélection explicite d’un outil par l’administrateur constitue son
+  autorisation, indépendamment d’une éventuelle étiquette sémantique lecture,
+  écriture ou administration ;
+- tout outil ou argument situé hors de l’enveloppe configurée est refusé ;
 - les secrets des connecteurs sont chiffrés et ne sont jamais transmis aux agents ;
 - les arguments fixes sensibles sont chiffrés au repos et toujours expurgés ;
 - les arguments fixes sont absents du schéma virtuel, impossibles à remplacer
@@ -135,8 +150,10 @@ reste conservé individuellement et audité.
   et immédiatement après toute incohérence, sans écraser le dernier checkpoint
   valide lorsqu’il échoue.
 
-Les opérations correctives ou en écriture restent différées jusqu’à une revue
-de menace, des approbations explicites et des règles qui échouent de façon sûre.
+Le modèle de sécurité ne repose pas sur une seconde approbation transactionnelle :
+la passerelle applique strictement la politique explicitement configurée par
+l’administrateur et échoue en mode fermé dès qu’elle ne peut plus prouver que
+l’appel reste dans cette enveloppe.
 
 ## Faux serveur MCP de test
 
@@ -155,6 +172,5 @@ Arrêter le serveur et retirer toute règle temporaire de pare-feu après le tes
 
 - Streamable HTTP est le seul transport de connecteur pris en charge ;
 - aucun worker autonome n’est fourni : un client MCP externe traite la file ;
-- les approbations d’opérations en écriture ne sont pas encore implémentées ;
 - le déploiement multi-instance ou haute disponibilité n’est pas pris en charge ;
 - l’App reste expérimentale et ne doit pas être exposée sur Internet.
