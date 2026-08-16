@@ -178,7 +178,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/agent-control-plane-rename.yml
+          git rm -f .github/workflows/agent-control-plane-rename.yml
           git add -A
           git diff --cached --check
           git config user.name "github-actions[bot]"
