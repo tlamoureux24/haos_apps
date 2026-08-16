@@ -104,6 +104,20 @@ et utilise le français comme repli. Le bouton **FR/EN** mémorise uniquement le
 choix d’affichage dans ce navigateur et ne modifie aucune donnée. Les noms MCP,
 identifiants techniques et données provenant des systèmes restent inchangés.
 
+## Actualisation de l’interface
+
+Chaque vue d’administration recharge ses propres données dès qu’elle est ouverte,
+sans nécessiter de F5. Les vues opérationnelles **Vue d’ensemble**, **Événements**,
+**Rapports** et **Audit** se réactualisent ensuite automatiquement toutes les
+10 secondes, tandis que **Exécutions** se réactualise toutes les 5 secondes. Un
+indicateur « Actualisé il y a… » affiche l’âge du dernier chargement réussi.
+
+Le rafraîchissement automatique est suspendu quand l’onglet du navigateur est
+masqué, lorsqu’un panneau d’administration est ouvert, ou lorsqu’un détail est
+déplié dans **Événements**, **Rapports** ou **Audit**, afin de ne pas perturber la
+lecture ou l’édition. Il reprend automatiquement ensuite ; le retour sur un onglet
+masqué déclenche immédiatement une nouvelle actualisation de la vue active.
+
 ## Données, sauvegarde et rétention
 
 La configuration, la file, les rapports et l’audit sont stockés dans le volume
