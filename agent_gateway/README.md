@@ -100,6 +100,20 @@ On first use the interface follows a supported browser preference (`fr` or
 display preference in that browser; it does not change App data. Technical MCP
 names, identifiers and upstream data remain unchanged.
 
+## Interface refresh
+
+Each administration view reloads its own data as soon as it is opened, without
+requiring a manual browser refresh. The operational **Overview**, **Events**,
+**Reports**, and **Audit** views then refresh automatically every 10 seconds,
+while **Executions** refreshes every 5 seconds. A bilingual “Updated … ago”
+indicator shows the age of the last successful refresh.
+
+Automatic refresh is suspended while the browser tab is hidden, while an
+administration drawer is open, or while a detail is expanded in **Events**,
+**Reports**, or **Audit**, so reading and editing are not disturbed. Refreshing
+resumes automatically afterwards; returning to a previously hidden browser tab
+immediately refreshes the active view.
+
 ## Data, backup, and retention
 
 Configuration, queue state, reports and audit data are stored in the App data
