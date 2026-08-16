@@ -9,6 +9,13 @@ plusieurs serveurs MCP. Commencez par ajouter un connecteur dans
 **Connecteurs**, composez une tâche dans **Tâches**, puis créez une identité
 Client MCP dans **Identités**. Son identifiant n’est affiché qu’une fois.
 
+Agent Gateway applique un modèle de pare-feu applicatif MCP deny-by-default :
+la découverte d’un outil n’accorde aucun droit, et la sélection explicite de cet
+outil dans une tâche valide constitue l’autorisation administrative de
+l’utiliser dans l’enveloppe exacte configurée. La passerelle n’ajoute pas de
+seconde approbation selon qu’un outil est présenté comme lecture, écriture ou
+administration ; tout outil ou argument non autorisé par la tâche reste refusé.
+
 Dans le panneau d’une nouvelle tâche, chaque outil reste **Standard** par
 défaut. Le volet facultatif **Restreindre cet outil** permet de partir d’un
 appel exemple valide : les propriétés fixes ordinaires ou sensibles sont
@@ -41,6 +48,13 @@ Agent Gateway connects authenticated agents to selected tools from one or more
 MCP servers. First add a connector under **Connectors**, compose a task under
 **Tasks**, then create an MCP client identity from **Identities**. Its credential
 is displayed only once.
+
+Agent Gateway uses a deny-by-default MCP application-firewall model: discovery
+of a tool grants no execution right, and explicitly selecting that tool in a
+valid task is the administrator's authorization to use it within the exact
+configured capability envelope. The gateway does not add a second approval
+step based on whether a tool is presented as read, write, or administrative;
+any tool or argument not authorized by the task remains rejected.
 
 In the new-task drawer every tool remains **Standard** by default. The optional
 **Restrict this tool** section starts from a valid example call: ordinary or
