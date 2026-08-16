@@ -31,7 +31,9 @@ def _sensitive_candidates(values: Iterable[Any]) -> tuple[Any, ...]:
     def collect(item: Any) -> None:
         candidates.append(item)
         if isinstance(item, dict):
-            for nested in item.values():
+            for key, nested in item.items():
+                if isinstance(key, str):
+                    collect(key)
                 collect(nested)
         elif isinstance(item, (list, tuple)):
             for nested in item:

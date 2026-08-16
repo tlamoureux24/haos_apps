@@ -481,6 +481,13 @@ class RedactionTests(unittest.TestCase):
         self.assertEqual(redacted["echoed_leaf"], "[REDACTED]")
         self.assertIs(redacted["unrelated_boolean"], True)
 
+    def test_text_key_from_sensitive_object_is_redacted_when_echoed_as_value(self) -> None:
+        secret_key = "private-scope-name"
+        result = {"structuredContent": {"innocent": secret_key}}
+        redacted = redact(result, [{secret_key: "ordinary-looking-value"}])
+        self.assertEqual(redacted["structuredContent"]["innocent"], "[REDACTED]")
+        self.assertNotIn(secret_key, json.dumps(redacted))
+
 
 class TaskReportContractTests(unittest.TestCase):
     def test_generic_report_shape_is_validated(self) -> None:

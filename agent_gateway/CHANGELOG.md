@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.46.4
+
+- Treat textual keys inside a sensitive fixed JSON object as transient
+  sensitive candidates when redacting upstream MCP results.
+
 ## 0.46.3
 
 - Redact every transient `fixed_sensitive` value recursively from upstream MCP
