@@ -389,7 +389,24 @@ Detailed design must preserve at least:
 
 Security constrains the engine technically; it does not turn it into a business-policy engine.
 
-## 21. Non-goals
+## 21. HAOS application and user interface requirements
+
+Agent Execution Plane is delivered as a **Home Assistant OS App** and must follow the same practical packaging discipline as Agent Control Plane.
+
+Product requirements for the App shell are:
+
+- installable and runnable as a normal HAOS App from the repository;
+- a configurable **standalone API listener port** exposed through the App configuration rather than hard-coded as product policy;
+- a mandatory least-privilege **AppArmor profile** appropriate to the actual runtime needs of Agent Execution Plane;
+- a Home Assistant **Ingress administration interface** used to configure and operate the App without requiring direct access to the administration listener;
+- an administration UI visually consistent with Agent Control Plane's graphical language and interaction style while remaining specific to Execution Plane's responsibilities;
+- configuration/visibility for the models, their priority/state/timeout, the ACP source connection, standalone API credential/state, current execution state and pending-result recovery where applicable;
+- repository App assets including a dedicated **logo** and **icon**;
+- complete user documentation in both **English and French**, including installation, configuration, ACP integration and standalone API usage.
+
+These are product requirements. The internal framework, database schema, process topology, listener implementation and AppArmor rules are implementation choices and do not require product-level administrator arbitration unless they change the visible behavior or security boundary above.
+
+## 22. Non-goals
 
 Agent Execution Plane must not:
 
@@ -406,7 +423,7 @@ Agent Execution Plane must not:
 - embed Home Assistant, Gatus, OpenDTU, Cerbo GX, UniFi or another product as core business logic;
 - require Agent Control Plane or MCP Capability Bridge in order to run.
 
-## 22. Genericity test
+## 23. Genericity test
 
 A proposed feature belongs in Agent Execution Plane only if it is required to:
 
@@ -414,7 +431,7 @@ A proposed feature belongs in Agent Execution Plane only if it is required to:
 
 If a feature instead decides what work should exist, what capabilities should be authorized, what a conclusion means operationally, or what should happen after the source receives the outcome, it belongs elsewhere.
 
-## 23. Remaining detailed technical design
+## 24. Remaining detailed technical design
 
 The remaining work before the authoritative implementation plan is intentionally technical rather than a second functional-design pass:
 
@@ -424,13 +441,13 @@ The remaining work before the authoritative implementation plan is intentionally
 4. exact MCP client/session mechanics;
 5. model UI/provider-specific fields;
 6. minimal persistence schema for active-interruption and pending-result recovery;
-7. HAOS listeners/network/AppArmor boundaries;
+7. HAOS process/listener/network/AppArmor implementation consistent with the validated App requirements;
 8. bounded logs, redaction and UI state presentation;
 9. CI tests and real-HAOS acceptance gates.
 
 These points must not reopen the validated execution behavior unless implementation reveals a concrete contradiction that cannot be resolved otherwise.
 
-## 24. Delivery discipline
+## 25. Delivery discipline
 
 The authoritative implementation plan is created only after the remaining technical design is settled.
 
