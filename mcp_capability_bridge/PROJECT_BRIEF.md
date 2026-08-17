@@ -1,335 +1,255 @@
-# MCP Capability Bridge — Foundational Project Brief
+# MCP Capability Bridge — Project Brief
 
-Status: **foundational brief — detailed design not yet started**.
+Status: **functional scope fixed — technical design and implementation plan follow this brief**.
 
-This document defines the product boundary for MCP Capability Bridge before implementation planning begins. It intentionally describes responsibilities, constraints and open questions without prematurely selecting the detailed adapter model or version-one feature set.
-
-The root `ARCHITECTURE_CHARTER.md` is normative for this project.
+This document defines the product boundary and visible requirements of MCP Capability Bridge. The root `ARCHITECTURE_CHARTER.md` remains normative; where this brief is more specific, the narrower MCP Capability Bridge responsibility applies.
 
 ## 1. Product purpose
 
-MCP Capability Bridge is a generic MCP server that turns deliberately bounded non-MCP technical capabilities into MCP tools.
+MCP Capability Bridge is a **generic MCP server for bounded non-MCP technical capabilities**.
 
-Its purpose is to make systems that do not natively speak MCP available through a standard MCP capability boundary without teaching reasoning clients or Agent Control Plane how SSH, target HTTP APIs, browser automation or appliance-specific transports work.
+Its responsibility is deliberately small:
 
-A concise product model is:
+1. let the administrator configure a technical target;
+2. let the administrator define bounded capabilities on that target;
+3. expose each enabled valid capability as a standard MCP tool;
+4. validate every tool invocation against the configured capability envelope;
+5. execute the corresponding technical operation;
+6. return a bounded, sanitized MCP result.
 
-`configured technical target -> bounded adapter capability -> MCP tool -> compatible MCP client`
+Conceptually:
 
-## 2. Primary goals
+`technical target -> bounded configured capability -> MCP tool -> any compatible MCP client`
 
-MCP Capability Bridge should eventually provide:
+The Bridge is not a reasoning engine, control plane, task system, scheduler, workflow engine or agent runtime.
 
-- a generic adapter architecture for non-MCP technical capabilities;
-- MCP-native tool schemas and normalized results;
-- explicit administrator configuration of targets and credentials;
-- strict capability bounding, validation, limits and timeouts;
-- safe secret storage and non-disclosure;
-- independent usefulness with any compatible MCP client;
-- HAOS packaging suitable for always-on local operation;
-- clean interoperability with Agent Control Plane without depending on it.
+## 2. Independence and genericity
 
-Candidate adapter families include SSH, HTTP and browser automation. Their exact initial scope must be decided during detailed design rather than assumed by this brief.
+MCP Capability Bridge must remain fully useful by itself.
 
-## 3. Non-goals
+It does **not** require Agent Control Plane or Agent Execution Plane. Any compatible authenticated MCP client can use it directly.
+
+When Agent Control Plane is used, the Bridge appears exactly as an ordinary upstream MCP server. No private API, shared database, special task contract or suite-only back channel is introduced.
+
+When Agent Execution Plane uses a Bridge directly, it does so through the same standard MCP surface as any other client.
+
+The core must not contain product-specific behavior for Home Assistant, OpenDTU, Cerbo GX, UniFi, Gatus or any other appliance. Those systems are only possible configured targets.
+
+## 3. Responsibility split
+
+The key separation rule remains:
+
+> **MCP Capability Bridge defines the maximum technical capability; Agent Control Plane, when present, defines operational authorization.**
+
+The Bridge therefore owns:
+
+- technical target connection configuration;
+- target credentials it directly needs;
+- bounded capability definitions;
+- strict argument validation;
+- technical invocation timeout and resource limits;
+- adapter execution and cleanup;
+- bounded result normalization and secret redaction;
+- the MCP server endpoint itself.
+
+The Bridge does not own:
+
+- agents or models;
+- model-provider credentials;
+- tasks, jobs, leases, reports or reasoning state;
+- schedules, triggers or event routing;
+- Control Plane identities or per-business-scenario authorization;
+- decisions about which job should receive which capability.
+
+## 4. Target and capability model
+
+The administrator configures **targets** and **capabilities**.
+
+A target contains the adapter-specific technical context that must never be controlled by MCP arguments, such as an SSH host/user, an HTTP origin/base URL, or a Browser origin/session configuration.
+
+A capability is one deliberately bounded operation against one configured target. It has a stable MCP-facing identity, human-readable title/description, strict input schema, adapter-specific fixed operation definition, timeout/resource bounds and enabled/disabled state.
+
+Only enabled capabilities whose configuration remains valid are exposed through MCP tool discovery.
+
+MCP arguments may fill only the explicit variable positions declared by the capability. They cannot replace administrator-controlled target identity, target credentials or hidden fixed configuration.
+
+The Bridge must not make unrestricted passthrough its normal model. In particular, a generic `ssh_exec(command: string)`, arbitrary caller-selected URL, arbitrary browser navigation origin or caller-supplied credential is not an acceptable default capability.
+
+## 5. Adapter scope
+
+The architecture supports adapters without putting adapter-specific branches into the generic MCP/configuration core.
+
+The implementation sequence covers three generic adapter families:
+
+- **HTTP**, for bounded calls to configured HTTP(S) targets;
+- **SSH**, for bounded execution against configured SSH targets;
+- **Browser**, for bounded browser interactions with configured origins when a normal API is not sufficient.
+
+HTTP and SSH establish the first practical production baseline. Browser is implemented as a separate security-gated lot because its runtime, image and threat surface are materially larger; it must not weaken the HTTP/SSH baseline or turn the Bridge into unrestricted remote browser control.
+
+Adding another adapter later must not require changing MCP authentication, target/capability ownership or unrelated adapters.
+
+## 6. MCP server boundary
+
+The Bridge exposes standard MCP tools over **Streamable HTTP**.
+
+The MCP endpoint is authenticated. Standalone access uses a Bridge-owned opaque Bearer credential with the same simple secret philosophy used elsewhere in the suite:
+
+- generated by the application;
+- displayed only once when issued/replaced;
+- not recoverable later in clear text;
+- revocable and replaceable from the administration UI;
+- stored only as a verifier because the Bridge only needs to validate it.
+
+This credential authenticates access to the Bridge server as a whole. MCP Capability Bridge deliberately does **not** create a second per-client identity/permission system. A directly connected client that possesses the Bridge credential can discover/use the capabilities currently exposed by the Bridge. Fine-grained operational authorization belongs to a governing MCP client such as Agent Control Plane when that is required.
+
+The server must use ordinary MCP contracts for tool discovery and invocation and remain interoperable with compatible MCP clients. Compatibility with Agent Control Plane is an acceptance target, not a private integration mode.
+
+## 7. Capability safety rules
+
+Every capability must fail closed outside its configured technical envelope.
+
+At minimum:
+
+- input is validated against the exact capability schema before adapter execution;
+- unknown/unexpected arguments are rejected;
+- caller input cannot replace target host/origin/user/credential or other fixed technical context;
+- secrets never appear in tool schemas, logs or returned errors;
+- redirects/origin changes, shell construction, browser navigation and similar adapter-specific escape paths are bounded by the adapter configuration;
+- execution duration and returned data are bounded;
+- no automatic retry of a capability invocation is required by the Bridge;
+- side-effecting operations are never blindly replayed after transport ambiguity or process restart.
+
+MCP tool annotations may describe behavior but are not an authorization mechanism.
+
+## 8. Persistence
+
+Persistence exists for Bridge configuration, not for Control Plane or Execution Plane state.
+
+Durable state includes only what the Bridge itself owns, such as:
+
+- targets;
+- capabilities;
+- encrypted target credentials/secrets;
+- Bridge settings;
+- MCP credential verifier;
+- minimal operational state needed to recover configuration safely.
+
+The Bridge does not persist ACP tasks/jobs, Execution Plane reasoning/model state or a permanent history of tool invocations.
+
+Once the Bridge reaches its production-data preservation cutoff, target/capability configuration becomes non-disposable and later schema changes must preserve supported data through tested upgrades.
+
+## 9. Invocation behavior
+
+MCP Capability Bridge may serve multiple MCP clients and does not adopt Execution Plane's one-job execution model.
+
+Individual tool invocations are independent and technically bounded. The implementation may use a bounded global concurrency limit to protect the HAOS host, but it must not create a waiting job system, scheduler or durable invocation queue.
+
+Each invocation either returns its bounded adapter result or a factual technical error. The Bridge does not interpret that result as a business outcome.
+
+No automatic invocation retry is performed by default. The caller decides whether a failed logical operation should be attempted again.
+
+## 10. Administration and HAOS application requirements
+
+MCP Capability Bridge is delivered as a normal **Home Assistant OS App** and follows the same practical App discipline as Agent Control Plane and Agent Execution Plane.
+
+Visible product requirements are:
+
+- installable and runnable from the repository as a normal HAOS App;
+- a mandatory least-privilege **AppArmor profile** appropriate to the actual adapters/runtime;
+- a Home Assistant **Ingress administration interface**;
+- a user-configurable **MCP server host port** through the HAOS App Network configuration;
+- an administration UI visually consistent with Agent Control Plane's graphical language and interaction style while remaining specific to Bridge responsibilities;
+- a fully bilingual **French/English** UI with an in-UI language switch;
+- full **light/dark mode** support with an in-UI theme switch;
+- the header displays **MCP Capability Bridge** with the running **version immediately beside the product name**;
+- views/configuration for Bridge status, MCP credential, targets, capabilities and relevant bounded technical state;
+- dedicated repository **logo** and **icon**;
+- complete user documentation in **English and French**, including installation, MCP connection, target/capability configuration, adapter security constraints and examples.
+
+Internal framework, database schema, exact process topology, AppArmor rule details and implementation libraries are technical choices unless they change these visible/security requirements.
+
+## 11. HTTP adapter boundary
+
+An HTTP target owns its base origin and credentials/fixed headers. A capability owns a fixed method and bounded relative operation mapping.
+
+MCP arguments may populate only explicitly configured path/query/body positions. They may not provide an arbitrary URL, origin, authentication header or unrestricted proxy destination.
+
+Redirect behavior, TLS verification, response size and timeout are bounded. The adapter must not become a generic SSRF/network proxy.
+
+## 12. SSH adapter boundary
+
+An SSH target owns host, port, user, host-key trust and credentials.
+
+A capability owns the fixed executable/command structure and explicitly variable argument positions. Caller input cannot replace the host, user, credential or whole command.
+
+Host-key verification is mandatory. Arguments are constructed without raw caller-controlled shell concatenation. Execution time and stdout/stderr size are bounded. The Bridge does not provide a default unrestricted shell tool.
+
+## 13. Browser adapter boundary
+
+A Browser target owns its permitted origin(s) and target/session credentials.
+
+A Browser capability is a bounded administrator-defined interaction against those origins. Caller arguments may populate only explicitly declared values in fixed interaction steps.
+
+The initial Browser design must not expose arbitrary JavaScript evaluation, arbitrary caller-selected URLs, unrestricted downloads/uploads, unrestricted filesystem access or a generic remote browser-control surface.
+
+Browser processes/sessions must be isolated and cleaned up deterministically. Browser support is accepted only after its additional HAOS/AppArmor/security footprint is proven independently.
+
+## 14. Observability
+
+The Ingress UI exposes only operational information needed to configure and diagnose the Bridge, such as:
+
+- App/MCP server state;
+- target/capability availability;
+- current bounded invocation count;
+- last useful redacted technical failure/status;
+- credential presence/rotation state.
+
+It does not become a second Control Plane audit system or permanent business invocation history.
+
+## 15. Security baseline
+
+The implementation must preserve:
+
+- unprivileged HAOS runtime;
+- least-privilege AppArmor;
+- authenticated MCP endpoint;
+- protected reversible target secrets and non-reversible MCP credential verification;
+- strict input/schema bounds;
+- target/origin/host bounding;
+- SSH host-key and HTTP TLS verification;
+- output/time/concurrency limits;
+- secret redaction/non-disclosure;
+- deterministic child-process/browser cleanup;
+- no model-controlled configuration mutation;
+- fail-closed behavior when a capability definition is invalid or its technical envelope cannot be proven.
+
+## 16. Non-goals
 
 MCP Capability Bridge must not:
 
-- own reasoning models or model-provider credentials;
-- run agent reasoning loops;
-- own WorkSources, jobs, job leases or result/report lifecycles;
-- own event intake, triggers, schedules or task definitions;
-- duplicate Agent Control Plane identities or operational authorization policy;
-- decide which agent may use which capability for which business scenario;
-- become a general-purpose workflow engine;
-- become a second Control Plane;
-- require Agent Control Plane or Agent Execution Plane in order to run;
-- expose unrestricted technical primitives merely because another component may later restrict their use.
+- run a reasoning model;
+- own tasks, jobs, leases, reports, schedules, triggers or events;
+- copy ACP identities/permissions or task authorization;
+- create a generic workflow engine;
+- create a durable invocation queue;
+- interpret tool results as business decisions;
+- expose arbitrary unrestricted SSH, HTTP proxy or browser control by default;
+- contain appliance-specific core logic;
+- require Agent Control Plane or Agent Execution Plane.
 
-## 4. Independence requirement
+## 17. Genericity test
 
-A standalone MCP Capability Bridge must be usable by any compatible MCP client that is appropriately configured and authenticated.
+A feature belongs in MCP Capability Bridge only if it is required to:
 
-Agent Control Plane is an important expected client because it can govern Bridge tools through its existing deny-by-default task/capability model, but the Bridge must not encode Control Plane-specific task, identity, lease or report semantics.
+> configure a bounded technical capability on a non-MCP target, expose it as a standard MCP tool, execute that capability safely, and return the technical result.
 
-Likewise, Agent Control Plane must not need Bridge-specific code. It should see the Bridge exactly as another administrator-configured MCP server.
+If it instead decides what work should happen, reasons about the work, or decides which business actor/job is authorized to use the tool, it belongs elsewhere.
 
-## 5. Core separation rule
+## 18. Delivery discipline
 
-The central responsibility split is:
+Implementation follows the suite lifecycle:
 
-> **MCP Capability Bridge defines the maximum technical capability; Agent Control Plane defines the operational authorization.**
+`planned -> implemented by Codex -> independently reviewed -> CI validated -> deployed on HAOS -> real acceptance tested -> accepted`
 
-This has two consequences.
-
-First, the Bridge must expose only technical operations that are intentionally bounded enough to be safe as capabilities in their own right. It must not rely on a downstream policy layer to rescue an intrinsically unlimited primitive.
-
-Second, when Agent Control Plane is used, the Bridge must not recreate business authorization such as task membership, per-job capability selection or agent-specific operational policy. Those decisions remain Control Plane responsibilities.
-
-## 6. Capability model direction
-
-A Bridge capability should have an explicit MCP-facing contract including at least:
-
-- stable tool identity;
-- human-readable purpose;
-- strict input schema;
-- bounded target/configuration context;
-- deterministic validation before execution;
-- explicit timeout/resource limits;
-- bounded and normalized result handling;
-- redaction rules for secrets and sensitive target data where applicable.
-
-The detailed capability-definition format remains open.
-
-Capability design should prefer narrow, intention-revealing operations over generic command passthrough. A raw primitive such as:
-
-`ssh_exec(command: string)`
-
-must not become the default architecture simply because it is easy to implement. If a deliberately broad primitive is ever supported, its scope, threat model, configuration and operational limits must be an explicit product decision.
-
-## 7. Adapter direction
-
-Target-specific mechanics belong behind adapter interfaces.
-
-Potential adapter families include:
-
-- **SSH** for explicitly configured remote-command or subsystem capabilities;
-- **HTTP** for bounded requests to configured endpoints/APIs;
-- **Browser** for controlled browser automation where no adequate API exists.
-
-The generic core should understand capability definitions, invocation lifecycle, limits and MCP contracts. It should not contain growing branches for individual products such as OpenDTU, Cerbo GX, UniFi or other appliances.
-
-Product-specific behavior, when genuinely necessary, must be expressed through administrator configuration or a bounded adapter/plugin implementation rather than contaminating the core architecture.
-
-## 8. SSH direction
-
-If SSH is included, detailed design must address at least:
-
-- target identity and host-key verification;
-- credentials/keys and rotation;
-- allowed remote account and privilege model;
-- whether capabilities map to fixed commands, argument templates, subsystems or another bounded representation;
-- command/argument validation and quoting;
-- execution timeout and output-size limits;
-- exit status and normalized error handling;
-- prevention of arbitrary host/user/key override by MCP arguments;
-- prevention of accidental shell expansion outside the intended capability envelope.
-
-The preferred security model is expected to combine a restricted remote account with a restricted Bridge-side capability definition rather than relying on either layer alone.
-
-## 9. HTTP direction
-
-If HTTP is included, detailed design must address at least:
-
-- configured base targets and endpoint bounding;
-- allowed methods;
-- headers and credential injection;
-- argument-to-path/query/body mapping;
-- redirects;
-- DNS/IP changes and SSRF considerations;
-- TLS verification;
-- timeouts and response-size limits;
-- content-type handling;
-- safe result normalization;
-- prevention of MCP arguments changing the configured origin or secret material.
-
-The generic HTTP adapter must not become an unrestricted network proxy.
-
-## 10. Browser direction
-
-If browser automation is included, detailed design must address at least:
-
-- browser engine/process isolation;
-- persistent versus ephemeral sessions;
-- authentication/session credential ownership;
-- navigation-origin restrictions;
-- download/upload behavior;
-- DOM/page-content size limits;
-- JavaScript execution boundaries;
-- screenshot and artifact handling;
-- timeouts and stuck-page recovery;
-- prompt-injection/untrusted-page-content considerations;
-- how capabilities remain bounded instead of becoming unrestricted remote browser control.
-
-Browser automation is expected to be the most security-sensitive adapter family and should not be included in the first implementation merely for completeness if its threat model is not ready.
-
-## 11. Credential ownership
-
-The Bridge owns credentials it directly needs to access its configured technical targets, including where applicable:
-
-- SSH private keys or equivalent authentication material;
-- HTTP/API credentials;
-- browser-session credentials or secrets.
-
-These secrets must not be copied into Agent Control Plane or Agent Execution Plane merely to make integration convenient.
-
-MCP clients should receive only tool contracts and sanitized results, not target credentials, private keys, session cookies or hidden connection configuration.
-
-Credential storage, one-time display behavior, rotation, deletion and backup implications must be designed before production use.
-
-## 12. Target and configuration ownership
-
-The Bridge owns the technical target definition needed for its adapter to operate.
-
-MCP invocation arguments must not be able to silently replace administrator-controlled values such as:
-
-- SSH host, port, user or key;
-- HTTP origin/base URL or secret headers;
-- browser target origin or stored session identity.
-
-Administrator-fixed context should remain outside the model-visible schema whenever practical, or otherwise be validated against an immutable configured envelope before execution.
-
-This complements — but does not duplicate — Agent Control Plane's `fixed_arguments_v1` capability narrowing when Control Plane is in the path.
-
-## 13. MCP server boundary
-
-The Bridge should present capabilities through standard MCP contracts and should avoid private coupling to one client implementation.
-
-Detailed design must decide:
-
-- supported MCP transport(s);
-- server authentication;
-- MCP protocol-version support;
-- initialization and tool discovery behavior;
-- schema limits;
-- result-size limits;
-- cancellation and timeout mapping;
-- whether capability inventory changes require stable fingerprints or other compatibility signals for clients such as Agent Control Plane.
-
-Compatibility with Agent Control Plane's connector discovery/fingerprint model is an important acceptance target, but must be achieved through ordinary MCP behavior rather than a private back channel.
-
-## 14. Authorization boundary
-
-The Bridge needs sufficient administration security to protect its own configuration and MCP endpoint, but it must not invent Control Plane-style operational task authorization.
-
-When used behind Agent Control Plane:
-
-- Bridge configuration defines which technical capabilities exist;
-- Control Plane task revisions select which of those capabilities are exposed to a given governed execution;
-- Control Plane may further narrow arguments through its own generic mechanisms;
-- Bridge still validates every invocation against its own technical capability definition.
-
-Neither layer should broaden the other.
-
-When used standalone, the administrator assumes responsibility for deciding which clients are allowed to access the Bridge and which configured capabilities they can discover/use according to the standalone access model that will be designed later.
-
-## 15. Execution lifecycle and retries
-
-The Bridge owns the lifecycle of an individual technical capability invocation that it performs directly.
-
-Detailed design must define:
-
-- invocation timeout;
-- cancellation;
-- subprocess/session cleanup;
-- transport retry policy, if any;
-- which operations are safe to retry;
-- output collection and truncation;
-- normalized success/failure results;
-- crash/restart behavior for in-flight invocations.
-
-The Bridge must not blindly retry side-effecting operations. Retry behavior should be capability-/adapter-aware and must not conflict with retries owned by Agent Execution Plane or Agent Control Plane.
-
-## 16. Persistence direction
-
-Persistence requirements are deliberately undecided at brief stage.
-
-The detailed design must determine what must be stored durably, potentially including:
-
-- target definitions;
-- capability definitions;
-- adapter configuration;
-- credentials/secrets;
-- browser-session state where supported;
-- administrator settings;
-- bounded diagnostic history.
-
-The Bridge must not persist copies of Control Plane tasks/jobs or Execution Plane reasoning state.
-
-The production-data preservation cutoff must be declared before users are asked to create non-disposable production target/capability configuration.
-
-## 17. Observability direction
-
-The Bridge needs enough observability to operate technical adapters safely without becoming a duplicate governance audit system.
-
-Potential areas include:
-
-- adapter/target health;
-- capability availability;
-- current invocation counts;
-- bounded duration/result statistics;
-- normalized transport/target failures;
-- redacted administration logs;
-- configuration-change traceability appropriate to the Bridge itself.
-
-When Agent Control Plane is present, its audit remains the authoritative record of governed operational authorization and job-context invocation decisions. Bridge diagnostics should complement that record, not duplicate its semantics.
-
-## 18. Security baseline
-
-The detailed plan must include at least:
-
-- least-privilege HAOS runtime and AppArmor policy;
-- minimal listener and outbound-network exposure;
-- strong administrator and MCP endpoint authentication appropriate to the final design;
-- strict target bounding and SSRF resistance where relevant;
-- host-key/TLS verification appropriate to the adapter;
-- secret non-disclosure and redaction;
-- bounded input/output sizes;
-- bounded execution duration and concurrency;
-- cleanup of subprocesses/browser sessions;
-- no target/credential override from model-controlled input;
-- fail-closed behavior when configured capability validity cannot be proven.
-
-## 19. Genericity tests
-
-A proposed core feature should be rejected or moved behind an adapter/configuration layer if it requires:
-
-- `if control_plane` in core capability execution;
-- `if execution_plane` in core capability execution;
-- `if opendtu`, `if cerbo`, `if unifi` or other appliance-specific branches in the generic core;
-- interpreting one client's task/job semantics;
-- running a model or reasoning loop;
-- deciding operational authorization based on agent identity or business scenario.
-
-The core should understand adapters, targets, bounded capabilities and MCP — not agents, jobs or products.
-
-## 20. Initial integration target
-
-A likely first suite integration scenario is:
-
-`Agent Execution Plane -> governed MCP surface from Agent Control Plane -> MCP Capability Bridge -> bounded SSH/HTTP/browser capability -> target system`
-
-For Agent Control Plane, however, MCP Capability Bridge must look like an ordinary upstream MCP server.
-
-A standalone Bridge scenario must remain equally valid:
-
-`any compatible MCP client -> MCP Capability Bridge -> configured bounded target capability`
-
-## 21. Detailed-design questions to resolve later
-
-Before substantial implementation begins, the detailed design must explicitly settle at least:
-
-1. the adapter interface and capability-definition model;
-2. which adapter family/families belong in the first accepted release;
-3. MCP transport, authentication and protocol compatibility;
-4. target configuration and credential lifecycle;
-5. capability schema/fingerprint stability;
-6. invocation concurrency, timeout, cancellation and cleanup;
-7. safe retry semantics;
-8. SSRF/network policy and target verification;
-9. SSH capability bounding if SSH is included;
-10. HTTP request bounding if HTTP is included;
-11. browser isolation/session/security model if Browser is included;
-12. local persistence and production-data cutoff;
-13. administration UX and observability;
-14. HAOS listener/network/AppArmor boundaries;
-15. CI and real-HAOS acceptance gates;
-16. interoperability acceptance against Agent Control Plane using only standard MCP contracts.
-
-These questions are intentionally deferred while Agent Execution Plane receives the next detailed design focus.
-
-## 22. Delivery discipline
-
-MCP Capability Bridge will follow the suite delivery lifecycle defined in `ARCHITECTURE_CHARTER.md`.
-
-Its authoritative implementation plan will be created only after its detailed architecture is agreed. Until then, Codex should not be asked to invent adapter contracts or security boundaries through implementation.
+Codex implements only the current bounded lot. Its summary alone never marks a lot accepted. Any architectural drift or defect is corrected through a focused patch and re-reviewed before HAOS acceptance.
