@@ -62,7 +62,7 @@ Agent Execution Plane:
 - does not authorize or broaden capabilities;
 - does not choose what ACP should do with a result;
 - remains model-neutral from ACP's perspective: ACP does not select the provider/model;
-- executes the claimed job through its own model profiles;
+- executes the claimed job through its own configured models;
 - returns the model-produced result or factual technical execution failure.
 
 The reference transport is ACP's existing authenticated **Streamable HTTP MCP surface**. Execution Plane is configured with:
@@ -123,58 +123,58 @@ The first release supports two provider adapter families:
 - **Ollama-compatible** endpoints;
 - **OpenAI-compatible** endpoints.
 
-Multiple model profiles may be configured across either family, including local and remote endpoints.
+Multiple models may be configured across either family, including local and remote endpoints.
 
 Provider-specific mechanics belong behind provider adapters rather than spreading provider branches through the execution loop.
 
 Model-provider credentials belong to Agent Execution Plane because it directly invokes the providers.
 
-## 8. Model profiles and administrator priority
+## 8. Configured models and administrator priority
 
-Each model profile includes at least:
+Each configured model includes at least:
 
 - enabled/disabled state;
 - explicit administrator-defined priority/order;
 - provider/model technical configuration and credentials;
-- a timeout covering the model's entire attempt on one execution.
+- a timeout covering that model's entire attempt on one execution.
 
 Rules:
 
 - every new execution starts again from the top of the administrator-defined priority list;
-- disabled profiles are ignored;
-- Execution Plane never automatically reorders, disables or quarantines profiles after failures;
+- disabled models are ignored;
+- Execution Plane never automatically reorders, disables or quarantines models after failures;
 - a priority-1 model that failed previously is tried again first on the next execution if still enabled and compatible;
-- `disabled` means only that the administrator does not want the profile used now.
+- `disabled` means only that the administrator does not want the model used now.
 
 Priority may be changed while a model is executing; the change affects only later executions.
 
-While a profile is executing the current job:
+While a model is executing the current job:
 
 - it cannot be disabled;
 - it cannot be deleted;
 - its technical configuration cannot be changed in a way that could affect the current attempt;
 - the UI clearly identifies it as currently in use.
 
-A profile not currently in use may be deleted whether enabled or disabled.
+A model not currently in use may be deleted whether enabled or disabled.
 
 ## 9. Model configuration validation
 
-A new model profile cannot be saved until its initial technical validation succeeds, even when the profile is initially disabled.
+A new model cannot be saved until its initial technical validation succeeds, even when the model is initially disabled.
 
-For an existing profile modification:
+For an existing model configuration modification:
 
 1. test the candidate configuration first;
 2. apply it only if validation succeeds;
 3. if validation fails, keep the previous valid configuration unchanged;
 4. show a useful bounded error without exposing secrets.
 
-Known tool/function-calling incompatibility prevents creation of a new profile.
+Known tool/function-calling incompatibility prevents creation of a new model.
 
-If an existing profile later becomes incompatible, show `Incompatible`, exclude it from execution, and leave correction/removal to the administrator.
+If an existing model later becomes incompatible, show `Incompatible`, exclude it from execution, and leave correction/removal to the administrator.
 
 ## 10. Model health
 
-All configured profiles, enabled and disabled, are technically checked at application startup where possible.
+All configured models, enabled and disabled, are technically checked at application startup where possible.
 
 Provider/model unavailability must never prevent the App itself from starting and must never mutate administrator priority or enabled/disabled state.
 
@@ -210,7 +210,7 @@ This is a worker loop, not a scheduler.
 
 ## 12. Model fallback
 
-For every new execution, enabled compatible model profiles are tried in administrator priority order.
+For every new execution, enabled compatible models are tried in administrator priority order.
 
 Automatic fallback to the next model is allowed only after a **technical failure before any MCP tool action has actually executed**.
 
@@ -229,11 +229,11 @@ If all enabled compatible models fail technically before any MCP action, Executi
 
 ## 13. Per-model timeout
 
-Each profile has a configurable timeout covering that model's **entire attempt** on the current execution.
+Each configured model has its own configurable timeout covering that model's **entire attempt** on the current execution.
 
-Default for a newly created profile: **5 minutes**.
+Default for a newly configured model: **5 minutes**.
 
-The administrator remains free to choose the timeout appropriate for each model profile. Agent Execution Plane does not derive or impose a product-level maximum from any caller's lease or lifecycle policy.
+The administrator remains free to choose the timeout appropriate for each model. Agent Execution Plane does not derive or impose a product-level maximum from any caller's lease or lifecycle policy.
 
 The timeout does not reset after each reasoning turn or tool call.
 
@@ -422,7 +422,7 @@ The remaining work before the authoritative implementation plan is intentionally
 2. provider-adapter interface for Ollama-compatible and OpenAI-compatible providers;
 3. exact provider/tool-call mechanics and bounded structured-output validation;
 4. exact MCP client/session mechanics;
-5. model-profile UI/provider-specific fields;
+5. model UI/provider-specific fields;
 6. minimal persistence schema for active-interruption and pending-result recovery;
 7. HAOS listeners/network/AppArmor boundaries;
 8. bounded logs, redaction and UI state presentation;
