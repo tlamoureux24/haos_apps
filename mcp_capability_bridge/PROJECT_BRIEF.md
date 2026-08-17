@@ -38,91 +38,101 @@ The core must not contain product-specific behavior for Home Assistant, OpenDTU,
 
 MCP Capability Bridge is **adapter-oriented and extensible**.
 
-The product is not permanently limited to the adapters implemented in its first release. The generic MCP/authentication/configuration core must allow later target types to be added as separate bounded adapters without redesigning unrelated adapters or coupling the Bridge to a particular client.
+The generic MCP/authentication/configuration core must allow later target types to be added as separate bounded adapters without redesigning unrelated adapters or coupling the Bridge to a particular client.
 
-The first implementation focuses only on the two concrete classes of local technical access currently required:
+The first implementation focuses only on:
 
 - **Web administration interfaces**, reached through HTTP or HTTPS and operated through a real browser engine;
 - **SSH targets**, reached through deliberately bounded configured commands.
 
 These are the **initial adapters**, not the architectural limit of the Bridge.
 
-Future needs may justify additional adapters — for example FTP/SFTP, a direct bounded API adapter, another remote-management protocol or another technical transport. Such examples are intentionally **not part of the current implementation plan**. Each future adapter must be designed and accepted as its own bounded extension while preserving the common Bridge security and MCP contract.
+Future needs may justify additional adapters such as FTP/SFTP, a direct bounded API adapter or another technical transport. Those are intentionally outside the current implementation plan and must each be designed as a bounded extension.
 
-## 4. Responsibility split
+## 4. Core separation rule
 
-The key separation rule remains:
+The key responsibility split is:
 
 > **MCP Capability Bridge defines the maximum technical capability; Agent Control Plane, when present, defines operational authorization.**
 
-The Bridge owns:
+The Bridge owns target connection configuration, target credentials it directly needs, adapter-specific MCP tools, strict argument/target-envelope validation, bounded runtime resources, adapter cleanup, result sanitization and the MCP server endpoint.
 
-- technical target connection configuration;
-- target credentials it directly needs;
-- the adapter-specific MCP tool surface;
-- strict argument and target-envelope validation;
-- technical invocation/session timeout and resource limits;
-- adapter execution and cleanup;
-- bounded result normalization and secret redaction;
-- the MCP server endpoint itself.
+The Bridge does not own models, agents, tasks, jobs, leases, reports, schedules, triggers, events, Control Plane identities or business-scenario authorization.
 
-The Bridge does not own:
+## 5. Ephemeral runtime rule
 
-- agents or models;
-- model-provider credentials;
-- tasks, jobs, leases, reports or reasoning state;
-- schedules, triggers or event routing;
-- Control Plane identities or per-business-scenario authorization;
-- decisions about which job should receive which tool.
+**Target runtime state is disposable by default.**
 
-## 5. Web administration target — intended behavior
+The Bridge persists administrator configuration because it must survive restarts, but it does not persist technical session state produced while using a target.
+
+### Web
+
+Each `web_open` equivalent starts a **fresh isolated browser session**, comparable to a new private/incognito window.
+
+Multiple MCP actions may use that same short-lived session because interactive browsing requires continuity between page inspection, clicks, form filling and navigation. However:
+
+- the session starts from a clean state;
+- no previous session cookies, browser history, cache, local storage, session storage, IndexedDB or browsing profile are loaded;
+- no browser storage state is deliberately exported for reuse;
+- no HAR, video, trace or download archive is persisted as normal operation;
+- stored Bridge credentials may be injected only to establish the configured target login and are never exposed to the MCP client/model;
+- closing, expiry, App shutdown, browser failure or App restart destroys the session and its temporary data;
+- the next Web session starts clean again.
+
+This rule applies even when reconnecting to the same configured Web target.
+
+### SSH
+
+Every SSH tool invocation opens a **fresh SSH connection**, executes exactly the configured bounded operation and closes the connection afterwards.
+
+The Bridge does not keep a persistent shell, PTY, connection pool/multiplexed control session, agent-forwarding state, remote working session or command/output history between calls.
+
+Target configuration and encrypted credentials remain durable because they are administrator configuration; SSH runtime state does not.
+
+### Diagnostics
+
+The Bridge may retain only minimal redacted application logs needed for technical diagnosis, such as safe target/tool identifiers, status category and duration. It must not persist Web page contents, browser snapshots, cookies, SSH command arguments, SSH stdout/stderr or target secrets as an invocation history.
+
+## 6. Web administration target
 
 A Web target represents an administrator-configured **HTTP/HTTPS administration interface**.
 
-The objective is not to encode a pre-written workflow for each website. The objective is to let a reasoning model **interactively inspect and operate the configured web interface** through ordinary MCP tool calls.
-
-The Bridge therefore drives the browser. The model does not need a native browser feature: it only needs ordinary tool/function-calling support from its host.
+The objective is to let a reasoning model interactively inspect and operate that configured interface through ordinary MCP tool calls. The model does not need a native browser feature; it only needs ordinary tool/function calling from its host.
 
 A Web target owns at least:
 
-- its fixed base origin and any explicitly allowed same-target origins;
+- fixed base origin and explicitly allowed same-target origins;
 - TLS policy;
-- authentication/session material that the Bridge itself needs;
-- browser/session limits;
+- authentication material required by the Bridge;
+- bounded browser-session limits;
 - enabled/disabled state.
 
-For an enabled valid Web target, the Bridge exposes a deterministic target-scoped browser tool family sufficient for interactive administration, including operations equivalent to:
+For an enabled valid target, the Bridge exposes deterministic target-scoped tools equivalent to:
 
-- start/open a browser session on the configured target;
-- inspect the current page as a bounded textual/accessibility snapshot with stable element references;
-- navigate only within the configured allowed origin envelope;
+- open a fresh session;
+- inspect the current page as bounded text/structured accessibility state with Bridge-issued element references;
+- navigate only inside the configured origin envelope;
 - click a referenced element;
-- fill a referenced field;
-- select a referenced option;
-- send a bounded key/submit action where needed;
+- fill/select/press using referenced elements;
 - wait for bounded page/state changes;
-- optionally obtain a screenshot when useful and supported by the consuming client/model path;
-- close the browser session.
+- optionally obtain a bounded screenshot;
+- close the session.
 
-The exact MCP tool names are technical design, but the behavior must remain generic and target-scoped.
+The model cannot supply arbitrary external URLs, arbitrary JavaScript, unrestricted selectors, DevTools commands, filesystem paths, downloads/uploads or browser credentials.
 
-The model must **not** be allowed to supply an arbitrary external URL, arbitrary JavaScript, unrestricted DOM selectors, DevTools commands, filesystem paths, downloads/uploads or browser credentials.
+The primary page representation is textual/structured so a non-vision model can operate the interface. Screenshot support is supplementary.
 
-Browser authentication secrets belong to the Bridge. Where an interface needs login, the Bridge must be able to establish the configured authenticated session without revealing stored credentials to the model/MCP client.
+## 7. Browser-engine neutrality
 
-## 6. Model-side requirement for Web access
+The product contract does **not** require Chromium specifically.
 
-Web access must not require a model-specific browser integration.
+The implementation must use whichever unprivileged browser + automation stack is simplest and safest to package under HAOS/AppArmor while satisfying the Web contract and ephemeral-runtime rule.
 
-A compatible reasoning host only needs to:
+The initial implementation may prefer system Chromium/ChromeDriver because it is naturally available in the Alpine ecosystem used by Home Assistant, but this is an implementation choice rather than a permanent product dependency. Firefox or another suitable standards-compatible engine may replace it if HAOS evidence shows a cleaner or safer implementation.
 
-- discover ordinary MCP tools;
-- expose them through the model provider's tool/function-calling mechanism;
-- feed the bounded tool results back to the model.
+Changing browser engine must not change the MCP Web contract.
 
-The primary page representation returned to the model is textual/structured so a non-vision model can operate the interface. Screenshot support is supplementary, not a requirement for basic Web administration.
-
-## 7. SSH target — intended behavior
+## 8. SSH target
 
 An SSH target owns host, port, user, host-key trust and credentials.
 
@@ -132,159 +142,96 @@ Each enabled SSH capability defines a fixed executable/command structure with on
 
 Host-key verification is mandatory. Arguments are constructed without raw caller-controlled shell concatenation. Execution time and stdout/stderr size are bounded.
 
-## 8. MCP server boundary
+## 9. MCP server boundary
 
 The Bridge exposes standard MCP tools over **Streamable HTTP**.
 
-The MCP endpoint is authenticated with one Bridge-owned opaque Bearer credential in the initial product:
+The MCP endpoint uses one Bridge-owned opaque Bearer credential in the initial product:
 
 - generated by the application;
 - displayed only once when issued/replaced;
 - not recoverable later in clear text;
 - revocable and replaceable from the administration UI;
-- stored only as a verifier because the Bridge only needs to validate it.
+- stored only as a verifier.
 
-This credential authenticates the Bridge endpoint as a whole. MCP Capability Bridge deliberately does **not** create a second per-client identity/permission system. A directly connected client that possesses the credential can discover/use the currently exposed Bridge tools.
+The Bridge deliberately does not create per-client business permissions. Possession of the Bridge credential grants access to the currently exposed Bridge tools. Fine-grained operational authorization belongs elsewhere when needed.
 
-Fine-grained operational authorization belongs to a governing MCP client such as Agent Control Plane when required.
+Compatibility with Agent Control Plane is achieved through ordinary MCP only.
 
-Compatibility with Agent Control Plane is an acceptance target achieved through standard MCP only, never through a private integration mode.
+## 10. Safety rules
 
-## 9. Target safety rules
-
-Every adapter must fail closed outside its configured technical envelope.
+Every adapter fails closed outside its configured technical envelope.
 
 At minimum:
 
-- caller input cannot replace administrator-controlled target identity or credentials;
+- caller input cannot replace target identity or credentials;
 - secrets never appear in tool schemas, browser snapshots, logs or returned errors;
 - execution/session duration and returned data are bounded;
-- adapter-specific escape paths are blocked by that adapter's configured envelope;
-- Web navigation cannot escape the configured origin envelope;
-- Web actions operate on references obtained from the current bounded page snapshot rather than accepting unrestricted caller selectors;
-- SSH arguments cannot become a caller-controlled whole shell command;
-- no automatic replay/retry of target operations after an ambiguous failure or restart;
-- disabled or invalid targets/tools are not exposed as usable MCP tools.
+- Web navigation cannot escape configured allowed origins;
+- Web actions use Bridge-issued references from the current page snapshot rather than unrestricted caller selectors;
+- SSH input cannot become a caller-controlled whole shell command;
+- no automatic replay/retry of target operations after ambiguous failure or restart;
+- disabled/invalid targets/tools are not exposed as usable MCP tools.
 
-MCP tool annotations may describe behavior but are not an authorization mechanism.
-
-## 10. Browser session behavior
-
-Interactive web use spans several MCP calls, so the Bridge may maintain **short-lived in-memory browser sessions**.
-
-A session is:
-
-- created for one configured Web target;
-- identified by an opaque runtime handle returned to the caller;
-- usable only with that same target's tool family;
-- bounded by inactivity/absolute lifetime and resource limits;
-- cleaned up on explicit close, timeout, error, App shutdown or restart;
-- never a durable job or browser-history database.
-
-Browser sessions are not replayed or restored after an App restart.
+MCP annotations are descriptive only, never authorization.
 
 ## 11. Persistence
 
-Persistence exists for Bridge configuration, not for Control Plane or Execution Plane state.
+Persistence exists for Bridge-owned configuration only.
 
-Durable state includes only what the Bridge itself owns, such as:
+Durable state includes targets, bounded SSH capability definitions, encrypted target credentials/secrets, Web authentication setup, Bridge settings and the MCP credential verifier.
 
-- target definitions and adapter type;
-- adapter-owned bounded capability/configuration definitions where applicable;
-- encrypted target credentials/secrets;
-- Web authentication/session setup configuration where required;
-- Bridge settings;
-- MCP credential verifier.
+The Bridge does not persist ACP jobs/tasks, Execution Plane reasoning state, browser profiles/sessions/history, SSH runtime sessions or a permanent invocation history.
 
-The Bridge does not persist ACP tasks/jobs, Execution Plane reasoning/model state, permanent browser histories or a permanent history of tool invocations.
+After the production-data preservation cutoff, supported configuration must be preserved through deterministic tested migrations.
 
-Once the Bridge reaches its production-data preservation cutoff, Bridge-owned target/adapter configuration becomes non-disposable and later schema changes must preserve supported data through tested upgrades.
+## 12. Concurrency and retry behavior
 
-## 12. Invocation and concurrency behavior
+The Bridge may serve multiple MCP clients and uses bounded in-memory concurrency limits to protect HAOS resources.
 
-MCP Capability Bridge may serve multiple MCP clients and does not adopt Execution Plane's one-job execution model.
+It has no durable invocation queue or scheduler. When capacity is exhausted, a new operation fails immediately with a bounded busy error.
 
-Individual adapter invocations and stateful adapter sessions are technically bounded. The implementation may use bounded global and adapter-specific concurrency limits to protect the HAOS host, but it must not create a waiting job system, scheduler or durable invocation queue.
+No automatic logical retry is performed by default. The caller decides whether another attempt is appropriate.
 
-When capacity is exhausted, a new operation fails immediately with a bounded busy error. No automatic invocation retry is performed by default; the caller decides what to do next.
+## 13. HAOS application requirements
 
-## 13. Administration and HAOS application requirements
+MCP Capability Bridge is a normal **Home Assistant OS App** with:
 
-MCP Capability Bridge is delivered as a normal **Home Assistant OS App** and follows the same practical App discipline as Agent Control Plane and Agent Execution Plane.
+- least-privilege AppArmor;
+- Home Assistant Ingress administration UI;
+- user-configurable MCP server host port through HAOS Network settings;
+- graphical language consistent with Agent Control Plane;
+- French/English UI with in-UI language switch;
+- light/dark mode with in-UI theme switch;
+- `MCP Capability Bridge vX.Y.Z` in the header;
+- configuration/visibility for Bridge state, MCP credential, targets, Web sessions/state where useful and SSH capabilities;
+- dedicated logo and icon;
+- complete English and French documentation.
 
-Visible product requirements are:
-
-- installable and runnable from the repository as a normal HAOS App;
-- a mandatory least-privilege **AppArmor profile** appropriate to the actual adapters/runtime;
-- a Home Assistant **Ingress administration interface**;
-- a user-configurable **MCP server host port** through the HAOS App Network configuration;
-- an administration UI visually consistent with Agent Control Plane's graphical language and interaction style while remaining specific to Bridge responsibilities;
-- a fully bilingual **French/English** UI with an in-UI language switch;
-- full **light/dark mode** support with an in-UI theme switch;
-- the header displays **MCP Capability Bridge** with the running **version immediately beside the product name**;
-- generic target management plus adapter-specific configuration/status views for the adapters currently installed by the App;
-- dedicated repository **logo** and **icon**;
-- complete user documentation in **English and French**, including installation, MCP connection, current adapter setup, security constraints and examples.
-
-Internal framework, database schema, exact process topology, AppArmor rule details, implementation libraries and the internal adapter-registration mechanism are technical choices unless they change these visible/security requirements.
+Internal framework, exact browser engine, database schema, process topology and AppArmor rule details are technical choices unless they change visible behavior or the security boundary.
 
 ## 14. Observability
 
-The Ingress UI exposes only operational information needed to configure and diagnose the Bridge, such as:
-
-- App/MCP server state;
-- target/tool availability;
-- current bounded invocation/session counts;
-- last useful redacted technical failure/status;
-- credential presence/rotation state.
+Ingress exposes only information required to configure and diagnose the Bridge: App/MCP state, target/tool availability, current bounded session/invocation counts, safe recent technical status and credential state.
 
 It does not become a second Control Plane audit system or permanent business invocation history.
 
-## 15. Security baseline
-
-The implementation must preserve:
-
-- unprivileged HAOS runtime;
-- least-privilege AppArmor;
-- authenticated MCP endpoint;
-- protected reversible target secrets and non-reversible MCP credential verification;
-- strict input bounds;
-- adapter-controlled target-envelope validation;
-- adapter-appropriate peer/server verification;
-- output/time/concurrency limits;
-- secret redaction/non-disclosure;
-- deterministic subprocess/session cleanup where relevant;
-- no model-controlled configuration mutation;
-- fail-closed behavior when a target/tool definition is invalid or its technical envelope cannot be proven.
-
-## 16. Non-goals
+## 15. Non-goals
 
 MCP Capability Bridge must not:
 
 - run a reasoning model;
 - own tasks, jobs, leases, reports, schedules, triggers or events;
 - copy ACP identities/permissions or task authorization;
-- create a generic workflow engine;
-- create a durable invocation queue;
+- create a generic workflow engine or durable invocation queue;
 - interpret tool results as business decisions;
-- require a model-specific browser integration;
-- expose unrestricted passthrough primitives merely because another component may later restrict them;
+- require model-specific browser integration;
+- persist reusable browser/SSH runtime sessions;
+- expose unrestricted browser control, unrestricted SSH shell or arbitrary URL proxy;
 - contain appliance-specific core logic;
 - require Agent Control Plane or Agent Execution Plane.
 
-## 17. Adapter extensibility rule
-
-A new technical transport belongs as a new Bridge adapter when it can define:
-
-- administrator-controlled target configuration and credentials;
-- a bounded MCP tool surface;
-- strict validation preventing caller-controlled escape from that target envelope;
-- bounded execution/result/resource behavior;
-- deterministic cleanup and safe failure semantics appropriate to that transport.
-
-Adding such an adapter must not require redesigning MCP authentication, Control Plane integration, Execution Plane integration or unrelated adapters.
-
-## 18. Genericity test
+## 16. Genericity test
 
 A feature belongs in MCP Capability Bridge only if it is required to:
 
@@ -292,7 +239,7 @@ A feature belongs in MCP Capability Bridge only if it is required to:
 
 If it instead decides what work should happen, reasons about the work, or decides which business actor/job is authorized to use the tool, it belongs elsewhere.
 
-## 19. Delivery discipline
+## 17. Delivery discipline
 
 Implementation follows the suite lifecycle:
 
