@@ -294,6 +294,8 @@ Standalone API access uses an **opaque Bearer token** managed by Agent Execution
 
 For every standalone execution, the **caller supplies the MCP execution information** needed by Agent Execution Plane, following the same source-owned principle used in the Agent Control Plane integration. This includes the MCP endpoint, any credential required to access it, and the exact MCP tool surface authorized for that execution. Agent Execution Plane does not maintain a permanent standalone connector catalog and does not reuse caller-supplied MCP credentials or tools as configuration for later executions. They exist only to execute the submitted request.
 
+A standalone caller may also supply an **optional JSON result schema** as part of the execution request. When a result schema is supplied, the final model result for that execution is required to conform to that caller-provided schema. When no result schema is supplied, the model may return a free-form result. The schema is a source-provided output contract, not an Execution Plane business-policy decision; Agent Execution Plane must not invent a different result structure. The exact bounded validation/repair mechanics remain part of detailed technical design.
+
 The exact standalone request/response payload schemas remain to be designed.
 
 ## 16. Independence from MCP Capability Bridge
