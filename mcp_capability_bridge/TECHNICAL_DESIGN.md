@@ -6,491 +6,304 @@ This document translates `PROJECT_BRIEF.md` into implementation choices. It must
 
 ## 1. Design goal
 
-The Bridge remains one small authenticated MCP server around bounded technical adapters:
+The Bridge is one authenticated MCP server around bounded adapters:
 
-`MCP client -> Bridge core -> selected adapter -> configured target -> bounded result`
+`MCP client -> Bridge core -> adapter tools -> configured target -> bounded result`
 
-There is no suite-private protocol and no special runtime mode for Agent Control Plane or Agent Execution Plane.
+The core owns MCP, authentication, target configuration, secret protection, generic adapter registration, bounds and HAOS administration. Adapter-specific mechanics remain behind adapters.
 
-The first release implements only:
+Initial adapters are **Web** and **SSH**. Future adapters must be addable without redesigning the MCP/authentication core or unrelated adapters.
 
-- interactive **Web administration** through a real browser engine for HTTP/HTTPS interfaces;
-- bounded **SSH** command capabilities.
-
-Web and SSH are initial adapters, not hard-coded product limits.
-
-## 2. Adapter boundary
-
-The Bridge core owns only concerns that are common to every adapter:
-
-- authenticated MCP endpoint;
-- target registry and persistence;
-- secret protection/redaction;
-- adapter registration and dispatch;
-- common input/result/resource bounds;
-- concurrency accounting;
-- administration shell;
-- health and safe diagnostics.
-
-Each adapter owns the technical semantics needed for its transport, including:
-
-- adapter-specific target configuration validation;
-- the MCP tools generated or configured for that target type;
-- adapter-specific invocation/session behavior;
-- target-envelope enforcement;
-- adapter-specific connectivity tests;
-- cleanup and technical error normalization.
-
-The adapter interface must stay intentionally small. Adding another adapter later must not require changing MCP authentication, the existing Web/SSH implementations, ACP interoperability or Execution Plane interoperability.
-
-No dynamic third-party plugin marketplace/loading system is required. Adapter registration may remain ordinary internal application code; modularity means **separation of responsibilities and independent adapter extension**, not a plugin framework.
-
-## 3. Runtime baseline
+## 2. Runtime baseline
 
 Use the same proven HAOS-oriented foundation as Agent Control Plane where generic:
 
 - `ghcr.io/home-assistant/base`;
 - Python runtime;
-- Starlette/Uvicorn for administration and health surfaces;
-- official MCP Python SDK v2, pinned to an exact stable release when implemented;
-- standard-library `sqlite3` for Bridge-owned persistence;
-- `jsonschema` for bounded tool argument validation;
-- `cryptography` for authenticated encryption of reversible target secrets;
-- `asyncssh` for the initial SSH adapter;
-- Alpine/system Chromium with a pinned browser-driving stack proven inside the HAOS base image for the initial Web adapter.
+- Starlette/Uvicorn for administration/health surfaces;
+- official MCP Python SDK v2, exact-pinned at implementation time;
+- standard-library `sqlite3`;
+- `cryptography` for reversible target-secret protection;
+- `jsonschema` for bounded tool arguments;
+- `asyncssh` for SSH;
+- one HAOS-compatible unprivileged browser-driving stack for the Web adapter.
 
-The preferred Web implementation is system Chromium plus Selenium/WebDriver using the HAOS/Alpine packaged browser/driver, avoiding browser downloads at runtime. If the exact HAOS base-image package combination requires an equivalent unprivileged driver, Codex may adapt that implementation without changing the MCP contract described below.
+The App drops to an unprivileged runtime user after minimal `/data` preparation.
 
-Dependencies are exact-pinned. Adapter-specific dependencies are installed only when required by adapters included in the App release. The App drops to an unprivileged `mcp-capability-bridge` runtime user after minimal `/data` preparation.
+## 3. Browser implementation choice
+
+The architecture is **browser-engine neutral**.
+
+The first candidate is system **Chromium + ChromeDriver + Selenium/WebDriver**, because the Alpine ecosystem used by Home Assistant provides Chromium and ChromeDriver together and ChromeDriver naturally creates a fresh temporary profile per driver session.
+
+This candidate is not a permanent contract. Firefox/geckodriver or another suitable engine may replace it if real HAOS/AppArmor testing proves a simpler or safer implementation.
+
+Playwright remains technically attractive for isolated browser contexts, but its official Linux support targets Debian/Ubuntu rather than Alpine. It therefore must not be selected merely for API convenience if that complicates HAOS packaging.
+
+The accepted implementation is whichever engine/driver satisfies the same Web MCP contract while remaining unprivileged, bounded and reproducible on supported HAOS architectures.
 
 ## 4. MCP compatibility
 
-The Bridge uses standard MCP Streamable HTTP and the current stable official Python SDK v2.
+Expose standard MCP **Streamable HTTP** on one endpoint. Use the current stable official Python SDK and preserve compatibility with the MCP generation used by the existing Agent Control Plane connector on that same endpoint.
 
-The implementation must interoperate with both current MCP clients and the earlier MCP client generation used by the existing Agent Control Plane connector on the **same endpoint**, using ordinary SDK compatibility rather than a second deployment or private compatibility RPC.
+Only MCP tools are exposed. Prompts, resources, model sampling, jobs and task semantics are outside Bridge responsibility.
 
-Only tools are exposed. Prompts, resources, model sampling, jobs and task semantics are outside Bridge responsibility.
-
-Tool inventory is deterministic and sorted by tool name. Configuration changes appear through ordinary MCP discovery behavior.
+No suite-private protocol or client-specific mode is introduced.
 
 ## 5. HAOS listeners
 
-### Administration listener
+- Administration listener: fixed container port `8099`, Ingress-only, not normally published.
+- MCP listener: fixed container port `8098`, `/mcp` plus non-sensitive `/health/live` and `/health/ready`.
+- HAOS publishes `8098` through a user-configurable host-side Network mapping.
 
-- fixed container port `8099`;
-- Home Assistant Ingress only;
-- not published as a normal host port;
-- serves administration UI and administration JSON endpoints;
-- validates the Ingress boundary with the same defensive principles as ACP.
+External target failures do not make the App unready and must not create watchdog restart loops.
 
-### MCP listener
+## 6. MCP authentication
 
-- fixed container port `8098`;
-- MCP endpoint at `/mcp`;
-- `/health/live` and `/health/ready` on the same public listener;
-- exposed through HAOS App `ports`, so the **host-side MCP port is user configurable** from Home Assistant Network settings;
-- every MCP request requires the Bridge Bearer credential;
-- browser-origin requests to the MCP endpoint are rejected unless a future explicit safe CORS use case is deliberately implemented.
+Use one Bridge-owned opaque Bearer credential initially.
 
-Changing the host port never changes internal target configuration.
+The clear token is shown only once on issue/replacement. Store only a verifier protected with an App-local pepper/HMAC key under `/data/private`. Replacement immediately invalidates the old token.
 
-## 6. Health semantics
+There are no Bridge client identities or business scopes.
 
-`/health/live` means the process is alive.
+## 7. Target-secret storage
 
-`/health/ready` means Bridge-owned persistence/configuration and listeners initialized successfully.
+Target credentials must be usable by adapters, so store them using authenticated reversible encryption with an App-local key under `/data/private`.
 
-A configured target being offline does not make the App unready and must not create a HAOS watchdog restart loop. Target failures are operational states shown in Ingress.
+SQLite contains ciphertext and safe metadata only. Administration APIs expose presence/type indicators, never stored clear secrets.
 
-## 7. MCP Bearer credential
+## 8. Persistence model
 
-The first release has one Bridge server-access credential.
-
-Generation:
-
-- cryptographically random opaque token;
-- displayed only once on issue/replacement;
-- never logged or returned later by administration APIs.
-
-Storage:
-
-- clear token never stored;
-- verifier stored using an App-local random pepper/HMAC key under `/data/private`;
-- constant-time verification.
-
-Lifecycle:
-
-- explicit issue;
-- revoke;
-- replace/rotate;
-- old token invalid immediately after replacement.
-
-There are no Bridge client identities/scopes. Possession of this token grants access to the Bridge's currently exposed tools. Fine-grained business authorization belongs elsewhere.
-
-## 8. Reversible target secrets
-
-Target credentials must be used by adapters, so they are reversibly protected.
-
-Use an App-local authenticated-encryption key under `/data/private`. SQLite stores ciphertext plus safe metadata only.
-
-Administration responses expose only safe presence/type indicators such as `has_secret`.
-
-Stored Web usernames/passwords, HTTP Basic credentials, SSH passwords/private keys/passphrases and any future adapter secrets never appear in logs, tool schemas, page snapshots or MCP errors/results.
-
-## 9. Persistence model
-
-Use `/data/mcp_capability_bridge.db`.
+Use `/data/mcp_capability_bridge.db` for Bridge-owned configuration only.
 
 Logical durable state:
 
-### `settings`
+- `settings` — schema generation and bounded technical settings;
+- `mcp_credential` — verifier metadata;
+- `targets` — stable ID/key, display name, adapter type, enabled state, non-secret configuration, encrypted secret payload;
+- adapter-owned durable configuration tables only when an adapter genuinely needs them, such as bounded SSH capabilities.
 
-- schema generation/version;
-- bounded technical settings such as concurrency/session TTL defaults.
+The generic core must not hard-code Web/SSH-specific columns into its common target model.
 
-### `mcp_credential`
+No permanent invocation, browser-history, SSH-session, ACP-job or reasoning-history table exists.
 
-- verifier metadata only;
-- replacement/revocation state and timestamps.
+## 9. Adapter registration model
 
-### `targets`
+Each adapter provides a small internal contract for:
 
-- immutable internal ID;
-- stable administrator-visible key;
-- display name;
-- adapter type identifier (`web` and `ssh` initially, extensible later);
-- enabled/disabled state;
-- non-secret adapter configuration JSON;
-- encrypted secret payload;
-- timestamps.
+- target configuration validation;
+- optional target connectivity test;
+- deterministic MCP tool definitions for enabled valid targets/configured capabilities;
+- tool invocation dispatch;
+- adapter-specific cleanup;
+- safe status presentation metadata.
 
-### `ssh_capabilities`
+This is an internal extension point, not a public plugin ecosystem and not a workflow framework.
 
-- immutable internal ID;
-- SSH target ID;
-- globally unique stable MCP tool name;
-- title/description;
-- enabled/disabled state;
-- strict input schema;
-- fixed command/argument template;
-- timeout/output bounds;
-- timestamps.
+Adding a later FTP/SFTP/API adapter must not require changes to MCP authentication, unrelated adapters or suite integration semantics.
 
-Web action tools are deterministic adapter tools derived from each enabled valid Web target rather than administrator-authored browser workflows.
+## 10. Ephemeral Web runtime
 
-Future adapters may use only target configuration or may add their own adapter-owned persistence where genuinely necessary. They must not require redesigning the common target/authentication tables merely to add a transport.
+`web_open` creates a **new clean browser runtime session** for exactly one configured Web target.
 
-No permanent invocation, browser-history, ACP-job or reasoning-history table is created.
+The session may span multiple MCP calls because interactive administration requires continuity, but it is never durable.
 
-## 10. Stable target-scoped tool identity
+Requirements:
 
-Each adapter owns the stable MCP identities it exposes while obeying global uniqueness.
+- fresh temporary browser profile/context at open;
+- never load cookies/cache/history/localStorage/sessionStorage/IndexedDB/profile state from a prior session;
+- no saved storage-state file for reuse;
+- no HAR/video/trace persistence in normal operation;
+- downloads disabled in the initial adapter;
+- session handle is opaque, memory-only and target-bound;
+- inactivity and absolute session lifetime limits;
+- close on explicit close, expiry, browser failure, App shutdown or restart;
+- temporary profile/context deleted during cleanup;
+- next `web_open` for the same target starts clean again.
 
-Each enabled valid Web target with key `<target>` exposes a deterministic target-scoped Web tool family. Exact normalization is implementation-defined but stable after target creation.
-
-Conceptual tools are:
-
-- `<target>__web_open`
-- `<target>__web_snapshot`
-- `<target>__web_navigate`
-- `<target>__web_click`
-- `<target>__web_fill`
-- `<target>__web_select`
-- `<target>__web_press`
-- `<target>__web_wait`
-- `<target>__web_screenshot`
-- `<target>__web_close`
-
-The actual initial set may merge trivial actions if this reduces complexity without reducing the behavior in `PROJECT_BRIEF.md`.
-
-Changing a target key after creation is compatibility-breaking and requires explicit confirmation because it may change adapter-generated MCP tool names. Changing a display title does not.
-
-SSH capabilities retain their explicit stable administrator-defined MCP tool name.
+If a driver creates a temporary on-disk profile internally, it must live only under Bridge-controlled temporary storage and be deleted deterministically when the session ends.
 
 ## 11. Web target configuration
 
-A Web target stores at least:
+A Web target stores:
 
-- fixed base URL with `http` or `https` scheme;
-- explicit allowed top-level origin set, defaulting to the base origin only;
+- fixed `http`/`https` base origin;
+- explicitly allowed top-level origins, default base origin only;
 - TLS verification policy, default enabled;
-- authentication mode and encrypted authentication material when required;
-- session inactivity and absolute lifetime bounds;
-- enabled/disabled state.
+- enabled state;
+- bounded session timeouts;
+- encrypted authentication material where required.
 
-Initial authentication modes should cover the common local-administration cases without becoming a generic credential scripting system:
+Initial authentication modes may include none, HTTP Basic and configured form login using administrator-fixed selectors/paths. Login secrets are injected by the Bridge and never returned through MCP.
 
-- no authentication;
-- HTTP Basic authentication;
-- configured form login using administrator-fixed login path/selectors and encrypted username/password values.
+## 12. Web MCP contract
 
-Form-login selectors are administrator configuration and are never supplied by the model. More complex SSO/MFA flows are outside the first release unless implementation evidence shows they can be added generically without weakening the boundary.
+Each enabled valid Web target exposes a stable target-scoped tool family equivalent to:
 
-## 12. Web browser sessions
+- `web_open`;
+- `web_snapshot`;
+- `web_navigate`;
+- `web_click`;
+- `web_fill`;
+- `web_select`;
+- `web_press`;
+- `web_wait`;
+- optional `web_screenshot`;
+- `web_close`.
 
-Interactive administration needs state across multiple MCP calls.
+Exact names may be namespaced by target key.
 
-`web_open` creates an isolated browser context/profile and returns an opaque `session_id`. The session is bound to exactly one Web target.
+`web_snapshot` returns bounded textual/accessibility state and Bridge-issued opaque element references. A model does not supply arbitrary CSS/XPath selectors.
 
-Subsequent Web tools require that opaque session handle and may act only against the same target.
+Navigation may not escape configured allowed origins. Every resulting top-level URL is revalidated after navigation/redirect.
 
-Sessions are:
+No arbitrary JavaScript, DevTools control, filesystem path, upload/download or persistent browser profile is exposed.
 
-- in memory only;
-- bounded by inactivity timeout and absolute maximum lifetime;
-- counted against a small browser-session concurrency limit;
-- cleaned on explicit close, timeout, browser failure, App shutdown or restart;
-- never automatically restored/replayed after restart.
+A non-vision tool-calling model must be able to complete the normal Web path using text/structured snapshots alone.
 
-A Bridge restart invalidates every browser `session_id`.
+## 13. Web element references
 
-## 13. Web page representation
+Element references are generated by the Bridge for the current session/page generation. They are opaque and short-lived.
 
-The primary model-facing page representation is **bounded text/structured data**, not raw HTML.
+Navigation or material DOM changes invalidate stale references. An action on a stale reference fails safely and requires a new snapshot.
 
-`web_snapshot` returns a compact page snapshot containing:
+This prevents the model from turning the Browser adapter into arbitrary selector execution.
 
-- safe current URL/path metadata;
-- page title;
-- bounded visible/accessibility text useful for reasoning;
-- interactable elements with short opaque **element references** and useful labels/roles/state.
+## 14. Ephemeral SSH runtime
 
-Element references are generated by the Bridge and are valid only for the current session/page generation. Navigation or material DOM change may invalidate them and require a fresh snapshot.
+Every SSH MCP tool invocation uses a **fresh SSH connection**.
 
-The model does **not** provide arbitrary CSS/XPath selectors. Actions such as click/fill/select operate on an element reference obtained from a Bridge snapshot.
+Flow:
 
-This is both safer and easier for a model to use than exposing arbitrary selectors.
+`validate call -> connect/authenticate/verify host key -> execute one bounded operation -> collect bounded result -> close channels/connection`
 
-## 14. Web action semantics
+Do not persist or reuse:
 
-### Open
+- interactive shell/PTY;
+- ControlMaster/multiplexing connection;
+- SSH agent forwarding state;
+- remote working-directory session;
+- command history;
+- stdout/stderr history;
+- connection/session handles between MCP calls.
 
-Starts the target session, performs the configured login when required and lands on the configured administration origin.
+Only administrator configuration, encrypted credentials and trusted/pinned host-key material are durable.
 
-### Navigate
+## 15. SSH target and capability
 
-Accepts only a relative path or another administrator-bounded same-target location. It cannot change scheme/host/port outside the allowed origin set.
-
-### Click / fill / select / press
-
-Operate only on current valid element references.
-
-`fill` values may come from model arguments for ordinary form data, but stored Bridge authentication secrets are injected only by Bridge-owned login behavior and never returned to the model.
-
-### Wait
-
-Waits for bounded page/element/state change with a bounded timeout; it is not an unbounded sleep primitive.
-
-### Screenshot
-
-Provides a bounded screenshot for clients/models that can make use of image tool results. Basic Web operation must **not depend on vision**, because the text/accessibility snapshot is the normative representation.
-
-### Close
-
-Terminates browser/driver children and removes temporary profile data.
-
-## 15. Web origin and browser security
-
-The browser may render normal target pages, but the Bridge prevents model-driven escape:
-
-- top-level navigation must remain inside allowed configured origins;
-- every resulting top-level URL is revalidated after redirects/navigation;
-- model arguments cannot supply arbitrary JavaScript;
-- no DevTools/remote-debugging MCP surface;
-- no arbitrary selectors;
-- no file upload/download in the initial release;
-- no arbitrary local filesystem path;
-- no persistent unrestricted browser profile;
-- browser profile/temp files are private and deleted after session cleanup.
-
-The page itself is untrusted input to the reasoning model. The Bridge transports page state; it does not reinterpret page text as authorization or configuration.
-
-## 16. Model-side requirement
-
-Nothing in the Bridge requires a model-provider-specific Browser mode.
-
-The consuming host must only expose the Bridge MCP tools through ordinary provider tool/function calling and return tool results to the model.
-
-A non-vision model can operate the interface using `web_snapshot`. Vision support is optional for `web_screenshot`.
-
-## 17. SSH target
-
-An SSH target stores:
-
-- hostname/IP;
-- port;
-- username;
-- authentication type and encrypted credential;
-- mandatory pinned/trusted host-key material;
-- enabled/disabled state.
-
-Host-key verification is always performed. Permanent “accept any host key” is not supported.
-
-Initial credentials may include password or encrypted private key/passphrase where safely supported by `asyncssh`.
-
-## 18. SSH capability
+An SSH target stores fixed host/IP, port, username, mandatory host-key trust, enabled state and encrypted credential.
 
 Each SSH capability defines one bounded command structure:
 
-- fixed executable/command head;
-- ordered argument template where each item is an administrator-fixed literal or one declared input property;
+- stable MCP tool name;
 - strict input object schema;
+- fixed executable/command head;
+- ordered fixed/input argument template;
 - no caller-controlled whole command string;
 - no PTY;
 - no arbitrary environment map;
-- no unrestricted stdin stream initially;
-- per-capability timeout and output bound.
+- no unrestricted stdin initially;
+- timeout/output bounds.
 
-Values are converted/quoted safely; raw caller text is never concatenated as shell syntax.
+Caller values are safely converted/quoted and never concatenated as raw shell syntax.
 
-The result contains bounded exit status/stdout/stderr and safe transport/timeout metadata. The Bridge reports technical result only; it does not infer business meaning.
-
-## 19. Invocation concurrency and retries
+## 16. Concurrency and retry
 
 There is no durable queue.
 
-Use bounded in-memory concurrency:
+Use bounded in-memory limits for adapter operations and a stricter browser-session limit. Capacity exhaustion fails immediately with a bounded busy error.
 
-- small global adapter operation limit;
-- adapter-specific stricter limits where the runtime cost requires them, including browser sessions;
-- immediate bounded `busy` failure when capacity is exhausted.
+No automatic logical retry of Web actions or SSH commands. Ambiguous target side effects are never replayed automatically.
 
-The Bridge performs **no automatic logical retry** of target operations. Ambiguous side effects are never replayed automatically.
+## 17. Result and logging policy
 
-## 20. Result and error bounds
+Tool results are bounded structured MCP content with compatibility text content as needed.
 
-Tool results use deterministic structured MCP output with compatibility text content where needed by the SDK.
+Never return target credentials, cookies, auth headers, private keys or internal crypto material.
 
-Results never contain target secrets, auth headers, cookies, private keys or internal crypto material.
+Normal Bridge logs may retain only safe technical metadata such as correlation ID, adapter/target/tool key, duration, byte counts and status category.
 
-Adapter outputs have explicit hard size/resource limits. Oversized data fails boundedly rather than silently flooding the client.
-
-Errors expose safe categories and useful technical messages, never stack traces or raw secret-bearing upstream exceptions.
-
-## 21. Configuration lifecycle
-
-Targets and adapter-specific capability definitions are managed through Ingress only.
-
-Create/edit is persisted only after static validation by the target's adapter.
-
-Connectivity tests are explicit and adapter-owned. For the first release:
-
-- Web: browser startup + bounded target-origin reachability/login test;
-- SSH: connect/authenticate + host-key verification without executing an arbitrary command.
-
-SSH capability test explicitly executes the configured command and warns about possible side effects.
-
-Target deletion/credential rotation or other execution-affecting changes are refused while that target is actively in use. Each active operation uses an immutable configuration snapshot.
-
-## 22. Administration UI
-
-Ingress follows ACP's visual language without copying ACP business concepts.
-
-Header:
-
-`MCP Capability Bridge vX.Y.Z`
-
-with FR/EN and light/dark controls.
-
-Primary common views:
-
-- **Overview** — App/MCP state, credential state, target/tool counts, active sessions/invocations;
-- **Targets** — generic target list plus adapter-specific create/edit/test/enable/disable/delete configuration;
-- **MCP access** — issue/replace/revoke token and connection instructions.
-
-Initial adapter-specific UI includes SSH capability configuration and Web target/browser state. Future adapters extend target/capability drawers or add a narrowly scoped adapter view only when needed; they do not create a second administration framework.
-
-Stored secrets are never redisplayed.
-
-## 23. Logs and observability
-
-Logs are bounded/redacted.
-
-Safe fields may include correlation ID, adapter type, safe target/tool key, duration, safe status category and byte counts.
-
-Do not log by default:
+Do not persist by default:
 
 - MCP arguments;
-- browser page text/snapshots/screenshots;
+- browser snapshots/page text/screenshots;
+- browser cookies/storage/history;
+- SSH command arguments;
 - SSH stdout/stderr;
-- credentials/cookies/private keys;
-- stored secret values.
+- target credentials.
 
-No permanent business audit/invocation history is required.
+## 18. Configuration lifecycle
 
-## 24. AppArmor and process boundary
+Targets and adapter-owned capability definitions are managed through Ingress.
 
-AppArmor starts from the minimal observed runtime inventory rather than copying ACP verbatim.
+Create/edit is saved only after static validation. Connectivity tests are explicit and must avoid executing the target operation when a safer connectivity/authentication test exists.
 
-Common baseline permissions cover only required Python/s6 runtime, application code, Bridge DB/private keys, temp/runtime paths and outbound stream sockets.
+Execution-affecting mutation or credential rotation is refused while the target is actively in use. Active operations use immutable in-memory configuration snapshots.
 
-Each adapter may add only the AppArmor permissions required by its proven runtime. The initial Web adapter adds only the Chromium/WebDriver executables, libraries, shared-memory/temp/profile paths and child-process behavior demonstrated necessary by CI tracing and real HAOS testing. SSH uses only the network/runtime permissions actually required by its library implementation.
+## 19. Administration UI
 
-A future adapter must not inherit broad privileges simply because another adapter needs them. If an adapter cannot operate safely under a defensible HAOS/AppArmor boundary, that adapter is not accepted until its implementation is changed or the product-level security tradeoff is explicitly reconsidered.
+Ingress follows ACP's visual language without ACP business concepts.
 
-## 25. Graceful shutdown
+Header: `MCP Capability Bridge vX.Y.Z` with FR/EN and light/dark controls.
 
-On SIGTERM/App stop:
+Primary views:
+
+- Overview;
+- Targets;
+- adapter-specific configuration sections/drawers;
+- MCP access.
+
+Stored secrets are never redisplayed. Web target state may show active ephemeral session count; no session history page is created.
+
+## 20. AppArmor and process boundary
+
+Start from minimal observed runtime inventory rather than copying ACP verbatim.
+
+Baseline permits only required Python/s6 runtime, application code, Bridge DB/private keys, temporary paths and outbound stream sockets.
+
+The Web lot adds only the selected browser/driver executables, libraries and temporary/shared-memory paths actually proven necessary.
+
+The Browser adapter is not accepted if it requires privileged mode, broad host filesystem/device access or an unjustifiably broad AppArmor profile.
+
+## 21. Graceful shutdown
+
+On shutdown:
 
 - stop accepting new MCP work;
-- boundedly drain simple active operations;
-- invoke adapter-specific cleanup for remaining sessions/processes;
+- boundedly drain simple operations;
 - terminate browser/driver children;
 - close SSH/network resources;
 - delete temporary browser profiles;
-- never synthesize success for interrupted operations;
-- never replay interrupted operations after restart.
+- do not synthesize success for interrupted work;
+- do not replay work after restart.
 
-## 26. CI design
+## 22. CI design
 
-CI grows by implementation lot and by adapter.
+CI grows by lot and includes metadata/source validation, exact dependency installation, container build/provenance, Ingress/health smoke tests, secret non-disclosure, AppArmor executable inventory and restart/persistence tests.
 
-Common CI includes:
+Web tests prove fresh-session isolation, no state leakage between two sessions to the same target, cleanup, origin confinement, textual snapshots, element-ref lifecycle and optional screenshot bounds.
 
-- metadata/source validation;
-- exact dependency install;
-- compile/unit tests;
-- amd64 image build with base-image provenance;
-- startup/health/Ingress smoke tests;
-- secret non-disclosure;
-- AppArmor executable inventory;
-- restart/persistence tests;
-- current and legacy-compatible MCP client tests against the same endpoint.
+SSH tests prove a fresh connection per invocation, host-key verification, argument injection resistance, timeout/output bounds, cleanup and absence of retained session/output state.
 
-Every adapter adds deterministic adapter-specific fixtures without weakening or replacing the common tests.
+ACP interoperability uses standard MCP discovery/call behavior only.
 
-Initial Web adapter fixture tests cover:
+## 23. Production-data cutoff
 
-- page snapshot and stable element refs;
-- click/fill/select/navigation;
-- same-origin enforcement and redirect escape rejection;
-- configured login without secret disclosure;
-- session isolation/TTL/cleanup;
-- text-only model path;
-- optional screenshot path;
-- App restart invalidating browser sessions cleanly.
+Before production readiness, schema replacement is allowed only on explicitly disposable test installations.
 
-Initial SSH fixture tests cover host-key verification, safe argument construction, injection probes, timeout/output bounds and no automatic retry.
+After the declared cutoff, target/credential/capability configuration is production data and schema evolution requires deterministic tested migrations.
 
-ACP interoperability uses only standard MCP discovery/call behavior.
+## 24. Technical details not requiring product re-approval
 
-## 27. Production-data cutoff
+Unless visible behavior/security changes, implementation may choose:
 
-Early development may replace schema generation only while explicitly operating on disposable test data.
+- exact Python class/module names;
+- exact SQLite DDL/indexes;
+- exact stable MCP SDK pin;
+- Chromium vs Firefox or equivalent browser engine;
+- Selenium/WebDriver vs another HAOS-proven unprivileged automation layer;
+- exact temporary-profile implementation;
+- exact hard limits after test evidence;
+- UI component reuse mechanics from ACP.
 
-Before the first production-ready release, the plan declares the persistence preservation cutoff. From that point, all supported Bridge target, credential and adapter-specific capability/configuration data require deterministic tested migrations on schema evolution.
-
-## 28. Technical details not requiring product re-approval
-
-Unless they alter visible behavior/security, the following are implementation decisions:
-
-- Python module/class names;
-- exact adapter registration/interface class names;
-- exact SQLite DDL/indexes and per-adapter tables;
-- exact stable MCP SDK v2 pin;
-- exact Chromium/WebDriver package versions available in the HAOS base image;
-- exact opaque session/element reference encoding;
-- practical hard limits after test evidence;
-- CSS/component reuse mechanics from ACP.
-
-Any contradiction affecting independence, adapter extensibility, target power, MCP authentication, credential secrecy, target-envelope enforcement or visible HAOS behavior must be escalated before changing the product boundary.
+Any contradiction affecting independence, adapter extensibility, target power, credential secrecy, ephemeral-runtime guarantees or visible HAOS behavior must be escalated before changing the product boundary.
