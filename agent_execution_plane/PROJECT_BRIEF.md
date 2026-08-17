@@ -233,23 +233,25 @@ Each profile has a configurable timeout covering that model's **entire attempt**
 
 Default for a newly created profile: **5 minutes**.
 
+The administrator remains free to choose the timeout appropriate for each model profile. Agent Execution Plane does not derive or impose a product-level maximum from any caller's lease or lifecycle policy.
+
 The timeout does not reset after each reasoning turn or tool call.
 
 If timeout occurs before any MCP action executes, fallback may continue to the next model.
 
 If timeout occurs after an MCP action has executed, no model fallback is allowed and the technical timeout is reported.
 
-The exact allowed configuration range remains a technical-design choice.
-
 ## 14. Agent Control Plane lease behavior
 
-Execution Plane uses ACP's existing lease contract.
+Execution Plane uses ACP's existing lease contract **only when ACP is the caller/source**.
 
 Current ACP behavior:
 
 - initial lease: **5 minutes**;
 - heartbeat extends it in 5-minute windows;
 - maximum attempt lifetime: **30 minutes**.
+
+These values belong to ACP and do not define Agent Execution Plane's model-timeout policy. Another caller may expose different lifecycle limits or no lease mechanism at all.
 
 A single transient communication/heartbeat failure does not immediately stop a running job. Execution may continue only while the already-issued lease remains unquestionably valid and heartbeat restoration is attempted.
 
@@ -421,11 +423,10 @@ The remaining work before the authoritative implementation plan is intentionally
 3. exact provider/tool-call mechanics and bounded structured-output validation;
 4. exact MCP client/session mechanics;
 5. model-profile UI/provider-specific fields;
-6. allowed timeout configuration range around the validated 5-minute default;
-7. minimal persistence schema for active-interruption and pending-result recovery;
-8. HAOS listeners/network/AppArmor boundaries;
-9. bounded logs, redaction and UI state presentation;
-10. CI tests and real-HAOS acceptance gates.
+6. minimal persistence schema for active-interruption and pending-result recovery;
+7. HAOS listeners/network/AppArmor boundaries;
+8. bounded logs, redaction and UI state presentation;
+9. CI tests and real-HAOS acceptance gates.
 
 These points must not reopen the validated execution behavior unless implementation reveals a concrete contradiction that cannot be resolved otherwise.
 
