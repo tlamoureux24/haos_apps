@@ -34,14 +34,20 @@ When Agent Execution Plane uses a Bridge directly, it does so through the same s
 
 The core must not contain product-specific behavior for Home Assistant, OpenDTU, Cerbo GX, UniFi, Gatus or any other appliance. Those systems are only possible configured targets.
 
-## 3. Primary target types
+## 3. Modular adapter model and initial scope
 
-The first implementation focuses on the two concrete classes of local technical access required by the product direction:
+MCP Capability Bridge is **adapter-oriented and extensible**.
+
+The product is not permanently limited to the adapters implemented in its first release. The generic MCP/authentication/configuration core must allow later target types to be added as separate bounded adapters without redesigning unrelated adapters or coupling the Bridge to a particular client.
+
+The first implementation focuses only on the two concrete classes of local technical access currently required:
 
 - **Web administration interfaces**, reached through HTTP or HTTPS and operated through a real browser engine;
 - **SSH targets**, reached through deliberately bounded configured commands.
 
-HTTP/HTTPS is therefore primarily the transport used by a **Web target**. A separate raw HTTP/API adapter is **not required for the initial release** merely because the web interface itself uses HTTP. It may be added later as an independent bounded adapter if a genuine direct-API use case justifies it.
+These are the **initial adapters**, not the architectural limit of the Bridge.
+
+Future needs may justify additional adapters — for example FTP/SFTP, a direct bounded API adapter, another remote-management protocol or another technical transport. Such examples are intentionally **not part of the current implementation plan**. Each future adapter must be designed and accepted as its own bounded extension while preserving the common Bridge security and MCP contract.
 
 ## 4. Responsibility split
 
@@ -150,9 +156,10 @@ Every adapter must fail closed outside its configured technical envelope.
 
 At minimum:
 
-- caller input cannot replace target host/origin/user/credential;
+- caller input cannot replace administrator-controlled target identity or credentials;
 - secrets never appear in tool schemas, browser snapshots, logs or returned errors;
 - execution/session duration and returned data are bounded;
+- adapter-specific escape paths are blocked by that adapter's configured envelope;
 - Web navigation cannot escape the configured origin envelope;
 - Web actions operate on references obtained from the current bounded page snapshot rather than accepting unrestricted caller selectors;
 - SSH arguments cannot become a caller-controlled whole shell command;
@@ -182,8 +189,8 @@ Persistence exists for Bridge configuration, not for Control Plane or Execution 
 
 Durable state includes only what the Bridge itself owns, such as:
 
-- targets;
-- bounded SSH capability definitions;
+- target definitions and adapter type;
+- adapter-owned bounded capability/configuration definitions where applicable;
 - encrypted target credentials/secrets;
 - Web authentication/session setup configuration where required;
 - Bridge settings;
@@ -191,13 +198,13 @@ Durable state includes only what the Bridge itself owns, such as:
 
 The Bridge does not persist ACP tasks/jobs, Execution Plane reasoning/model state, permanent browser histories or a permanent history of tool invocations.
 
-Once the Bridge reaches its production-data preservation cutoff, target/capability configuration becomes non-disposable and later schema changes must preserve supported data through tested upgrades.
+Once the Bridge reaches its production-data preservation cutoff, Bridge-owned target/adapter configuration becomes non-disposable and later schema changes must preserve supported data through tested upgrades.
 
 ## 12. Invocation and concurrency behavior
 
 MCP Capability Bridge may serve multiple MCP clients and does not adopt Execution Plane's one-job execution model.
 
-Individual SSH invocations and Web browser sessions/actions are technically bounded. The implementation may use bounded global and adapter-specific concurrency limits to protect the HAOS host, but it must not create a waiting job system, scheduler or durable invocation queue.
+Individual adapter invocations and stateful adapter sessions are technically bounded. The implementation may use bounded global and adapter-specific concurrency limits to protect the HAOS host, but it must not create a waiting job system, scheduler or durable invocation queue.
 
 When capacity is exhausted, a new operation fails immediately with a bounded busy error. No automatic invocation retry is performed by default; the caller decides what to do next.
 
@@ -215,11 +222,11 @@ Visible product requirements are:
 - a fully bilingual **French/English** UI with an in-UI language switch;
 - full **light/dark mode** support with an in-UI theme switch;
 - the header displays **MCP Capability Bridge** with the running **version immediately beside the product name**;
-- views/configuration for Bridge status, MCP credential, targets, Web sessions/state where useful and SSH capabilities;
+- generic target management plus adapter-specific configuration/status views for the adapters currently installed by the App;
 - dedicated repository **logo** and **icon**;
-- complete user documentation in **English and French**, including installation, MCP connection, Web target setup, SSH setup, security constraints and examples.
+- complete user documentation in **English and French**, including installation, MCP connection, current adapter setup, security constraints and examples.
 
-Internal framework, database schema, exact process topology, AppArmor rule details and implementation libraries are technical choices unless they change these visible/security requirements.
+Internal framework, database schema, exact process topology, AppArmor rule details, implementation libraries and the internal adapter-registration mechanism are technical choices unless they change these visible/security requirements.
 
 ## 14. Observability
 
@@ -227,7 +234,7 @@ The Ingress UI exposes only operational information needed to configure and diag
 
 - App/MCP server state;
 - target/tool availability;
-- current bounded invocation/browser-session count;
+- current bounded invocation/session counts;
 - last useful redacted technical failure/status;
 - credential presence/rotation state.
 
@@ -242,11 +249,11 @@ The implementation must preserve:
 - authenticated MCP endpoint;
 - protected reversible target secrets and non-reversible MCP credential verification;
 - strict input bounds;
-- target/origin/host bounding;
-- SSH host-key and Web TLS verification;
+- adapter-controlled target-envelope validation;
+- adapter-appropriate peer/server verification;
 - output/time/concurrency limits;
 - secret redaction/non-disclosure;
-- deterministic browser/subprocess cleanup;
+- deterministic subprocess/session cleanup where relevant;
 - no model-controlled configuration mutation;
 - fail-closed behavior when a target/tool definition is invalid or its technical envelope cannot be proven.
 
@@ -261,11 +268,23 @@ MCP Capability Bridge must not:
 - create a durable invocation queue;
 - interpret tool results as business decisions;
 - require a model-specific browser integration;
-- expose an arbitrary unrestricted browser, unrestricted SSH shell or arbitrary URL proxy;
+- expose unrestricted passthrough primitives merely because another component may later restrict them;
 - contain appliance-specific core logic;
 - require Agent Control Plane or Agent Execution Plane.
 
-## 17. Genericity test
+## 17. Adapter extensibility rule
+
+A new technical transport belongs as a new Bridge adapter when it can define:
+
+- administrator-controlled target configuration and credentials;
+- a bounded MCP tool surface;
+- strict validation preventing caller-controlled escape from that target envelope;
+- bounded execution/result/resource behavior;
+- deterministic cleanup and safe failure semantics appropriate to that transport.
+
+Adding such an adapter must not require redesigning MCP authentication, Control Plane integration, Execution Plane integration or unrelated adapters.
+
+## 18. Genericity test
 
 A feature belongs in MCP Capability Bridge only if it is required to:
 
@@ -273,7 +292,7 @@ A feature belongs in MCP Capability Bridge only if it is required to:
 
 If it instead decides what work should happen, reasons about the work, or decides which business actor/job is authorized to use the tool, it belongs elsewhere.
 
-## 18. Delivery discipline
+## 19. Delivery discipline
 
 Implementation follows the suite lifecycle:
 
