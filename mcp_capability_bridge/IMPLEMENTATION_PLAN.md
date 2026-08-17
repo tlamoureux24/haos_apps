@@ -30,7 +30,8 @@ Every lot must preserve:
 - unprivileged HAOS runtime and least-privilege AppArmor;
 - configurable MCP host port through HAOS Network settings;
 - Ingress UI follows ACP visual language, FR/EN, light/dark, product name + version;
-- dedicated icon/logo and FR/EN documentation;
+- the committed `mcp_capability_bridge/icon.png` and `mcp_capability_bridge/logo.png` are the authoritative branding assets and must not be replaced, regenerated or substituted without an explicit later product decision;
+- dedicated FR/EN documentation;
 - appliance names never become core logic.
 
 ## Lot 0 — executable HAOS App shell
@@ -45,6 +46,8 @@ Create the smallest real MCP Capability Bridge HAOS App that installs, starts an
 
 - HAOS App metadata under `mcp_capability_bridge/`;
 - initial version source and `MCP Capability Bridge vX.Y.Z` header;
+- preserve the committed root `icon.png` and `logo.png` unchanged as the HAOS App's authoritative icon/logo assets so Home Assistant repository/Supervisor presentation uses those files rather than generated substitutes;
+- the Ingress header must visibly render the committed `icon.png` (or an exact packaged copy of the same asset) immediately with the `MCP Capability Bridge vX.Y.Z` product identity; `logo.png` may additionally be reused elsewhere in the UI but does not replace this mandatory header icon;
 - Home Assistant base image and provenance discipline comparable to ACP;
 - unprivileged runtime user;
 - startup/graceful-shutdown foundation;
@@ -56,7 +59,6 @@ Create the smallest real MCP Capability Bridge HAOS App that installs, starts an
 - ACP-style Ingress shell;
 - FR/EN and light/dark controls;
 - Overview showing only real App readiness;
-- initial logo/icon;
 - basic FR/EN installation docs;
 - dedicated GitHub Actions workflow;
 - image/listener/restart/persistence/AppArmor smoke tests.
@@ -65,9 +67,27 @@ Create the smallest real MCP Capability Bridge HAOS App that installs, starts an
 
 No MCP tools, Bearer issuance, targets, browser, SSH, adapter implementation or fake/sample tools.
 
+### CI evidence
+
+- committed `icon.png` and `logo.png` are present in the packaged App unchanged and the Ingress header resolves/renders the authoritative `icon.png` asset rather than an emoji, generated icon or unrelated substitute;
+- metadata/source validation;
+- Python compile/tests;
+- image build and startup;
+- both health endpoints;
+- Ingress-prefix correctness;
+- bilingual/theme/version/icon UI assertions;
+- listener isolation and configurable MCP host-port mapping;
+- restart/persistence smoke test;
+- initial AppArmor executable inventory.
+
 ### HAOS acceptance
 
-Install, confirm clean logs/startup, verify Ingress/version/language/theme, verify configurable 8098 host port, restart App and HAOS cleanly.
+1. install the App from the repository and confirm Home Assistant presents the committed App icon/logo correctly;
+2. confirm clean logs/startup;
+3. open Ingress and confirm the committed icon is visible with the product name + version in the header;
+4. verify FR/EN and light/dark;
+5. verify configurable 8098 host port;
+6. restart App and HAOS cleanly and confirm the branding assets remain unchanged.
 
 ## Lot 1 — authenticated MCP server and generic adapter foundation
 
@@ -231,7 +251,7 @@ Close the first production-ready release after Web and SSH are accepted on real 
 - graceful shutdown verification;
 - credential rotation safety;
 - polished bilingual Ingress UI;
-- final logo/icon;
+- final presentation review while preserving the committed authoritative `icon.png` and `logo.png`; replacing either asset requires an explicit later product decision;
 - complete README/README.fr/HAOS docs;
 - generic MCP client examples;
 - ACP interoperability through ordinary MCP only;
@@ -251,11 +271,12 @@ Before production cutoff:
 - clients cannot change configured target identity;
 - credentials are never disclosed;
 - no automatic operation replay/retry exists;
-- no permanent invocation/session history exists.
+- no permanent invocation/session history exists;
+- authoritative `icon.png`/`logo.png` remain the packaged HAOS branding assets and the Ingress header continues to render the authoritative `icon.png`.
 
 ### HAOS acceptance
 
-Perform clean install/UI/auth checks, Web end-to-end including second-session clean-state proof, SSH end-to-end including fresh-connection proof, generic client + ACP discovery/calls, restart during/after Web activity, persistence of configuration only, and AppArmor denial-free normal operation without unjustified permissions.
+Perform clean install/UI/auth checks, confirm authoritative app icon/logo and Ingress header icon presentation, Web end-to-end including second-session clean-state proof, SSH end-to-end including fresh-connection proof, generic client + ACP discovery/calls, restart during/after Web activity, persistence of configuration only, and AppArmor denial-free normal operation without unjustified permissions.
 
 After acceptance, target/credential/SSH-capability configuration is production data. Future schema evolution requires explicit deterministic tested migrations.
 
