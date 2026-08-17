@@ -1,397 +1,440 @@
 # Agent Execution Plane — Foundational Project Brief
 
-Status: **foundational brief — detailed design in progress, no implementation started**.
+Status: **functional behavior validated — detailed technical design in progress, no implementation started**.
 
-This document defines the strict product boundary and the operational decisions already validated for Agent Execution Plane before implementation planning begins.
+This document defines the strict product boundary and the validated behavior of Agent Execution Plane before implementation planning begins.
 
-The root `ARCHITECTURE_CHARTER.md` remains normative. Where this brief is more specific, Agent Execution Plane must follow the narrower responsibility defined here.
+The root `ARCHITECTURE_CHARTER.md` remains normative. Where this brief is more specific, Agent Execution Plane follows the narrower responsibility defined here.
 
 ## 1. Product purpose
 
 Agent Execution Plane is a **model execution engine**.
 
-Its entire product responsibility is:
+Its responsibility is deliberately small:
 
-1. receive a job from a source;
-2. give the model exactly the job content and MCP tools supplied for that execution;
-3. run the model/tool-calling loop required to execute that job;
-4. receive the model's result;
-5. return that result to the configured destination.
+1. receive one execution from a source;
+2. give a configured reasoning model exactly the source-provided objective/input and MCP capability surface;
+3. run the model/tool-calling loop;
+4. obtain the final model result or a factual technical failure;
+5. return that outcome to the source/destination.
 
-A concise product flow is:
+Conceptually:
 
-`job source -> Agent Execution Plane -> model + supplied MCP tools -> model result -> result destination`
+`source -> Agent Execution Plane -> model + supplied MCP tools -> result -> source`
 
-Agent Execution Plane is not a control plane, scheduler, policy engine, workflow engine, job designer or infrastructure bridge.
+Agent Execution Plane is not a control plane, scheduler, workflow engine, policy engine, job designer or infrastructure bridge.
 
-## 2. Reference integration with Agent Control Plane
+## 2. One execution contract, regardless of source
 
-The first and reference integration is deliberately simple:
+**Agent Control Plane integration and standalone API usage use the same execution engine and the same functional contract.**
+
+There are not two different execution behaviors to design.
+
+In both cases, the source supplies the execution material:
+
+- objective/instruction;
+- input data;
+- MCP endpoint/access information needed for that execution;
+- the exact MCP tool surface authorized for that execution;
+- an output/result schema when the source requires structured output.
+
+Agent Execution Plane then applies its own configured model priority, runs exactly the same model/MCP loop and produces exactly one result or factual technical failure.
+
+The only differences between Agent Control Plane mode and standalone usage are **transport and lifecycle mechanics at the boundary**:
+
+- Agent Control Plane exposes jobs, leases, governed MCP capabilities and result completion through its existing MCP surface;
+- the standalone API accepts the equivalent execution material directly and exposes explicit result retrieval/acknowledgement.
+
+Those boundary differences must never create divergent execution semantics. The standalone API documentation must describe clearly how to submit the same information that Agent Control Plane supplies through its existing contract.
+
+## 3. Reference Agent Control Plane integration
+
+Reference flow:
 
 `Agent Control Plane -> Agent Execution Plane -> reasoning model -> governed MCP tools -> model result -> Agent Control Plane`
 
-Agent Control Plane already owns the job, its instructions/input, the capability envelope, its lifecycle and the report contract. Agent Execution Plane consumes that existing contract with the minimum adaptation necessary to run the selected local execution profile and MCP loop.
+Agent Control Plane owns the task/job, its business lifecycle, instructions/input, authorization, capability envelope, retry policy and report contract.
 
-For this integration:
+Agent Execution Plane:
 
-- Agent Control Plane decides which jobs exist and when they become available;
-- Agent Control Plane supplies the job content that is to be given to the model;
-- Agent Control Plane supplies/exposes the MCP tools available to that execution;
-- Agent Control Plane remains model-neutral and does not choose the reasoning provider used by Agent Execution Plane;
-- Agent Execution Plane does not add semantic instructions, business context, capabilities or policy;
-- Agent Execution Plane executes the job through its own configured model profiles;
-- Agent Execution Plane returns the model-produced result to Agent Control Plane;
-- factual technical failures that prevent execution are reported back to Agent Control Plane rather than turned into policy decisions by Agent Execution Plane.
+- does not create or choose ACP jobs;
+- does not add semantic instructions or business context;
+- does not authorize or broaden capabilities;
+- does not choose what ACP should do with a result;
+- remains model-neutral from ACP's perspective: ACP does not select the provider/model;
+- executes the claimed job through its own model profiles;
+- returns the model-produced result or factual technical execution failure.
 
-The existing Agent Control Plane job/MCP/report behavior already exercised successfully with Codex is the reference behavior. Agent Execution Plane must not redesign that contract merely to introduce additional abstraction.
+The reference transport is ACP's existing authenticated **Streamable HTTP MCP surface**. Execution Plane is configured with:
 
-The reference transport is the existing authenticated **Streamable HTTP MCP surface** exposed by Agent Control Plane. Agent Execution Plane is configured with that MCP endpoint and the opaque Bearer credential of a worker identity authorized to claim, heartbeat, complete and fail jobs. The same governed MCP surface exposes the capabilities available to the currently claimed job. No separate ACP-specific execution API or duplicated lease protocol is introduced in Agent Execution Plane.
+- the ACP MCP endpoint;
+- the opaque Bearer credential of a worker identity authorized to claim, heartbeat, complete and fail jobs.
 
-## 3. Strict execution-only rule
+The same governed MCP surface exposes the capabilities available to the currently claimed job. No ACP-specific parallel execution API and no duplicated lease protocol are introduced.
+
+## 4. Strict execution-only rule
 
 Agent Execution Plane **executes and reports; it does not decide business policy**.
 
 It must not decide:
 
-- what job should exist;
+- what work should exist;
 - when a task becomes a job;
-- what the job objective should be;
-- what additional business context the model should receive;
+- what objective or business context should be added;
 - which operational capabilities should be authorized;
 - whether missing capabilities should be granted;
-- whether a model conclusion is correct or sufficient as a business result;
-- whether the source should retry, recreate, escalate or otherwise continue the job;
-- what another component should do with the returned result.
+- whether the model's conclusion is business-correct or sufficient;
+- whether the source should retry, recreate, escalate or continue work;
+- what another component should do after receiving the result.
 
-If the model concludes that the supplied tools or information are insufficient, that conclusion is part of the **model result** and is returned unchanged in meaning to the destination. Agent Execution Plane must not reinterpret that conclusion into its own business-policy state machine.
+If the model concludes that tools or information are insufficient, that is a **model result**, not an Execution Plane technical failure.
 
-If Agent Execution Plane itself encounters a technical problem — for example a provider transport failure or an MCP protocol failure that prevents the requested execution from continuing — it reports the factual technical failure to the destination. It does not decide the subsequent policy response.
+If Execution Plane itself encounters a provider, MCP, transport or runtime problem that prevents execution, it reports the factual technical failure without inventing the subsequent policy response.
 
-## 4. No semantic enrichment
+## 5. No semantic enrichment
 
-Everything Agent Execution Plane presents to the model for a job must originate from the job source or from the MCP capability surface supplied for that execution.
+Everything presented to the model for an execution originates from the source or from the supplied MCP capability surface.
 
-Agent Execution Plane must not silently add:
+Execution Plane must not silently add:
 
 - new job instructions;
-- additional business context;
 - inferred objectives;
-- source-specific metadata as reasoning context;
-- extra MCP tools;
+- business context;
+- hidden tools;
 - semantic authorization labels;
-- policy prompts that alter the meaning of the supplied job.
+- policy prompts that change the meaning of the source request.
 
-Provider-specific formatting required to transmit the supplied content is an implementation detail and is allowed, but it must not change or enrich the semantic content of the job.
+Provider-specific formatting necessary to transmit the same content is allowed, but it must not alter its meaning.
 
-Internal runtime information such as process IDs, local session identifiers, health state or diagnostics must not become model context unless the job source explicitly supplied that information as part of the job.
-
-## 5. MCP tool rule
+## 6. MCP capability rule
 
 MCP is the only model-invocable capability path in Agent Execution Plane.
 
-The engine uses only the MCP tools supplied or exposed for the current execution. It must not discover and add unrelated capabilities on its own, connect around a governing source to hidden upstream servers, or create direct infrastructure side channels.
+Execution Plane uses only the MCP tools supplied/exposed for the current execution. It must not discover and add unrelated capabilities or create direct SSH/browser/target-HTTP side channels.
 
-When Agent Control Plane is used, Agent Execution Plane consumes only the governed MCP capability surface made available by Agent Control Plane for the execution.
+A reasoning model does not need to speak MCP itself. Execution Plane speaks MCP and maps the supplied tools into the provider's supported tool/function-calling mechanism.
 
-The capability surface must never be broadened by Agent Execution Plane during execution.
+A model/provider that cannot support the required tool/function-calling behavior is incompatible and must not receive work.
 
-If the model needs a capability that is not available, Agent Execution Plane does not obtain one. The model may report that limitation in its result, which is then returned to the destination.
+## 7. Model provider scope
 
-A reasoning model does not need to speak MCP itself; Agent Execution Plane handles MCP. The model/provider must, however, support the tool/function-calling behavior required to use the supplied MCP tools.
+The first release supports two provider adapter families:
 
-## 6. Model profiles and administrator priority
+- **Ollama-compatible** endpoints;
+- **OpenAI-compatible** endpoints.
 
-Agent Execution Plane owns its reasoning/model-provider configuration because invoking a model is its core technical responsibility.
+Multiple model profiles may be configured across either family, including local and remote endpoints.
 
-The first release supports two provider adapter families: **Ollama-compatible** endpoints and **OpenAI-compatible** endpoints. Multiple model profiles may be configured across either family, including local and remote endpoints.
+Provider-specific mechanics belong behind provider adapters rather than spreading provider branches through the execution loop.
 
-Each model profile has at least these administrator-controlled properties:
+Model-provider credentials belong to Agent Execution Plane because it directly invokes the providers.
+
+## 8. Model profiles and administrator priority
+
+Each model profile includes at least:
 
 - enabled/disabled state;
-- explicit priority/order in the model list;
+- explicit administrator-defined priority/order;
 - provider/model technical configuration and credentials;
-- a timeout covering the model's entire attempt on one job.
+- a timeout covering the model's entire attempt on one execution.
 
-The rules are:
+Rules:
 
-- model priority belongs to Agent Execution Plane, not Agent Control Plane;
-- disabled means only that the administrator does not currently want the model used for jobs;
-- disabled does not mean invalid, broken or untested;
-- every new job starts again from the top of the administrator-defined priority list;
-- disabled profiles are skipped;
-- Agent Execution Plane never automatically reorders models, changes their priority or disables them because of a temporary failure;
-- a model that failed on a previous job is retried normally according to its configured priority on the next job.
+- every new execution starts again from the top of the administrator-defined priority list;
+- disabled profiles are ignored;
+- Execution Plane never automatically reorders, disables or quarantines profiles after failures;
+- a priority-1 model that failed previously is tried again first on the next execution if still enabled and compatible;
+- `disabled` means only that the administrator does not want the profile used now.
 
-Provider-specific mechanics belong behind provider adapters. The execution loop must not contain growing `if openai`, `if ollama`, or equivalent product branches outside those adapters.
+Priority may be changed while a model is executing; the change affects only later executions.
 
-Model-provider credentials belong to Agent Execution Plane because it directly uses them.
-
-## 7. Model configuration lifecycle
-
-A model profile may be stored only when its configuration has passed the required technical validation.
-
-For a new profile:
-
-- the initial technical test must succeed before the profile can be created;
-- this requirement applies whether the new profile is initially enabled or disabled.
-
-For an existing profile:
-
-- a candidate configuration is tested before replacing the current one;
-- if the candidate test fails, the previous valid configuration remains fully in place;
-- the UI must state clearly that the new configuration could not be applied and that the previous configuration was preserved;
-- useful bounded technical failure information should be shown without exposing secrets.
-
-While a model profile is executing the active job:
+While a profile is executing the current job:
 
 - it cannot be disabled;
 - it cannot be deleted;
-- its technical configuration cannot be modified in a way that could affect the running attempt;
-- the UI must state clearly that the model is currently in use;
-- its position in the priority list **may still be changed**, because reordering affects only future jobs and does not modify the active execution.
+- its technical configuration cannot be changed in a way that could affect the current attempt;
+- the UI clearly identifies it as currently in use.
 
-A model that is not currently in use may be deleted whether enabled or disabled.
+A profile not currently in use may be deleted whether enabled or disabled.
 
-## 8. Model compatibility and health
+## 9. Model configuration validation
 
-A model/provider profile that cannot support the tool/function-calling required by Agent Execution Plane is incompatible and must never receive a job.
+A new model profile cannot be saved until its initial technical validation succeeds, even when the profile is initially disabled.
 
-For a new profile, known incompatibility prevents creation. For an existing profile that later becomes incompatible, the UI must show an explicit `Incompatible` state and the profile is excluded from execution until corrected or removed by the administrator.
+For an existing profile modification:
 
-At application startup, Agent Execution Plane tests all configured model profiles, enabled and disabled, to establish their current technical state. A failed availability test must not prevent the App itself from starting and must not change the administrator's enabled/disabled choice or priority order.
+1. test the candidate configuration first;
+2. apply it only if validation succeeds;
+3. if validation fails, keep the previous valid configuration unchanged;
+4. show a useful bounded error without exposing secrets.
 
-Periodic automatic health checks are allowed only when they can be guaranteed not to consume billable/provider usage such as model inference tokens, credits or quota. No automatic health check may submit a prompt or trigger model inference.
+Known tool/function-calling incompatibility prevents creation of a new profile.
 
-If a provider has no guaranteed non-billable health mechanism, Agent Execution Plane must not perform periodic automatic checks against that provider. Its UI may show an unverified/unknown current state until a legitimate test or real use supplies newer information.
+If an existing profile later becomes incompatible, show `Incompatible`, exclude it from execution, and leave correction/removal to the administrator.
 
-Health state is informative. An enabled priority-1 model that previously appeared unavailable is still tried first on the next job, according to the administrator's order.
+## 10. Model health
 
-## 9. Single-job worker behavior
+All configured profiles, enabled and disabled, are technically checked at application startup where possible.
 
-Version one has exactly **one execution slot**.
+Provider/model unavailability must never prevent the App itself from starting and must never mutate administrator priority or enabled/disabled state.
 
-Agent Execution Plane never executes two jobs concurrently and never claims a second job while the current job or its result-delivery phase is still active.
+Periodic health checks are allowed only when they are guaranteed not to consume billable inference tokens, credits or provider quota.
 
-When integrated with Agent Control Plane:
+No automatic health check may submit a prompt or trigger inference.
 
-- when the execution slot is free and at least one enabled compatible model exists, Agent Execution Plane polls for work every **1 second**;
-- polling remains a fixed 1-second mechanism even while Agent Control Plane is temporarily unreachable;
-- when a job is obtained, polling for new jobs stops;
-- after the current job has fully completed and its result has been accepted by the destination, polling resumes immediately;
-- if no model profile is enabled, Agent Execution Plane does not claim jobs and the UI clearly reports that execution is waiting for an enabled model.
+If a provider offers no guaranteed free/non-inferential health mechanism, no periodic check is performed; the UI may show an unverified/unknown state until a legitimate manual test or real execution updates it.
 
-This worker loop is not a scheduler. Agent Control Plane remains responsible for deciding when tasks become jobs.
+Health state is informational. Administrator priority remains authoritative for every new execution.
 
-## 10. Model selection and fallback
+## 11. Single execution slot
 
-For every new job, Agent Execution Plane evaluates enabled compatible model profiles from highest to lowest administrator-defined priority.
+Version one has exactly **one global execution slot**.
 
-If a model suffers a technical failure **before any MCP tool action has been executed for that job**, Agent Execution Plane may continue to the next enabled compatible model in the list.
+Execution Plane never executes two jobs concurrently and never owns an internal queue of waiting work.
 
-The fallback model receives:
+With Agent Control Plane:
 
-- the original job content;
+- when free and at least one enabled compatible model exists, poll ACP every **1 second**;
+- if ACP is unavailable while idle, continue polling every **1 second** and expose the issue in the UI;
+- when a job is claimed, stop claiming more work;
+- resume polling immediately only after the current execution/result-delivery lifecycle is fully cleared;
+- if no active compatible model exists, do not claim jobs and show a clear waiting state.
+
+With the standalone API:
+
+- if an execution is already active, `POST /execute` is refused immediately as busy;
+- if a final result is still awaiting acknowledgement, `POST /execute` is also refused immediately;
+- the caller is responsible for retrying later.
+
+This is a worker loop, not a scheduler.
+
+## 12. Model fallback
+
+For every new execution, enabled compatible model profiles are tried in administrator priority order.
+
+Automatic fallback to the next model is allowed only after a **technical failure before any MCP tool action has actually executed**.
+
+The fallback model starts completely from zero with:
+
+- the original source-provided objective/input;
 - the original supplied MCP capability surface;
-- no reasoning state, conversation, summary or other semantic material from the failed model.
+- the original output contract;
+- its own complete configured timeout.
 
-The fallback model starts from zero and receives its own complete configured timeout.
+No partial conversation, reasoning, summary or state from the failed model is passed to the fallback model.
 
-Once any MCP tool action has actually been executed for the job, Agent Execution Plane must not automatically switch to another model for that job. A later technical failure is reported to the destination instead of replaying the job through another model and risking duplicate effects.
+Once any MCP action has actually executed, **no automatic fallback to another model is allowed** for that execution because side effects may already have occurred.
 
-If every enabled compatible model fails technically before any MCP action occurs, Agent Execution Plane stops the attempt and reports the factual technical failure to the destination. It does not keep the job for an autonomous retry later.
+If all enabled compatible models fail technically before any MCP action, Execution Plane reports a bounded factual technical failure to the source. It does not schedule an internal retry later.
 
-## 11. Per-model timeout
+## 13. Per-model timeout
 
-Each model profile has its own configurable timeout. A newly created model profile uses **5 minutes by default** unless the administrator chooses another value.
+Each profile has a configurable timeout covering that model's **entire attempt** on the current execution.
 
-The timeout covers that model's **entire attempt on the job**, from the start of the attempt until the model returns its final result or the attempt cannot continue. It does not reset at each reasoning turn or MCP exchange.
+Default for a newly created profile: **5 minutes**.
 
-If a model times out before any MCP action has been executed, the next enabled compatible model may be tried according to the priority/fallback rule.
+The timeout does not reset after each reasoning turn or tool call.
 
-If the timeout occurs after an MCP action has been executed, no automatic model fallback is allowed and the technical timeout is reported to the destination.
+If timeout occurs before any MCP action executes, fallback may continue to the next model.
 
-## 12. Agent Control Plane lease/connectivity behavior
+If timeout occurs after an MCP action has executed, no model fallback is allowed and the technical timeout is reported.
 
-When a job has been claimed from Agent Control Plane, Execution Plane must respect the validity of the existing Control Plane lease rather than invent a separate execution-ownership system.
+The exact allowed configuration range remains a technical-design choice.
 
-The current Agent Control Plane lease is issued for **5 minutes**, may be extended by heartbeat in 5-minute windows and is bounded by the Control Plane's maximum attempt lifetime of **30 minutes**. Execution Plane must work inside that existing contract.
+## 14. Agent Control Plane lease behavior
 
-A single transient communication/heartbeat failure does not immediately stop a running job. Agent Execution Plane may continue while the already-issued lease remains unquestionably valid and it attempts to restore communication.
+Execution Plane uses ACP's existing lease contract.
+
+Current ACP behavior:
+
+- initial lease: **5 minutes**;
+- heartbeat extends it in 5-minute windows;
+- maximum attempt lifetime: **30 minutes**.
+
+A single transient communication/heartbeat failure does not immediately stop a running job. Execution may continue only while the already-issued lease remains unquestionably valid and heartbeat restoration is attempted.
 
 As soon as lease validity can no longer be guaranteed:
 
-- Agent Execution Plane stops continuing the reasoning attempt;
-- no new MCP tool invocation may be issued for that job;
-- the interruption is reported factually to Agent Control Plane when communication permits.
+- stop continuing the model attempt;
+- issue no new MCP tool invocation;
+- later report the factual interruption to ACP when communication permits.
 
-The current Agent Control Plane behavior does not allow an already-claimed job to be manually cancelled, so Agent Execution Plane must not invent a separate claimed-job cancellation protocol for the reference integration.
+ACP currently does not support manual cancellation of an already claimed job, so Execution Plane must not invent a separate claimed-job cancellation protocol.
 
-## 13. Result delivery and blocking behavior
+## 15. Result delivery and acknowledgement
 
-Agent Execution Plane handles only one current execution/result at a time.
+Execution Plane never owns more than one current execution/final result.
 
-When the model has produced its final result, Agent Execution Plane persists the result until the configured destination has explicitly accepted or acknowledged it.
+Once a final result exists, it is persisted until the destination explicitly accepts or acknowledges it.
 
-While a result is awaiting delivery/acknowledgement:
+While a final result is pending:
 
-- no new job is accepted or claimed;
-- the model is not run again;
+- no new execution is accepted or claimed;
+- the model is not rerun;
 - the same persisted result is retained;
-- the UI clearly shows that a result is awaiting delivery and the known technical reason when delivery is failing.
+- the UI clearly shows the pending-delivery state and any known technical cause.
 
-For Agent Control Plane integration, result delivery is retried every **1 second** until Control Plane accepts it. Once accepted, the temporary local result is deleted and polling for the next job resumes immediately.
+### Agent Control Plane boundary
 
-The administration UI must provide an explicit, confirmed **abandon/delete pending result** action as an exceptional recovery mechanism. This allows the administrator to unblock the engine if a result can no longer be delivered. The action removes the local pending result and does not rerun the model or decide what the source should do with the original job.
+Execution Plane retries delivery to ACP every **1 second** until ACP accepts the result. Once accepted, the temporary local copy is deleted and polling resumes immediately.
 
-## 14. Crash/restart safety and minimal persistence
+### Standalone boundary
 
-Agent Execution Plane persists only what is necessary to avoid losing the state needed to finish or truthfully report its current execution responsibility.
+The standalone API is asynchronous:
 
-Durable state includes:
+- `POST /execute` submits the execution and returns an opaque execution ID;
+- `GET /executions/<id>` retrieves state/result and **does not** release it;
+- `POST /executions/<id>/ack` explicitly confirms successful receipt.
+
+Only the explicit `ack` deletes the temporary local result and frees the execution slot.
+
+The API/logs distinguish at least execution accepted, result available, result retrieved, result acknowledged and manual abandonment.
+
+### Manual recovery
+
+Both ACP and standalone operation expose an explicit confirmed **abandon pending result** administration action.
+
+Abandonment deletes the local pending result and frees the engine. It does not rerun the model and does not decide what the source should do next.
+
+## 16. Crash/restart safety and persistence
+
+Persistence exists only for configuration and safe recovery, **not as a job database**.
+
+Durable state includes only:
 
 - model/provider configuration and credentials;
-- application settings;
-- the minimum reference required to identify a job/execution that was active if the process restarts before a final result exists;
-- a final result that exists but has not yet been accepted/acknowledged, plus the minimum information necessary to deliver it.
+- application settings/source connection configuration;
+- the minimum reference necessary to identify an execution that was active if the process restarts before a final result exists;
+- a final result that exists but has not yet been accepted/acknowledged, plus the minimum delivery information required.
 
-It must not keep a permanent shadow copy of Agent Control Plane jobs, model conversations or reasoning history.
+Execution Plane does not permanently store job histories, model conversations, reasoning histories or shadow copies of ACP governance state.
 
-If Agent Execution Plane restarts while a final result is waiting for delivery, it restores that exact pending result, remains blocked from new work and continues delivery attempts without rerunning the model.
+If the App restarts while a final result is pending, restore that exact result and continue waiting/delivery without rerunning the model.
 
-If Agent Execution Plane restarts while a job was still being executed and no final result existed, it **must not automatically rerun the job**. MCP actions may already have occurred. Instead it records/reports the factual interruption to the source when possible and waits for the source to determine the next policy action.
+If the App restarts while an execution was still running and no final result exists, **do not automatically rerun it**. Record/report the factual interruption to the source when possible; the source decides what happens next.
 
-## 15. Standalone independence and API
+## 17. Standalone API boundary
 
-Agent Execution Plane must remain fully usable without Agent Control Plane.
+Standalone operation is only a generic way for another source to use the **same execution engine** without Agent Control Plane.
 
-Independence does **not** mean that Agent Execution Plane creates its own tasks, scheduler, authorization policy or job orchestration system. It means another system can submit one execution and receive its result through a small documented API.
+The caller supplies the equivalent execution information that ACP supplies in the reference integration:
 
-The standalone API is asynchronous and deliberately minimal.
+- `objective` / instruction;
+- `input` JSON;
+- MCP endpoint information;
+- optional MCP credential required to access that endpoint;
+- exact MCP tools authorized for that execution;
+- optional JSON result schema.
 
-Conceptually:
+The caller **never selects the model**. Execution Plane always applies its own configured model priority and fallback rules.
 
-- `POST /execute` submits one execution and returns an opaque execution identifier;
-- `GET /executions/<id>` retrieves the current execution state and, when available, the final result;
-- `POST /executions/<id>/ack` explicitly confirms that the caller has successfully received the final result.
+Execution Plane does not maintain a standalone connector catalog and does not reuse caller-supplied MCP endpoints, credentials or tools as configuration for later executions.
 
-If the engine is already executing a request or holding a final result that has not yet been acknowledged, a new `POST /execute` is refused immediately with a clear busy response. There is no standalone internal queue.
+When a result schema is supplied, the final result must conform to that caller-provided output contract. When no result schema is supplied, free-form model output is allowed.
 
-A standalone final result is persisted and the engine remains blocked until the caller sends the explicit acknowledgement. Merely calling `GET /executions/<id>` does not release the result.
+The exact JSON encoding/bounds of these fields remain technical API design, not a separate functional behavior.
 
-The API and logs should distinguish at least:
+### Standalone authentication
 
-- execution accepted;
-- result available;
-- result consulted/retrieved through `GET`;
-- result acknowledged through `ack`;
-- pending result manually abandoned by the administrator.
+Standalone API access uses an **opaque Bearer token** managed by Agent Execution Plane, following the same credential philosophy as ACP:
 
-The administration UI exposes the same explicit, confirmed pending-result abandonment action in standalone mode.
+- generated by the application;
+- displayed to the administrator only once;
+- never recoverable later in clear text;
+- revocable and replaceable from the administration UI.
 
-The standalone API documentation must describe this submit/retrieve/acknowledge lifecycle clearly so external callers know that failing to acknowledge a result intentionally keeps the single execution slot occupied.
+No separate username/password or session-login system is introduced.
 
-Standalone API access uses an **opaque Bearer token** managed by Agent Execution Plane. The token is generated by the application, displayed to the administrator only once when issued, and is never recoverable later in clear text. The administration UI must allow that standalone API credential to be revoked and replaced. Authentication follows the same simple credential philosophy already used by Agent Control Plane rather than introducing a separate login/session system.
+The API documentation must clearly document submission, retrieval and acknowledgement, including the fact that failure to acknowledge intentionally keeps the single execution slot occupied.
 
-For every standalone execution, the **caller supplies the MCP execution information** needed by Agent Execution Plane, following the same source-owned principle used in the Agent Control Plane integration. This includes the MCP endpoint, any credential required to access it, and the exact MCP tool surface authorized for that execution. Agent Execution Plane does not maintain a permanent standalone connector catalog and does not reuse caller-supplied MCP credentials or tools as configuration for later executions. They exist only to execute the submitted request.
-
-A standalone caller may also supply an **optional JSON result schema** as part of the execution request. When a result schema is supplied, the final model result for that execution is required to conform to that caller-provided schema. When no result schema is supplied, the model may return a free-form result. The schema is a source-provided output contract, not an Execution Plane business-policy decision; Agent Execution Plane must not invent a different result structure. The exact bounded validation/repair mechanics remain part of detailed technical design.
-
-The exact standalone request/response payload schemas remain to be designed.
-
-## 16. Independence from MCP Capability Bridge
+## 18. MCP Capability Bridge independence
 
 MCP Capability Bridge is optional.
 
-If used, it is simply an MCP server whose tools may be supplied to an Agent Execution Plane execution, directly in standalone usage or through Agent Control Plane.
+If used, it is simply an MCP server whose tools may be supplied for an execution, directly by a standalone caller or through Agent Control Plane.
 
-Agent Execution Plane must not know how Bridge capabilities are implemented internally and must not implement SSH, target HTTP, browser automation or appliance-specific execution itself.
+Execution Plane must not know how Bridge capabilities are implemented internally and must not implement SSH, target HTTP, browser automation or appliance-specific execution itself.
 
-## 17. Non-goals
+## 19. Observability
 
-Agent Execution Plane must not:
-
-- own Agent Control Plane task definitions or task revisions;
-- own Agent Control Plane event intake, mappings, triggers, schedules or grace incidents;
-- own operational authorization policy;
-- choose which MCP tools a governed job is permitted to use;
-- duplicate Agent Control Plane's job governance, reports, audit or policy logic;
-- create a generic WorkSource framework;
-- create a generic workflow/orchestration engine;
-- create its own scheduler;
-- maintain an internal queue of waiting jobs in version one;
-- classify model conclusions into business outcomes;
-- decide source-level retry/escalation policy;
-- add business context or instructions that were not supplied by the job source;
-- discover extra tools for a running job;
-- directly execute SSH, browser automation, arbitrary target HTTP calls or appliance-specific actions outside MCP;
-- embed Home Assistant, Gatus, OpenDTU, Cerbo GX, UniFi or any other product as core business logic;
-- require Agent Control Plane or MCP Capability Bridge in order to run.
-
-## 18. Observability
-
-Operational visibility should remain limited to what is necessary to run and diagnose the execution engine, including:
+Operational visibility is limited to what is required to operate and diagnose the execution engine, including:
 
 - engine health;
-- source/destination connectivity relevant to the current execution;
-- configured model state, priority, enabled/disabled state and compatibility;
+- ACP/source connectivity where relevant;
+- model state, priority, enabled/disabled state and compatibility;
 - current technical execution activity;
-- pending-result delivery state;
+- pending-result delivery/acknowledgement state;
 - bounded/redacted technical errors;
 - provider usage information where safely available.
 
 Observability must not become a second governance/audit system and must not reinterpret model results.
 
-## 19. Security baseline
+## 20. Security baseline
 
-Detailed design must include the security necessary to run the engine safely without changing its responsibility:
+Detailed design must preserve at least:
 
 - least-privilege HAOS runtime and AppArmor policy;
-- protected model-provider credentials;
+- protected model-provider and source/MCP credentials;
 - authenticated standalone API;
-- strict input/output and transport bounds;
+- bounded input/output and transport sizes;
 - bounded MCP definitions, arguments and results;
 - model/MCP timeouts required to prevent stuck execution;
-- secret redaction and non-disclosure;
+- secret redaction/non-disclosure;
 - no privileged shell/browser/target-HTTP side channel outside MCP;
 - no model-produced data interpreted as configuration or new authorization;
-- no capability broadening by Agent Execution Plane;
-- crash/restart handling that never blindly replays a possibly side-effecting job.
+- no capability broadening by Execution Plane;
+- crash/restart handling that never blindly replays potentially side-effecting work.
 
-Security mechanisms must constrain the execution engine technically; they must not turn it into a business-policy engine.
+Security constrains the engine technically; it does not turn it into a business-policy engine.
 
-## 20. Genericity test
+## 21. Non-goals
 
-A proposed Agent Execution Plane feature belongs in the product only if it is required to:
+Agent Execution Plane must not:
 
-> receive a supplied job, have one of the administrator-configured models execute it with the supplied MCP tools, and return the resulting model output.
+- own ACP task definitions, triggers, schedules, events, incidents or policy;
+- choose which MCP tools a governed ACP job is authorized to use;
+- duplicate ACP governance, retry policy, reports or audit logic;
+- create its own scheduler or waiting-job queue;
+- become a generic workflow/orchestration framework;
+- classify model conclusions into business outcomes;
+- decide source-level retry/escalation policy;
+- add business instructions/context not supplied by the source;
+- discover extra tools for a running execution;
+- execute direct infrastructure actions outside MCP;
+- embed Home Assistant, Gatus, OpenDTU, Cerbo GX, UniFi or another product as core business logic;
+- require Agent Control Plane or MCP Capability Bridge in order to run.
 
-If a feature instead decides what work should exist, what capabilities should be authorized, what a model conclusion means operationally, or what the source should do after the result is returned, it belongs elsewhere.
+## 22. Genericity test
 
-Provider-specific mechanics belong behind provider adapters. Source/destination-specific transport mechanics belong at the thin source/destination boundary. Product/vendor-specific infrastructure mechanics belong behind MCP, not in Agent Execution Plane.
+A proposed feature belongs in Agent Execution Plane only if it is required to:
 
-## 21. Remaining detailed-design questions
+> receive a source-supplied execution, have one of the administrator-configured models execute it with the source-supplied MCP capability surface, and return the resulting model output or factual technical failure.
 
-Before implementation begins, remaining work should stay concrete and limited to mechanics necessary for this deliberately small product, including:
+If a feature instead decides what work should exist, what capabilities should be authorized, what a conclusion means operationally, or what should happen after the source receives the outcome, it belongs elsewhere.
 
-1. exact standalone API payload schemas;
-2. the provider-adapter interface for the validated Ollama-compatible and OpenAI-compatible provider families;
-3. exact technical definitions used to distinguish pre-MCP provider failure from post-MCP failure;
-4. the exact MCP client/session mechanics for the supplied capability surface;
-5. model-profile UI fields and provider-specific configuration fields;
-6. the allowed configurable timeout range around the validated **5-minute default**;
-7. exact persistence schema for active-interruption and pending-result recovery;
-8. HAOS listener/network/AppArmor boundaries;
+## 23. Remaining detailed technical design
+
+The remaining work before the authoritative implementation plan is intentionally technical rather than a second functional-design pass:
+
+1. exact standalone JSON request/response encoding and size bounds for the already validated common execution contract;
+2. provider-adapter interface for Ollama-compatible and OpenAI-compatible providers;
+3. exact provider/tool-call mechanics and bounded structured-output validation;
+4. exact MCP client/session mechanics;
+5. model-profile UI/provider-specific fields;
+6. allowed timeout configuration range around the validated 5-minute default;
+7. minimal persistence schema for active-interruption and pending-result recovery;
+8. HAOS listeners/network/AppArmor boundaries;
 9. bounded logs, redaction and UI state presentation;
 10. CI tests and real-HAOS acceptance gates.
 
-These questions must be answered without expanding the product beyond its execution-only responsibility.
+These points must not reopen the validated execution behavior unless implementation reveals a concrete contradiction that cannot be resolved otherwise.
 
-## 22. Delivery discipline
+## 24. Delivery discipline
 
-The authoritative implementation plan will be created only after the detailed design is agreed.
+The authoritative implementation plan is created only after the remaining technical design is settled.
 
-For every future implementation lot:
+For every implementation lot:
 
 `planned -> implemented by Codex -> independently reviewed -> CI validated -> deployed on HAOS -> real acceptance tested -> accepted`
 
-A Codex summary alone never marks a lot complete. Any defect found during review or HAOS acceptance is patched, reviewed and retested before the lot is recorded as accepted.
+A Codex summary alone never marks a lot complete. Any defect found during review or HAOS acceptance is patched, reviewed and retested before the lot is accepted.
