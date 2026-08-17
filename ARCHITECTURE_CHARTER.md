@@ -194,4 +194,4 @@ Before adding a cross-cutting feature, apply these tests:
 
 The suite architecture is established before implementation of the two new components.
 
-The next implementation focus is **Agent Execution Plane**. Its validated project brief, technical design and authoritative implementation plan define the work sequence. MCP Capability Bridge remains at foundational-brief stage until the Execution Plane implementation is sufficiently stable to confirm the shared boundaries without duplicating responsibilities.
+The next implementation focus is **Agent Execution Plane**. Its validated project brief, technical design and authoritative implementation plan define the work sequence. MCP Capability Bridge now also has a validated project brief, fixed technical design and authoritative implementation plan; its implementation remains intentionally sequenced after Agent Execution Plane is sufficiently stable to confirm the shared boundaries without duplicating responsibilities.
