@@ -19,14 +19,15 @@ Every lot must preserve:
 - MCP Capability Bridge is an independent generic MCP server;
 - no required Agent Control Plane or Agent Execution Plane dependency;
 - no reasoning models, jobs, tasks, leases, schedules or workflow engine;
+- the Bridge core is adapter-oriented and must allow future bounded target types without redesigning MCP/authentication or unrelated adapters;
+- **Web** and **SSH** are the only adapters in the initial implementation plan, not permanent product limits;
 - Web administration means interactive model access to configured HTTP/HTTPS administration interfaces through Bridge-driven browser tools;
 - the model does not require native Browser support, only ordinary tool/function calling from its host;
-- a separate raw HTTP/API adapter is not part of the initial release;
 - SSH remains bounded and never exposes a default unrestricted shell;
-- caller input cannot replace target origin/host/user/credentials;
+- caller input cannot replace administrator-controlled target identity or credentials;
 - browser actions cannot escape configured top-level origins;
 - browser actions use Bridge-issued element references rather than arbitrary model-supplied selectors;
-- Web/SSH target secrets remain inside the Bridge;
+- target secrets remain inside the Bridge;
 - one Bridge-owned opaque Bearer credential authenticates the MCP endpoint without per-client business permissions;
 - no durable invocation queue/history or automatic replay/retry;
 - standard MCP Streamable HTTP only;
@@ -68,7 +69,7 @@ Create the smallest real MCP Capability Bridge HAOS App that installs, starts an
 
 ### Anti-goals
 
-Do not implement MCP tool discovery/calls, Bearer issuance, targets, Web/Chromium, SSH or fake tools.
+Do not implement MCP tool discovery/calls, Bearer issuance, targets, any technical adapter or fake tools.
 
 ### CI evidence
 
@@ -96,13 +97,13 @@ Do not implement MCP tool discovery/calls, Bearer issuance, targets, Web/Chromiu
 
 Lot 0 proves only the HAOS shell/security foundation.
 
-## Lot 1 — authenticated MCP server and target foundation
+## Lot 1 — authenticated MCP server and generic adapter foundation
 
 Status: **planned**.
 
 ### Goal
 
-Turn the shell into a real standalone authenticated MCP server and persist generic target configuration, while exposing no target actions until an adapter is implemented.
+Turn the shell into a real standalone authenticated MCP server and establish the generic target/adapter foundation, while exposing no target actions until a concrete adapter is implemented.
 
 ### Scope
 
@@ -115,20 +116,22 @@ Turn the shell into a real standalone authenticated MCP server and persist gener
 - verifier-only token persistence with App-local pepper/HMAC key under `/data/private`;
 - reject unauthenticated MCP requests;
 - reject unsafe browser-Origin access to the MCP endpoint;
-- generation-1 `settings`, `mcp_credential`, `targets` and `ssh_capabilities` persistence;
+- generation-1 common persistence for `settings`, `mcp_credential` and `targets` only;
+- generic target adapter-type identifier and adapter registration/dispatch boundary;
+- no adapter-specific persistence table before its adapter lot requires one;
 - App-local authenticated-encryption key for target secrets;
 - encrypted secret storage/redaction utilities;
-- generic target repository with stable key, display name, type, enabled state and safe configuration envelope;
-- static target validation;
+- generic target repository with stable key, display name, adapter type, enabled state and safe configuration envelope;
+- common static target-envelope validation hooks delegated to the selected adapter;
 - in-use snapshot/locking foundation;
 - bounded global invocation/session accounting foundation;
-- Ingress views for MCP access and Targets;
-- deterministic empty tool inventory until Web/SSH adapters are present;
+- Ingress views for MCP access and generic Targets;
+- deterministic empty tool inventory until an adapter is implemented;
 - no echo/sample tool.
 
 ### Anti-goals
 
-No Chromium/browser action, SSH connection, raw HTTP/API adapter, ACP-specific authorization or per-client permissions.
+No Chromium/browser action, SSH connection, future transport adapter, ACP-specific authorization or per-client permissions.
 
 ### CI evidence
 
@@ -137,10 +140,11 @@ No Chromium/browser action, SSH connection, raw HTTP/API adapter, ACP-specific a
 - wrong/missing Bearer rejected;
 - token replacement invalidates old token;
 - clear token not recoverable from API/database/logs;
-- encrypted secret round-trip without plaintext persistence;
-- target static validation;
+- encrypted secret utility round-trip without plaintext persistence;
+- adapter registration/unknown-adapter fail-closed tests;
+- generic target persistence/validation tests;
 - Ingress CRUD/persistence shell tests;
-- restart with configuration preserved.
+- restart with common configuration preserved.
 
 ### HAOS acceptance
 
@@ -149,9 +153,9 @@ No Chromium/browser action, SSH connection, raw HTTP/API adapter, ACP-specific a
 3. confirm it cannot be redisplayed;
 4. connect a compatible MCP client and confirm authenticated empty tool inventory;
 5. rotate credential and confirm old token stops working;
-6. create/restart/delete a disabled target record and confirm persistence + no secret disclosure.
+6. verify the target administration shell is present but does not pretend an unimplemented adapter exists.
 
-Lot 1 establishes the MCP/security/configuration foundation.
+Lot 1 establishes the MCP/security/modular-adapter foundation.
 
 ## Lot 2 — interactive Web administration adapter
 
@@ -163,6 +167,7 @@ Let a model interactively operate administrator-configured HTTP/HTTPS administra
 
 ### Scope
 
+- register the first concrete adapter type: `web`;
 - Web target type with:
   - fixed base HTTP/HTTPS origin;
   - explicit allowed top-level origins, default base origin only;
@@ -190,7 +195,7 @@ Let a model interactively operate administrator-configured HTTP/HTTPS administra
 - no arbitrary local filesystem access;
 - browser session concurrency bound with immediate busy response;
 - no automatic Web action retry;
-- Ingress Web target configuration/test/status;
+- Ingress Web target configuration/test/status integrated into the common target UI;
 - generated Web tool inventory visible to administrator;
 - AppArmor expanded only for the proven Chromium/WebDriver runtime requirements.
 
@@ -227,7 +232,8 @@ Use a deterministic local web administration fixture proving:
 - crash/shutdown cleanup;
 - restart invalidates old session IDs without replay;
 - optional screenshot path bounded;
-- AppArmor executable/process inventory includes only required browser runtime.
+- AppArmor executable/process inventory includes only required browser runtime;
+- common MCP/auth/target tests remain unchanged and green.
 
 ### HAOS acceptance
 
@@ -250,15 +256,17 @@ Status: **planned**.
 
 ### Goal
 
-Expose administrator-defined SSH operations as ordinary bounded MCP tools without providing an unrestricted shell.
+Add SSH as a second independent adapter and expose administrator-defined SSH operations as ordinary bounded MCP tools without providing an unrestricted shell.
 
 ### Scope
 
+- register adapter type `ssh` without changing the Web adapter contract;
 - SSH target:
   - fixed host/IP, port and username;
   - encrypted password/private-key/passphrase credential support where safe;
   - mandatory pinned/trusted host-key material;
   - enabled/disabled state;
+- add SSH-owned persistence for bounded SSH capability definitions;
 - explicit SSH target connectivity/auth/host-key test without arbitrary remote command;
 - bounded SSH capability definitions with:
   - stable MCP tool name;
@@ -273,7 +281,7 @@ Expose administrator-defined SSH operations as ordinary bounded MCP tools withou
 - no PTY, arbitrary env map or unrestricted stdin in initial release;
 - bounded stdout/stderr/exit-status result;
 - no automatic command retry;
-- Ingress SSH capability CRUD/test/status;
+- Ingress SSH target/capability CRUD/test/status integrated with the common administration shell;
 - target/capability in-use mutation protection;
 - AppArmor updated only for actual SSH library/runtime needs.
 
@@ -294,7 +302,8 @@ Local deterministic SSH fixture proves:
 - caller cannot replace host/user/whole command;
 - timeout/output bounds;
 - no retry after ambiguous failure;
-- disabled/invalid SSH capabilities absent from MCP tool discovery.
+- disabled/invalid SSH capabilities absent from MCP tool discovery;
+- Web adapter and common MCP/auth tests remain unchanged and green.
 
 ### HAOS acceptance
 
@@ -308,7 +317,7 @@ Against a deliberately restricted test SSH account:
 6. verify credentials never appear in UI/log/MCP result;
 7. disable capability and confirm disappearance from discovery.
 
-Lot 3 proves generic bounded SSH access.
+Lot 3 proves that a second adapter can be added without turning the core into adapter-specific logic.
 
 ## Lot 4 — hardening, interoperability, documentation and production cutoff
 
@@ -316,19 +325,20 @@ Status: **planned**.
 
 ### Goal
 
-Close the first production-ready release after Web and SSH are real and accepted on HAOS.
+Close the first production-ready release after the initial Web and SSH adapters are real and accepted on HAOS.
 
 ### Scope
 
-- full threat-model review for Web, SSH, MCP endpoint, secrets and HAOS runtime;
+- full threat-model review for common Bridge core, Web, SSH, MCP endpoint, secrets and HAOS runtime;
 - bounded hard limits finalized from test evidence;
-- graceful shutdown/drain and child-process cleanup verification;
+- graceful shutdown/drain and adapter cleanup verification;
 - concurrency/busy behavior under load;
 - malformed/oversized MCP argument/result cases;
 - browser session leak/stale-handle tests;
-- Browser process crash tests;
+- browser process crash tests;
 - SSH ambiguous-failure/no-retry tests;
 - credential rotation while targets active/inactive;
+- prove adapter isolation: Web-specific failure/change does not break SSH/common core and vice versa;
 - Ingress responsive/polished bilingual UI consistency with ACP;
 - final dedicated logo/icon if initial assets were temporary;
 - complete `README.md`, `README.fr.md` and HAOS `DOCS.md`/equivalent bilingual documentation;
@@ -344,14 +354,15 @@ Close the first production-ready release after Web and SSH are real and accepted
 Before production cutoff:
 
 - Bridge must run usefully with no ACP/Execution Plane installed;
+- common MCP/auth/target code must not structurally depend on Web or SSH internals;
 - Web administration must work with an ordinary tool-calling non-vision model path;
 - ACP sees Bridge as an ordinary MCP server;
-- no model/client can select a different Web origin or SSH host than configured;
+- no model/client can escape the administrator-configured target envelope;
 - no target credential is disclosed;
-- browser and SSH resources clean up deterministically;
+- adapter resources clean up deterministically;
 - no automatic target-operation retry/replay exists;
 - no permanent invocation/browser history has appeared;
-- raw HTTP/API adapter remains outside this release unless separately justified and planned later.
+- no unplanned future adapter has been slipped into the release.
 
 ### HAOS acceptance
 
@@ -364,11 +375,28 @@ Perform final real-install acceptance covering:
 5. generic MCP client discovery/calls;
 6. ACP connector discovery/calls using ordinary MCP only;
 7. restart during/after browser session and verify cleanup/no replay;
-8. persistence of target/SSH capability configuration;
+8. persistence of common target and adapter-owned configuration;
 9. AppArmor denial-free normal operation with no unjustified permissions;
 10. backup/restore or equivalent persistence check required by the final HAOS packaging policy.
 
-After this lot is accepted, target/credential/SSH capability persistence is **production data**. Future schema changes require explicit deterministic tested upgrades; routine data removal/clean reinstall is no longer an acceptable upgrade strategy.
+After this lot is accepted, supported Bridge target, credential and adapter-owned configuration is **production data**. Future schema changes require explicit deterministic tested upgrades; routine data removal/clean reinstall is no longer an acceptable upgrade strategy.
+
+## Future adapter extensions — intentionally outside this plan
+
+The first release stops at Web + SSH.
+
+A future need such as FTP/SFTP, direct API access or another technical transport does **not** get implemented speculatively now. When such a need becomes real, it receives its own bounded adapter design/implementation lot covering:
+
+- target configuration and credentials;
+- MCP tool contract;
+- transport-specific security envelope;
+- resource/time/output limits;
+- AppArmor/runtime additions if any;
+- CI fixtures;
+- documentation FR/EN;
+- real HAOS acceptance.
+
+The acceptance test for the architecture is that such a future adapter can be added without redesigning common MCP authentication, unrelated adapters or suite integrations.
 
 ## Delivery discipline
 
