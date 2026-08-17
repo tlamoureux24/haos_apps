@@ -43,16 +43,15 @@ Agent Control Plane must remain useful with any compatible MCP client and any co
 
 Agent Execution Plane is the reasoning and execution component.
 
-Its responsibility is to take a unit of work, reason about it through a configured model/reasoning provider, invoke only the MCP tools made available to that execution, and return a result through the work source or result contract in use.
+Its responsibility is to take one source-supplied execution, reason about it through a configured model/reasoning provider, invoke only the MCP tools made available to that execution, and return a result through the source/result contract in use.
 
-Its architecture must support generic adapters for:
+Its architecture must keep three mechanics separated without turning them into a generic orchestration framework:
 
-- work sources;
-- model/reasoning providers;
-- MCP tool access;
-- result/report delivery where this is not already part of the work-source contract.
+- thin source/result boundaries;
+- model/reasoning provider adapters;
+- MCP tool access.
 
-Agent Control Plane may be the first and reference WorkSource integration, but Agent Execution Plane must not require it. Manual/API work submission or other WorkSource implementations may be supported without changing the core execution engine.
+Agent Control Plane is the reference source integration. A small documented standalone API provides independent use without Agent Control Plane. Additional source integrations may be added later only when concrete need exists; the charter does **not** require a generic WorkSource/plugin framework.
 
 Agent Execution Plane must not become a second control plane. It does not own administrator task policy, operational authorization, event routing, trigger definitions, durable governance audit, or connector capability selection.
 
@@ -78,11 +77,13 @@ When both are used, the Bridge must not duplicate Control Plane task policy, and
 
 ## 5. Integration contracts
 
-### 5.1 WorkSource boundary
+### 5.1 Execution source boundary
 
-Agent Execution Plane consumes work through a generic WorkSource contract. Agent Control Plane is expected to be the reference implementation of that integration, but the contract must not encode Control Plane-specific business logic into the execution core.
+Agent Execution Plane receives an execution through a small explicit source boundary and returns the outcome through that source's documented result lifecycle.
 
-The detailed WorkSource lifecycle, lease mapping, cancellation behavior, retries and result semantics must be specified during Agent Execution Plane design before implementation.
+Agent Control Plane is the reference integration; the standalone API is the independent generic boundary. Both must map to the same core execution semantics rather than create separate engines or business behavior.
+
+Source-specific acquisition, lease, acknowledgement and retry mechanics stay at the boundary that owns them. They must not leak source-specific business logic into the execution core.
 
 ### 5.2 MCP boundary
 
@@ -124,7 +125,7 @@ Each durable state transition must have one clear owner.
 
 Cross-component designs must avoid two components independently retrying the same logical action without an explicit contract, because this can create duplicate executions or contradictory state.
 
-The detailed ownership of acquisition retries, model retries, MCP invocation retries, job attempts, lease expiry and result-delivery retries must be decided explicitly during Agent Execution Plane design. Until then, no implementation should silently assign overlapping retry responsibility.
+For Agent Execution Plane, acquisition/result retries belong to the source boundary that owns the relevant lifecycle, while model fallback and MCP-loop safety belong to the execution engine. These responsibilities must remain explicit and non-overlapping.
 
 Failures must remain isolated:
 
@@ -139,7 +140,7 @@ The generic core of each component must depend on contracts and capability descr
 
 Provider- or transport-specific behavior belongs behind adapters with explicit capabilities. Code shaped as growing business-logic branches such as `if home_assistant`, `if gatus`, `if codex`, `if openai`, `if ollama` or appliance-specific equivalents is architectural drift unless it is confined to the adapter that owns that integration.
 
-Adding a new provider, WorkSource, MCP server or Bridge adapter should not require changing unrelated core orchestration or policy semantics.
+Adding a new model provider or concrete source boundary should not require changing unrelated core execution semantics. This extensibility requirement does not justify building unused generic plugin frameworks in advance.
 
 ## 10. Independent security boundaries
 
@@ -193,4 +194,4 @@ Before adding a cross-cutting feature, apply these tests:
 
 The suite architecture is established before implementation of the two new components.
 
-The next design focus is **Agent Execution Plane**. Its detailed architecture and implementation plan must be worked through before substantial code is written. MCP Capability Bridge remains at foundational-brief stage until the Execution Plane design is sufficiently stable to confirm the shared boundaries without duplicating responsibilities.
+The next implementation focus is **Agent Execution Plane**. Its validated project brief, technical design and authoritative implementation plan define the work sequence. MCP Capability Bridge remains at foundational-brief stage until the Execution Plane implementation is sufficiently stable to confirm the shared boundaries without duplicating responsibilities.
