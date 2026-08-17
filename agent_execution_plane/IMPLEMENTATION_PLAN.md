@@ -30,6 +30,7 @@ The following rules apply from the first commit onward:
 - no hidden business/system prompt enrichment;
 - secrets and reasoning content are never logged;
 - the App runs as a normal HAOS App with Ingress, AppArmor, logo/icon and bilingual light/dark administration UI;
+- the committed `agent_execution_plane/icon.png` and `agent_execution_plane/logo.png` are the authoritative branding assets and must not be replaced, regenerated or substituted without an explicit later product decision;
 - implementation details must stay generic and provider/source-specific mechanics stay at thin boundaries.
 
 ## Lot 0 — executable HAOS application shell
@@ -44,6 +45,8 @@ Create the smallest real Agent Execution Plane App that installs, starts and can
 
 - HAOS App metadata under `agent_execution_plane/`;
 - application version source and `Agent Execution Plane vX.Y.Z` header rendering;
+- preserve the committed root `icon.png` and `logo.png` unchanged as the HAOS App's authoritative icon/logo assets so Home Assistant repository/Supervisor presentation uses those files rather than generated substitutes;
+- the Ingress header must visibly render the committed `icon.png` (or an exact packaged copy of the same asset) immediately with the `Agent Execution Plane vX.Y.Z` product identity; `logo.png` may additionally be reused elsewhere in the UI but does not replace this mandatory header icon;
 - Dockerfile based on the Home Assistant base image with pinned provenance handling equivalent in discipline to ACP;
 - unprivileged runtime user and startup script;
 - SQLite initialization plumbing with generation-1 empty schema infrastructure;
@@ -55,7 +58,6 @@ Create the smallest real Agent Execution Plane App that installs, starts and can
 - French/English switch;
 - light/dark switch;
 - Overview shell showing App/engine readiness without pretending external models/ACP are configured;
-- dedicated initial icon/logo assets;
 - basic English/French installation documentation;
 - dedicated GitHub Actions validation workflow;
 - container smoke test proving listener isolation and persistent `/data` across restart.
@@ -67,23 +69,24 @@ Do not implement model providers, ACP polling, standalone execution submission, 
 ### CI evidence
 
 - metadata/source validation;
+- committed `icon.png` and `logo.png` are present in the packaged App unchanged and the Ingress header resolves/renders the authoritative `icon.png` asset rather than an emoji, generated icon or unrelated substitute;
 - Python compile/tests;
 - amd64 image build;
 - startup and both health endpoints;
 - Ingress-prefix correctness;
-- bilingual/theme/version UI assertions;
+- bilingual/theme/version/icon UI assertions;
 - restart/persistence smoke test;
 - initial AppArmor executable inventory.
 
 ### HAOS acceptance
 
-1. install the App from the repository;
+1. install the App from the repository and confirm Home Assistant presents the committed App icon/logo correctly;
 2. confirm clean startup/logs;
-3. open Ingress and confirm name + version;
+3. open Ingress and confirm the committed icon is visible with the product name + version in the header;
 4. verify FR/EN;
 5. verify light/dark;
 6. verify the standalone API host port can be changed in the App Network configuration;
-7. restart App and HAOS once, confirming clean recovery.
+7. restart App and HAOS once, confirming clean recovery and unchanged branding assets.
 
 Acceptance of Lot 0 proves only the App shell/security foundation.
 
@@ -317,7 +320,7 @@ Close the first public/production-quality Execution Plane release without adding
 - final safety-bound review;
 - final bilingual UI copy review;
 - responsive Ingress review on desktop/mobile widths;
-- final dedicated logo/icon assets and repository presentation;
+- final presentation review while preserving the committed authoritative `icon.png` and `logo.png`; replacing either asset requires an explicit later product decision;
 - complete `README.md`, `README.fr.md`, `DOCS.md` and French-equivalent detailed documentation;
 - compatibility statement for Ollama-compatible, OpenAI-compatible and MCP Streamable HTTP expectations;
 - threat/security boundary document focused on Execution Plane;
@@ -337,7 +340,7 @@ Perform the complete real recipe:
 - validate ACP execution;
 - restart App and HAOS with configuration preserved;
 - validate pending-result restart behavior;
-- validate language/theme/version and configured Network port;
+- validate language/theme/version, authoritative icon/logo presentation and configured Network port;
 - verify AppArmor-enforced normal operation and graceful stop/start;
 - inspect logs for secret/data leakage and unexpected errors.
 
