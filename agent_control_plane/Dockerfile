@@ -23,7 +23,7 @@ RUN python3 -m pip install \
   --requirement /app/requirements.txt
 
 COPY src /app/src
-COPY logo.png /app/logo.png
+COPY icon.png /app/icon.png
 COPY run.sh /run.sh
 
 RUN chmod 755 /run.sh

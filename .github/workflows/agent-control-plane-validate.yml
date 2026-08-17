@@ -288,7 +288,7 @@ jobs:
           [[ "${ingress_page}" == *"Agent Control Plane"* ]]
           [[ "${ingress_page}" == *'href="/api/hassio_ingress/ci/health/ready"'* ]]
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/admin.js"'* ]]
-          [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/logo.png"'* ]]
+          [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/icon.png"'* ]]
           [[ "${ingress_page}" == *'href="#audit"'* ]]
           [[ "${ingress_page}" == *"Agent Control Plane <b>v${version}</b>"* ]]
           curl --fail --silent \
@@ -318,10 +318,10 @@ jobs:
             http://127.0.0.1:18099/admin/api/v1/connectors/legacy/tools)" = "404"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             http://127.0.0.1:18098/admin/api/v1/connectors/legacy/tools)" = "404"
-          test "$(curl --silent --output /tmp/agent-control-plane-logo.png --write-out '%{http_code}' \
+          test "$(curl --silent --output /tmp/agent-control-plane-icon.png --write-out '%{http_code}' \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
-            http://127.0.0.1:18099/admin/assets/logo.png)" = "200"
-          test "$(stat -c '%s' /tmp/agent-control-plane-logo.png)" -gt 1000
+            http://127.0.0.1:18099/admin/assets/icon.png)" = "200"
+          test "$(stat -c '%s' /tmp/agent-control-plane-icon.png)" -gt 1000
           echo "SMOKE_STAGE=ingress-ready"
           public_root_status="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18098/)"
           echo "SMOKE_CHECK=public-root:${public_root_status}"
