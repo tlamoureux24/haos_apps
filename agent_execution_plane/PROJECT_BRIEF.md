@@ -400,6 +400,9 @@ Product requirements for the App shell are:
 - a mandatory least-privilege **AppArmor profile** appropriate to the actual runtime needs of Agent Execution Plane;
 - a Home Assistant **Ingress administration interface** used to configure and operate the App without requiring direct access to the administration listener;
 - an administration UI visually consistent with Agent Control Plane's graphical language and interaction style while remaining specific to Execution Plane's responsibilities;
+- a fully bilingual **French/English** Ingress interface, with an in-UI language switch comparable to Agent Control Plane;
+- full **light and dark mode** support, with an in-UI theme control comparable to Agent Control Plane;
+- the application header displays **Agent Execution Plane** with the running application **version immediately beside the product name**, following the same presentation principle as Agent Control Plane;
 - configuration/visibility for the models, their priority/state/timeout, the ACP source connection, standalone API credential/state, current execution state and pending-result recovery where applicable;
 - repository App assets including a dedicated **logo** and **icon**;
 - complete user documentation in both **English and French**, including installation, configuration, ACP integration and standalone API usage.
