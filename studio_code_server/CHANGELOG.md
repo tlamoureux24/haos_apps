@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11
+
+- Update code-server to 4.133.0.
+- Update Codex CLI to 0.147.0.
+- Update Home Assistant CLI to 5.3.0.
+
 ## 0.1.10 - 2026-08-12
 
 - Replace the custom Home Assistant App artwork with the official Visual Studio Code stable icon selected by the repository owner.
