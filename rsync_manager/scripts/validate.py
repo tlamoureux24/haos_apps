@@ -13,8 +13,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 APP_VERSION = re.compile(r"\d+\.\d+\.\d+")
 RSYNC_PACKAGE = re.compile(r"\d+\.\d+\.\d+-r\d+")
 EXPECTED_ASSETS = {
-    "icon.png": "42129d43f4b3913b3cde68aee5172b764847a56b77f757822ad416a95113478e",
-    "logo.png": "a0d4e8bc695f1228ae76535db6392b86930a96765e7d6d914077063176f1d746",
+    "icon.png": "80fb69a44befb214c60d3bbde7618fbb087e3e82906a7e59d5a380379145a20d",
+    "logo.png": "b8950cdeb846867d4e6040ca58f265712fa0f5e28cad9289d68d46f32436a83d",
     "rootfs/www/vendor/bootstrap/bootstrap.bundle.min.js": (
         "e4fd49181388c48ec5040bd3fe66f57c29c8e67fcd8502b3354b96ec7ab47cc7"
     ),
