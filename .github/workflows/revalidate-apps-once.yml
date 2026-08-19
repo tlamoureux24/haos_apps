@@ -1,0 +1,28 @@
+name: Revalidate apps once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/revalidate-apps-once.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch validation workflows on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh workflow run adguard-home-validate.yml --ref main
+          gh workflow run gatus-validate.yml --ref main
+          gh workflow run nginx-proxy-manager-validate.yml --ref main
+          gh workflow run rsync-manager-validate.yml --ref main
+          gh workflow run studio-code-server-validate.yml --ref main
