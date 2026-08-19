@@ -1,207 +1,1409 @@
 # Agent Control Plane
 
-Agent Control Plane is a stable Home Assistant App that mediates work between
-authenticated agents and one or more external MCP servers. It exposes only the
-virtual tools selected for a task, keeps upstream credentials inside the
-gateway, queues executions durably, and stores structured reports and an
-append-only audit trail.
+Agent Control Plane (ACP) is a Home Assistant App that orchestrates work between
+event sources, schedules, authenticated agents, and one or more external MCP
+servers. ACP does not embed an AI model: it governs **when** a task is created,
+**which agent** may claim it, and **which exact MCP tools** that agent may use for
+that task.
 
-It acts as a generic application firewall for MCP: deny by default, explicit
-administrator configuration is the authorization decision. A discovered tool
-that is not selected remains unusable; a tool explicitly selected in a valid
-task is authorized only within the exact envelope of that task, revision,
-identity, effective schema, and optional argument restrictions. Agent Control Plane
-does not create a separate authorization class based on whether a tool is
-presented as read, write, or administrative.
+ACP uses a deny-by-default model. Discovering an MCP tool does not authorize it.
+A tool becomes usable only after an administrator explicitly selects it in a
+task. At execution time ACP revalidates the task, task revision, connector, tool,
+schema fingerprint, caller identity, active lease, and optional argument
+restrictions.
 
 French documentation: [README.fr.md](README.fr.md).
 
-Public release references: [MCP compatibility](MCP_COMPATIBILITY.md),
+Technical references: [MCP compatibility](MCP_COMPATIBILITY.md),
 [threat model](THREAT_MODEL.md), [implementation plan](IMPLEMENTATION_PLAN.md),
 and [changelog](CHANGELOG.md).
 
-## Current capabilities
+---
 
-- generic Streamable HTTP MCP connectors, with optional Bearer authentication;
-- independent connector inventories and collision-free virtual tool names;
-- tasks composed from selected tools across one or several connectors;
-- optional per-tool `fixed_arguments_v1` restrictions that remove selected
-  top-level arguments from the agent-visible schema and inject their ordinary
-  or protected sensitive values inside the gateway;
-- authenticated MCP clients and authenticated event sources;
-- manual, scheduled and event-driven executions;
-- cooldown and durable grace incidents for event triggers, with either simple
-  mapping-level recovery or bounded aggregation and recovery by stable subject;
-- persistent leases, retries, dead letters and human-readable reports;
-- reversible task and connector archival without deleting history;
-- bounded operational-data retention and verified append-only audit chain;
-- French and English Ingress interface with an operational cockpit, separated
-  configuration drawers, browser detection and a persistent manual selector;
-- aggregated operational metrics without secrets or high-cardinality labels.
+## 1. Understand ACP in a few minutes
 
-Agent Control Plane does not embed a model and does not run an agent by itself. An
-MCP-capable client such as Codex claims queued jobs, invokes the virtual tools
-published for the claimed task, and submits the final report.
+Before configuring the App, learn the main objects.
 
-## Installation
+| ACP object | Role | Example |
+| --- | --- | --- |
+| **Connector** | Connection to one upstream MCP server and inventory of its tools | Home Assistant MCP server |
+| **Task** | Instructions sent to the agent plus the exact allowed MCP tools | Diagnose an unavailable camera |
+| **Identity** | Authenticated caller with precise permissions | Codex, Home Assistant Events |
+| **Event source** | Identity allowed to publish events to ACP | Home Assistant automations |
+| **Trigger** | Maps one event type from one source to one task | `gatus.alert` → network diagnosis |
+| **Schedule** | Creates recurring task executions | Daily diagnosis at 09:00 |
+| **Execution** | Concrete queued unit of work | Job created after an alert |
+| **Report** | Structured result returned by the agent | Summary + findings |
+| **Audit** | Append-only governance log | Creation, denial, tool call, report |
+
+Typical event flow:
+
+```text
+Home Assistant / another source
+        │
+        │ POST /api/v1/events + Bearer
+        ▼
+     ACP event source
+        │
+        ▼
+       Trigger
+        │
+        ├── no grace ─────────────────► Execution
+        │
+        └── grace ► Incident ─────────► Recovery: cancel/resolve
+                           │
+                           └───────────► expiry: Execution
+                                                    │
+                                                    ▼
+                                                  Agent
+                                                    │
+                                           allowed MCP tools
+                                                    │
+                                                    ▼
+                                                  Report
+```
+
+Manual and scheduled flows start directly from the task:
+
+```text
+Run now / Schedule → Execution → Agent → MCP tools → Report
+```
+
+---
+
+## 2. Installation, networking, and App options
 
 1. Add this repository to the Home Assistant App store.
 2. Install **Agent Control Plane**.
-3. Keep TCP port `8098` unpublished until an MCP client or event source needs
-   direct access.
-4. Start the App and open its Ingress interface.
+3. Start the App.
+4. Open its Ingress interface.
 
-The administration listener is available only through authenticated Home
-Assistant Ingress. Port `8098` carries the authenticated public MCP and event
-API; expose it only on a trusted LAN or VPN.
+Administration is intentionally available only through authenticated Home
+Assistant Ingress.
 
-## First workflow
+### Public port 8098
 
-1. Open **Connectors**, enter a display name and a Streamable HTTP `/mcp` URL,
-   then select **Test and add**.
-2. Open **Tasks**, write the instructions sent to the agent and select only the
-   connector tools required by that task. Leave each tool in **Standard** mode,
-   or expand **Restrict this tool** to configure a valid example call and mark
-   selected top-level properties as agent-editable, ordinary fixed, or
-   sensitive fixed.
-3. Open **Identities**, create an MCP client identity with job-processing and
-   report permissions, then copy its one-time credential.
-4. Configure the MCP client with `http://HOME_ASSISTANT_IP:8098/mcp` and send
-   the credential as a Bearer token.
-5. Run the task manually, schedule it, or create an authenticated event source
-   and trigger.
-6. Review **Executions**, **Reports**, and **Audit**.
+The public MCP/event listener uses internal TCP port `8098`. This port is **not
+published by default**. Publish it only if an MCP client or event source needs to
+reach ACP directly.
 
-## Connector and task lifecycle
+In the Home Assistant App network configuration, map `8098/tcp` to a host port,
+for example `8098`. If you choose another host port, use that value in client
+URLs.
 
-Disabling is temporary. Archiving removes a resource from normal operational
-views while retaining all executions, reports and audit entries. A resource is
-restored in a disabled state and must be explicitly reactivated. Agent Control Plane
-refuses to archive a task or connector while related work is queued or leased.
-Archiving a task also pauses its schedules and event triggers.
+Examples:
 
-An active connector can be edited without deleting its tasks. Ordinary editing
-can change its display name and optionally replace its endpoint; leaving the new
-endpoint empty retains the protected endpoint and Bearer token already stored by
-the gateway. The existing endpoint path/query and Bearer token are never
-returned to the browser. Use the separate **Rotate secret** action to configure
-or replace a Bearer token. A blank rotation is rejected and never clears the
-current secret implicitly.
+```text
+MCP:    http://HOME_ASSISTANT_IP:8098/mcp
+Events: http://HOME_ASSISTANT_IP:8098/api/v1/events
+```
 
-Endpoint replacement and secret rotation always run MCP initialization and tool
-discovery again. Network or schema failure retains the last inventory for
-inspection but marks the connector unavailable. Dependent tasks fail closed
-until the connector is ready and every selected tool still has its recorded
-fingerprint. A failed rotation does not replace the stored secret. A successful
-rotation replaces the gateway's protected copy; the
-old secret is no longer stored or used by Agent Control Plane. Revoking that token at
-the upstream server remains an upstream administration operation.
+Do not expose this listener directly to the Internet. Use a trusted LAN or VPN.
 
-## Language
+### App options
 
-On first use the interface follows a supported browser preference (`fr` or
-`en`) and falls back to French. The **FR/EN** header button stores only the
-display preference in that browser; it does not change App data. Technical MCP
-names, identifiers and upstream data remain unchanged.
+| Option | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `log_level` | `debug`, `info`, `warning`, `error` | `info` | Runtime log level |
+| `intake_rate_limit_per_minute` | 1 to 600 | 30 | Maximum accepted events per minute per source identity |
 
-## Interface refresh
+The intake limit protects the event API. A source exceeding it receives HTTP
+`429` with `Retry-After: 60`.
 
-Each administration view reloads its own data as soon as it is opened, without
-requiring a manual browser refresh. The operational **Overview**, **Events**,
-**Reports**, and **Audit** views then refresh automatically every 10 seconds,
-while **Executions** refreshes every 5 seconds. A bilingual “Updated … ago”
-indicator shows the age of the last successful refresh.
+---
 
-Automatic refresh is suspended while the browser tab is hidden, while an
-administration drawer is open, or while a detail is expanded in **Events**,
-**Reports**, or **Audit**, so reading and editing are not disturbed. Refreshing
-resumes automatically afterwards; returning to a previously hidden browser tab
-immediately refreshes the active view.
+## 3. Overview
 
-## Data, backup, and retention
+**Overview** is the operational cockpit. It summarizes:
 
-Configuration, queue state, reports and audit data are stored in the App data
-volume and are included in cold Home Assistant backups. The default retention
-policy keeps terminal operational data for 90 days. Queued or leased work,
-configuration and audit entries are never removed by retention.
+- ready, unavailable, disabled, and archived connectors;
+- ready, unavailable, disabled, and archived tasks;
+- active identities;
+- active triggers and schedules;
+- recent events and reports;
+- queued and running executions;
+- grace incidents;
+- dead letters and recent failures;
+- audit-chain verification status.
 
-Development is now closed and persisted Agent Control Plane data is considered
-non-disposable starting with existing 0.46.8 installations. Any future release
-that changes the SQLite schema must preserve existing data through an explicit,
-tested upgrade path. Routine App-data deletion or a clean reinstall is no longer
-an acceptable schema-upgrade strategy. If a database cannot be upgraded safely,
-startup must fail closed without partially altering it and the release must
-document the required backup/recovery path. No separate configuration
-export/import is planned while Home Assistant backups cover coherent recovery.
+Operational **Overview**, **Events**, **Reports**, and **Audit** refresh every 10
+seconds. **Executions** refreshes every 5 seconds. Refresh pauses while the tab is
+hidden, an administration drawer is open, or a detail is expanded.
 
-## Grace incidents and subject correlation
+---
 
-A trigger with a grace period can use **Simple** correlation or **Aggregated by
-subject** correlation. Aggregated mode requires every alert and recovery to
-carry the same non-empty, stable `subject` object for one resource. Changing
-observations belong in `attributes`. The first alert fixes the deadline;
-additional subjects do not extend it. Recoveries remove only their matching
-subject, and one job is created at expiry for all subjects still active.
+## 4. MCP connectors
 
-Incidents and their subject counts remain visible under **Triggers**. Promotion
-is atomic and bounded; an incident that cannot be queued after bounded retries
-becomes visibly blocked and can be retried by an administrator. Incoming events
-remain individually retained and audited.
+A connector represents **one upstream MCP server** whose tools ACP may discover.
 
-## Security boundaries
+### New connector parameters
 
-- the application listeners run as an unprivileged user under AppArmor;
-- administration is isolated from the public MCP/event listener;
-- discovery of a tool grants no execution right;
-- only tools explicitly selected in the valid task revision are exposed and
-  invocable by the authorized identity;
-- explicit administrator selection of a tool is its authorization, regardless
-  of any semantic read, write, or administrative label;
-- any tool or argument outside the configured capability envelope is rejected;
-- connector secrets are encrypted at rest and never exposed to agents;
-- sensitive fixed arguments are encrypted at rest and redacted by key and by
-  transient value from every upstream result before it reaches an agent;
-- fixed arguments are absent from the virtual schema, cannot be overridden by
-  an agent, and are injected only after validation of the reduced call;
-- admitted MCP input schemas use JSON Schema Draft 2020-12 and are enforced in
-  full before an upstream call; unknown constraints, formats, dialects and
-  external references fail closed;
-- reachable connectors whose schemas cannot be admitted are marked `invalid`
-  with their precise `last_error_code`, while transport failures remain
-  `unreachable`;
-- tool invocation is resolved by task revision, connector, tool and schema
-  fingerprint;
-- an agent never receives the original connector credential or unrestricted
-  connector inventory;
-- audit records are HMAC-chained and can be verified from the interface;
-- the cockpit never traverses the chain: it reads bounded state while the
-  authenticated anchor is revalidated before each incremental advance;
-- a full verification runs at startup, every 24 hours, on request, and
-  immediately after any inconsistency without replacing the last valid
-  checkpoint when it fails.
+#### Name
 
-The security model does not rely on a second transactional approval step: the
-gateway strictly enforces the policy explicitly configured by the administrator
-and fails closed whenever it can no longer prove that an invocation remains
-inside that envelope.
+Human-readable name displayed in ACP. It is not sent to the MCP server.
 
-## Test MCP server
+Example:
 
-`scripts/fake_mcp_server.py` is a harmless read-only acceptance server. It
-publishes a fake `ha_get_addon` tool specifically to prove that two connectors
-may expose the same upstream name while Agent Control Plane gives the agent two
-unique virtual names.
+```text
+Home Assistant MCP
+```
+
+#### Streamable HTTP URL
+
+Full upstream MCP endpoint, usually ending in `/mcp`.
+
+Example:
+
+```text
+http://192.168.1.50:8765/mcp
+```
+
+Constraints:
+
+- `http` or `https` scheme;
+- host required;
+- port between 1 and 65535 when present;
+- maximum 2048 characters;
+- no embedded username/password;
+- no URL fragment;
+- HTTP redirects are not followed.
+
+#### Optional Bearer token
+
+Set this only if the upstream MCP server requires Bearer authentication. ACP then
+sends:
+
+```text
+Authorization: Bearer <token>
+```
+
+The secret is protected at rest inside ACP. It is never sent to agents and never
+redisplayed in the UI.
+
+### Test and add
+
+ACP initializes a Streamable HTTP session, calls `tools/list`, validates the
+published schemas, and stores the inventory only if the connection is acceptable.
+
+Discovery is limited to 200 tools per connector. Each input schema is limited to
+16 KiB. The admitted JSON Schema profile is documented in
+[MCP_COMPATIBILITY.md](MCP_COMPATIBILITY.md).
+
+### Connector states
+
+| State | Meaning |
+| --- | --- |
+| `ready` | Connection and inventory are valid |
+| `disabled` | Administratively disabled |
+| `unreachable` | Server or transport cannot be reached |
+| `invalid` | Server is reachable but publishes a rejected MCP schema |
+
+A dependent task becomes unavailable if its connector is no longer ready, a tool
+disappears, or a selected tool schema fingerprint changes.
+
+### Check
+
+**Check** rediscovers the inventory. ACP does not silently continue using a
+contract whose schema changed.
+
+### Edit endpoint
+
+The display name can be edited without replacing the secret. Leaving the new URL
+blank preserves the protected endpoint. Replacing the URL triggers discovery
+again.
+
+Connection changes are refused while a dependent execution is queued or leased.
+
+### Rotate secret
+
+**Rotate secret** explicitly replaces the stored Bearer credential. The current
+secret is never prefilled. ACP tests the new value before adopting it.
+
+If validation fails, the previous secret remains stored. If validation succeeds,
+the old secret is no longer stored or used by ACP; revoking it at the upstream
+server remains an upstream operation.
+
+### Disable, archive, delete
+
+- **Disable**: temporary administrative state; configuration remains.
+- **Archive**: removes the connector from normal operational views while
+  retaining history. Restore returns it disabled.
+- **Delete**: permanent deletion, allowed only when persistent dependencies no
+  longer reference it.
+
+---
+
+## 5. Tasks
+
+A task is the work contract presented to the agent. It contains instructions and
+an explicit list of allowed MCP tools.
+
+### Name
+
+Human-readable task name, for example:
+
+```text
+Diagnose unavailable camera
+```
+
+The UI generates a compatible internal technical name automatically.
+
+### Instructions sent to the agent
+
+Describe the desired outcome, boundaries, and expected behavior.
+
+Example:
+
+```text
+Analyze the affected service. Use only the tools available for this task.
+Identify the most likely cause, perform no destructive action, and return a
+concise report containing verifiable findings.
+```
+
+Maximum: 4000 characters.
+
+### Maximum attempts
+
+Maximum number of execution attempts when an agent reports a retryable failure or
+a lease expires. The technical range is 1 to 10.
+
+After retryable attempts are exhausted, the execution becomes a **dead letter / Needs attention**.
+
+### Allowed tools
+
+A task must contain at least one tool from a ready connector. Selecting a tool is
+**the authorization decision**: a discovered but unselected tool is not available
+to the agent.
+
+Tools are exposed through unique virtual names bound to the task revision, so two
+connectors can publish the same upstream tool name without collision.
+
+### Standard mode
+
+**Standard — original schema** exposes the admitted upstream input schema to the
+agent. The agent may provide every argument accepted by that schema.
+
+Use this mode only when the agent genuinely needs control over the entire tool
+input surface.
+
+### Restrict this tool / fixed arguments
+
+**Restricted — fixed arguments** reduces the agent-visible surface. For each
+top-level schema property, choose:
+
+| Exposure | Effect |
+| --- | --- |
+| **Agent editable** | Property stays visible; the agent provides the value |
+| **Ordinary fixed value** | Property is removed from the agent schema; ACP injects the configured value |
+| **Sensitive fixed value** | Same behavior, but protected at rest and never redisplayed |
+| **Not exposed** | Optional property is removed and not injected |
+
+Required upstream properties cannot simply be omitted: they must remain editable
+or receive a fixed value.
+
+#### Example value
+
+The UI asks for a **valid example call**. ACP validates it against the upstream
+schema, then stores the fixed values in the immutable task contract.
+
+At execution time:
+
+1. ACP validates agent arguments against the reduced schema;
+2. ACP rejects attempts to provide hidden arguments;
+3. ACP injects ordinary and sensitive fixed values;
+4. ACP validates the merged call against the upstream schema;
+5. only then is the MCP call dispatched.
+
+This is useful for fixing an `entity_id`, host, workspace, scope, or sensitive
+parameter that the agent must not change.
+
+### Run now
+
+Creates an execution with empty input `{}`. ACP allows only one queued or running
+execution at a time for a given task.
+
+### Disable, archive, delete
+
+- disabling prevents new executions and removes pending grace incidents for the task;
+- archiving also pauses its schedules and triggers;
+- a task with queued or leased work cannot be archived;
+- a task already referenced by executions, schedules, or triggers cannot be
+  deleted while those dependencies remain.
+
+---
+
+## 6. Identities and permissions
+
+An identity represents one authenticated caller. Each identity owns its own
+Bearer credential and exact permission set.
+
+### Name
+
+Human-readable caller name, for example:
+
+```text
+Codex HAOS
+Home Assistant Events
+External monitoring
+```
+
+### Type
+
+| Type | Recommended use |
+| --- | --- |
+| **MCP client** (`client`) | Agent/worker claiming and processing jobs |
+| **Event source** (`event_source`) | System publishing events; required by event triggers |
+| **Scheduler** (`scheduler`) | Identity class available for an external scheduling client; internal UI schedules do not need one |
+
+An ACP event trigger explicitly requires an active **Event source** identity.
+
+### Control-plane permissions
+
+| UI permission | Technical action | Allows... |
+| --- | --- | --- |
+| Read own permissions | `permissions.effective.read` | Inspect effective identity rights |
+| Create events | `events.create` | POST to `/api/v1/events` |
+| Read events | `events.read` | Read the public event collection |
+| Read jobs | `jobs.read` | Read the job collection |
+| Process jobs | `jobs.claim` + worker bundle | Claim, maintain, complete, or fail jobs |
+| Read reports | `reports.read` | Read persisted reports |
+
+When **Process jobs** is selected, the UI also grants `jobs.heartbeat`,
+`jobs.complete`, and `jobs.fail` because they are required for the worker
+lifecycle.
+
+A Home Assistant source that only publishes events normally needs only:
+
+```text
+events.create
+```
+
+### Credential shown once
+
+After creation ACP displays the credential only once. Copy it immediately. It
+cannot be retrieved later. If lost, revoke the identity and create a new one.
+
+Never place this credential in Git, screenshots, or logs.
+
+### Revoke
+
+Revocation invalidates every active credential of the identity immediately. For
+an event source, pending grace incidents linked to that source are also removed.
+
+---
+
+## 7. Events: public API contract
+
+Endpoint:
+
+```text
+POST http://HOME_ASSISTANT_IP:8098/api/v1/events
+```
+
+Required headers:
+
+```text
+Authorization: Bearer <source credential>
+Content-Type: application/json
+Idempotency-Key: <unique key for the logical event>
+```
+
+The credential must belong to an identity granted `events.create`.
+
+### JSON body
+
+ACP accepts a strict version-1 contract:
+
+```json
+{
+  "schema_version": 1,
+  "event_type": "service.alert",
+  "occurred_at": "2026-08-19T16:30:00+00:00",
+  "subject": {
+    "service": "camera_duo2"
+  },
+  "attributes": {
+    "status": "unreachable",
+    "message": "Timeout"
+  }
+}
+```
+
+No additional top-level field is accepted.
+
+### `schema_version`
+
+Must be exactly:
+
+```json
+1
+```
+
+### `event_type`
+
+Identifies the event kind and must exactly match the ACP trigger's **Event type**.
+
+Constraints:
+
+- 1 to 120 characters;
+- starts with a lowercase letter;
+- remaining characters may be lowercase letters, digits, `_`, `.`, `-`.
+
+Examples:
+
+```text
+gatus.alert
+gatus.recovered
+camera.offline
+backup.failed
+ups.on_battery
+```
+
+### `occurred_at`
+
+Timestamp when the event actually occurred. A timezone is mandatory (`Z`,
+`+00:00`, `+02:00`, etc.). ACP normalizes the value to UTC.
+
+ACP rejects timestamps:
+
+- more than 24 hours in the past;
+- more than 5 minutes in the future.
+
+### `subject`: **who/what is affected?**
+
+`subject` should contain only the **stable identity** of the affected resource or
+logical subject.
+
+Good example:
+
+```json
+{
+  "endpoint": "CAM DUO2",
+  "site": "home"
+}
+```
+
+Bad example:
+
+```json
+{
+  "endpoint": "CAM DUO2",
+  "status": "down",
+  "checked_at": "2026-08-19T18:21:00+02:00",
+  "latency_ms": 3000
+}
+```
+
+`status`, `checked_at`, and `latency_ms` vary from observation to observation and
+belong in `attributes`.
+
+This separation is critical with **Aggregated by subject** correlation because
+ACP uses the canonical `subject` value to prove that an alert and a recovery
+refer to exactly the same resource.
+
+JSON key order does not matter, but names, types, and values do. `{"id":"1"}`
+and `{"id":1}` are different subjects.
+
+### `attributes`: **what is happening?**
+
+`attributes` contains variable operational information useful to analysis:
+
+```json
+{
+  "status": "unreachable",
+  "message": "Connection timed out",
+  "latency_ms": 3000,
+  "attempt": 2
+}
+```
+
+Put observations, messages, metrics, states, and diagnostic details here.
+
+### Event payload limits
+
+- HTTP body: maximum 32 KiB;
+- `subject`: maximum 32 fields;
+- `attributes`: maximum 32 fields;
+- key name in `subject` or `attributes`: maximum 80 characters;
+- aggregated canonical `subject`: maximum 4096 bytes;
+- aggregated incident: maximum 100 subjects;
+- final aggregated input: maximum 128 KiB.
+
+### `Idempotency-Key`
+
+The idempotency key is mandatory and must contain 1 to 160 characters.
+
+Its purpose is to make network retries safe. For the same source identity,
+reusing the same key returns the already-recorded event instead of creating a new
+logical event.
+
+Choose a key that is **stable for one logical event**, but different for the next
+alert and its recovery.
+
+Good example:
+
+```text
+ha-01JABCDEF123-alert
+ha-01JXYZ987654-recovered
+```
+
+Do not use a constant such as `home-assistant-event` or all future requests would
+be treated as retries of the same event.
+
+### HTTP response
+
+A new valid event returns HTTP `202`:
+
+```json
+{
+  "event_id": "...",
+  "job_id": null,
+  "duplicate": false,
+  "status": "grace_started"
+}
+```
+
+A retry with the same key may return HTTP `200` with `duplicate: true`.
+
+`job_id` may be `null` even when the event is perfectly valid, for example during
+a grace period, cooldown, recovery, or when the same task already has active
+work.
+
+---
+
+## 8. Triggers: every parameter explained
+
+A trigger maps **one source + one event type** to **one task**. The source never
+chooses a task in its HTTP request; that decision remains inside ACP's
+administrative configuration.
+
+### Name
+
+Human-readable trigger name.
+
+Example:
+
+```text
+Gatus - endpoint outage
+```
+
+### Event source
+
+Active `event_source` identity allowed to submit this event.
+
+The same `event_type` sent with another identity credential does not match this
+trigger.
+
+### Event type
+
+Must exactly match the incoming JSON `event_type`.
+
+Example:
+
+```text
+gatus.alert
+```
+
+For one source ACP prevents collisions between alert and recovery event types
+across triggers so one event cannot ambiguously match several mappings.
+
+### Task
+
+Task to execute when the trigger eventually fires. It must be ready when the
+trigger is configured. If dependencies later become unavailable ACP fails closed
+rather than giving the agent a partially valid capability contract.
+
+### Input sent to the agent
+
+This setting decides which part of the event becomes the **job input**. It does
+not change the event retained under **Events**; it changes what the agent receives
+for the task.
+
+#### Full event (`full_event`)
+
+The agent receives:
+
+```json
+{
+  "schema_version": 1,
+  "event_type": "service.alert",
+  "occurred_at": "...",
+  "subject": {"service": "camera_duo2"},
+  "attributes": {"status": "unreachable"}
+}
+```
+
+Choose this when the agent needs the event type, time, subject identity, and
+operational attributes.
+
+#### Subject only (`subject`)
+
+Without aggregation, the agent receives only:
+
+```json
+{
+  "service": "camera_duo2"
+}
+```
+
+Choose this when the task and its tools can work from resource identity alone.
+
+#### Attributes only (`attributes`)
+
+Without aggregation, the agent receives only:
+
+```json
+{
+  "status": "unreachable",
+  "message": "Timeout"
+}
+```
+
+Choose this when the subject is mainly used by ACP for correlation and the task
+only needs the variable observations.
+
+**Important: in Simple mode, `attributes` does not automatically contain the
+`subject`.** If the agent must know exactly which resource is affected, use
+`full_event` or deliberately include the identifier it needs inside `attributes`.
+
+#### Special case: Aggregated by subject
+
+In aggregated correlation ACP builds a deterministic envelope. Even with
+**Attributes only**, each element keeps its `subject` so the agent can associate
+observations with the correct resource.
+
+Example with `input_mode = attributes`:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "aggregated_event_incident",
+  "event_type": "service.alert",
+  "opened_at": "...",
+  "due_at": "...",
+  "subjects": [
+    {
+      "subject": {"service": "camera_duo2"},
+      "attributes": {"status": "unreachable", "message": "Timeout"}
+    },
+    {
+      "subject": {"service": "camera_garage"},
+      "attributes": {"status": "unreachable", "message": "No route"}
+    }
+  ]
+}
+```
+
+With `full_event`, each item contains `subject` plus an `event` object. With
+`subject`, each item contains only its `subject` inside the aggregated envelope.
+
+This is an important semantic difference between **Simple** and **Aggregated by
+subject** modes.
+
+### Grace period
+
+Grace prevents the agent from being invoked for failures that recover quickly.
+
+With `5 minutes`, the first alert opens an incident whose due time is fixed to
+`now + 5 minutes`.
+
+Repeated alerts **do not extend the due time**. They update the latest data for
+the relevant subject while preserving the original deadline.
+
+A grace period greater than zero requires a recovery event type.
+
+### Recovery event type
+
+Example:
+
+```text
+gatus.recovered
+```
+
+It must differ from the alert event type.
+
+A recovery does not create a new task. It resolves all or part of a pending grace
+incident.
+
+If no incident is active, the recovery is simply recorded and audited.
+
+### Simple correlation
+
+The trigger has one logical incident.
+
+- first alert: opens the incident;
+- repeated alerts: update the latest input;
+- recovery: cancels the whole incident;
+- expiry: creates one execution using the latest available input.
+
+`subject` does not need to be non-empty in Simple mode.
+
+### Aggregated by subject correlation
+
+Use this when one alert family may affect several resources during the same grace
+window.
+
+Every alert must contain a non-empty stable `subject`.
+
+Example:
+
+```text
+18:00 CAM DUO2 down       → incident opened, 1 subject
+18:01 CAM GARAGE down     → same incident, 2 subjects
+18:02 CAM DUO2 recovered  → CAM DUO2 removed, 1 subject
+18:05 deadline            → one job for CAM GARAGE
+```
+
+A recovery whose exact `subject` is not present becomes an audited no-op. ACP
+never removes another subject by approximation.
+
+When the last subject recovers before the deadline, the incident disappears and
+no job is created.
+
+### Cooldown
+
+Cooldown limits how frequently the same trigger may actually create jobs.
+
+It starts after a real trigger, meaning when the job is queued either immediately
+or after grace expiry. An event received during cooldown is retained and audited
+but does not create another job.
+
+Cooldown and grace solve different problems:
+
+- **grace** = wait before deciding whether an incident deserves execution;
+- **cooldown** = prevent executions from occurring too close together after a trigger.
+
+### One active execution per task
+
+If the target task already owns a `queued` or `leased` job ACP does not create a
+second one. The event is retained with `task_execution_active`.
+
+### Incident promotion after grace
+
+At expiry ACP revalidates:
+
+- trigger enabled;
+- task enabled and ready;
+- connectors and schema fingerprints valid;
+- no other active execution for the task;
+- cooldown;
+- queue capacity.
+
+Temporary promotion failures are retried with bounded backoff. After 10 attempts
+the incident becomes **blocked** and remains visible under **Triggers**. **Retry
+incident** resets the promotion attempts.
+
+---
+
+## 9. Special Home Assistant section: publish events to ACP
+
+This section is intentionally detailed so a non-developer can build the complete
+flow.
+
+### What we are building
+
+```text
+Home Assistant automation
+        │
+        ▼
+rest_command.acp_event
+        │
+        │ Authorization: Bearer ...
+        │ Idempotency-Key: ...
+        ▼
+http://HA_IP:8098/api/v1/events
+        │
+        ▼
+ACP event source
+        │
+        ▼
+ACP trigger
+        │
+        ▼
+Task / grace / recovery / agent
+```
+
+### Prerequisites
+
+Before starting:
+
+1. ACP is installed and running;
+2. ACP's public port is published to the LAN, for example `8098`;
+3. at least one MCP connector is ready;
+4. at least one ACP task is ready;
+5. you can edit Home Assistant `configuration.yaml` and `secrets.yaml`.
+
+### Step 1 — Create the Home Assistant identity in ACP
+
+Open **ACP → Identities → New identity**:
+
+```text
+Name: Home Assistant Events
+Type: Event source
+Permission: Create events
+```
+
+Do not grant worker permissions unless this identity actually needs them.
+
+Create the identity and immediately copy the credential displayed once.
+
+### Step 2 — Store the Bearer value in `secrets.yaml`
+
+Add to Home Assistant `secrets.yaml`:
+
+```yaml
+acp_event_authorization: "Bearer PASTE_THE_ACP_CREDENTIAL_HERE"
+```
+
+Storing the complete `Bearer ...` value keeps the credential entirely out of
+`configuration.yaml`.
+
+`secrets.yaml` avoids scattering secrets across configuration files, but the file
+is **not encrypted**. Protect access to your Home Assistant configuration and
+backups.
+
+### Step 3 — Create the `rest_command`
+
+Add to `configuration.yaml`:
+
+```yaml
+rest_command:
+  acp_event:
+    url: "http://192.168.1.10:8098/api/v1/events"
+    method: post
+    content_type: "application/json"
+    headers:
+      Authorization: !secret acp_event_authorization
+      Idempotency-Key: "{{ idempotency_key }}"
+    payload: >-
+      {{
+        {
+          "schema_version": 1,
+          "event_type": event_type,
+          "occurred_at": occurred_at,
+          "subject": subject | default({}),
+          "attributes": attributes | default({})
+        } | to_json
+      }}
+```
+
+Replace `192.168.1.10` with your Home Assistant IP and `8098` with the host port
+actually mapped to ACP.
+
+Why use `to_json`? It safely serializes strings, quotes, numbers, booleans,
+dictionaries, and special characters. It is safer than building JSON manually
+with string concatenation.
+
+After adding a `rest_command` to `configuration.yaml`, restart Home Assistant so
+the configuration is loaded.
+
+> If you already have a `rest_command:` section, do not create a second one.
+> Add `acp_event:` under the existing section with correct YAML indentation.
+
+### Step 4 — Create the matching trigger in ACP
+
+Before the first test, create **ACP → Triggers → New trigger** for the event type
+you intend to send.
+
+Simple first test:
+
+```text
+Name: Home Assistant test
+Event source: Home Assistant Events
+Event type: service.alert
+Task: your test task
+Input sent to agent: Full event
+Grace period: None
+Cooldown: None
+```
+
+For a first test, **Full event** is easiest to understand because the job contains
+the exact business payload sent by Home Assistant.
+
+### Step 5 — Manual Home Assistant test
+
+Call `rest_command.acp_event` from Home Assistant developer tools with:
+
+```yaml
+action: rest_command.acp_event
+data:
+  event_type: "service.alert"
+  occurred_at: "{{ utcnow().isoformat() }}"
+  idempotency_key: "manual-acp-test-001"
+  subject:
+    service: "acp_manual_test"
+  attributes:
+    message: "Test sent from Home Assistant"
+    status: "unreachable"
+```
+
+Then open ACP **Events**. You should see `service.alert` from **Home Assistant
+Events**.
+
+If the trigger has no grace or cooldown and the task is available, an execution
+should also appear under **Executions**.
+
+To create another logical event, change the key:
+
+```text
+manual-acp-test-002
+```
+
+If you reuse `manual-acp-test-001`, ACP should treat the request as a duplicate
+retry instead of creating a second event.
+
+### Step 6 — Complete Home Assistant automation with alert + recovery
+
+The following example monitors a `binary_sensor`. Adapt the entity and `on/off`
+polarity to your device.
+
+```yaml
+alias: "ACP - Example service monitoring"
+description: "Sends an alert and recovery to Agent Control Plane"
+mode: queued
+max: 10
+
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.example_service
+    to: "off"
+    id: alert
+
+  - trigger: state
+    entity_id: binary_sensor.example_service
+    to: "on"
+    id: recovered
+
+actions:
+  - action: rest_command.acp_event
+    data:
+      event_type: >-
+        {{ 'service.alert' if trigger.id == 'alert' else 'service.recovered' }}
+      occurred_at: "{{ trigger.to_state.last_changed.isoformat() }}"
+      idempotency_key: "ha-{{ trigger.to_state.context.id }}-{{ trigger.id }}"
+      subject:
+        entity_id: "{{ trigger.entity_id }}"
+        service: "example_service"
+      attributes:
+        state: "{{ trigger.to_state.state }}"
+        previous_state: >-
+          {{ trigger.from_state.state if trigger.from_state is not none else 'unknown' }}
+        friendly_name: >-
+          {{ state_attr(trigger.entity_id, 'friendly_name') or trigger.entity_id }}
+```
+
+Important details:
+
+- the alert uses `service.alert`;
+- the recovery uses `service.recovered`;
+- **the `subject` is identical and stable in both cases**;
+- current and previous state belong in `attributes` because they change;
+- the idempotency key includes the state-change context and `alert`/`recovered`,
+  therefore alert and recovery do not share the same key;
+- `occurred_at` comes from the actual state change and includes a timezone.
+
+### Step 7 — Configure grace and recovery in ACP
+
+Turn the previous example into false-positive suppression:
+
+```text
+Name: Example service monitoring
+Source: Home Assistant Events
+Event type: service.alert
+Task: Diagnose service
+Input sent: choose as explained below
+Grace period: 5 minutes
+Recovery event type: service.recovered
+Correlation: Simple or Aggregated by subject
+Cooldown: as needed
+```
+
+#### Which input mode should you choose?
+
+- **Full event**: safest when the agent needs entity identity, time, and all details.
+- **Subject only**: when the task only needs to know which resource to inspect.
+- **Attributes only + Simple**: only when attributes truly contain everything the
+  agent needs.
+- **Attributes only + Aggregated by subject**: very useful for multi-resource
+  incidents because ACP automatically preserves each `subject` beside its
+  `attributes` in the aggregated envelope.
+
+### Gatus logic example
+
+A clean convention for Gatus monitoring is:
+
+```text
+ACP alert:    gatus.alert
+ACP recovery: gatus.recovered
+```
+
+The `subject` should identify the endpoint stably, for example:
+
+```json
+{
+  "endpoint": "CAM DUO2"
+}
+```
+
+Changing monitoring values belong in `attributes`, such as status, error message,
+failing condition, or a metric.
+
+If several endpoints may fail during one grace window, **Aggregated by subject**
+allows one job to contain only the endpoints still down at expiry.
+
+The exact fields available in Home Assistant's `gatus_alert` event depend on what
+the Gatus Home Assistant alert provider publishes. Inspect that HA event first,
+then map stable fields to `subject` and variable fields to `attributes`.
+
+### Test a recovery manually
+
+With an active grace incident, send:
+
+```yaml
+action: rest_command.acp_event
+data:
+  event_type: "service.recovered"
+  occurred_at: "{{ utcnow().isoformat() }}"
+  idempotency_key: "manual-acp-recovery-001"
+  subject:
+    service: "acp_manual_test"
+  attributes:
+    message: "Service recovered"
+    status: "reachable"
+```
+
+In Simple mode the whole incident should be cancelled. In Aggregated mode only
+the exactly matching subject should be removed.
+
+---
+
+## 10. Event outcomes
+
+The **Events** view shows processing outcomes. Main values include:
+
+| Outcome | Meaning |
+| --- | --- |
+| `accepted` / `queued` | Execution created immediately |
+| `grace_started` | First event opened a grace incident |
+| `grace_active` | Simple incident already active; latest input updated |
+| `grace_subject_added` | New subject added to an aggregated incident |
+| `grace_subject_updated` | Existing subject data updated |
+| `grace_reactivated` | New alert reactivated a blocked incident |
+| `grace_cancelled` | Simple recovery cancelled the incident |
+| `subject_recovered` | Aggregated recovery removed one subject |
+| `incident_resolved` | Last subject recovered; incident fully resolved |
+| `recovery_subject_unknown` | Recovery for an absent subject; nothing else changed |
+| `recovery_recorded` | Recovery received without an active incident |
+| `task_execution_active` | The same task already has active work |
+| `cooldown_active` | Trigger is still cooling down |
+| `incident_subject_limit` | 100-subject limit reached |
+| `aggregate_subject_too_large` | Aggregated `subject` exceeds 4096 bytes |
+| `accepted_after_grace` | Incident promoted to execution after grace |
+
+Every incoming event remains individually retained even when it does not create a
+job.
+
+---
+
+## 11. Schedules
+
+A schedule automatically creates executions for a ready task.
+
+### Name
+
+Human-readable name, for example:
+
+```text
+Daily network diagnosis
+```
+
+### Task
+
+Task to execute. It must be ready when the schedule is created or edited.
+
+### Interval mode
+
+Runs the task periodically. The UI currently offers common values such as 5, 15,
+30, 60, 360, 1440, and 10080 minutes.
+
+Occurrences missed while ACP is stopped are not replayed in a burst.
+
+### Daily mode
+
+Parameters:
+
+- local `HH:MM` time;
+- IANA timezone such as `Europe/Paris`.
+
+The timezone is important for daylight-saving-time transitions.
+
+### Weekly mode
+
+Same principle as Daily, plus the weekday.
+
+Internal weekday numbering is:
+
+```text
+0 = Monday ... 6 = Sunday
+```
+
+### What happens if the task cannot run?
+
+A schedule does not create an invalid job. Its last outcome may show:
+
+- `skipped_active`: the task is already active;
+- `queue_full`: queue capacity reached;
+- `task_unavailable`: dependency not ready.
+
+The next occurrence is still calculated; missed runs are not accumulated.
+
+Internal schedules currently create empty task input `{}`.
+
+---
+
+## 12. Executions
+
+An execution is a persistent job.
+
+### States
+
+| State | Meaning |
+| --- | --- |
+| `queued` | Waiting for an agent |
+| `leased` | Claimed and running |
+| `completed` | Completed with a valid report |
+| `failed` | Non-retryable failure |
+| `dead_letter` | Retryable failures exhausted |
+| `cancelled` | Cancelled before claim |
+
+### Leases
+
+When an agent claims a job ACP grants an initial 5-minute lease. Heartbeats may
+extend it, but never beyond 30 minutes from claim time. An expired lease consumes
+an attempt; the job returns to the queue or becomes a dead letter when attempts
+are exhausted.
+
+One worker identity may own only one active lease at a time.
+
+### Cancel
+
+Only a still-`queued` job can be cancelled from the UI.
+
+### Requeue a dead letter
+
+Requeue does not rewrite history. ACP creates a **new job** from the dead letter
+after revalidating task readiness, connectors, schemas, concurrency, and queue
+capacity.
+
+---
+
+## 13. Reports
+
+The final report schema expected by a task is:
+
+```json
+{
+  "schema_version": 1,
+  "summary": "Diagnosis summary",
+  "findings": [
+    "First finding",
+    "Second finding"
+  ]
+}
+```
+
+Main constraints:
+
+- `schema_version`: integer;
+- `summary`: non-empty string, maximum 2000 characters;
+- `findings`: array, maximum 100 items;
+- no additional top-level fields.
+
+The **Reports** view renders the summary, findings, and raw structured data.
+
+---
+
+## 14. Audit and retention
+
+### Audit chain
+
+Audit entries are HMAC chained. ACP maintains an authenticated checkpoint and
+performs:
+
+- full verification at startup;
+- full verification at least every 24 hours;
+- full verification on demand with **Verify now**;
+- immediate full verification when incremental checking finds an inconsistency.
+
+**Export JSONL** downloads up to the 10,000 most recent audit entries in JSON
+Lines form.
+
+### Retention policy
+
+Parameters:
+
+| Parameter | Effect |
+| --- | --- |
+| **Keep terminal data** | Minimum age before terminal operational data can be deleted |
+| **Maximum per run** | Maximum cleanup batch size |
+| **Automatic cleanup** | Allows a bounded automatic pass at most once every 24 hours |
+
+Technical ranges:
+
+- retention: 7 to 3650 days;
+- batch size: 10 to 1000.
+
+The UI offers a practical subset of common values.
+
+Retention may delete old terminal jobs (`completed`, `failed`, `cancelled`,
+`dead_letter`), attempts, reports, and old orphaned events.
+
+It does not delete:
+
+- `queued` or `leased` jobs;
+- configuration;
+- audit entries;
+- events still referenced by an active incident.
+
+Default terminal-data retention is 90 days.
+
+---
+
+## 15. Troubleshooting Home Assistant → ACP
+
+### HTTP 401
+
+Likely cause: missing, invalid, revoked, or incorrectly copied credential.
+
+Check:
+
+```yaml
+acp_event_authorization: "Bearer ..."
+```
+
+and the `Authorization` header in the `rest_command`.
+
+### HTTP 403
+
+The identity is authenticated but lacks `events.create`.
+
+### HTTP 413
+
+The JSON body exceeds 32 KiB.
+
+### HTTP 422 `invalid_request`
+
+Common causes:
+
+- wrong `Content-Type`;
+- `schema_version` is not 1;
+- invalid `event_type`;
+- timestamp has no timezone;
+- timestamp is too old or too far in the future;
+- missing or overlong `Idempotency-Key`;
+- no active trigger for **this source + this type**;
+- empty `subject` with aggregated correlation;
+- task or dependency became unavailable;
+- unexpected top-level JSON field.
+
+### HTTP 429
+
+The source exceeded `intake_rate_limit_per_minute`. ACP responds with
+`Retry-After: 60`.
+
+### HTTP 503
+
+ACP's queue is full at the time the event needs to create a job.
+
+### Event appears but no job is created
+
+This is not necessarily an error. Check the **Outcome** column under **Events**.
+Normal causes include:
+
+- active grace incident;
+- recovery;
+- cooldown;
+- task already active;
+- duplicate idempotency key.
+
+### Recovery does not close the expected incident
+
+In **Aggregated by subject** mode, compare the exact `subject` value of alert and
+recovery. Never put changing values such as status, message, or timestamp in the
+subject.
+
+### Trigger cannot be created
+
+Verify that:
+
+- the source is an active `event_source` identity;
+- the task is `ready`;
+- with grace, a different `recovery_event_type` is defined;
+- without grace, correlation is `simple` and no recovery is configured;
+- the same event type is not already used by another trigger for that source.
+
+---
+
+## 16. Security and operational good practices
+
+- publish `8098` only on a trusted LAN/VPN;
+- create a separate identity for every client or source;
+- grant only required permissions;
+- use a dedicated Home Assistant identity with only `events.create`;
+- do not store ACP credentials directly in `configuration.yaml`;
+- use `secrets.yaml` and protect backups too;
+- select the minimum MCP tool set required by each task;
+- use fixed arguments to remove parameters the agent must not control;
+- classify confidential fixed values as `fixed_sensitive`;
+- do not put secrets in `subject`, `attributes`, task instructions, or ordinary
+  fixed values;
+- regularly verify the audit-chain state.
+
+ACP does not rely on a second transactional approval step: explicit administrator
+selection and configuration define policy. Anything outside that envelope is
+rejected.
+
+---
+
+## 17. Data, backup, and upgrades
+
+Configuration, queue state, reports, events, and audit data live in the App data
+volume and are covered by cold Home Assistant backups.
+
+Starting with existing `0.46.8` installations, persisted data is considered
+non-disposable. Any incompatible SQLite schema evolution must provide an explicit,
+tested migration path. Deleting App data and performing a clean reinstall is no
+longer a normal upgrade strategy.
+
+If a database cannot be upgraded safely, startup must fail closed without partial
+modification and the release must document the required backup/recovery path.
+
+---
+
+## 18. Test MCP server
+
+The repository includes `scripts/fake_mcp_server.py`, a harmless read-only
+Streamable HTTP acceptance server useful for discovery and duplicate tool-name
+testing.
 
 ```bash
 python3 -m pip install 'mcp==1.28.1'
 python3 agent_control_plane/scripts/fake_mcp_server.py --host 0.0.0.0 --port 8765
 ```
 
-Stop the server and remove any temporary firewall rule after the test.
+Stop the server and remove temporary firewall rules after testing.
 
-## Known limits
+---
 
-- Streamable HTTP is the only connector transport currently supported;
-- no autonomous worker is bundled: an external MCP client must process jobs;
+## 19. Known limits
+
+- Streamable HTTP is the only supported connector transport;
+- `stdio` connectors and legacy SSE are not supported;
+- ACP proxies MCP tools only, not resources/prompts/roots/sampling;
+- no autonomous worker is bundled: an external MCP client processes the queue;
 - multi-instance/high-availability deployment is not supported;
-- direct internet exposure is not supported; use a trusted LAN or VPN.
+- direct Internet exposure is not supported;
+- internal schedules currently accept no custom input payload and create `{}`.
+
+For protocol and schema details, see
+[MCP_COMPATIBILITY.md](MCP_COMPATIBILITY.md).
