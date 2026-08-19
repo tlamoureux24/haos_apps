@@ -26,6 +26,7 @@ from cryptography.fernet import Fernet, InvalidToken
 
 OPTIONS_PATH = "/data/options.json"
 STATE_PATH = "/data/state.json"
+HISTORY_PATH = "/data/history.json"
 LAST_BACKUP_PATH = "/data/last_traffic_matching_list_backup.json"
 ENCRYPTED_API_KEY_PATH = "/data/unifi_api_key.enc"
 API_KEY_KEY_PATH = "/data/unifi_api_key.key"
@@ -33,11 +34,14 @@ LIST_TYPE = "IPV4_ADDRESSES"
 ITEM_TYPE = "IP_ADDRESS"
 MANAGED_VERSION = 1
 WEBHOOK_PORT = 37989
+INGRESS_PORT = 8099
+HISTORY_LIMIT = 1000
 HA_EVENT_TYPE = "unifi_autoblock_ip_banned"
 
 
 LOGGER = logging.getLogger("unifi_autoblock")
 UPDATE_LOCK = threading.Lock()
+HISTORY_LOCK = threading.Lock()
 
 
 def utc_now() -> dt.datetime:
@@ -71,6 +75,42 @@ def save_json_file(path: str, data: Any) -> None:
         json.dump(data, handle, indent=2, sort_keys=True)
         handle.write("\n")
     os.replace(tmp_path, path)
+
+
+def load_history() -> list[dict[str, Any]]:
+    history = load_json_file(HISTORY_PATH, [])
+    if not isinstance(history, list):
+        raise RuntimeError(f"Invalid history in {HISTORY_PATH}: expected a JSON array")
+    return [entry for entry in history if isinstance(entry, dict)]
+
+
+def append_history(action: str, ip: str, details: dict[str, Any] | None = None) -> None:
+    entry: dict[str, Any] = {
+        "timestamp": isoformat(utc_now()),
+        "action": action,
+        "ip": ip,
+    }
+    if details:
+        for key in (
+            "severity",
+            "signature",
+            "region",
+            "destination",
+            "destination_port",
+            "protocol",
+        ):
+            value = details.get(key)
+            if value is not None and value != "":
+                entry[key] = value
+    with HISTORY_LOCK:
+        history = load_history()
+        history.append(entry)
+        save_json_file(HISTORY_PATH, history[-HISTORY_LIMIT:])
+
+
+def record_expired_history(expired: list[str]) -> None:
+    for ip in expired:
+        append_history("expired", ip)
 
 
 def save_private_bytes(path: str, data: bytes) -> None:
@@ -713,7 +753,9 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
                 }
                 backup_traffic_list(traffic_list)
                 client.update_traffic_list(payload)
+                record_expired_history(expired)
             save_json_file(STATE_PATH, state)
+            append_history("already_present", source_ip, details)
             LOGGER.info(
                 "IP %s is already present in UniFi blocklist; IDS/IPS destination was %s:%s",
                 source_ip,
@@ -732,8 +774,13 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
         client.update_traffic_list(payload)
         verify = client.get_traffic_list()
         verified_items = validate_traffic_list(verify, config)
-        if source_ip not in {item["value"] for item in verified_items}:
+        verified_ips = {item["value"] for item in verified_items}
+        if source_ip not in verified_ips:
             raise RuntimeError("UniFi update verification failed")
+        if set(expired) & verified_ips:
+            raise RuntimeError("UniFi expiration verification failed")
+
+        record_expired_history(expired)
 
         expires_at = isoformat(now + dt.timedelta(days=config.ban_ttl_days))
         state["managed_ips"][source_ip] = {
@@ -744,6 +791,7 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
             "last_details": details,
         }
         save_json_file(STATE_PATH, state)
+        append_history("blocked", source_ip, details)
 
     LOGGER.info(
         "Added %s to %s after IDS/IPS alert for %s:%s",
@@ -844,6 +892,16 @@ class AutoblockServer(ThreadingHTTPServer):
         self.unifi_client = client
 
 
+def start_ingress_server() -> ThreadingHTTPServer:
+    from ingress_ui import IngressHandler
+
+    server = ThreadingHTTPServer(("0.0.0.0", INGRESS_PORT), IngressHandler)
+    server.history_loader = load_history
+    thread = threading.Thread(target=server.serve_forever, name="ingress", daemon=True)
+    thread.start()
+    return server
+
+
 def configure_logging(level: str) -> None:
     numeric = getattr(logging, level, logging.INFO)
     logging.basicConfig(
@@ -875,12 +933,16 @@ def main() -> None:
     LOGGER.info("Resolved traffic matching list ID: %s", config.traffic_matching_list_id)
 
     server = AutoblockServer(("0.0.0.0", WEBHOOK_PORT), config, client)
+    ingress_server = start_ingress_server()
+    LOGGER.info("Home Assistant Ingress listener started on port %s", INGRESS_PORT)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         LOGGER.info("Stopping UniFi Autoblock")
     finally:
         server.server_close()
+        ingress_server.shutdown()
+        ingress_server.server_close()
 
 
 if __name__ == "__main__":

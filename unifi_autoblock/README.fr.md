@@ -20,6 +20,14 @@ L'app est conçue pour une installation 100 % locale avec les clés API UniFi Ne
 
 Les entrées manuelles existantes sont conservées. Le nettoyage TTL ne s'applique qu'aux IP ajoutées par UniFi Autoblock et suivies dans `/data/state.json`.
 
+## Historique Ingress
+
+Ouvrez UniFi Autoblock depuis la barre latérale Home Assistant pour consulter son historique en lecture seule. La page présente, du plus récent au plus ancien, les bannissements confirmés, les nouvelles alertes concernant des IP déjà bannies et les IP gérées arrivées à expiration. Les préférences français/anglais et clair/sombre sont conservées uniquement dans le navigateur.
+
+L'historique est indépendant de la liste UniFi courante et stocké dans `/data/history.json`. Les 1000 dernières entrées sont conservées. Il contient uniquement les données déjà disponibles pendant le traitement d'une alerte et ne propose aucune action de bannissement, débannissement, configuration ou administration.
+
+Home Assistant Ingress utilise un listener distinct non publié. Le webhook et `/health` restent sur le port 37989 avec leur authentification et leur comportement existants.
+
 Les IPv6, IP privées, loopback, link-local, multicast, réservées et autres adresses non publiques sont ignorées automatiquement. Les alertes IDS/IPS internes ne doivent donc pas ajouter vos appareils locaux à la blocklist.
 
 ## Modèle de sécurité
@@ -37,6 +45,7 @@ Les IPv6, IP privées, loopback, link-local, multicast, réservées et autres ad
 - Aucun mode host network n'est demandé.
 - Aucun mode privilégié n'est demandé.
 - Seul `/data` est utilisé pour l'état de l'app.
+- L'interface d'historique en lecture seule est exposée uniquement via Home Assistant Ingress et ne possède aucun endpoint de configuration ou d'action UniFi.
 
 Après restauration d'une sauvegarde Home Assistant ou réinstallation sans la clé locale de déchiffrement, saisissez à nouveau la clé API UniFi dans la configuration de l'app.
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- Add a read-only Home Assistant Ingress page showing the latest UniFi Autoblock actions in French or English with persistent light/dark theme preferences.
+- Persist confirmed `blocked`, `already_present`, and `expired` actions independently in `/data/history.json`, retaining the latest 1000 entries.
+- Keep the existing webhook and health listener unchanged on port 37989 while serving Ingress on a separate unpublished port.
+
 ## 0.4.9
 
 - Include the IDS/IPS destination IP and port in dry-run, successful-ban, and already-blocked log messages.

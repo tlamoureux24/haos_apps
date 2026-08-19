@@ -10,6 +10,10 @@ UniFi Autoblock reçoit les webhooks UniFi Alarm Manager et ajoute les adresses 
 
 L'app ne crée pas de règles firewall. Créez manuellement une règle firewall UniFi qui bloque le trafic provenant de votre liste vers le reverse proxy ou le service exposé à protéger.
 
+### Historique Ingress
+
+Ouvrez UniFi Autoblock depuis la barre latérale Home Assistant pour consulter, en lecture seule, les 1000 dernières actions confirmées : IP bannies, nouvelles alertes pour des IP déjà bannies et IP gérées arrivées à expiration. L'historique persiste dans `/data/history.json` indépendamment de la liste UniFi courante. La page propose le français ou l'anglais et un thème clair ou sombre, sans aucune action d'administration.
+
 ### Sécurité
 
 - `dry_run` est activé par défaut.
@@ -115,6 +119,10 @@ Voir le [README français sur GitHub](https://github.com/tlamoureux24/haos_apps/
 UniFi Autoblock receives UniFi Alarm Manager webhook events and adds public IPv4 attacker addresses to an existing UniFi `IPV4_ADDRESSES` traffic matching list.
 
 The app does not create firewall rules. Create a UniFi firewall policy manually that blocks traffic from your traffic matching list toward the protected reverse proxy or exposed service.
+
+### Ingress history
+
+Open UniFi Autoblock from the Home Assistant sidebar to view the latest 1000 confirmed actions in read-only mode: blocked IPs, repeat alerts for IPs already blocked, and expired managed IPs. History persists in `/data/history.json` independently from the current UniFi list. The page supports French or English and a light or dark theme, with no administration actions.
 
 ### Security
 

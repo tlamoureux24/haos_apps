@@ -20,6 +20,14 @@ The app is designed for local-only deployments with UniFi Network API keys. It d
 
 Existing manual entries are preserved. TTL cleanup only applies to IPs that UniFi Autoblock added and tracks in `/data/state.json`.
 
+## Ingress History
+
+Open UniFi Autoblock from the Home Assistant sidebar to view its read-only action history. The page lists the latest confirmed bans, repeat alerts for IPs already blocked, and expired managed IPs, newest first. It offers French/English and light/dark display preferences stored only in the browser.
+
+The history is independent from the current UniFi list and is stored in `/data/history.json`. The latest 1000 entries are retained. It contains only data already available while processing an alert and provides no ban, unban, configuration, or other administration action.
+
+Home Assistant Ingress uses a separate, unpublished listener. The webhook and `/health` continue to use port 37989 with their existing authentication and behavior.
+
 IPv6, private, loopback, link-local, multicast, reserved, and other non-public source addresses are ignored automatically. Internal IDS/IPS alerts should therefore not add local devices to your blocklist.
 
 ## Security Model
@@ -37,6 +45,7 @@ IPv6, private, loopback, link-local, multicast, reserved, and other non-public s
 - No host networking is requested.
 - No privileged mode is requested.
 - Only `/data` is used for app state.
+- The read-only history UI is exposed only through Home Assistant Ingress and has no configuration or UniFi action endpoints.
 
 After restoring a Home Assistant backup or reinstalling the app without its local decryption key, enter the UniFi API key again in the app configuration.
 
