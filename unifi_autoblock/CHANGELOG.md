@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Add Home Assistant panel icon.
+
 ## 0.5.0
 
 - Add a read-only Home Assistant Ingress page showing the latest UniFi Autoblock actions in French or English with persistent light/dark theme preferences.
