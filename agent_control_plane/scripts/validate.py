@@ -195,17 +195,17 @@ def main() -> int:
     if "/sbin/**" in apparmor:
         raise RuntimeError("AppArmor must not grant broad access to /sbin")
     audited_s6_executables = (
-        "/package/admin/s6-2.14.0.1/command/s6-ipcclient ix,",
-        "/package/admin/s6-2.14.0.1/command/s6-ipcserver-access ix,",
-        "/package/admin/s6-2.14.0.1/command/s6-ipcserver-socketbinder ix,",
-        "/package/admin/s6-2.14.0.1/command/s6-ipcserverd ix,",
-        "/package/admin/s6-2.14.0.1/command/s6-sudo ix,",
-        "/package/admin/s6-2.14.0.1/command/s6-sudoc ix,",
-        "/package/admin/s6-2.14.0.1/command/s6-sudod ix,",
-        "/package/admin/s6-2.14.0.1/command/s6-svc ix,",
-        "/package/admin/s6-2.14.0.1/command/s6-svlisten ix,",
-        "/package/admin/s6-2.14.0.1/command/s6-svscanctl ix,",
-        "/package/admin/s6-linux-init-1.2.0.0/command/s6-linux-init-shutdown ix,",
+        "/package/admin/s6-2.15.0.0/command/s6-ipcclient ix,",
+        "/package/admin/s6-2.15.0.0/command/s6-ipcserver-access ix,",
+        "/package/admin/s6-2.15.0.0/command/s6-ipcserver-socketbinder ix,",
+        "/package/admin/s6-2.15.0.0/command/s6-ipcserverd ix,",
+        "/package/admin/s6-2.15.0.0/command/s6-sudo ix,",
+        "/package/admin/s6-2.15.0.0/command/s6-sudoc ix,",
+        "/package/admin/s6-2.15.0.0/command/s6-sudod ix,",
+        "/package/admin/s6-2.15.0.0/command/s6-svc ix,",
+        "/package/admin/s6-2.15.0.0/command/s6-svlisten ix,",
+        "/package/admin/s6-2.15.0.0/command/s6-svscanctl ix,",
+        "/package/admin/s6-linux-init-1.2.0.1/command/s6-linux-init-shutdown ix,",
     )
     for executable_rule in audited_s6_executables:
         if executable_rule not in apparmor:
