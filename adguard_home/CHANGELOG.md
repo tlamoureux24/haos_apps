@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.107.79-1 - 2026-08-19
+
+- Update the official AdGuard Home image from 0.107.78 to 0.107.79.
+- Reset the Home Assistant package revision to 1.
+
 ## 0.107.78-6 - 2026-07-22
 
 - Detect an existing configuration as the unprivileged runtime user so
