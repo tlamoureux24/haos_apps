@@ -1,0 +1,56 @@
+name: Stage ACP s6 base-image refresh
+
+on:
+  push:
+    branches:
+      - acp-s6-refresh-staging
+    paths:
+      - ".github/workflows/acp-s6-refresh-staging.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out staging branch
+        uses: actions/checkout@v6
+        with:
+          ref: acp-s6-refresh-staging
+
+      - name: Refresh audited s6 version paths
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sed -i \
+            -e 's#/package/admin/s6-overlay-3\.2\.2\.0#/package/admin/s6-overlay-3.2.3.0#g' \
+            .github/workflows/agent-control-plane-validate.yml
+
+          sed -i \
+            -e 's#/package/admin/s6-2\.14\.0\.1#/package/admin/s6-2.15.0.0#g' \
+            -e 's#/package/admin/s6-linux-init-1\.2\.0\.0#/package/admin/s6-linux-init-1.2.0.1#g' \
+            agent_control_plane/scripts/validate.py
+
+          ! grep -R -n -E \
+            's6-overlay-3\.2\.2\.0|s6-2\.14\.0\.1|s6-linux-init-1\.2\.0\.0|execline-2\.9\.8\.1|s6-overlay-helpers-0\.1\.2\.1|s6-portable-utils-2\.3\.1\.1|s6-rc-0\.6\.0\.0' \
+            agent_control_plane/apparmor.txt \
+            agent_control_plane/scripts/validate.py \
+            .github/workflows/agent-control-plane-validate.yml
+
+          python3 agent_control_plane/scripts/validate.py
+
+      - name: Commit staging refresh
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .github/workflows/agent-control-plane-validate.yml \
+            agent_control_plane/scripts/validate.py
+          git diff --cached --check
+          git diff --cached --quiet && exit 0
+          git commit -m 'ci(acp): refresh s6 validation paths'
+          git push origin HEAD:acp-s6-refresh-staging
