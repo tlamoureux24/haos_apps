@@ -13,18 +13,21 @@ Agent Execution Plane is a **model execution engine**.
 Its responsibility is deliberately small:
 
 1. receive one execution from a source;
-2. give a configured reasoning model exactly the source-provided objective/input and exactly the model-invocable MCP capability envelope supplied by that source;
-3. run the model/tool-calling loop;
-4. obtain the final model result or a factual technical failure;
-5. return that outcome to the source/destination.
+2. give a configured reasoning model exactly the source-provided objective/input and exactly the source-supplied MCP operational capability envelope for that execution;
+3. let the configured provider use its permitted native reasoning/information helpers where they stay inside the provider/runtime responsibility and do not create an operational side channel;
+4. run the model/tool-calling loop;
+5. obtain the final model result or a factual technical failure;
+6. return that outcome to the source/destination.
 
 Conceptually:
 
-`source -> Agent Execution Plane -> model + source-supplied MCP capability envelope -> result -> source`
+`source -> Agent Execution Plane -> model + source-supplied MCP operational capabilities + permitted provider-native reasoning helpers -> result -> source`
 
 Agent Execution Plane is not a control plane, scheduler, workflow engine, policy engine, job designer or infrastructure bridge.
 
-The source decides what work and capability envelope exist. Agent Execution Plane executes that already-defined contract; it does not derive, select, authorize, broaden or semantically narrow the capability envelope itself.
+The source decides what work and MCP operational capability envelope exist. Agent Execution Plane executes that already-defined contract; it does not derive, select, authorize, broaden or semantically narrow the MCP operational capability envelope itself.
+
+Provider-native reasoning/information helpers are separate from that source authorization contract. They may support reasoning, planning or public information retrieval, but they must not provide a parallel path to operate the user's infrastructure, reach local/private AEP state, obtain connector credentials or bypass the governed MCP path.
 
 ## 2. One execution contract, regardless of source
 
@@ -37,10 +40,12 @@ In both cases, the source supplies the execution material:
 - objective/instruction;
 - input data;
 - MCP endpoint/access information needed for that execution;
-- the exact model-invocable MCP capability envelope already selected/authorized by the source;
+- the exact model-invocable MCP operational capability envelope already selected/authorized by the source;
 - an output/result schema when the source requires structured output.
 
-That capability envelope is an **input contract**, not an Agent Execution Plane authorization decision. Execution Plane may perform only the protocol/schema consistency checks needed to execute the supplied envelope safely. It must not replace it with a different subset, add capabilities from MCP discovery, classify tools semantically, or reconstruct source policy.
+That MCP capability envelope is an **input contract**, not an Agent Execution Plane authorization decision. Execution Plane may perform only the protocol/schema consistency checks needed to execute the supplied envelope safely. It must not replace it with a different subset, add capabilities from MCP discovery, classify tools semantically, or reconstruct source policy.
+
+Provider-native reasoning/information helpers are not part of that MCP envelope. Their availability is a provider-adapter/runtime property and must remain independent from the source's operational authorization decision. A provider helper must never be treated as permission to access infrastructure outside the supplied MCP contract.
 
 Agent Execution Plane then applies its configured model priority deterministically, runs exactly the same model/MCP loop and produces exactly one result or factual technical failure.
 
@@ -68,7 +73,7 @@ Agent Control Plane also owns:
 - effective schemas and restrictions such as `fixed_arguments_v1`;
 - per-invocation authorization and fail-closed revalidation before any upstream call.
 
-`jobs_claim_v1` returns the claimed job with its `allowed_capabilities`. That field is the **authoritative model-invocable capability envelope** for the execution. Agent Execution Plane must not derive a different capability set from the ACP MCP server's complete `tools/list` result.
+`jobs_claim_v1` returns the claimed job with its `allowed_capabilities`. That field is the **authoritative model-invocable MCP operational capability envelope** for the execution. Agent Execution Plane must not derive a different MCP capability set from the ACP MCP server's complete `tools/list` result.
 
 The ACP public MCP surface intentionally contains two different categories of tools:
 
@@ -81,12 +86,13 @@ Agent Execution Plane:
 
 - does not create or choose ACP jobs;
 - does not add semantic instructions or business context;
-- does not authorize, select or broaden capabilities;
+- does not authorize, select or broaden MCP operational capabilities;
 - does not inspect ACP connector configuration or upstream credentials;
 - does not reconstruct connector provenance, hidden fixed arguments or ACP restrictions;
 - uses ACP lifecycle tools only in its ACP source boundary, never as model tools;
 - maps the claimed job's `allowed_capabilities` into the common execution contract exactly;
 - may verify mechanically that each claimed capability still exists on the same ACP MCP session with the expected effective input schema;
+- may let its provider use permitted native reasoning/information helpers that do not act on the user's infrastructure or bypass ACP;
 - executes the claimed job through its configured models;
 - returns the model-produced result or factual technical execution failure;
 - does not choose what ACP should do with that result.
@@ -107,14 +113,16 @@ It must not decide:
 - what work should exist;
 - when a task becomes a job;
 - what objective or business context should be added;
-- which operational capabilities should be authorized;
-- which capabilities from a broader server inventory should become model-visible;
-- whether missing capabilities should be granted;
+- which operational MCP capabilities should be authorized;
+- which capabilities from a broader MCP server inventory should become model-visible;
+- whether missing MCP capabilities should be granted;
 - whether the model's conclusion is business-correct or sufficient;
 - whether the source should retry, recreate, escalate or continue work;
 - what another component should do after receiving the result.
 
-The source-supplied capability envelope is authoritative. AEP may reject an execution when that contract cannot be executed consistently or safely at the protocol level, but that rejection is a factual technical failure, not a new authorization decision.
+The source-supplied MCP capability envelope is authoritative. AEP may reject an execution when that contract cannot be executed consistently or safely at the protocol level, but that rejection is a factual technical failure, not a new authorization decision.
+
+Permitted provider-native reasoning/information helpers do not alter this rule. They support how the model reasons; they do not grant operational authority and must not be used as an alternate connector or infrastructure-control path.
 
 If the model concludes that tools or information are insufficient, that is a **model result**, not an Execution Plane technical failure.
 
@@ -122,41 +130,46 @@ If Execution Plane itself encounters a provider, MCP, transport or runtime probl
 
 ## 5. No semantic enrichment
 
-Everything presented to the model for an execution originates from the source or from the source-governed MCP capability metadata corresponding to the supplied capability envelope.
+All **business/task semantic content deliberately supplied by AEP** to the model originates from the source or from the source-governed MCP capability metadata corresponding to the supplied MCP envelope.
+
+A model provider/runtime may additionally contribute generic provider-native system mechanics and permitted reasoning/information helpers. Those provider-native facilities must not add a new business objective, grant operational authorization, expose source-boundary lifecycle tools, or create access to the user's infrastructure or AEP private host state outside MCP.
 
 Execution Plane must not silently add:
 
 - new job instructions;
 - inferred objectives;
 - business context;
-- hidden tools;
+- hidden operational tools;
 - source-boundary lifecycle tools;
 - semantic authorization labels;
 - policy prompts that change the meaning of the source request.
 
-Provider-specific formatting necessary to transmit the same content is allowed, but it must not alter its meaning.
+Provider-specific formatting and generic provider-native reasoning mechanics necessary to execute the same task are allowed, but they must not alter its business meaning or authority boundary.
 
-## 6. MCP capability rule
+## 6. MCP operational capability rule
 
-MCP is the only model-invocable capability path in Agent Execution Plane.
+MCP is the only model-initiated path in Agent Execution Plane for **operational access to or actions on user-controlled infrastructure and other non-provider technical systems**.
 
-Every execution carries an exact model-invocable capability envelope supplied by its source. Execution Plane uses `tools/list` only as a **technical consistency mechanism** for that envelope: it may confirm that the named capabilities exist and that their effective input schemas still match what the source supplied. `tools/list` is never an authorization source for AEP.
+Every execution carries an exact model-invocable MCP operational capability envelope supplied by its source. Execution Plane uses `tools/list` only as a **technical consistency mechanism** for that envelope: it may confirm that the named MCP capabilities exist and that their effective input schemas still match what the source supplied. `tools/list` is never an authorization source for AEP.
+
+Provider-native reasoning/information helpers are explicitly separate from MCP operational capabilities. Helpers such as internal planning or public Web search may be available when they remain within the provider/runtime reasoning boundary and cannot operate user infrastructure, access AEP host/private data, use hidden connector credentials, or create a second MCP/connector path.
 
 Therefore:
 
-- AEP does not discover tools and then decide which ones are allowed;
-- AEP does not add a tool merely because it appears in MCP discovery;
+- AEP does not discover MCP tools and then decide which ones are allowed;
+- AEP does not add an MCP tool merely because it appears in MCP discovery;
 - AEP does not expose source-boundary lifecycle tools merely because they exist on the same MCP server; in the ACP boundary, ACP lifecycle tools are categorically boundary-only and never model-invocable;
-- an empty source capability envelope means zero model-visible tools even if the MCP server exposes other tools;
-- a capability missing from the MCP server or presenting a mismatched effective schema makes the supplied execution contract technically inconsistent and fails closed;
-- a model request for a tool outside the frozen source envelope is rejected locally without dispatch;
-- local JSON-schema argument validation enforces the already-supplied technical contract and is not a second semantic authorization system.
+- an empty source MCP capability envelope means zero model-visible **AEP-supplied MCP operational tools**, even if the MCP server exposes other tools; permitted provider-native reasoning/information helpers may still exist independently;
+- a source MCP capability missing from the MCP server or presenting a mismatched effective schema makes the supplied execution contract technically inconsistent and fails closed;
+- a model request for an AEP/MCP tool outside the frozen source envelope is rejected locally without MCP dispatch;
+- local JSON-schema argument validation enforces the already-supplied technical MCP contract and is not a second semantic authorization system;
+- no provider-native helper may be reclassified as harmless if it can actually execute commands, access local/private files, reach local-network/user infrastructure or invoke an alternate connector path outside the governed MCP envelope.
 
-For ACP specifically, the `allowed_capabilities` from the claimed job provide the authoritative names and effective schemas. ACP remains responsible for connector selection, virtual naming, argument restrictions, hidden/fixed argument injection, authorization and upstream dispatch. AEP neither knows nor recreates those decisions.
+For ACP specifically, the `allowed_capabilities` from the claimed job provide the authoritative names and effective schemas for **MCP operational tools**. ACP remains responsible for connector selection, virtual naming, argument restrictions, hidden/fixed argument injection, authorization and upstream dispatch. AEP neither knows nor recreates those decisions.
 
-A reasoning model does not need to speak MCP itself. Execution Plane speaks MCP and maps the source-supplied capabilities into the provider's supported tool/function-calling mechanism.
+A reasoning model does not need to speak MCP itself. Execution Plane speaks MCP and maps the source-supplied operational capabilities into the provider's supported tool/function-calling mechanism. Provider-native reasoning/information helpers remain provider-side mechanics and are not mapped into ACP authorization.
 
-A model/provider that cannot support the required tool/function-calling behavior is incompatible and must not receive work.
+A model/provider that cannot support the required operational tool/function-calling behavior is incompatible and must not receive work.
 
 ## 7. Model provider scope
 
@@ -169,6 +182,8 @@ The first release supports three provider adapter families:
 Multiple models may be configured across these families, including local and remote generic endpoints. `openai_chatgpt_oauth` never accepts an OpenAI Platform API key and never falls back implicitly to API billing. Its shared ChatGPT account login is owned and persisted by the official Codex runtime in an AEP-specific private Codex home; AEP never extracts, copies, stores, returns or logs OAuth tokens.
 
 Provider-specific mechanics belong behind provider adapters rather than spreading provider branches through the execution loop.
+
+A provider adapter may expose documented native reasoning/information helpers required or useful for that provider's normal reasoning behavior, including public information retrieval, provided those helpers satisfy the operational-side-channel prohibition defined above. Provider-native helpers do not modify the source-supplied MCP capability envelope.
 
 Model-provider credentials belong to Agent Execution Plane because it directly invokes the providers.
 
@@ -257,7 +272,7 @@ This is a worker loop, not a scheduler.
 
 For every new execution, enabled compatible models are tried in administrator priority order.
 
-Automatic fallback to the next model is allowed only after a **technical failure before any MCP tool action has actually executed**.
+Automatic fallback to the next model is allowed only after a **technical failure before any MCP operational action has actually been dispatched**.
 
 The fallback model starts completely from zero with:
 
@@ -268,7 +283,9 @@ The fallback model starts completely from zero with:
 
 No partial conversation, reasoning, summary or state from the failed model is passed to the fallback model.
 
-Once any MCP action has actually executed, **no automatic fallback to another model is allowed** for that execution because side effects may already have occurred.
+Use of permitted provider-native reasoning/information helpers such as planning or public Web search does not itself cross the MCP side-effect boundary and therefore does not by itself forbid fallback. No provider-native operational side-effect capability is permitted outside MCP.
+
+Once any MCP operational action has actually been dispatched, **no automatic fallback to another model is allowed** for that execution because side effects may already have occurred.
 
 If all enabled compatible models fail technically before any MCP action, Execution Plane reports a bounded factual technical failure to the source. It does not schedule an internal retry later.
 
@@ -280,7 +297,7 @@ Default for a newly configured model: **5 minutes**.
 
 The administrator remains free to choose the timeout appropriate for each model. Agent Execution Plane does not derive or impose a product-level maximum from any caller's lease or lifecycle policy.
 
-The timeout does not reset after each reasoning turn or tool call.
+The timeout does not reset after each reasoning turn, permitted provider-native helper use or MCP tool call.
 
 If timeout occurs before any MCP action executes, fallback may continue to the next model.
 
@@ -370,10 +387,12 @@ The caller is the source authority for that standalone execution and supplies:
 - `input` JSON;
 - MCP endpoint information;
 - optional MCP credential required to access that endpoint;
-- the exact model-invocable MCP capability envelope for that execution;
+- the exact model-invocable MCP operational capability envelope for that execution;
 - optional JSON result schema.
 
-The standalone caller is responsible for deciding what capability envelope it intends to expose. AEP does not inspect a broader MCP inventory and invent an authorization policy. It only verifies and executes the exact envelope supplied in the request.
+The standalone caller is responsible for deciding what MCP capability envelope it intends to expose. AEP does not inspect a broader MCP inventory and invent an authorization policy. It only verifies and executes the exact envelope supplied in the request.
+
+Provider-native reasoning/information helpers, when supported by the selected provider, remain provider mechanics and are not caller-selected operational capabilities.
 
 The caller **never selects the model**. Execution Plane always applies its own configured model priority and fallback rules.
 
@@ -404,6 +423,8 @@ If used, it is simply an MCP server whose tools may participate in a source-defi
 
 Execution Plane must not know how Bridge capabilities are implemented internally and must not implement SSH, target HTTP, browser automation or appliance-specific execution itself.
 
+Provider-native public information retrieval is not a substitute for Bridge or MCP when an operation needs to inspect or control a user-owned technical target.
+
 ## 19. Observability
 
 Operational visibility is limited to what is required to operate and diagnose the execution engine, including:
@@ -429,9 +450,10 @@ Detailed design must preserve at least:
 - bounded MCP definitions, arguments and results;
 - model/MCP timeouts required to prevent stuck execution;
 - secret redaction/non-disclosure;
-- no privileged shell/browser/target-HTTP side channel outside MCP;
+- no privileged local shell/filesystem, native MCP connector, browser automation against user infrastructure or vendor-target HTTP side channel outside MCP;
+- provider-native public information retrieval may be used for reasoning, but it must not receive AEP private credentials or become a path to local/user infrastructure control;
 - no model-produced data interpreted as configuration or new authorization;
-- no capability broadening, selection or semantic authorization by Execution Plane;
+- no MCP capability broadening, selection or semantic authorization by Execution Plane;
 - no source-boundary lifecycle tool exposed to the model merely because it exists on the same MCP server;
 - crash/restart handling that never blindly replays potentially side-effecting work.
 
@@ -464,7 +486,7 @@ Agent Execution Plane must not:
 - own ACP task definitions, triggers, schedules, events, incidents or policy;
 - own or configure ACP upstream MCP connectors, connector inventories, endpoints or credentials;
 - choose which MCP tools a governed ACP job is authorized to use;
-- derive a model-visible capability set from the complete ACP `tools/list` inventory;
+- derive a model-visible MCP operational capability set from the complete ACP `tools/list` inventory;
 - reproduce ACP namespacing, virtual capability construction, `fixed_arguments_v1`, hidden argument injection or per-invocation authorization;
 - expose ACP claim/heartbeat/complete/fail lifecycle tools to the reasoning model;
 - duplicate ACP governance, retry policy, reports or audit logic;
@@ -473,8 +495,9 @@ Agent Execution Plane must not:
 - classify model conclusions into business outcomes;
 - decide source-level retry/escalation policy;
 - add business instructions/context not supplied by the source;
-- discover extra tools for a running execution and add them to the source envelope;
+- discover extra MCP tools for a running execution and add them to the source envelope;
 - execute direct infrastructure actions outside MCP;
+- permit provider-native shell/filesystem/native-MCP/browser/vendor-control capabilities to bypass the source-authorized operational path;
 - embed Home Assistant, Gatus, OpenDTU, Cerbo GX, UniFi or another product as core business logic;
 - require Agent Control Plane or MCP Capability Bridge in order to run.
 
@@ -482,20 +505,22 @@ Agent Execution Plane must not:
 
 A proposed feature belongs in Agent Execution Plane only if it is required to:
 
-> receive a source-supplied execution, apply the administrator-configured model execution order, execute it with exactly the model-invocable MCP capability envelope supplied by the source, and return the resulting model output or factual technical failure.
+> receive a source-supplied execution, apply the administrator-configured model execution order, reason using the selected provider and its permitted non-operational helpers, execute it with exactly the source-supplied MCP operational capability envelope, and return the resulting model output or factual technical failure.
 
-AEP may validate that this supplied contract is technically executable, but it never defines the authorization contract itself.
+AEP may validate that this supplied MCP contract is technically executable, but it never defines the operational authorization contract itself.
 
-If a feature instead decides what work should exist, what capabilities should be authorized, how upstream connectors should be exposed/restricted, what a conclusion means operationally, or what should happen after the source receives the outcome, it belongs elsewhere.
+If a feature instead decides what work should exist, what operational capabilities should be authorized, how upstream connectors should be exposed/restricted, what a conclusion means operationally, or what should happen after the source receives the outcome, it belongs elsewhere.
+
+A provider-native feature remains in AEP only if it supports reasoning/information without becoming a privileged path to user infrastructure or local/private host state.
 
 ## 24. Remaining detailed technical design
 
 Remaining implementation work is intentionally technical rather than a second functional-design pass:
 
 1. exact standalone JSON request/response encoding and size bounds for the already validated common execution contract;
-2. provider-adapter interface for Ollama-compatible and OpenAI-compatible providers;
+2. provider-adapter interface for Ollama-compatible, OpenAI-compatible and OpenAI ChatGPT OAuth providers, including permitted native reasoning/information helper handling;
 3. exact provider/tool-call mechanics and bounded structured-output validation;
-4. exact MCP client/session mechanics, including strict separation between source-boundary lifecycle tools and the source-supplied model capability envelope;
+4. exact MCP client/session mechanics, including strict separation between source-boundary lifecycle tools and the source-supplied MCP operational capability envelope;
 5. model UI/provider-specific fields;
 6. minimal persistence schema for active-interruption and pending-result recovery;
 7. HAOS process/listener/network/AppArmor implementation consistent with the validated App requirements;
