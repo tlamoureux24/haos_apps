@@ -1,8 +1,8 @@
 # Agent Execution Plane — Foundational Project Brief
 
-Status: **functional behavior validated — detailed technical design in progress, no implementation started**.
+Status: **foundational product boundary — Lots 0 and 1 accepted; remaining implementation follows this brief**.
 
-This document defines the strict product boundary and the validated behavior of Agent Execution Plane before implementation planning begins.
+This document defines the strict product boundary and validated behavior of Agent Execution Plane throughout implementation.
 
 The root `ARCHITECTURE_CHARTER.md` remains normative. Where this brief is more specific, Agent Execution Plane follows the narrower responsibility defined here.
 
@@ -13,16 +13,18 @@ Agent Execution Plane is a **model execution engine**.
 Its responsibility is deliberately small:
 
 1. receive one execution from a source;
-2. give a configured reasoning model exactly the source-provided objective/input and MCP capability surface;
+2. give a configured reasoning model exactly the source-provided objective/input and exactly the model-invocable MCP capability envelope supplied by that source;
 3. run the model/tool-calling loop;
 4. obtain the final model result or a factual technical failure;
 5. return that outcome to the source/destination.
 
 Conceptually:
 
-`source -> Agent Execution Plane -> model + supplied MCP tools -> result -> source`
+`source -> Agent Execution Plane -> model + source-supplied MCP capability envelope -> result -> source`
 
 Agent Execution Plane is not a control plane, scheduler, workflow engine, policy engine, job designer or infrastructure bridge.
+
+The source decides what work and capability envelope exist. Agent Execution Plane executes that already-defined contract; it does not derive, select, authorize, broaden or semantically narrow the capability envelope itself.
 
 ## 2. One execution contract, regardless of source
 
@@ -35,46 +37,70 @@ In both cases, the source supplies the execution material:
 - objective/instruction;
 - input data;
 - MCP endpoint/access information needed for that execution;
-- the exact MCP tool surface authorized for that execution;
+- the exact model-invocable MCP capability envelope already selected/authorized by the source;
 - an output/result schema when the source requires structured output.
 
-Agent Execution Plane then applies its own configured model priority, runs exactly the same model/MCP loop and produces exactly one result or factual technical failure.
+That capability envelope is an **input contract**, not an Agent Execution Plane authorization decision. Execution Plane may perform only the protocol/schema consistency checks needed to execute the supplied envelope safely. It must not replace it with a different subset, add capabilities from MCP discovery, classify tools semantically, or reconstruct source policy.
+
+Agent Execution Plane then applies its configured model priority deterministically, runs exactly the same model/MCP loop and produces exactly one result or factual technical failure.
 
 The only differences between Agent Control Plane mode and standalone usage are **transport and lifecycle mechanics at the boundary**:
 
 - Agent Control Plane exposes jobs, leases, governed MCP capabilities and result completion through its existing MCP surface;
 - the standalone API accepts the equivalent execution material directly and exposes explicit result retrieval/acknowledgement.
 
-Those boundary differences must never create divergent execution semantics. The standalone API documentation must describe clearly how to submit the same information that Agent Control Plane supplies through its existing contract.
+Those boundary differences must never create divergent execution semantics. The standalone API documentation must describe clearly how to submit the same execution material that Agent Control Plane supplies through its existing contract.
 
 ## 3. Reference Agent Control Plane integration
 
 Reference flow:
 
-`Agent Control Plane -> Agent Execution Plane -> reasoning model -> governed MCP tools -> model result -> Agent Control Plane`
+`Agent Control Plane -> Agent Execution Plane -> reasoning model -> governed virtual MCP capabilities -> model result -> Agent Control Plane`
 
 Agent Control Plane owns the task/job, its business lifecycle, instructions/input, authorization, capability envelope, retry policy and report contract.
+
+Agent Control Plane also owns:
+
+- upstream MCP connector configuration, endpoints and credentials;
+- connector discovery and inventories;
+- administrator task/tool selection;
+- namespacing/virtualization of selected capabilities;
+- effective schemas and restrictions such as `fixed_arguments_v1`;
+- per-invocation authorization and fail-closed revalidation before any upstream call.
+
+`jobs_claim_v1` returns the claimed job with its `allowed_capabilities`. That field is the **authoritative model-invocable capability envelope** for the execution. Agent Execution Plane must not derive a different capability set from the ACP MCP server's complete `tools/list` result.
+
+The ACP public MCP surface intentionally contains two different categories of tools:
+
+1. **source-boundary lifecycle tools** used by Agent Execution Plane itself, such as claim, heartbeat, complete and fail;
+2. **virtual task capabilities** governed by ACP and eligible for model exposure only when they are present in the claimed job's `allowed_capabilities` envelope.
+
+The lifecycle tools remain boundary mechanics and are never model-invocable merely because they appear in `tools/list`.
 
 Agent Execution Plane:
 
 - does not create or choose ACP jobs;
 - does not add semantic instructions or business context;
-- does not authorize or broaden capabilities;
-- does not choose what ACP should do with a result;
-- remains model-neutral from ACP's perspective: ACP does not select the provider/model;
-- executes the claimed job through its own configured models;
-- returns the model-produced result or factual technical execution failure.
+- does not authorize, select or broaden capabilities;
+- does not inspect ACP connector configuration or upstream credentials;
+- does not reconstruct connector provenance, hidden fixed arguments or ACP restrictions;
+- uses ACP lifecycle tools only in its ACP source boundary, never as model tools;
+- maps the claimed job's `allowed_capabilities` into the common execution contract exactly;
+- may verify mechanically that each claimed capability still exists on the same ACP MCP session with the expected effective input schema;
+- executes the claimed job through its configured models;
+- returns the model-produced result or factual technical execution failure;
+- does not choose what ACP should do with that result.
 
 The reference transport is ACP's existing authenticated **Streamable HTTP MCP surface**. Execution Plane is configured with:
 
 - the ACP MCP endpoint;
-- the opaque Bearer credential of a worker identity authorized to claim, heartbeat, complete and fail jobs.
+- the opaque Bearer credential of a worker identity authorized by ACP to claim, heartbeat, complete and fail jobs.
 
-The same governed MCP surface exposes the capabilities available to the currently claimed job. No ACP-specific parallel execution API and no duplicated lease protocol are introduced.
+The same governed MCP surface exposes lifecycle tools to the AEP boundary and the virtual capabilities of the active job. No ACP-specific parallel execution API and no duplicated lease or authorization protocol are introduced.
 
 ## 4. Strict execution-only rule
 
-Agent Execution Plane **executes and reports; it does not decide business policy**.
+Agent Execution Plane **executes and reports; it does not decide business or authorization policy**.
 
 It must not decide:
 
@@ -82,10 +108,13 @@ It must not decide:
 - when a task becomes a job;
 - what objective or business context should be added;
 - which operational capabilities should be authorized;
+- which capabilities from a broader server inventory should become model-visible;
 - whether missing capabilities should be granted;
 - whether the model's conclusion is business-correct or sufficient;
 - whether the source should retry, recreate, escalate or continue work;
 - what another component should do after receiving the result.
+
+The source-supplied capability envelope is authoritative. AEP may reject an execution when that contract cannot be executed consistently or safely at the protocol level, but that rejection is a factual technical failure, not a new authorization decision.
 
 If the model concludes that tools or information are insufficient, that is a **model result**, not an Execution Plane technical failure.
 
@@ -93,7 +122,7 @@ If Execution Plane itself encounters a provider, MCP, transport or runtime probl
 
 ## 5. No semantic enrichment
 
-Everything presented to the model for an execution originates from the source or from the supplied MCP capability surface.
+Everything presented to the model for an execution originates from the source or from the source-governed MCP capability metadata corresponding to the supplied capability envelope.
 
 Execution Plane must not silently add:
 
@@ -101,6 +130,7 @@ Execution Plane must not silently add:
 - inferred objectives;
 - business context;
 - hidden tools;
+- source-boundary lifecycle tools;
 - semantic authorization labels;
 - policy prompts that change the meaning of the source request.
 
@@ -110,9 +140,21 @@ Provider-specific formatting necessary to transmit the same content is allowed, 
 
 MCP is the only model-invocable capability path in Agent Execution Plane.
 
-Execution Plane uses only the MCP tools supplied/exposed for the current execution. It must not discover and add unrelated capabilities or create direct SSH/browser/target-HTTP side channels.
+Every execution carries an exact model-invocable capability envelope supplied by its source. Execution Plane uses `tools/list` only as a **technical consistency mechanism** for that envelope: it may confirm that the named capabilities exist and that their effective input schemas still match what the source supplied. `tools/list` is never an authorization source for AEP.
 
-A reasoning model does not need to speak MCP itself. Execution Plane speaks MCP and maps the supplied tools into the provider's supported tool/function-calling mechanism.
+Therefore:
+
+- AEP does not discover tools and then decide which ones are allowed;
+- AEP does not add a tool merely because it appears in MCP discovery;
+- AEP does not expose source-boundary lifecycle tools to the model unless the source contract itself explicitly made them model capabilities;
+- an empty source capability envelope means zero model-visible tools even if the MCP server exposes other tools;
+- a capability missing from the MCP server or presenting a mismatched effective schema makes the supplied execution contract technically inconsistent and fails closed;
+- a model request for a tool outside the frozen source envelope is rejected locally without dispatch;
+- local JSON-schema argument validation enforces the already-supplied technical contract and is not a second semantic authorization system.
+
+For ACP specifically, the `allowed_capabilities` from the claimed job provide the authoritative names and effective schemas. ACP remains responsible for connector selection, virtual naming, argument restrictions, hidden/fixed argument injection, authorization and upstream dispatch. AEP neither knows nor recreates those decisions.
+
+A reasoning model does not need to speak MCP itself. Execution Plane speaks MCP and maps the source-supplied capabilities into the provider's supported tool/function-calling mechanism.
 
 A model/provider that cannot support the required tool/function-calling behavior is incompatible and must not receive work.
 
@@ -220,7 +262,7 @@ Automatic fallback to the next model is allowed only after a **technical failure
 The fallback model starts completely from zero with:
 
 - the original source-provided objective/input;
-- the original supplied MCP capability surface;
+- the original frozen source-supplied MCP capability envelope;
 - the original output contract;
 - its own complete configured timeout.
 
@@ -322,18 +364,20 @@ If the App restarts while an execution was still running and no final result exi
 
 Standalone operation is only a generic way for another source to use the **same execution engine** without Agent Control Plane.
 
-The caller supplies the equivalent execution information that ACP supplies in the reference integration:
+The caller is the source authority for that standalone execution and supplies:
 
 - `objective` / instruction;
 - `input` JSON;
 - MCP endpoint information;
 - optional MCP credential required to access that endpoint;
-- exact MCP tools authorized for that execution;
+- the exact model-invocable MCP capability envelope for that execution;
 - optional JSON result schema.
+
+The standalone caller is responsible for deciding what capability envelope it intends to expose. AEP does not inspect a broader MCP inventory and invent an authorization policy. It only verifies and executes the exact envelope supplied in the request.
 
 The caller **never selects the model**. Execution Plane always applies its own configured model priority and fallback rules.
 
-Execution Plane does not maintain a standalone connector catalog and does not reuse caller-supplied MCP endpoints, credentials or tools as configuration for later executions.
+Execution Plane does not maintain a standalone connector catalog and does not reuse caller-supplied MCP endpoints, credentials or capability descriptors as configuration for later executions.
 
 When a result schema is supplied, the final result must conform to that caller-provided output contract. When no result schema is supplied, free-form model output is allowed.
 
@@ -356,7 +400,7 @@ The API documentation must clearly document submission, retrieval and acknowledg
 
 MCP Capability Bridge is optional.
 
-If used, it is simply an MCP server whose tools may be supplied for an execution, directly by a standalone caller or through Agent Control Plane.
+If used, it is simply an MCP server whose tools may participate in a source-defined execution envelope, directly from a standalone caller or indirectly through Agent Control Plane's governed virtual capabilities.
 
 Execution Plane must not know how Bridge capabilities are implemented internally and must not implement SSH, target HTTP, browser automation or appliance-specific execution itself.
 
@@ -387,7 +431,8 @@ Detailed design must preserve at least:
 - secret redaction/non-disclosure;
 - no privileged shell/browser/target-HTTP side channel outside MCP;
 - no model-produced data interpreted as configuration or new authorization;
-- no capability broadening by Execution Plane;
+- no capability broadening, selection or semantic authorization by Execution Plane;
+- no source-boundary lifecycle tool exposed to the model merely because it exists on the same MCP server;
 - crash/restart handling that never blindly replays potentially side-effecting work.
 
 Security constrains the engine technically; it does not turn it into a business-policy engine.
@@ -417,14 +462,18 @@ These are product requirements. The internal framework, database schema, process
 Agent Execution Plane must not:
 
 - own ACP task definitions, triggers, schedules, events, incidents or policy;
+- own or configure ACP upstream MCP connectors, connector inventories, endpoints or credentials;
 - choose which MCP tools a governed ACP job is authorized to use;
+- derive a model-visible capability set from the complete ACP `tools/list` inventory;
+- reproduce ACP namespacing, virtual capability construction, `fixed_arguments_v1`, hidden argument injection or per-invocation authorization;
+- expose ACP claim/heartbeat/complete/fail lifecycle tools to the reasoning model;
 - duplicate ACP governance, retry policy, reports or audit logic;
 - create its own scheduler or waiting-job queue;
 - become a generic workflow/orchestration framework;
 - classify model conclusions into business outcomes;
 - decide source-level retry/escalation policy;
 - add business instructions/context not supplied by the source;
-- discover extra tools for a running execution;
+- discover extra tools for a running execution and add them to the source envelope;
 - execute direct infrastructure actions outside MCP;
 - embed Home Assistant, Gatus, OpenDTU, Cerbo GX, UniFi or another product as core business logic;
 - require Agent Control Plane or MCP Capability Bridge in order to run.
@@ -433,18 +482,20 @@ Agent Execution Plane must not:
 
 A proposed feature belongs in Agent Execution Plane only if it is required to:
 
-> receive a source-supplied execution, have one of the administrator-configured models execute it with the source-supplied MCP capability surface, and return the resulting model output or factual technical failure.
+> receive a source-supplied execution, apply the administrator-configured model execution order, execute it with exactly the model-invocable MCP capability envelope supplied by the source, and return the resulting model output or factual technical failure.
 
-If a feature instead decides what work should exist, what capabilities should be authorized, what a conclusion means operationally, or what should happen after the source receives the outcome, it belongs elsewhere.
+AEP may validate that this supplied contract is technically executable, but it never defines the authorization contract itself.
+
+If a feature instead decides what work should exist, what capabilities should be authorized, how upstream connectors should be exposed/restricted, what a conclusion means operationally, or what should happen after the source receives the outcome, it belongs elsewhere.
 
 ## 24. Remaining detailed technical design
 
-The remaining work before the authoritative implementation plan is intentionally technical rather than a second functional-design pass:
+Remaining implementation work is intentionally technical rather than a second functional-design pass:
 
 1. exact standalone JSON request/response encoding and size bounds for the already validated common execution contract;
 2. provider-adapter interface for Ollama-compatible and OpenAI-compatible providers;
 3. exact provider/tool-call mechanics and bounded structured-output validation;
-4. exact MCP client/session mechanics;
+4. exact MCP client/session mechanics, including strict separation between source-boundary lifecycle tools and the source-supplied model capability envelope;
 5. model UI/provider-specific fields;
 6. minimal persistence schema for active-interruption and pending-result recovery;
 7. HAOS process/listener/network/AppArmor implementation consistent with the validated App requirements;
@@ -454,8 +505,6 @@ The remaining work before the authoritative implementation plan is intentionally
 These points must not reopen the validated execution behavior unless implementation reveals a concrete contradiction that cannot be resolved otherwise.
 
 ## 25. Delivery discipline
-
-The authoritative implementation plan is created only after the remaining technical design is settled.
 
 For every implementation lot:
 
