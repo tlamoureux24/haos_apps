@@ -1,6 +1,6 @@
 # Agent Execution Plane — Implementation Plan
 
-Status: **authoritative implementation sequence — implementation not started**.
+Status: **authoritative implementation sequence — Lots 0 and 1 accepted; Lot 2 next**.
 
 This plan is derived from `PROJECT_BRIEF.md`, `TECHNICAL_DESIGN.md` and the root `ARCHITECTURE_CHARTER.md`.
 
@@ -19,7 +19,12 @@ The following rules apply from the first commit onward:
 - Agent Execution Plane remains a model execution engine, not a control plane;
 - ACP and standalone API use the same core execution semantics;
 - one global execution slot, no internal waiting queue;
-- the caller/source supplies objective, input and exact MCP capability surface;
+- the caller/source supplies objective, input and the exact **model-invocable MCP capability envelope** for the execution;
+- AEP never decides which operational capabilities are authorized;
+- AEP never derives authorization from a broader `tools/list` inventory;
+- when ACP is the source, the claimed job's `allowed_capabilities` is the authoritative model capability envelope;
+- ACP lifecycle tools used by AEP itself are never exposed to the reasoning model merely because they are available on the same MCP server;
+- ACP owns connector configuration/discovery, task selection, virtual capability construction, effective schemas, restrictions such as `fixed_arguments_v1`, authorization and fail-closed upstream resolution;
 - the caller never selects the model;
 - configured models are tried in administrator priority order;
 - 5-minute default timeout per configured model, with no caller-derived product maximum;
@@ -35,70 +40,41 @@ The following rules apply from the first commit onward:
 
 ## Lot 0 — executable HAOS application shell
 
-Status: **planned**.
+Status: **accepted on HAOS**.
 
 ### Goal
 
 Create the smallest real Agent Execution Plane App that installs, starts and can be operated safely on HAOS before model/execution behavior is added.
 
-### Scope
+### Accepted scope
 
 - HAOS App metadata under `agent_execution_plane/`;
 - application version source and `Agent Execution Plane vX.Y.Z` header rendering;
-- preserve the committed root `icon.png` and `logo.png` unchanged as the HAOS App's authoritative icon/logo assets so Home Assistant repository/Supervisor presentation uses those files rather than generated substitutes;
-- the Ingress header must visibly render the committed `icon.png` (or an exact packaged copy of the same asset) immediately with the `Agent Execution Plane vX.Y.Z` product identity; `logo.png` may additionally be reused elsewhere in the UI but does not replace this mandatory header icon;
-- Dockerfile based on the Home Assistant base image with pinned provenance handling equivalent in discipline to ACP;
+- committed authoritative `icon.png` and `logo.png`;
+- Home Assistant base image and reproducible build discipline;
 - unprivileged runtime user and startup script;
-- SQLite initialization plumbing with generation-1 empty schema infrastructure;
+- SQLite generation-1 infrastructure;
 - fixed internal administration listener on `8099` through Ingress;
 - fixed internal standalone API listener on `8098`, exposed through a user-configurable HAOS Network host-port mapping;
 - non-sensitive `/health/live` and `/health/ready`;
-- first least-privilege `agent_execution_plane` AppArmor profile based on actual startup/runtime requirements;
-- Ingress shell using ACP's visual language;
+- least-privilege AppArmor foundation validated on real HAOS;
+- ACP-style Ingress shell;
 - French/English switch;
 - light/dark switch;
-- Overview shell showing App/engine readiness without pretending external models/ACP are configured;
-- basic English/French installation documentation;
-- dedicated GitHub Actions validation workflow;
-- container smoke test proving listener isolation and persistent `/data` across restart.
+- Overview and Activity shell;
+- CI and container persistence smoke tests.
 
-### Explicit anti-goals
-
-Do not implement model providers, ACP polling, standalone execution submission, MCP tool execution, task/job storage or fake placeholder business behavior.
-
-### CI evidence
-
-- metadata/source validation;
-- committed `icon.png` and `logo.png` are present in the packaged App unchanged and the Ingress header resolves/renders the authoritative `icon.png` asset rather than an emoji, generated icon or unrelated substitute;
-- Python compile/tests;
-- amd64 image build;
-- startup and both health endpoints;
-- Ingress-prefix correctness;
-- bilingual/theme/version/icon UI assertions;
-- restart/persistence smoke test;
-- initial AppArmor executable inventory.
-
-### HAOS acceptance
-
-1. install the App from the repository and confirm Home Assistant presents the committed App icon/logo correctly;
-2. confirm clean startup/logs;
-3. open Ingress and confirm the committed icon is visible with the product name + version in the header;
-4. verify FR/EN;
-5. verify light/dark;
-6. verify the standalone API host port can be changed in the App Network configuration;
-7. restart App and HAOS once, confirming clean recovery and unchanged branding assets.
-
-Acceptance of Lot 0 proves only the App shell/security foundation.
+Acceptance was completed through the 0.1.x line; a full HAOS host reboot was intentionally not required because the App-level restart path supplied the relevant evidence without unnecessarily disrupting the host.
 
 ## Lot 1 — configured models and provider adapters
 
-Status: **planned**.
+Status: **accepted on HAOS in 0.3.1**.
 
 ### Goal
 
 Make Execution Plane able to configure, validate, order and monitor reasoning models without executing source work yet.
 
-### Scope
+### Accepted scope
 
 - generation-1 `models` persistence;
 - App-local encryption key under `/data/private`;
@@ -106,97 +82,205 @@ Make Execution Plane able to configure, validate, order and monitor reasoning mo
 - Ingress **Models** view;
 - create/edit/delete configured model;
 - enabled/disabled state;
-- drag/buttons or equivalent deterministic priority reordering;
+- deterministic priority reordering;
 - per-model timeout in minutes, default 5, positive values only and no product maximum;
 - Ollama-compatible adapter;
 - OpenAI-compatible `/v1/chat/completions` adapter;
 - official `openai_chatgpt_oauth` adapter through exactly pinned `openai-codex==0.144.4` and `openai-codex-cli-bin==0.144.4` over local stdio JSONL only;
 - dedicated restrictive `/data/private/codex-home`, forced ChatGPT login and file-owned Codex credential storage with API-key environment variables removed from the child process;
 - shared ChatGPT device-code login/account/logout UI and Codex `model/list` catalogue without OAuth-token handling by AEP;
-- optional provider Bearer/API credential;
 - validate-before-save creation/edit lifecycle;
 - existing configuration preserved when candidate validation fails;
 - Ollama model/tool capability validation from native metadata where available;
 - bounded explicit tool-call inference probe where generic OpenAI-compatible metadata cannot establish required tool support;
-- visible warning that explicit compatibility validation can consume provider usage;
 - non-inference startup/health checks only;
 - non-inference OAuth validation based only on app-server handshake, ChatGPT account state and catalogue membership;
-- `Available`, `Unavailable`, `Incompatible`, `Unverified`, `Disabled`, and `In use` UI states as applicable;
-- priority changes allowed during use at data-model level, while destructive/technical edits are lockable once engine use exists in later lots.
+- bilingual responsive Models UI including final 0.3.1 polish.
 
-### Explicit anti-goals
-
-No source job execution, no MCP call loop, no Codex thread/turn, no autonomous provider quarantine/reordering, no automatic inference-based health polling and no API-key fallback for `openai_chatgpt_oauth`.
-
-### CI evidence
-
-- fake Ollama-compatible endpoint tests;
-- fake OpenAI-compatible endpoint tests;
-- tool-call compatibility probe tests;
-- candidate-edit rollback tests;
-- encrypted-secret/non-disclosure tests;
-- timeout and priority tests;
-- startup health behavior with unreachable providers.
-- fake Codex app-server device login/account/catalogue tests, child-environment isolation tests and a real pinned-runtime initialize/initialized smoke test without external authentication.
-
-### HAOS acceptance
-
-Configure at least one reachable compatible model, exercise successful and failed edits, restart the App and confirm model configuration/priority/timeout survive correctly with no secret disclosure.
+Real HAOS acceptance proved Codex app-server execution under AppArmor, device-code OAuth with a ChatGPT subscription, real `model/list`, model persistence across App restart, account persistence, model deletion without logout, explicit logout and non-disclosure in Activity.
 
 ## Lot 2 — common execution engine and MCP tool loop
 
-Status: **planned**.
+Status: **planned — next implementation lot**.
 
 ### Goal
 
 Implement the source-neutral execution engine once, before attaching either public source boundary end to end.
+
+### Architectural rule for this lot
+
+The execution core receives a **source-supplied capability envelope**. It does not create one.
+
+The Lot 2 fake-source harness must therefore provide:
+
+- objective/input;
+- MCP endpoint/credential;
+- exact model-invocable capability descriptors;
+- optional result schema.
+
+The engine may use MCP `tools/list` only to verify that those supplied capabilities still exist with the expected effective schemas. It must not turn the complete MCP inventory into a new authorization decision.
+
+In the later ACP boundary, the exact envelope will come from `jobs_claim_v1.job.allowed_capabilities`. ACP lifecycle tools on the same MCP server remain source-boundary mechanics and are not model tools.
 
 ### Scope
 
 - internal `ExecutionRequest` / `ExecutionOutcome` values only;
 - one atomic global execution slot;
 - deterministic source objective/input serialization without business enrichment;
-- selection of enabled compatible models by administrator priority;
+- deterministic application of enabled compatible models by administrator priority;
 - entire-attempt per-model timeout;
 - provider conversation/tool-call normalization;
 - one Streamable HTTP MCP session per execution;
-- paginated `tools/list` support;
-- exact source-supplied tool subset verification;
-- fail closed on missing/schema-changed capability;
-- local argument validation before `tools/call`;
+- paginated `tools/list` support used solely for source-envelope consistency verification;
+- exact verification that every source-supplied capability exists with the expected effective input schema;
+- no addition of tools absent from the source envelope;
+- no semantic narrowing or classification of the source envelope by AEP;
+- local argument validation against the frozen source-supplied schema before `tools/call`;
+- optional deterministic one-to-one provider transport aliasing only when provider naming constraints require it;
 - `mcp_effect_possible` set at dispatch time;
 - no fallback after dispatch;
 - provider/model fallback only for qualifying pre-MCP technical failure;
-- fallback restarts from original source material with no prior model state;
+- fallback restarts from original source material and original capability envelope with no prior model state;
 - caller-provided optional result schema;
 - provider structured-output mapping;
 - local JSON-schema validation;
 - output-contract failure/fallback behavior;
 - technical payload/tool-count bounds from `TECHNICAL_DESIGN.md`;
-- no reasoning/conversation persistence.
+- no reasoning/conversation persistence;
+- `In use` model locking required by the already accepted model contract.
+
+### Provider behavior
+
+#### Ollama-compatible
+
+Implement the model/tool loop behind the provider adapter with exactly the frozen source capability envelope.
+
+#### OpenAI-compatible
+
+Implement `/v1/chat/completions` tool calls/results and structured output as supported, again using exactly the frozen source envelope.
+
+#### OpenAI ChatGPT OAuth
+
+Before relying on Codex execution, CI must prove with the real pinned 0.144.4 runtime that AEP can use ephemeral `thread/start`/`turn/start` plus `dynamicTools` without exposing any native Codex capability or unrelated instruction source.
+
+The OAuth execution wrapper must:
+
+- use an execution-specific strict method allow-list separate from the Lot 1 account/catalogue wrapper;
+- never auto-approve command/file/permission requests;
+- never use native Codex shell, filesystem, apply-patch, web, image, MCP, skills, plugins/apps/connectors, sub-agents or collaboration tools;
+- use `ephemeral: true`;
+- use `environments: []`;
+- select no capability root/workspace;
+- require empty `instructionSources`;
+- map only the frozen source capability envelope into `dynamicTools`;
+- route `item/tool/call` back through AEP's MCP loop;
+- use the official output-schema mechanism when applicable rather than semantic prompt enrichment.
+
+If exact isolation cannot be demonstrated, `openai_chatgpt_oauth` is execution-incompatible. Do not weaken the MCP-only invariant and do not fall back to an OpenAI Platform API key.
 
 ### Explicit anti-goals
 
-No ACP-specific lease semantics in the engine core, no standalone HTTP lifecycle yet, no internal queue, no output-quality/business judgment, no repair-agent loop.
+Do not implement:
+
+- ACP connection configuration;
+- ACP polling/claim/heartbeat/result delivery;
+- ACP identities, connectors, task definitions, capability selection or authorization logic;
+- ACP virtual capability construction or `fixed_arguments_v1`;
+- standalone HTTP execution lifecycle;
+- standalone Bearer management;
+- persistent active/pending execution lifecycle;
+- internal queue/scheduler;
+- manual execution UI;
+- MCP connector catalogue;
+- capability/authorization editor;
+- output-quality/business judgment;
+- repair-agent loop;
+- Bridge behavior, SSH, browser or vendor HTTP.
 
 ### CI evidence
 
-- model1 fail/model2 succeed before MCP;
-- model1 fail after MCP dispatch with no model2 replay;
-- MCP request dispatched but response lost still blocks fallback;
-- unknown/unlisted tool rejected before dispatch;
-- schema drift rejected;
-- invalid arguments rejected locally;
-- MCP tool failure reported without provider fallback;
+#### Engine and model ordering
+
+- one global slot;
+- concurrent second execution => busy;
+- no queue;
+- configured priority order respected;
+- disabled model ignored;
+- model1 qualifying pre-MCP technical failure -> model2 succeeds;
+- next execution starts from model1 again;
+- no automatic priority/enabled mutation;
+- active model delete/disable/technical edit refused while priority change remains allowed for later executions.
+
+#### Source capability envelope
+
+Use a fake MCP server that deliberately exposes more than the fake source envelope, including lifecycle-like/unrelated tools.
+
+Prove:
+
+- empty source envelope -> zero model-visible tools even when MCP `tools/list` is non-empty;
+- N source capabilities -> exactly those N reach the provider/model;
+- unrelated MCP inventory entries never become model-visible;
+- no AEP rule chooses a different semantic subset;
+- paginated `tools/list` still validates source capabilities correctly;
+- missing source capability fails closed;
+- effective-schema mismatch fails closed;
+- >128 source capabilities fails rather than selecting/truncating a subset;
+- `tools/list_changed` never adds a capability mid-execution;
+- provider transport aliasing, if required, is deterministic one-to-one, reversible and collision-safe.
+
+#### Tool dispatch
+
+- model request outside frozen source envelope => no dispatch;
+- invalid JSON/schema => no dispatch;
+- valid call => exactly one dispatch;
+- argument and dispatch-count bounds;
+- result bounds;
+- no semantic authorization logic in AEP.
+
+#### Side effect / fallback
+
+- provider failure before dispatch -> fallback allowed;
+- provider failure after dispatch -> no fallback;
+- MCP request dispatched but response lost -> no fallback;
+- MCP tool error -> no fallback;
+- timeout before dispatch -> fallback;
+- timeout after dispatch -> no fallback.
+
+#### Results
+
 - free-form result success;
 - structured result success/failure;
-- configured timeout covers complete multi-turn attempt;
-- limits fail rather than silently truncate.
-- pinned OAuth runtime request capture proving ephemeral threads, `environments: []`, no native capabilities and exact dynamic-tool isolation: zero AEP tools means zero model-visible tools; N means exactly N and nothing else. Failure to prove this makes the OAuth provider execution-incompatible.
+- schema invalid before MCP -> fallback possible;
+- schema invalid after MCP -> no fallback;
+- limit overflow fails rather than silently truncating.
+
+#### Complete timeout
+
+- one monotonic deadline covers the complete model attempt, including provider turns and MCP exchanges;
+- deadline does not reset per turn/tool;
+- a fallback model receives its own configured full timeout.
+
+#### Pinned OAuth isolation — blocking
+
+Using the real Codex 0.144.4 runtime and a deterministic local capture backend, with no real OpenAI account/credential:
+
+- ephemeral thread;
+- `environments: []`;
+- empty `instructionSources`;
+- no workspace/capability root;
+- empty source envelope => provider receives zero tools;
+- N source tools => provider receives exactly N mapped tools;
+- no native Codex capability appears;
+- no project/coding instruction source is injected;
+- dynamic tool call returns through `item/tool/call` to the fake MCP path;
+- unexpected command/file/permission request is never approved;
+- no durable thread/session history remains.
+
+The actual outbound provider request must be captured; checking only the AEP `thread/start` payload is insufficient.
 
 ### Acceptance
 
-This lot can be accepted primarily through independent review and CI because no public source boundary exists yet. A container smoke harness should still exercise a complete fake-source -> model -> fake-MCP -> result path.
+Lot 2 has no public execution source, so real HAOS acceptance is limited to what is meaningful for the new runtime mechanics. Independent review and CI must provide the functional engine evidence, followed by a HAOS deployment/start/runtime smoke sufficient to validate dependencies/AppArmor changes. Lot 2 is accepted only after that evidence is reviewed; CI green alone is not acceptance.
 
 ## Lot 3 — standalone API, authentication and durable result lifecycle
 
@@ -213,8 +297,9 @@ Make Agent Execution Plane fully useful independently of Agent Control Plane.
 - `POST /api/v1/execute`;
 - `GET /api/v1/executions/{id}`;
 - `POST /api/v1/executions/{id}/ack`;
-- exact request contract for objective/input/MCP endpoint/optional MCP Bearer/exact tools/optional result schema;
+- exact request contract for objective/input/MCP endpoint/optional MCP Bearer/**exact caller-selected model capability envelope**/optional result schema;
 - caller cannot select model;
+- AEP does not derive the standalone capability envelope from `tools/list`;
 - immediate busy refusal, no queue;
 - execution-scoped MCP credentials never promoted to persistent configuration;
 - minimal `active_execution` persistence;
@@ -241,11 +326,12 @@ Make Agent Execution Plane fully useful independently of Agent Control Plane.
 - active crash/restart -> interrupted result;
 - pending crash/restart -> same result;
 - caller MCP Bearer never persists after execution;
+- caller capability envelope remains execution-scoped;
 - request/result/body bounds.
 
 ### HAOS acceptance
 
-Run a real standalone execution against a configured model and a test MCP server, retrieve the result, prove the engine remains blocked before ACK, ACK it, then prove a new execution is accepted. Repeat the pending-result step across an App restart.
+Run a real standalone execution against a configured model and a test MCP server whose inventory contains both requested and unrelated tools. Confirm only the caller-supplied envelope reaches the model, retrieve the result, prove the engine remains blocked before ACK, ACK it, then prove a new execution is accepted. Repeat the pending-result step across an App restart.
 
 Acceptance of this lot proves the independence invariant: Execution Plane is useful with no ACP installed/configured.
 
@@ -255,7 +341,7 @@ Status: **planned**.
 
 ### Goal
 
-Attach the existing ACP contract to the already-working common execution engine without creating ACP-specific execution semantics.
+Attach the existing ACP contract to the already-working common execution engine without creating ACP-specific execution semantics or duplicating ACP governance.
 
 ### Scope
 
@@ -264,8 +350,11 @@ Attach the existing ACP contract to the already-working common execution engine 
 - ACP connectivity state without making App readiness depend on ACP;
 - fixed 1-second idle claim polling while a usable model exists;
 - stop claiming when slot is occupied;
-- map `jobs_claim_v1` directly into the common execution request;
-- use ACP supplied objective/input/allowed capability surface/required report schema;
+- call `jobs_claim_v1` through the ACP boundary;
+- map ACP job objective/input/**`allowed_capabilities` exactly**/required report schema into the common execution request;
+- treat ACP `allowed_capabilities` as authoritative for model visibility;
+- keep ACP lifecycle tools (`jobs_claim_v1`, heartbeat, complete, fail and other boundary operations) out of the model envelope;
+- use ACP's MCP `tools/list` only to verify the claimed capability descriptors remain technically present/applicable, never to choose authorized capabilities;
 - lease token protection and heartbeat;
 - continue across one transient heartbeat failure only while current lease remains indisputably valid;
 - stop model/no new MCP dispatch when lease validity can no longer be guaranteed;
@@ -280,11 +369,19 @@ Attach the existing ACP contract to the already-working common execution engine 
 
 ### Explicit anti-goals
 
-No ACP task/trigger/job-history UI, no ACP database access, no duplicated lease policy, no model selection from ACP, no conversion of ACP's current 30-minute attempt lifetime into an Execution Plane timeout limit.
+No ACP task/trigger/job-history UI, no ACP database access, no connector catalogue, no task/capability editor, no copied ACP connector credentials, no recreated `fixed_arguments_v1`, no duplicated authorization or lease policy, no model selection from ACP, no conversion of ACP's current 30-minute attempt lifetime into an Execution Plane timeout limit.
 
 ### CI evidence
 
-- contract tests against current ACP job tools and capability envelope;
+Contract tests must use the **current ACP behavior**, including a public MCP surface containing both lifecycle tools and virtual task capabilities.
+
+Prove:
+
+- `jobs_claim_v1.job.allowed_capabilities` becomes exactly the model envelope;
+- lifecycle tools remain AEP-boundary-only and never become model-visible;
+- virtual capability effective schemas match the claim envelope;
+- an ACP `tools/list_changed` event does not broaden the frozen model envelope;
+- no connector endpoint, connector credential, hidden/fixed argument or upstream tool name is required by AEP;
 - idle 1-second polling;
 - no claim with zero enabled compatible models;
 - no second claim while active/pending;
@@ -299,16 +396,18 @@ No ACP task/trigger/job-history UI, no ACP database access, no duplicated lease 
 
 Use the real installed Agent Control Plane:
 
-1. configure a dedicated worker identity;
+1. configure a dedicated worker identity with only the ACP actions required by the boundary;
 2. connect Execution Plane;
-3. create one bounded ACP task/job;
+3. create one bounded ACP task/job with known virtual capabilities;
 4. observe automatic claim;
-5. observe model/MCP execution;
-6. confirm ACP receives one result/report;
-7. confirm Execution Plane returns to idle and then claims only the next queued job;
-8. exercise one ACP outage/recovery scenario without duplicate execution.
+5. confirm the model sees exactly the job's `allowed_capabilities` and none of the ACP lifecycle tools;
+6. observe model/MCP execution;
+7. confirm ACP performs the governed virtual capability resolution/call;
+8. confirm ACP receives one result/report;
+9. confirm Execution Plane returns to idle and then claims only the next queued job;
+10. exercise one ACP outage/recovery scenario without duplicate execution.
 
-This lot is accepted only after the real ACP<->Execution Plane path works on HAOS.
+This lot is accepted only after the real ACP<->Execution Plane path works on HAOS with the responsibility boundary intact.
 
 ## Lot 5 — release hardening and production baseline
 
@@ -324,11 +423,12 @@ Close the first public/production-quality Execution Plane release without adding
 - graceful shutdown behavior for idle, active and pending-result states;
 - complete secret/redaction review;
 - final safety-bound review;
+- final ACP/AEP responsibility-boundary review against `ARCHITECTURE_CHARTER.md` and the actual ACP contract;
 - final bilingual UI copy review;
 - responsive Ingress review on desktop/mobile widths;
-- final presentation review while preserving the committed authoritative `icon.png` and `logo.png`; replacing either asset requires an explicit later product decision;
-- complete `README.md`, `README.fr.md`, `DOCS.md` and French-equivalent detailed documentation;
-- compatibility statement for Ollama-compatible, OpenAI-compatible and MCP Streamable HTTP expectations;
+- final presentation review while preserving the committed authoritative `icon.png` and `logo.png`;
+- complete `README.md`, `README.fr.md`, `DOCS.md` and detailed bilingual documentation;
+- compatibility statement for Ollama-compatible, OpenAI-compatible, OpenAI ChatGPT OAuth and MCP Streamable HTTP expectations;
 - threat/security boundary document focused on Execution Plane;
 - final CI workflow including AppArmor trace/inventory, restart, fake-provider/MCP integration and UI smoke tests;
 - fresh-install HAOS recipe;
@@ -343,8 +443,8 @@ Perform the complete real recipe:
 - clean install of the release candidate;
 - configure models;
 - validate standalone execution + ACK;
-- validate ACP execution;
-- restart App and HAOS with configuration preserved;
+- validate ACP execution and capability-envelope separation;
+- restart App and HAOS with configuration preserved where host reboot evidence is materially required;
 - validate pending-result restart behavior;
 - validate language/theme/version, authoritative icon/logo presentation and configured Network port;
 - verify AppArmor-enforced normal operation and graceful stop/start;
