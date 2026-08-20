@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane is the model reasoning and execution component of the suite. Version `0.1.2` implements only the Lot 0 executable Home Assistant OS App shell: secure listeners, Ingress administration, health checks, generation-1 SQLite plumbing, and a safe persistent activity journal.
+Agent Execution Plane is the model reasoning and execution component of the suite. Version `0.2.0` adds Lot 1 configured-model administration and validation while retaining the accepted Lot 0 HAOS shell.
 
 ## Install and operate
 
@@ -10,4 +10,6 @@ The Ingress header offers visible FR/EN and light/dark controls. On first use, l
 
 The Activity view retains safe operational metadata for 30 days or 10,000 entries, whichever limit is reached first. It never stores prompts, results, credentials, request bodies, reasoning, or tool payloads.
 
-Lot 0 deliberately provides no model provider, execution submission, ACP polling, or MCP loop. See [README.fr.md](README.fr.md) for French documentation.
+The Models view supports Ollama-compatible and OpenAI-compatible endpoints, deterministic priority, enable/disable, positive per-model timeouts, and encrypted optional provider credentials. OpenAI-compatible explicit validation performs a small tool-call probe that may consume provider usage. Automatic startup health never performs inference.
+
+Lot 1 deliberately provides no execution submission, ACP polling, execution engine, or MCP loop. See [README.fr.md](README.fr.md) for French documentation.

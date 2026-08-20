@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
+import hmac
+import json
 import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -18,6 +22,7 @@ from starlette.routing import Route
 from agent_execution_plane import __version__
 from agent_execution_plane.admin_ui import ADMIN_CSS, ADMIN_JS
 from agent_execution_plane.database import database_ready, list_activity, record_activity
+from agent_execution_plane.models import Candidate, ModelStore
 from agent_execution_plane.settings import load_settings
 
 if os.geteuid() != 1000:
@@ -25,6 +30,8 @@ if os.geteuid() != 1000:
 
 settings = load_settings()
 icon_path = Path(os.environ.get("AGENT_EXECUTION_PLANE_ICON_PATH", "/app/icon.png"))
+csrf_token = secrets.token_urlsafe(32)
+model_store = ModelStore(settings.database_path, settings.data_dir / "private")
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -39,6 +46,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.update({"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "Cache-Control": "no-store"})
         if settings.surface == "admin":
             response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'self'"
+            if request.method == "GET" and request.url.path == "/":
+                response.set_cookie("aep_csrf", csrf_token, httponly=False, secure=True, samesite="strict", path=request.headers.get("x-ingress-path", "/"))
         return response
 
 
@@ -67,6 +76,47 @@ async def activity(request: Request) -> JSONResponse:
     return JSONResponse(list_activity(settings.database_path, limit, offset))
 
 
+def csrf_valid(request: Request) -> bool:
+    return hmac.compare_digest(request.cookies.get("aep_csrf", ""), request.headers.get("x-csrf-token", "")) and bool(request.cookies.get("aep_csrf"))
+
+
+async def json_body(request: Request) -> dict:
+    body = await request.body()
+    if len(body) > 32 * 1024: raise OverflowError
+    value = json.loads(body)
+    if not isinstance(value, dict): raise ValueError
+    return value
+
+
+async def models_api(request: Request) -> JSONResponse:
+    if request.method == "GET": return JSONResponse({"models": model_store.list()})
+    if not csrf_valid(request): return JSONResponse({"error": {"code": "csrf_failed"}}, status_code=403)
+    try:
+        data = await json_body(request)
+        candidate = Candidate(str(data.get("display_name", "")), str(data.get("provider_family", "")), str(data.get("base_url", "")), str(data.get("provider_model", "")), data.get("credential") or None, bool(data.get("replace_credential", False)), bool(data.get("enabled", True)), float(data.get("timeout_minutes", 5)))
+        model, check = await asyncio.to_thread(model_store.save, candidate, data.get("id"))
+    except OverflowError: return JSONResponse({"error": {"code": "body_too_large"}}, status_code=413)
+    except (ValueError, TypeError): return JSONResponse({"error": {"code": "invalid_model"}}, status_code=422)
+    except KeyError: return JSONResponse({"error": {"code": "model_not_found"}}, status_code=404)
+    if model is None: return JSONResponse({"error": {"code": check.code or check.state}, "technical_state": check.state}, status_code=422)
+    return JSONResponse({"model": model}, status_code=200 if data.get("id") else 201)
+
+
+async def model_action(request: Request) -> JSONResponse:
+    if not csrf_valid(request): return JSONResponse({"error": {"code": "csrf_failed"}}, status_code=403)
+    try: data = await json_body(request)
+    except (ValueError, OverflowError): return JSONResponse({"error": {"code": "invalid_request"}}, status_code=422)
+    action = request.path_params["action"]
+    try:
+        if action == "delete": found = await asyncio.to_thread(model_store.delete, str(data.get("id", "")))
+        elif action == "enabled": found = await asyncio.to_thread(model_store.set_enabled, str(data.get("id", "")), bool(data.get("enabled")))
+        elif action == "reorder": await asyncio.to_thread(model_store.reorder, [str(item) for item in data.get("ids", [])]); found = True
+        else: return JSONResponse({"error": {"code": "not_found"}}, status_code=404)
+    except ValueError: return JSONResponse({"error": {"code": "invalid_order"}}, status_code=422)
+    if not found: return JSONResponse({"error": {"code": "model_not_found"}}, status_code=404)
+    return JSONResponse({"status": "ok"})
+
+
 async def asset_css(_: Request) -> Response: return Response(ADMIN_CSS, media_type="text/css")
 async def asset_js(_: Request) -> Response: return Response(ADMIN_JS, media_type="application/javascript")
 async def asset_icon(_: Request) -> Response: return Response(icon_path.read_bytes(), media_type="image/png")
@@ -74,9 +124,11 @@ async def asset_icon(_: Request) -> Response: return Response(icon_path.read_byt
 
 @asynccontextmanager
 async def lifespan(_: Starlette):
+    health_task = None
     if settings.surface == "admin":
         record_activity(settings.database_path, "app_started", "system", "success")
         record_activity(settings.database_path, "app_ready", "system", "success")
+        health_task = asyncio.create_task(asyncio.to_thread(model_store.refresh_health))
     try:
         yield
     finally:
@@ -85,6 +137,6 @@ async def lifespan(_: Starlette):
 
 
 common = [Route("/health/live", live), Route("/health/ready", ready)]
-admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/activity", activity)]
+admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/models", models_api, methods=["GET", "POST"]), Route("/admin/api/v1/models/{action}", model_action, methods=["POST"])]
 routes = common + (admin if settings.surface == "admin" else [])
 app = Starlette(routes=routes, middleware=[Middleware(SecurityHeadersMiddleware)], lifespan=lifespan)

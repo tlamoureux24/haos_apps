@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Add encrypted configured-model persistence, deterministic ordering, enable/disable and positive per-model timeouts.
+- Add Ollama-compatible metadata validation and OpenAI-compatible explicit tool-call validation.
+- Add non-inference startup health and the bilingual responsive Models administration view.
+
 ## 0.1.2
 
 - Align the Ingress administration container maximum width with Agent Control Plane at 1840 px.

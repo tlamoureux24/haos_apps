@@ -143,6 +143,8 @@ profile agent_execution_plane flags=(attach_disconnected,mediate_deleted) {
   /usr/lib/python3*/** r,
   /data/ rw,
   /data/private/ rw,
+  /data/private/provider-key rwlk,
+  /data/private/.provider-key.*.tmp rwlk,
   /data/options.json r,
   /data/agent_execution_plane.db rwlk,
   /data/agent_execution_plane.db-{journal,shm,wal} rwlk,

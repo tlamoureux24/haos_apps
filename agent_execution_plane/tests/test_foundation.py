@@ -22,8 +22,8 @@ class FoundationTests(unittest.TestCase):
         self.assertTrue(database_ready(self.database))
         with closing(sqlite3.connect(self.database)) as db:
             tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        self.assertIn("schema_info", tables); self.assertIn("activity", tables)
-        self.assertFalse(tables & {"models", "jobs", "executions", "pending_result", "active_execution"})
+        self.assertIn("schema_info", tables); self.assertIn("activity", tables); self.assertIn("models", tables)
+        self.assertFalse(tables & {"jobs", "executions", "pending_result", "active_execution"})
 
     def test_activity_is_safe_and_persistent(self):
         record_activity(self.database, "app_ready", "system", "success")
