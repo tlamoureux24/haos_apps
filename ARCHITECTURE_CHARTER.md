@@ -43,19 +43,21 @@ Agent Control Plane must remain useful with any compatible MCP client and any co
 
 Agent Execution Plane is the reasoning and execution component.
 
-Its responsibility is to take one source-supplied execution, reason about it through a configured model/reasoning provider, invoke only the MCP tools made available to that execution, and return a result through the source/result contract in use.
+Its responsibility is to take one source-supplied execution, reason about it through a configured model/reasoning provider, invoke only the source-authorized MCP operational capabilities made available to that execution, optionally use bounded provider-native reasoning/information helpers that remain inside the provider/runtime responsibility, and return a result through the source/result contract in use.
 
 Its architecture must keep three mechanics separated without turning them into a generic orchestration framework:
 
 - thin source/result boundaries;
-- model/reasoning provider adapters;
-- MCP tool access.
+- model/reasoning provider adapters, including any permitted provider-native reasoning/information helpers;
+- MCP operational capability access.
 
 Agent Control Plane is the reference source integration. A small documented standalone API provides independent use without Agent Control Plane. Additional source integrations may be added later only when concrete need exists; the charter does **not** require a generic WorkSource/plugin framework.
 
 Agent Execution Plane must not become a second control plane. It does not own administrator task policy, operational authorization, event routing, trigger definitions, durable governance audit, or connector capability selection.
 
-Agent Execution Plane must not implement direct SSH, browser automation, vendor-specific HTTP control or other infrastructure access as privileged side channels. Such capabilities must be presented to the execution engine through MCP.
+Agent Execution Plane may use provider-native facilities that support reasoning or external information retrieval, for example internal planning or public Web search, when they do not provide a path to operate the user's infrastructure, access AEP host/private data, obtain connector credentials, or bypass the source-defined MCP operational capability envelope.
+
+Agent Execution Plane must not implement or permit direct SSH, local shell/filesystem control, browser automation against user infrastructure, vendor-specific HTTP control, native provider MCP connectors, or other infrastructure access as privileged side channels. Such operational capabilities must be presented to the execution engine through the source-authorized MCP path.
 
 ## 4. MCP Capability Bridge
 
@@ -85,11 +87,15 @@ Agent Control Plane is the reference integration; the standalone API is the inde
 
 Source-specific acquisition, lease, acknowledgement and retry mechanics stay at the boundary that owns them. They must not leak source-specific business logic into the execution core.
 
-### 5.2 MCP boundary
+### 5.2 Operational MCP boundary and provider-native helpers
 
-MCP is the capability boundary for model-invocable tools.
+MCP is the **operational capability boundary** for model-initiated access to or actions on user-controlled infrastructure and other non-provider technical systems.
 
-Agent Execution Plane must consume capabilities through MCP rather than privileged implementation-specific back doors. Agent Control Plane may expose a governed MCP capability surface to it. MCP Capability Bridge may appear to Agent Control Plane, Agent Execution Plane in standalone use, or another MCP client exactly as an MCP server.
+Agent Execution Plane must consume such operational capabilities through MCP rather than privileged implementation-specific back doors. Agent Control Plane may expose a governed MCP capability surface to it. MCP Capability Bridge may appear to Agent Control Plane, Agent Execution Plane in standalone use, or another MCP client exactly as an MCP server.
+
+Provider-native reasoning/information helpers are a separate category. A provider adapter may expose facilities such as internal planning, bounded interaction mechanics or public Web search when those facilities serve the model's reasoning and do not themselves provide operational access to the user's infrastructure, AEP host/private filesystem, local network targets, connector credentials or an alternate MCP/connector path.
+
+A provider-native helper does not become an ACP operational capability merely because the model can call it. Conversely, labeling a provider-native facility as a reasoning helper must never be used to smuggle an operational side channel around MCP or ACP.
 
 No integration may rely on a vendor-specific tool name, Home Assistant entity convention, appliance brand or local network product as a structural dependency of the generic core.
 
@@ -101,7 +107,9 @@ Execution results must cross component boundaries through explicit, versionable 
 
 Discovery is not authorization.
 
-Agent Control Plane owns operational authorization when it is present in the path. Its administrator-defined capability envelope is authoritative and must not be broadened by Agent Execution Plane or MCP Capability Bridge.
+Agent Control Plane owns operational authorization when it is present in the path. Its administrator-defined MCP capability envelope is authoritative for the execution and must not be broadened by Agent Execution Plane or MCP Capability Bridge.
+
+Provider-native reasoning/information helpers do not broaden that ACP envelope because they are not operational connector capabilities. They remain an Agent Execution Plane/provider-adapter concern and are acceptable only while they cannot access or mutate user infrastructure, AEP private host state or connector secrets outside the governed MCP path.
 
 Agent Execution Plane may perform protocol and provider capability validation, but it must not invent a second semantic authorization system based on labels such as `read`, `write`, `safe`, `dangerous` or vendor descriptions.
 
@@ -116,6 +124,8 @@ Secrets belong to the component that must directly use them:
 - SSH keys, target HTTP credentials and browser-session credentials belong to MCP Capability Bridge when it owns those target connections.
 
 Secrets must not be copied across components merely for convenience. Contracts must carry opaque authorization material only when the receiving component genuinely needs it to perform its own responsibility.
+
+Provider-native reasoning/information helpers must not be given AEP private credentials, ACP connector secrets or hidden fixed arguments merely to make them more capable. Public-information retrieval must not become a credential or infrastructure side channel.
 
 Each component must independently apply least privilege, redaction and non-disclosure appropriate to the secrets it owns.
 
@@ -139,6 +149,8 @@ Failures must remain isolated:
 The generic core of each component must depend on contracts and capability descriptors, not product names.
 
 Provider- or transport-specific behavior belongs behind adapters with explicit capabilities. Code shaped as growing business-logic branches such as `if home_assistant`, `if gatus`, `if codex`, `if openai`, `if ollama` or appliance-specific equivalents is architectural drift unless it is confined to the adapter that owns that integration.
+
+Provider-native reasoning/information features belong behind the provider adapter that owns them and must not alter the source-defined operational MCP envelope.
 
 Adding a new model provider or concrete source boundary should not require changing unrelated core execution semantics. This extensibility requirement does not justify building unused generic plugin frameworks in advance.
 
@@ -184,9 +196,10 @@ This process deliberately separates **implementation evidence** from **productio
 
 Before adding a cross-cutting feature, apply these tests:
 
-- If it decides **which work or capability is operationally authorized**, it belongs in Agent Control Plane.
-- If it decides **how a model reasons, calls available tools and produces a result**, it belongs in Agent Execution Plane.
+- If it decides **which work or operational MCP capability is authorized**, it belongs in Agent Control Plane.
+- If it decides **how a model reasons, uses permitted provider-native reasoning/information helpers, calls available operational tools and produces a result**, it belongs in Agent Execution Plane.
 - If it **turns a non-MCP technical capability into an MCP capability**, it belongs in MCP Capability Bridge.
+- If a proposed provider-native helper can access or mutate user infrastructure, local host/private state or connector credentials outside MCP, it is not a reasoning helper and must not bypass the operational MCP boundary.
 - If two components would both own the same durable state or retry, the contract is not yet sufficiently defined.
 - If a component would become unusable without one of the other two, the design violates the foundational invariant unless the feature is explicitly an optional integration adapter.
 
