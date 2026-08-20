@@ -301,7 +301,7 @@ This mechanism does **not** authorize capabilities. It only verifies that the so
 
 Tools returned by `tools/list` that are absent from the source envelope are not model tools. AEP does not classify them, authorize them, deny them semantically or use them to construct a replacement envelope. They remain outside the current execution contract.
 
-For ACP this distinction is mandatory because the same MCP server also exposes AEP boundary lifecycle tools. Those tools may be callable by the worker identity yet must remain invisible to the reasoning model unless ACP explicitly placed them in `allowed_capabilities` (the reference ACP contract does not do so).
+For ACP this distinction is mandatory because the same MCP server also exposes AEP boundary lifecycle tools. Those lifecycle tools are boundary-only mechanics and must never be exposed to the reasoning model. The model-visible ACP envelope comes exclusively from the task virtual capabilities carried in the claimed job's `allowed_capabilities`.
 
 A missing source capability or effective-schema mismatch fails closed as a factual technical contract inconsistency. Execution Plane never silently substitutes a changed schema or broadens/narrows the source envelope.
 
