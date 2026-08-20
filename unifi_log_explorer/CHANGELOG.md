@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1
+
+- Move the persistent language and light/dark controls from Settings into compact right-aligned header toggles matching UniFi Autoblock.
+- Display the container `BUILD_VERSION` beside the UniFi Log Explorer name with a `dev` fallback outside Home Assistant builds.
+
 ## 1.1.0
 
 - Move the existing administration interface to Home Assistant Ingress and stop publishing TCP port 8090 on the LAN.

@@ -679,11 +679,11 @@ STYLE = """
 html[data-theme=dark]{color-scheme:dark;--bg:#0d1420;--surface:#172235;--surface2:#202c41;--text:#e7edf5;--muted:#a4b2c6;--line:#30415d;--accent:#52c9e6;--accent2:#173b4a;--good:#50c895;--bad:#ff8293;--shadow:none}
 *{box-sizing:border-box}body{font:15px system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);margin:0}main{max-width:1440px;margin:auto;padding:24px}.top{display:flex;align-items:center;gap:20px;margin-bottom:22px}.brand{font-size:25px;font-weight:800;color:var(--accent);margin-right:auto}.nav{display:flex;gap:5px;flex-wrap:wrap}.nav a,.linkbtn{color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px}.nav a:hover,.nav .active{background:var(--accent2);color:var(--accent)}h1{font-size:28px;margin:10px 0 4px}h2{margin:0 0 16px;font-size:19px}.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:var(--shadow)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin:16px 0}.metric{font-size:28px;font-variant-numeric:tabular-nums}.muted{color:var(--muted)}.bad{color:var(--bad)}.good{color:var(--good)}button,.button{display:inline-block;background:var(--accent);color:#fff;border:0;border-radius:7px;padding:9px 14px;font-weight:700;text-decoration:none;cursor:pointer}button.secondary,.button.secondary{background:var(--surface2);color:var(--text);border:1px solid var(--line)}form.inline{display:inline}.filters{display:grid;grid-template-columns:2fr repeat(5,minmax(120px,1fr)) auto;gap:10px;align-items:end;margin:16px 0}.filters label{font-size:12px;color:var(--muted)}input,select{display:block;width:100%;margin-top:5px;padding:9px 10px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:7px}.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:10px}table{width:100%;border-collapse:collapse;white-space:nowrap}td,th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}th{font-size:12px;color:var(--muted);background:var(--surface2)}tr:last-child td{border:0}td.wrap{white-space:normal;min-width:160px}.pill{display:inline-block;padding:3px 8px;border-radius:999px;background:var(--surface2);font-size:12px}.bars{display:grid;gap:9px}.barline{display:grid;grid-template-columns:minmax(90px,1fr) 3fr 55px;gap:10px;align-items:center}.bar{height:8px;border-radius:5px;background:var(--surface2);overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pager{display:flex;justify-content:space-between;align-items:center;margin-top:14px}.route{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:17px}.arrow{color:var(--accent);font-size:22px}.details{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.kv{display:grid;grid-template-columns:120px 1fr;gap:7px 12px}.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}pre{overflow:auto;background:var(--surface2);padding:14px;border-radius:8px;font-size:12px}.empty{text-align:center;padding:38px;color:var(--muted)}@media(max-width:1100px){main{padding:14px}.top{align-items:flex-start;flex-wrap:wrap}.filters{grid-template-columns:1fr 1fr}.twocol{grid-template-columns:1fr}}@media(max-width:560px){.filters{grid-template-columns:1fr}.brand{width:100%}}
 input[type=hidden]{display:none!important}.barlink{color:var(--text);text-decoration:none;border-radius:6px}.barlink:hover{background:var(--accent2)}.clickcard{display:block;color:var(--text);text-decoration:none;transition:transform .15s,border-color .15s}.clickcard:hover{transform:translateY(-2px);border-color:var(--accent)}
-.toplogo{display:flex;align-items:center;gap:10px;color:var(--accent);text-decoration:none;font-size:25px;font-weight:800;margin-right:auto}.toplogo img{width:42px;height:42px;border-radius:10px}.menu{display:flex;align-items:center;gap:5px;position:relative;z-index:2}.menu a{display:block;position:relative;color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px}.menu a:hover,.menu a.active{background:var(--accent2);color:var(--accent)}.logfilters{display:flex;gap:8px;margin:16px 0}.logfilters a{background:var(--surface);color:var(--text);border:1px solid var(--line)}.logfilters a.active{background:var(--accent);color:#fff;border-color:var(--accent)}@media(max-width:800px){.menu{width:100%;overflow-x:auto}.toplogo{width:100%}}
+.toplogo{display:flex;align-items:center;gap:10px;color:var(--accent);text-decoration:none;font-size:25px;font-weight:800;margin-right:auto}.toplogo img{width:42px;height:42px;border-radius:10px}.toplogo b{font-size:12px;color:var(--muted);font-weight:650}.menu{display:flex;align-items:center;gap:5px;position:relative;z-index:2}.menu a{display:block;position:relative;color:var(--text);text-decoration:none;padding:9px 12px;border-radius:7px}.menu a:hover,.menu a.active{background:var(--accent2);color:var(--accent)}.headeractions{display:flex;gap:8px}.toggle{color:var(--text);padding:9px 12px;border-radius:7px;background:var(--surface);border:1px solid var(--line);cursor:pointer;font:inherit;text-decoration:none}.logfilters{display:flex;gap:8px;margin:16px 0}.logfilters a{background:var(--surface);color:var(--text);border:1px solid var(--line)}.logfilters a.active{background:var(--accent);color:#fff;border-color:var(--accent)}@media(max-width:800px){.menu{width:100%;overflow-x:auto}.toplogo{width:100%}.headeractions{margin-left:auto}}
 .barline{grid-template-columns:minmax(0,1.4fr) minmax(80px,3fr) 55px}.barlabel{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .eventfilters{grid-template-columns:2fr minmax(130px,1fr) minmax(130px,1fr) minmax(130px,1fr) auto}
 .overviewhead{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center;margin:8px 0 12px}.overviewhead h1{margin-top:0}.overviewhead p{margin-bottom:0}.statuscard{margin:0;box-shadow:var(--shadow)}@media(max-width:800px){.overviewhead{grid-template-columns:1fr;gap:12px}}
-.settingsgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.settingactions{display:flex;gap:8px;flex-wrap:wrap}.readonly{background:var(--surface2);border-radius:8px;padding:12px}.readonly .kv{grid-template-columns:minmax(150px,220px) 1fr}@media(max-width:800px){.settingsgrid{grid-template-columns:1fr}}
+.settingsgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.readonly{background:var(--surface2);border-radius:8px;padding:12px}.readonly .kv{grid-template-columns:minmax(150px,220px) 1fr}@media(max-width:800px){.settingsgrid{grid-template-columns:1fr}}
 .stackform{display:grid;gap:10px}.stackform label{color:var(--muted);font-size:13px}.statusnote{padding:10px 12px;border-left:4px solid var(--accent);background:var(--surface2);border-radius:6px}
 .chart{display:grid;grid-template-columns:repeat(24,1fr);gap:4px;height:130px;align-items:end}.chartcol{height:100%;display:flex;gap:2px;align-items:end}.chartbar{display:block;flex:1;min-height:2px;border-radius:3px 3px 0 0;background:var(--accent)}.chartbar.events{background:var(--good)}.legend{display:flex;gap:18px;margin-top:10px;color:var(--muted)}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--accent);margin-right:5px}.legend i.events{background:var(--good)}.danger{border-color:var(--bad)}.danger button{background:var(--bad)}
 """
@@ -805,12 +805,21 @@ class Web(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(raw))); self.end_headers(); self.wfile.write(raw)
 
     def nav(self, active):
-        return ("<header class=top><a class=toplogo href=/><img src=/icon.png alt=''><span>UniFi Log Explorer</span></a><nav class=menu>"
+        version = html.escape(os.environ.get("BUILD_VERSION", "dev"), quote=True)
+        current_path = self.path if self.path.startswith("/") and not self.path.startswith("//") else "/"
+        next_query = urllib.parse.urlencode({"next": current_path})
+        other_language = "en" if self.language() == "fr" else "fr"
+        language_label = "EN" if other_language == "en" else "FR"
+        opposite_theme = "dark" if self.theme() == "light" else "light"
+        theme_icon = "☾" if opposite_theme == "dark" else "☀"
+        theme_title = self.t("Mode sombre") if opposite_theme == "dark" else self.t("Mode clair")
+        return (f"<header class=top><a class=toplogo href=/><img src=/icon.png alt=''><span>UniFi Log Explorer <b>v{version}</b></span></a><nav class=menu>"
                 f"<a class='{'active' if active=='overview' else ''}' href='/'>{self.t('Vue d’ensemble')}</a>"
                 f"<a class='{'active' if active=='flows' else ''}' href='/flows'>Traffic Flows</a>"
                 f"<a class='{'active' if active=='events' else ''}' href='/events'>CEF / Syslog</a>"
                 f"<a class='{'active' if active=='settings' else ''}' href='/settings'>{self.t('Paramètres')}</a>"
-                "</nav></header>")
+                f"</nav><div class=headeractions><a id=language class=toggle href='/language?value={other_language}&amp;{next_query}' title='{self.t('Langue')}'>{language_label}</a>"
+                f"<a id=theme class=toggle href='/theme?value={opposite_theme}&amp;{next_query}' title='{html.escape(theme_title)}'>{theme_icon}</a></div></header>")
 
     @staticmethod
     def bars(title, rows, filter_name=None):
@@ -979,18 +988,7 @@ class Web(BaseHTTPRequestHandler):
             body = self.nav("events") + f"<p><a class='button secondary' href=/events>← {self.t('Retour aux événements')}</a></p>" + f"<div class=details><section class=card><h2>{self.t('Événement')}</h2>{summary}</section><section class=card><h2>{self.t('Données complètes')}</h2><pre>{html.escape(json.dumps(detail,indent=2,ensure_ascii=False))}</pre></section></div>"
             return self.send_html(body, title=f"{self.t('Détail de l’événement')} · UniFi Log Explorer")
         if path == "/settings":
-            csrf = html.escape(CSRF_TOKEN); current_theme = self.theme()
-            light_class = "" if current_theme == "light" else " secondary"
-            dark_class = "" if current_theme == "dark" else " secondary"
-            theme = ("<section class=card><h2>Apparence</h2><p class=muted>Le choix est mémorisé uniquement dans ce navigateur.</p><div class=settingactions>"
-                     f"<a class='button{light_class}' href='/theme?value=light&amp;next=/settings'>☀ Mode clair</a>"
-                     f"<a class='button{dark_class}' href='/theme?value=dark&amp;next=/settings'>☾ Mode sombre</a></div></section>")
-            current_language = self.language()
-            fr_class = "" if current_language == "fr" else " secondary"
-            en_class = "" if current_language == "en" else " secondary"
-            language_card = ("<section class=card><h2>Langue</h2><p class=muted>Le choix est mémorisé uniquement dans ce navigateur.</p><div class=settingactions>"
-                             f"<a class='button{fr_class}' href='/language?value=fr&amp;next=/settings'>Français</a>"
-                             f"<a class='button{en_class}' href='/language?value=en&amp;next=/settings'>English</a></div></section>")
+            csrf = html.escape(CSRF_TOKEN)
             raw_probe = self.store.setting("flow_probe_result"); probe = json.loads(raw_probe) if raw_probe else None
             if probe and probe.get("ok"):
                 tested = time.strftime("%d/%m/%Y %H:%M:%S", time.localtime(probe.get("tested_at", 0)))
@@ -1042,7 +1040,7 @@ class Web(BaseHTTPRequestHandler):
                                 f"<form class=stackform method=post action=/purge><input type=hidden name=csrf value='{csrf}'>"
                                 "<label>Données à supprimer<select name=target required><option value=events>Événements CEF / Syslog</option><option value=flows>Traffic Flows</option></select></label>"
                                 f"<label>{'Enter PURGE to confirm' if self.language()=='en' else 'Saisissez PURGER pour confirmer'}<input name=confirm required autocomplete=off></label><button>Supprimer les données</button></form></section>")
-            body = self.nav("settings") + "<h1>Paramètres</h1><p class=muted>Outils et état de la configuration locale.</p><div class=settingsgrid>" + monitoring + theme + language_card + api + diagnostic + config + maintenance_card + "</div>"
+            body = self.nav("settings") + "<h1>Paramètres</h1><p class=muted>Outils et état de la configuration locale.</p><div class=settingsgrid>" + monitoring + api + diagnostic + config + maintenance_card + "</div>"
             return self.send_html(body, title="Paramètres · UniFi Log Explorer")
         return self.send_error(404)
 

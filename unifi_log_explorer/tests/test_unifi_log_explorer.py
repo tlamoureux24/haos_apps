@@ -162,6 +162,8 @@ class ParserTests(unittest.TestCase):
                     self.assertIn(prefix + "/flows", parser.links)
                     self.assertIn(prefix + "/events", parser.links)
                     self.assertIn(prefix + "/settings", parser.links)
+                    self.assertIn("id=language", rendered[0])
+                    self.assertIn("id=theme", rendered[0])
                     self.assertFalse(any(link and link.startswith("/") and not link.startswith(prefix + "/") for link in parser.links))
                     if path == "/":
                         self.assertIn("class=overviewhead", rendered[0])
@@ -179,6 +181,8 @@ class ParserTests(unittest.TestCase):
                         self.assertIn("Lecture seule", rendered[0])
                         self.assertIn("Tester la connexion", rendered[0])
                         self.assertNotIn("Sécurité du compte", rendered[0])
+                        self.assertNotIn("<h2>Apparence</h2>", rendered[0])
+                        self.assertNotIn("<h2>Langue</h2>", rendered[0])
                         self.assertIn(f"action={prefix}/probe", rendered[0])
                         self.assertIn(f"action={prefix}/purge", rendered[0])
                         self.assertIn(f"href={prefix}/export.json", rendered[0])
@@ -262,6 +266,44 @@ class ParserTests(unittest.TestCase):
         self.assertIn("Overview", nav); self.assertIn("Settings", nav); self.assertNotIn("Sign out", nav)
         handler.headers = {"Accept-Language": "en", "Cookie": "ule_language=fr"}
         self.assertEqual(handler.language(), "fr")
+
+    def test_header_toggles_preserve_language_theme_and_ingress_path(self):
+        handler = ule.Web.__new__(ule.Web); handler.path = "/events?page=2"
+        handler.headers = {"X-Ingress-Path": "/api/hassio_ingress/test-token", "Cookie": "ule_language=fr; ule_theme=light"}
+        with mock.patch.dict(ule.os.environ, {"BUILD_VERSION": "1.1.1"}):
+            header = handler.prefix_markup(handler.nav("events"))
+        self.assertIn("UniFi Log Explorer <b>v1.1.1</b>", header)
+        self.assertIn("id=language", header); self.assertIn(">EN</a>", header)
+        self.assertIn("value=en", header); self.assertIn("id=theme", header)
+        self.assertIn("value=dark", header); self.assertIn(">☾</a>", header)
+        self.assertIn("next=%2Fevents%3Fpage%3D2", header)
+        self.assertIn("/api/hassio_ingress/test-token/language?", header)
+        self.assertIn("/api/hassio_ingress/test-token/theme?", header)
+
+        handler.headers["Cookie"] = "ule_language=en; ule_theme=dark"
+        header = handler.nav("events")
+        self.assertIn(">FR</a>", header); self.assertIn("value=fr", header)
+        self.assertIn("value=light", header); self.assertIn(">☀</a>", header)
+
+    def test_language_and_theme_routes_keep_cookie_persistence(self):
+        for path, cookie_fragment in (("/language?value=en&next=/settings", "ule_language=en"),
+                                      ("/theme?value=dark&next=/settings", "ule_theme=dark")):
+            handler = ule.Web.__new__(ule.Web); handler.path = path
+            handler.headers = {"X-Ingress-Path": "/api/hassio_ingress/test-token"}
+            handler.client_address = (ule.INGRESS_PROXY_IP, 12345)
+            redirects = []
+            handler.redirect = lambda target, cookie=None: redirects.append((target, cookie))
+            handler.do_GET()
+            self.assertEqual(redirects[0][0], "/settings")
+            self.assertIn(cookie_fragment, redirects[0][1])
+            self.assertIn("Path=/api/hassio_ingress/test-token/", redirects[0][1])
+
+    def test_build_version_is_supplied_by_container_environment(self):
+        dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text()
+        source = (Path(__file__).resolve().parents[1] / "unifi_log_explorer.py").read_text()
+        self.assertIn('ENV BUILD_VERSION="${BUILD_VERSION}"', dockerfile)
+        self.assertIn('os.environ.get("BUILD_VERSION", "dev")', source)
+        self.assertNotIn('BUILD_VERSION = "1.1.1"', source)
 
     def test_local_authentication_is_removed(self):
         source = (Path(__file__).resolve().parents[1] / "unifi_log_explorer.py").read_text()
