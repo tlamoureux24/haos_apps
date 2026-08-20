@@ -68,13 +68,19 @@ jobs:
           start; wait_ready
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' 'http://127.0.0.1:18099/admin/api/v1/activity?limit=50' | jq -e '.total >= 5 and any(.entries[]; .event_code == "app_stopped" and .category == "system" and .status == "success")'
           docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane test -f /data/agent_execution_plane.db
-      - name: Record initial AppArmor executable inventory
+      - name: Record Docker executable inventory (not HAOS AppArmor enforcement)
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
           docker run --rm --entrypoint /bin/sh "agent-execution-plane:${version}" -c 'find /command /package -type f -perm /111 -print 2>/dev/null' >> agent_execution_plane-apparmor-executables.txt
           sort -u -o agent_execution_plane-apparmor-executables.txt agent_execution_plane-apparmor-executables.txt
           test -s agent_execution_plane-apparmor-executables.txt
+          {
+            echo '### Agent Execution Plane AppArmor evidence'
+            echo
+            echo 'The uploaded executable inventory is Docker build/runtime evidence only.'
+            echo 'Docker CI does not apply or validate the Home Assistant OS AppArmor profile; real HAOS acceptance remains required.'
+          } >> "${GITHUB_STEP_SUMMARY}"
       - uses: actions/upload-artifact@v6
         with:
           name: agent-execution-plane-apparmor-executables

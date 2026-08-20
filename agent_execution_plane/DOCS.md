@@ -1,4 +1,4 @@
-# Agent Execution Plane 0.1.0
+# Agent Execution Plane 0.1.1
 
 ## Français
 

@@ -8,6 +8,7 @@ import pathlib
 import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = ROOT.parent
 
 
 def leaf_keys(text: str, section: str) -> set[str]:
@@ -20,6 +21,13 @@ def leaf_keys(text: str, section: str) -> set[str]:
     return keys
 
 
+def generic_s6_rules(text: str) -> tuple[str, ...]:
+    lines = text.splitlines()
+    start = lines.index("  /init rix,")
+    end = lines.index("  /run/ rw,")
+    return tuple(line for line in lines[start:end] if line)
+
+
 def main() -> int:
     config = (ROOT / "config.yaml").read_text()
     package = (ROOT / "src/agent_execution_plane/__init__.py").read_text()
@@ -28,9 +36,10 @@ def main() -> int:
     dockerfile = (ROOT / "Dockerfile").read_text()
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "0.1.0"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
+    for text in ('slug: "agent_execution_plane"', 'version: "0.1.1"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "0.1.0"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "0.1.1"' not in package: raise RuntimeError("Version sources differ")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 2: raise RuntimeError("Unprivileged two-listener runtime missing")
     if launcher.count("--log-config /app/src/agent_execution_plane/uvicorn_logging.json") != 2: raise RuntimeError("Timestamped listener logging missing")
@@ -43,6 +52,8 @@ def main() -> int:
         if item in source.lower(): raise RuntimeError(f"Later-lot behavior present: {item}")
     if "privileged:" in config or "host_network:" in config or "homeassistant_api:" in config: raise RuntimeError("Excess HAOS privileges")
     if "capability sys_admin" in apparmor or "network raw" in apparmor or "complain" in apparmor: raise RuntimeError("Excess AppArmor privilege")
+    if generic_s6_rules(apparmor) != generic_s6_rules(acp_apparmor): raise RuntimeError("Generic s6-overlay AppArmor rules must match the HAOS-proven Agent Control Plane bootstrap inventory")
+    if "agent_control_plane" in apparmor or "credential-pepper" in apparmor: raise RuntimeError("Agent Execution Plane AppArmor must not inherit Agent Control Plane data permissions")
     for name in ("icon.png", "logo.png"):
         path = ROOT / name
         if not path.is_file() or path.stat().st_size < 1000: raise RuntimeError(f"Missing authoritative {name}")

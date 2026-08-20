@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane est le composant de raisonnement et d’exécution de modèles de la suite. La version `0.1.0` implémente uniquement le shell exécutable HAOS du Lot 0 : listeners sécurisés, administration Ingress, contrôles de santé, plomberie SQLite génération 1 et journal d’activité persistant sûr.
+Agent Execution Plane est le composant de raisonnement et d’exécution de modèles de la suite. La version `0.1.1` implémente uniquement le shell exécutable HAOS du Lot 0 : listeners sécurisés, administration Ingress, contrôles de santé, plomberie SQLite génération 1 et journal d’activité persistant sûr.
 
 ## Installation et utilisation
 
