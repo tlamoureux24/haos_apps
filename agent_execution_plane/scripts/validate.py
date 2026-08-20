@@ -35,7 +35,7 @@ def main() -> int:
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 2: raise RuntimeError("Unprivileged two-listener runtime missing")
     if launcher.count("--log-config /app/src/agent_execution_plane/uvicorn_logging.json") != 2: raise RuntimeError("Timestamped listener logging missing")
     if "os.geteuid() != 1000" not in main_py or "ingress_only" not in main_py or "x-ingress-path" not in main_py: raise RuntimeError("Ingress boundary missing")
-    for invariant in ("Agent Execution Plane <b>v{__version__}</b>", "/admin/assets/icon.png", "aep-language", "navigator.language", "aep-theme", "prefers-color-scheme", "activityTitle"):
+    for invariant in ("Agent Execution Plane <b>v{__version__}</b>", "/admin/assets/icon.png", "aep-language", "navigator.language", "aep-theme", "prefers-color-scheme", "activityTitle", "app_stopped:'Application arrêtée'", "app_stopped:'Application stopped'"):
         if invariant not in main_py + ui: raise RuntimeError(f"UI invariant missing: {invariant}")
     forbidden = ("/api/v1/execute", "jobs_claim_v1", "tools/call", "ollama", "chat/completions")
     source = "".join(p.read_text(errors="ignore") for p in (ROOT / "src").rglob("*.py"))

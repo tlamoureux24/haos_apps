@@ -56,7 +56,7 @@ jobs:
           ui_js="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/admin.js)"
           ui_css="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/admin.css)"
           [[ "${ui_js}" == *"navigator.language"* && "${ui_js}" == *"aep-language"* && "${ui_js}" == *"aep-theme"* ]]
-          [[ "${ui_js}" == *"Overview"* && "${ui_js}" == *"Vue d’ensemble"* && "${ui_js}" == *"Activity"* && "${ui_js}" == *"Activité"* ]]
+          [[ "${ui_js}" == *"Overview"* && "${ui_js}" == *"Vue d’ensemble"* && "${ui_js}" == *"Activity"* && "${ui_js}" == *"Activité"* && "${ui_js}" == *"Application stopped"* && "${ui_js}" == *"Application arrêtée"* ]]
           [[ "${ui_css}" == *"html[data-theme=dark]"* ]]
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/icon.png -o /tmp/aep-icon.png
           cmp agent_execution_plane/icon.png /tmp/aep-icon.png
@@ -65,7 +65,7 @@ jobs:
           docker exec aep-smoke /bin/sh -c 'for process in /proc/[0-9]*; do readlink -f "${process}/exe" 2>/dev/null || true; done' > agent_execution_plane-apparmor-executables.txt
           docker stop -t 15 aep-smoke >/dev/null; docker rm aep-smoke >/dev/null
           start; wait_ready
-          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' 'http://127.0.0.1:18099/admin/api/v1/activity?limit=50' | jq -e '.total >= 4'
+          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' 'http://127.0.0.1:18099/admin/api/v1/activity?limit=50' | jq -e '.total >= 5 and any(.entries[]; .event_code == "app_stopped" and .category == "system" and .status == "success")'
           docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane test -f /data/agent_execution_plane.db
       - name: Record initial AppArmor executable inventory
         run: |

@@ -77,7 +77,11 @@ async def lifespan(_: Starlette):
     if settings.surface == "admin":
         record_activity(settings.database_path, "app_started", "system", "success")
         record_activity(settings.database_path, "app_ready", "system", "success")
-    yield
+    try:
+        yield
+    finally:
+        if settings.surface == "admin":
+            record_activity(settings.database_path, "app_stopped", "system", "success")
 
 
 common = [Route("/health/live", live), Route("/health/ready", ready)]

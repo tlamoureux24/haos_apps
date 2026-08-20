@@ -33,6 +33,13 @@ class FoundationTests(unittest.TestCase):
         self.assertRegex(entry["occurred_at"], r"(?:Z|[+-]\d\d:\d\d)$")
         self.assertEqual(set(entry), {"occurred_at", "event_code", "category", "status", "source_ip"})
 
+    def test_clean_stop_event_is_persistent(self):
+        record_activity(self.database, "app_stopped", "system", "success")
+        initialize(self.database)
+        entries = list_activity(self.database)["entries"]
+        self.assertEqual(entries[0]["event_code"], "app_stopped")
+        self.assertEqual(entries[0]["status"], "success")
+
     def test_retention_prunes_age_and_count(self):
         old = (datetime.now(timezone.utc) - timedelta(days=31)).isoformat()
         with closing(sqlite3.connect(self.database)) as db:
