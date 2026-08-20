@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Clarify the normative ACP/AEP responsibility boundary: ACP remains the sole authority for connector governance and operational capability selection; AEP consumes the source-supplied model capability envelope, performs only technical consistency checks, and keeps ACP lifecycle tools outside model visibility.
+- Clarify that MCP is the mandatory boundary for operational access to user infrastructure, while bounded provider-native reasoning/information helpers such as internal planning or public Web search may coexist when they cannot bypass MCP/ACP or access AEP private host state. Record the Codex 0.144.4 preflight observations as characterization inputs rather than a blanket zero-native-tools failure.
 
 ## 0.3.1
 
