@@ -2,9 +2,25 @@
 
 Agent Execution Plane est le composant de raisonnement et d’exécution de modèles de la suite. La version `0.3.1` clôt le Lot 1 avec OpenAI ChatGPT OAuth officiel et une administration bilingue des modèles finalisée, tout en conservant le shell HAOS Lot 0 accepté.
 
+## Frontière de responsabilité
+
+Agent Execution Plane est **uniquement un plan d’exécution**. Il ne possède ni la politique de tâche, ni la configuration des connecteurs MCP, ni la sélection des capacités, ni l’autorisation opérationnelle.
+
+Lorsque Agent Control Plane est utilisé, ACP reste l’unique autorité pour la gouvernance du travail et des capacités. ACP possède les connecteurs MCP amont, la sélection administrateur des outils de tâche, la construction des capacités virtuelles, les schémas effectifs et restrictions comme `fixed_arguments_v1`, l’autorisation et la résolution fail-closed jusqu’à l’appel amont.
+
+Un job ACP réclamé fournit une enveloppe `allowed_capabilities` autoritaire. AEP peut vérifier que ces capacités sont toujours techniquement présentes avec les schémas effectifs attendus, mais il ne doit jamais dériver une autre liste de capacités à partir de l’inventaire MCP complet retourné par `tools/list`.
+
+La surface MCP d’ACP contient aussi des opérations de cycle de vie utilisées par la frontière AEP elle-même, par exemple claim, heartbeat, complete et fail. Ces outils de cycle de vie **ne sont pas des outils du modèle de raisonnement** simplement parce que l’identité worker peut les appeler.
+
+Conceptuellement :
+
+`gouvernance ACP/source -> enveloppe exacte des capacités modèle -> raisonnement/exécution AEP -> résultat -> source`
+
+En mode standalone, le caller est l’autorité source et doit fournir l’enveloppe MCP exacte qui sera invocable par le modèle pour cette exécution. AEP ne construit toujours pas de politique d’autorisation à partir de la découverte MCP.
+
 ## Installation et utilisation
 
-Ajoutez ce dépôt au magasin d’Apps Home Assistant, installez **Agent Execution Plane**, démarrez l’App puis ouvrez son panneau Ingress. Le listener d’administration est accessible uniquement via Ingress sur le port conteneur `8099`. Le port conteneur `8098` est la future surface API autonome ; dans le Lot 0, il expose uniquement `/health/live` et `/health/ready`. Son port hôte peut être choisi dans les paramètres Réseau de l’App ou laissé désactivé.
+Ajoutez ce dépôt au magasin d’Apps Home Assistant, installez **Agent Execution Plane**, démarrez l’App puis ouvrez son panneau Ingress. Le listener d’administration est accessible uniquement via Ingress sur le port conteneur `8099`. Le port conteneur `8098` est la future surface API autonome ; actuellement il expose uniquement `/health/live` et `/health/ready`. Son port hôte peut être choisi dans les paramètres Réseau de l’App ou laissé désactivé.
 
 Le header Ingress propose les contrôles visibles FR/EN et clair/sombre. Au premier usage, la langue suit la préférence du navigateur lorsqu’elle est prise en charge, sinon le français est utilisé ; le thème suit la préférence du navigateur. Les choix manuels sont mémorisés uniquement dans le stockage local du navigateur.
 
@@ -14,4 +30,4 @@ La vue Modèles gère les endpoints Ollama-compatible et OpenAI-compatible, la p
 
 OpenAI ChatGPT OAuth utilise l’app-server Codex officiel exactement pinné en `0.144.4` et une connexion ChatGPT device-code partagée. Cette famille n’accepte ni URL de base ni clé API ; Codex reste seul propriétaire de la persistance et du refresh OAuth sous `/data/private/codex-home`.
 
-Le Lot 1 ne fournit volontairement aucune soumission d’exécution, polling ACP, moteur d’exécution ou boucle MCP. See [README.md](README.md) for English documentation.
+Le Lot 1 ne fournit volontairement aucune soumission d’exécution, polling ACP, moteur d’exécution ou boucle MCP. Le Lot 2 ajoute uniquement le moteur d’exécution source-neutral ; l’intégration ACP elle-même reste un lot de frontière ultérieur. See [README.md](README.md) for English documentation.
