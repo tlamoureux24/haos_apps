@@ -146,7 +146,7 @@ Therefore:
 
 - AEP does not discover tools and then decide which ones are allowed;
 - AEP does not add a tool merely because it appears in MCP discovery;
-- AEP does not expose source-boundary lifecycle tools to the model unless the source contract itself explicitly made them model capabilities;
+- AEP does not expose source-boundary lifecycle tools merely because they exist on the same MCP server; in the ACP boundary, ACP lifecycle tools are categorically boundary-only and never model-invocable;
 - an empty source capability envelope means zero model-visible tools even if the MCP server exposes other tools;
 - a capability missing from the MCP server or presenting a mismatched effective schema makes the supplied execution contract technically inconsistent and fails closed;
 - a model request for a tool outside the frozen source envelope is rejected locally without dispatch;
