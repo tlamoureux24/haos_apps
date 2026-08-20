@@ -80,6 +80,7 @@ class StandaloneApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_contract_bounds_and_no_model_selection(self):
         invalid=self.payload();invalid["model_id"]="caller-choice";response=await self.client.post("/api/v1/execute",json=invalid,headers=self.auth);self.assertEqual((response.status_code,response.json()["error"]["code"]),(422,"invalid_execution_contract"))
         malformed=await self.client.post("/api/v1/execute",content=b"{",headers={**self.auth,"Content-Type":"application/json"});self.assertEqual((malformed.status_code,malformed.json()["error"]["code"]),(400,"malformed_json"))
+        non_object=await self.client.post("/api/v1/execute",json=[],headers=self.auth);self.assertEqual((non_object.status_code,non_object.json()["error"]["code"]),(422,"invalid_execution_contract"))
         oversized=await self.client.post("/api/v1/execute",content=b"x"*(4*1024*1024+1),headers=self.auth);self.assertEqual((oversized.status_code,oversized.json()["error"]["code"]),(413,"body_too_large"))
         too_many=self.payload(tools=[{"name":f"t{i}","description":"","input_schema":{}} for i in range(129)]);response=await self.client.post("/api/v1/execute",json=too_many,headers=self.auth);self.assertEqual(response.status_code,422)
 

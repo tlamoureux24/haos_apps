@@ -20,14 +20,13 @@ from agent_execution_plane.lifecycle import LifecycleBusy, LifecycleStore
 MAX_BODY_BYTES = 4 * 1024 * 1024
 
 
-async def bounded_json(request: Request, limit: int = MAX_BODY_BYTES) -> dict[str, Any]:
+async def bounded_json(request: Request, limit: int = MAX_BODY_BYTES) -> Any:
     body = bytearray()
     async for chunk in request.stream():
         body.extend(chunk)
         if len(body) > limit: raise OverflowError
     try: value = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError): raise ValueError("malformed_json") from None
-    if not isinstance(value, dict): raise ValueError("invalid_execution_contract")
     return value
 
 
@@ -73,6 +72,7 @@ class StandaloneBoundary:
         try: data=await bounded_json(request)
         except OverflowError: return JSONResponse({"error":{"code":"body_too_large"}},status_code=413)
         except ValueError as exc: return JSONResponse({"error":{"code":str(exc)}},status_code=400)
+        if not isinstance(data, dict): return JSONResponse({"error":{"code":"invalid_execution_contract"}},status_code=422)
         execution_id=secrets.token_urlsafe(24)
         try: execution=execution_request(data,execution_id)
         except ValueError as exc: return JSONResponse({"error":{"code":"invalid_execution_contract","detail":str(exc)}},status_code=422)
