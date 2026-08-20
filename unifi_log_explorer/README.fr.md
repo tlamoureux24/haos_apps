@@ -5,9 +5,10 @@ et explorer localement l’activité d’un environnement UniFi. Elle réunit le
 Traffic Flows fournis par l’API locale UniFi Network et les événements reçus en
 Syslog/CEF.
 
-L’App n’utilise pas Ingress. Elle expose une interface web locale avec son propre
-compte administrateur et peut donc être placée derrière un reverse proxy si un
-accès HTTPS est souhaité.
+L’interface d’administration est disponible exclusivement via Home Assistant
+Ingress. Home Assistant authentifie l’utilisateur ; l’App ne possède plus de
+compte ni mot de passe local et son port TCP interne `8090` n’est pas publié sur
+le LAN.
 
 ## Fonctionnalités
 
@@ -24,8 +25,7 @@ accès HTTPS est souhaité.
   mémorisé dans le navigateur ;
 - page Paramètres regroupant test API, export diagnostic et résumé en lecture
   seule de la configuration Home Assistant ;
-- changement sécurisé du mot de passe, limitation des tentatives de connexion
-  et supervision de l’état de collecte ;
+- accès Ingress authentifié par Home Assistant et supervision de la collecte ;
 - exports CSV des résultats filtrés, graphique horaire sur 24 heures et outils
   de purge avec confirmation explicite ;
 - rétention configurable par durée et par nombre maximal d’enregistrements.
@@ -36,17 +36,15 @@ accès HTTPS est souhaité.
 - une console UniFi Network accessible en HTTPS depuis l’App ;
 - une clé API UniFi pour la collecte des Traffic Flows ;
 - un port UDP accessible depuis les équipements UniFi pour Syslog/CEF ;
-- un port TCP accessible depuis le navigateur pour l’interface web.
+- un utilisateur administrateur authentifié dans Home Assistant.
 
 ## Installation
 
 1. Ajouter ce dépôt à la boutique d’Apps Home Assistant.
 2. Installer **UniFi Log Explorer**.
 3. Renseigner les options adaptées au réseau avant de démarrer l’App.
-4. Vérifier les ports publiés dans l’onglet Réseau.
-5. Démarrer l’App et ouvrir son interface web.
-6. Créer le compte administrateur local. Le mot de passe doit comporter au
-   moins 12 caractères.
+4. Conserver le port UDP `5514` publié pour la réception Syslog/CEF.
+5. Démarrer l’App et ouvrir son interface Ingress depuis Home Assistant.
 
 ## Configuration
 
@@ -55,7 +53,6 @@ accès HTTPS est souhaité.
 | `allowed_source_ips` | Adresses IPv4 ou IPv6 exactes autorisées à envoyer des datagrammes Syslog/CEF. Les CIDR ne sont pas acceptés. |
 | `retention_hours` | Durée de conservation des événements et des Traffic Flows. |
 | `max_records` | Limite maximale appliquée séparément lors de l’entretien du stockage. |
-| `session_timeout_minutes` | Durée d’inactivité avant expiration d’une session web. |
 | `unifi_base_url` | URL HTTPS locale de la console ou passerelle UniFi. |
 | `unifi_site_slug` | Identifiant interne du site UniFi, souvent `default`. |
 | `unifi_api_key` | Clé API utilisée pour lire les Traffic Flows. |
@@ -68,6 +65,9 @@ accès HTTPS est souhaité.
 La configuration affichée dans la page **Paramètres** de l’interface est en
 lecture seule. Toute modification doit être effectuée dans les options de l’App
 Home Assistant, puis appliquée par un redémarrage.
+Pour assurer la mise à jour des installations existantes, une ancienne valeur
+`session_timeout_minutes` reste acceptée mais est ignorée : Home Assistant gère
+désormais la session authentifiée.
 
 ## Configuration de Syslog/CEF dans UniFi
 
@@ -129,7 +129,7 @@ adaptation de l’App.
 - **CEF / Syslog** : recherche dans tous les événements conservés, avec filtres
   par type, source et période, et accès aux données complètes de chaque événement.
 - **Paramètres** : thème, test API, export diagnostic et configuration en lecture
-  seule, état du stockage et changement du mot de passe.
+  seule, état du stockage et maintenance des données.
 
 ## Stockage et sauvegardes
 
@@ -143,16 +143,14 @@ la section des événements récents.
 
 ## Sécurité réseau
 
-- conserver l’interface web sur un LAN de confiance ou derrière un VPN ;
-- ne pas publier directement les ports web ou Syslog/CEF sur Internet ;
-- utiliser un reverse proxy pour fournir HTTPS si nécessaire ;
-- choisir un mot de passe administrateur unique ;
+- accéder à l’administration uniquement via Home Assistant Ingress ;
+- limiter le port UDP `5514` aux réseaux devant envoyer Syslog/CEF ;
 - limiter autant que possible l’accès réseau de l’App à la console UniFi ;
 - renouveler la clé API en cas de doute sur sa confidentialité.
 
 ## Limites connues
 
-- l’interface web utilise une authentification locale indépendante de Home Assistant ;
+- l’administration nécessite un administrateur authentifié dans Home Assistant ;
 - Syslog/CEF utilise UDP et ne garantit donc pas la livraison de chaque message ;
 - les clés API UniFi peuvent disposer de permissions plus larges que la lecture
   nécessaire ;

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0
+
+- Move the existing administration interface to Home Assistant Ingress and stop publishing TCP port 8090 on the LAN.
+- Remove local account setup, login, logout, password management, sessions, and login rate limiting; Home Assistant now authenticates administrators.
+- Preserve every navigation, asset, filter, detail, export, form, theme, language, and redirect URL under the dynamic Ingress prefix.
+- Keep state-changing actions protected by a constant-time checked, process-scoped CSRF token independent of authentication.
+- Require the validated Supervisor Ingress proxy source and `X-Ingress-Path` context for UI routes while keeping `/health` available to the watchdog.
+- Replace frame-blocking headers with a restrictive Ingress-compatible CSP and remove the standalone browser favicon route.
+- Retain the deprecated `session_timeout_minutes` schema entry as optional, ignored upgrade compatibility for existing installations.
+
 ## 1.0.0
 
 - Mark the application as stable after validation of collection, exploration, security, maintenance, and bilingual interfaces.

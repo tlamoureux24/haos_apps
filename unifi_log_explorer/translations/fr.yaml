@@ -8,9 +8,6 @@ configuration:
   max_records:
     name: Nombre maximal d'enregistrements
     description: Limite stricte partagée entre les journaux Syslog/CEF et les Traffic Flows.
-  session_timeout_minutes:
-    name: Expiration de session web (minutes)
-    description: Les sessions administrateur inactives expirent après cette durée.
   unifi_base_url:
     name: URL de la console UniFi
     description: URL HTTPS locale de la passerelle UniFi Cloud Gateway.

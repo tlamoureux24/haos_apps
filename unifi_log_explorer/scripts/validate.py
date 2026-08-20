@@ -14,8 +14,18 @@ if missing:
     errors.append(f"config.yaml missing: {', '.join(missing)}")
 if not re.search(r'^slug: "unifi_log_explorer"$', config_text, re.MULTILINE):
     errors.append("unexpected slug")
-if re.search(r"^ingress:\s*true", config_text, re.MULTILINE):
-    errors.append("Ingress must remain disabled")
+for expected in ('ingress: true', 'ingress_port: 8090', 'panel_title: "UniFi Log Explorer"',
+                 'panel_icon: "mdi:file-search-outline"', 'panel_admin: true'):
+    if expected not in config_text:
+        errors.append(f"missing Ingress setting: {expected}")
+if re.search(r"^webui:", config_text, re.MULTILINE):
+    errors.append("direct webui must remain disabled")
+if not re.search(r"^  8090/tcp: null$", config_text, re.MULTILINE):
+    errors.append("TCP port 8090 must not be published")
+if not re.search(r"^  5514/udp: 5514$", config_text, re.MULTILINE):
+    errors.append("UDP port 5514 must remain published")
+if 'watchdog: "http://[HOST]:[PORT:8090]/health"' not in config_text:
+    errors.append("watchdog must continue to use internal port 8090 /health")
 if not re.search(r'^\s+- "192\.168\.1\.1"$', config_text, re.MULTILINE):
     errors.append("default allowed source must be 192.168.1.1")
 for port in ("8090/tcp", "5514/udp"):

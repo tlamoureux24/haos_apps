@@ -8,9 +8,6 @@ configuration:
   max_records:
     name: Maximum records
     description: Hard limit shared by Syslog/CEF records and Traffic Flows.
-  session_timeout_minutes:
-    name: Web session timeout (minutes)
-    description: Inactive administrator sessions expire after this duration.
   unifi_base_url:
     name: UniFi console URL
     description: Local HTTPS URL of the UniFi Cloud Gateway.

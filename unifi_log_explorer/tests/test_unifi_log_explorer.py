@@ -130,7 +130,7 @@ class ParserTests(unittest.TestCase):
         self.assertFalse(collector.reconciliation_due(1_000_001))
         self.assertTrue(collector.reconciliation_due(1_000_000 + collector.RECONCILE_INTERVAL_SECONDS))
 
-    def test_authenticated_navigation_routes_render(self):
+    def test_ingress_navigation_routes_render_with_prefix(self):
         now = int(ule.time.time() * 1000)
         flow = {"id": "render-me", "flow_start_time": now - 1000, "flow_end_time": now,
                 "source": {"ip": "192.168.1.20", "name": "Phone"},
@@ -139,34 +139,37 @@ class ParserTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.object(ule, "DATA", Path(directory)), mock.patch.object(ule, "DB_PATH", Path(directory) / "test.db"):
                 store = ule.Store({"retention_hours": 168, "max_records": 1000,
-                                   "allowed_source_ips": {"192.168.1.1"}, "session_timeout_minutes": 60})
-                store.set_setting("admin_hash", "configured"); store.add_flows([flow])
+                                   "allowed_source_ips": {"192.168.1.1"}})
+                store.add_flows([flow])
                 store.add("cef", "192.168.1.1", "CEF only", {"name": "CEF only"})
                 store.add("syslog", "192.168.1.1", "Syslog only", {"message": "Syslog only"})
                 for number in range(10):
                     store.add("syslog", "192.168.1.20", f"Routine {number}", {"message": f"Routine {number}"})
                 cef_id = store.query_events({"kind": "cef", "hours": 24})["rows"][0]["id"]
                 for path in ("/", "/flows", "/events?size=10", "/events?kind=cef", f"/event?id={cef_id}", "/settings", "/flow?id=render-me"):
-                    handler = ule.Web.__new__(ule.Web); handler.path = path; handler.headers = {}; handler.store = store
-                    handler.session = lambda: {"csrf": "token"}
+                    handler = ule.Web.__new__(ule.Web); handler.path = path
+                    handler.headers = {"X-Ingress-Path": "/api/hassio_ingress/test-token"}
+                    handler.client_address = (ule.INGRESS_PROXY_IP, 12345); handler.store = store
                     rendered = []
-                    handler.send_html = lambda body, **kwargs: rendered.append(body)
+                    handler.send_html = lambda body, **kwargs: rendered.append(handler.prefix_markup(body))
                     handler.send_error = lambda code: self.fail(f"{path} returned HTTP {code}")
                     handler.do_GET()
                     self.assertTrue(rendered, path)
                     self.assertIn("Traffic Flows", rendered[0])
                     parser = LinkParser(); parser.feed(rendered[0])
-                    self.assertIn("/", parser.links)
-                    self.assertIn("/flows", parser.links)
-                    self.assertIn("/events", parser.links)
-                    self.assertIn("/settings", parser.links)
+                    prefix = "/api/hassio_ingress/test-token"
+                    self.assertIn(prefix + "/", parser.links)
+                    self.assertIn(prefix + "/flows", parser.links)
+                    self.assertIn(prefix + "/events", parser.links)
+                    self.assertIn(prefix + "/settings", parser.links)
+                    self.assertFalse(any(link and link.startswith("/") and not link.startswith(prefix + "/") for link in parser.links))
                     if path == "/":
                         self.assertIn("class=overviewhead", rendered[0])
                         self.assertIn("class='card statuscard'", rendered[0])
                         self.assertIn("Activité horaire", rendered[0])
                         self.assertLess(rendered[0].index("Collecte en attente"), rendered[0].index("class=grid"))
                     if path == "/events?size=10":
-                        self.assertTrue(any(link and link.startswith("/events?") and "page=2" in link for link in parser.links))
+                        self.assertTrue(any(link and link.startswith(prefix + "/events?") and "page=2" in link for link in parser.links))
                     if path == "/events?kind=cef":
                         self.assertIn("CEF only", rendered[0])
                         self.assertNotIn("Syslog only", rendered[0])
@@ -175,7 +178,10 @@ class ParserTests(unittest.TestCase):
                         self.assertIn("Exporter le diagnostic JSON", rendered[0])
                         self.assertIn("Lecture seule", rendered[0])
                         self.assertIn("Tester la connexion", rendered[0])
-                        self.assertIn("Sécurité du compte", rendered[0])
+                        self.assertNotIn("Sécurité du compte", rendered[0])
+                        self.assertIn(f"action={prefix}/probe", rendered[0])
+                        self.assertIn(f"action={prefix}/purge", rendered[0])
+                        self.assertIn(f"href={prefix}/export.json", rendered[0])
                         self.assertIn("Prochaine réconciliation", rendered[0])
                         self.assertIn("Maintenance des données", rendered[0])
                     if path.startswith("/event?"):
@@ -191,34 +197,76 @@ class ParserTests(unittest.TestCase):
                 self.assertEqual(store.purge("flows"), 1)
                 self.assertEqual(store.dashboard()["flow_stats"]["count"], 0)
 
-    def test_login_has_logo_and_public_theme_switch(self):
-        handler = ule.Web.__new__(ule.Web); handler.path = "/login"; handler.headers = {}
-        body = handler.auth_page("<form></form>", "Connexion")
-        self.assertIn("/logo.png", body)
-        self.assertIn("/theme?", body)
-        self.assertIn("input[type=hidden]{display:none!important}", ule.STYLE)
+    def test_ingress_context_and_health_exception(self):
+        handler = ule.Web.__new__(ule.Web); handler.path = "/"; handler.headers = {}
+        handler.client_address = ("192.168.1.20", 12345); handler.store = mock.MagicMock()
+        denied = []
+        handler.send_error = lambda code: denied.append(code)
+        handler.do_GET()
+        self.assertEqual(denied, [403])
+
+        handler = ule.Web.__new__(ule.Web); handler.path = "/health"; handler.headers = {}
+        handler.send_response = mock.Mock(); handler.send_header = mock.Mock(); handler.end_headers = mock.Mock()
+        handler.wfile = mock.Mock()
+        handler.do_GET()
+        handler.send_response.assert_called_once_with(200)
+        handler.wfile.write.assert_called_once_with(b"OK")
+
+    def test_ingress_security_headers_are_iframe_compatible(self):
+        handler = ule.Web.__new__(ule.Web); handler.path = "/"; handler.headers = {"X-Ingress-Path": "/api/hassio_ingress/test-token"}
+        sent = {}
+        handler.send_response = lambda status: sent.update(status=status)
+        handler.send_header = lambda key, value: sent.update({key: value})
+        handler.end_headers = lambda: None; handler.wfile = mock.Mock()
+        handler.send_html("<a href=/flows>Flows</a><img src=/icon.png><form action=/purge></form>")
+        self.assertEqual(sent["status"], 200)
+        self.assertNotIn("X-Frame-Options", sent)
+        self.assertIn("frame-ancestors 'self'", sent["Content-Security-Policy"])
+        self.assertNotIn("frame-ancestors 'none'", sent["Content-Security-Policy"])
+        document = handler.wfile.write.call_args.args[0].decode()
+        for target in ("/flows", "/icon.png", "/purge"):
+            self.assertIn("/api/hassio_ingress/test-token" + target, document)
+
+    def test_probe_and_purge_require_valid_csrf(self):
+        def post(path, form):
+            handler = ule.Web.__new__(ule.Web); handler.path = path
+            handler.headers = {"X-Ingress-Path": "/api/hassio_ingress/test-token"}
+            handler.client_address = (ule.INGRESS_PROXY_IP, 12345); handler.store = mock.MagicMock()
+            handler.store.options = {"unifi_api_key": "key"}; handler.store.purge.return_value = 3
+            handler.form = lambda: form
+            errors = []; redirects = []
+            handler.send_error = lambda code: errors.append(code)
+            handler.redirect = lambda target, cookie=None: redirects.append(target)
+            handler.do_POST()
+            return handler, errors, redirects
+
+        for path in ("/probe", "/purge"):
+            _, errors, redirects = post(path, {})
+            self.assertEqual(errors, [403]); self.assertFalse(redirects)
+            _, errors, redirects = post(path, {"csrf": "invalid"})
+            self.assertEqual(errors, [403]); self.assertFalse(redirects)
+        with mock.patch.object(ule, "flow_probe", return_value={"ok": True}):
+            handler, errors, redirects = post("/probe", {"csrf": ule.CSRF_TOKEN})
+        self.assertFalse(errors); self.assertEqual(redirects, ["/settings"])
+        handler.store.set_setting.assert_called_once()
+        handler, errors, redirects = post("/purge", {"csrf": ule.CSRF_TOKEN, "confirm": "PURGER", "target": "events"})
+        self.assertFalse(errors); self.assertEqual(redirects, ["/settings"])
+        handler.store.purge.assert_called_once_with("events")
 
     def test_english_interface_and_language_override(self):
         handler = ule.Web.__new__(ule.Web); handler.path = "/settings"
         handler.headers = {"Accept-Language": "en-US,en;q=0.9"}
         self.assertEqual(handler.language(), "en")
         self.assertEqual(handler.t("Vue d’ensemble"), "Overview")
-        nav = handler.nav("settings", {"csrf": "token"})
-        self.assertIn("Overview", nav); self.assertIn("Settings", nav); self.assertIn("Sign out", nav)
-        auth = handler.auth_page("<form></form>", "Connexion à votre espace local")
-        self.assertIn("Sign in to your local workspace", auth)
-        self.assertIn("value=fr", auth)
+        nav = handler.nav("settings")
+        self.assertIn("Overview", nav); self.assertIn("Settings", nav); self.assertNotIn("Sign out", nav)
         handler.headers = {"Accept-Language": "en", "Cookie": "ule_language=fr"}
         self.assertEqual(handler.language(), "fr")
 
-    def test_login_rate_limit_and_reset(self):
-        address = "test-client"
-        with ule.LOGIN_LOCK: ule.LOGIN_ATTEMPTS.pop(address, None)
-        for offset in range(ule.LOGIN_MAX_FAILURES):
-            ule.record_login_failure(address, now=1000 + offset)
-        self.assertGreater(ule.login_block_remaining(address, now=1010), 0)
-        ule.clear_login_failures(address)
-        self.assertEqual(ule.login_block_remaining(address, now=1010), 0)
+    def test_local_authentication_is_removed(self):
+        source = (Path(__file__).resolve().parents[1] / "unifi_log_explorer.py").read_text()
+        for obsolete in ("ule_session", "SESSIONS", "LOGIN_ATTEMPTS", "password_hash", 'path == "/login"', 'path == "/setup"', 'path == "/logout"', 'path == "/password"'):
+            self.assertNotIn(obsolete, source)
         self.assertEqual(ule.csv_safe("=SUM(A1:A2)"), "'=SUM(A1:A2)")
 
 

@@ -1,6 +1,6 @@
 name: "UniFi Log Explorer"
 slug: "unifi_log_explorer"
-version: "1.0.0"
+version: "1.1.0"
 description: "Explore UniFi Traffic Flows, Syslog and CEF data locally"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/unifi_log_explorer"
 arch:
@@ -15,11 +15,15 @@ backup: cold
 hassio_api: true
 backup_exclude:
   - /data/unifi_api_key.key
-webui: "http://[HOST]:[PORT:8090]/"
+ingress: true
+ingress_port: 8090
+panel_title: "UniFi Log Explorer"
+panel_icon: "mdi:file-search-outline"
+panel_admin: true
 watchdog: "http://[HOST]:[PORT:8090]/health"
 
 ports:
-  8090/tcp: 8090
+  8090/tcp: null
   5514/udp: 5514
 
 ports_description:
@@ -31,7 +35,6 @@ options:
     - "192.168.1.1"
   retention_hours: 168
   max_records: 250000
-  session_timeout_minutes: 60
   unifi_base_url: "https://192.168.1.1"
   unifi_site_slug: "default"
   unifi_api_key: ""
@@ -46,7 +49,8 @@ schema:
     - str
   retention_hours: "int(1,720)"
   max_records: "int(1000,2000000)"
-  session_timeout_minutes: "int(5,1440)"
+  # Upgrade compatibility only; ignored since Home Assistant owns authentication.
+  session_timeout_minutes: "int(5,1440)?"
   unifi_base_url: url
   unifi_site_slug: str
   unifi_api_key: password?
