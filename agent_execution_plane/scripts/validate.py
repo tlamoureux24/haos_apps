@@ -37,9 +37,9 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
     acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "0.4.0"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    for text in ('slug: "agent_execution_plane"', 'version: "0.4.1"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "0.4.0"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "0.4.1"' not in package: raise RuntimeError("Version sources differ")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 2: raise RuntimeError("Unprivileged two-listener runtime missing")
     if launcher.count("--log-config /app/src/agent_execution_plane/uvicorn_logging.json") != 2: raise RuntimeError("Timestamped listener logging missing")
@@ -47,6 +47,7 @@ def main() -> int:
     for invariant in ("Agent Execution Plane <b>v{__version__}</b>", "/admin/assets/icon.png", "aep-language", "navigator.language", "aep-theme", "prefers-color-scheme", "activityTitle", "app_stopped:'Application arrêtée'", "app_stopped:'Application stopped'"):
         if invariant not in main_py + ui: raise RuntimeError(f"UI invariant missing: {invariant}")
     if ".app{max-width:1840px" not in ui or ".app{max-width:1400px" in ui: raise RuntimeError("Administration layout width must match Agent Control Plane")
+    if ":root{color-scheme:light;scrollbar-gutter:stable;" not in ui: raise RuntimeError("Stable root scrollbar gutter missing")
     forbidden = ("/api/v1/execute", "jobs_claim_v1", "pending_result", "active_execution", "chatgptauthtokens")
     source = "".join(p.read_text(errors="ignore") for p in (ROOT / "src").rglob("*.py"))
     for item in forbidden:
@@ -66,6 +67,7 @@ def main() -> int:
     codex = (ROOT / "src/agent_execution_plane/codex_runtime.py").read_text()
     for invariant in ('CODEX_VERSION = "0.144.4"', 'forced_login_method = "chatgpt"', 'cli_auth_credentials_store = "file"', '"OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"'):
         if invariant not in codex: raise RuntimeError(f"Missing Codex OAuth isolation invariant: {invariant}")
+    if 'web_search = "live"\n\n[features]' not in codex or 'web_search = false' in codex: raise RuntimeError("Canonical Codex native Web search setting missing")
     for name in ("icon.png", "logo.png"):
         path = ROOT / name
         if not path.is_file() or path.stat().st_size < 1000: raise RuntimeError(f"Missing authoritative {name}")

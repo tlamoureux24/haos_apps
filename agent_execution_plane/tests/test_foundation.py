@@ -7,10 +7,15 @@ from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from agent_execution_plane.admin_ui import ADMIN_CSS
+
 from agent_execution_plane.database import MAX_ACTIVITY_ENTRIES, database_ready, initialize, list_activity, prune, record_activity
 
 
 class FoundationTests(unittest.TestCase):
+    def test_root_reserves_stable_scrollbar_gutter_without_changing_app_width(self):
+        self.assertIn(':root{color-scheme:light;scrollbar-gutter:stable;',ADMIN_CSS)
+        self.assertIn('.app{max-width:1840px',ADMIN_CSS)
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.database = Path(self.temp.name) / "agent_execution_plane.db"

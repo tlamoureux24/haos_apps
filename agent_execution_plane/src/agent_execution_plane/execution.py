@@ -67,6 +67,13 @@ class ToolCall:
 
 
 @dataclass(frozen=True)
+class ToolResult:
+    call_id: str
+    source_name: str
+    result: Any
+
+
+@dataclass(frozen=True)
 class ProviderReply:
     content: Any = None
     tool_calls: tuple[ToolCall, ...] = ()
@@ -175,7 +182,7 @@ class ExecutionEngine:
             if reply.tool_calls:
                 messages.append(reply.assistant_message or {'role':'assistant','content':reply.content,'tool_calls':[{'id':c.id,'name':c.name,'arguments':c.arguments} for c in reply.tool_calls]})
                 for call in reply.tool_calls:
-                    result=await dispatch(call); messages.append({'role':'tool','tool_call_id':call.id,'content':canonical(result)})
+                    result=await dispatch(call); messages.append(ToolResult(call.id,call.name,result))
                 continue
             result=reply.content
             if request.result_schema is not None:

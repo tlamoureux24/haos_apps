@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
+import re
 from typing import Any
 
 import httpx
 
 from agent_execution_plane.codex_runtime import CodexRuntime, CodexRuntimeError
-from agent_execution_plane.execution import Capability, ProviderReply, ToolCall
+from agent_execution_plane.execution import Capability, ProviderReply, ToolCall, ToolResult, canonical
 
 PROBE_TIMEOUT_SECONDS = 15.0
 
@@ -82,10 +84,52 @@ def _openai_tools(tools: tuple[Capability,...]) -> list[dict[str,Any]]:
     return [{'type':'function','function':{'name':t.name,'description':t.description,'parameters':t.input_schema}} for t in tools]
 
 
+OPENAI_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+class TransportNames:
+    """Deterministic reversible 1:1 provider transport names; never authorization."""
+    def __init__(self, tools: tuple[Capability, ...], *, constrained: bool):
+        reserved={tool.name for tool in tools if not constrained or OPENAI_NAME.fullmatch(tool.name)}
+        self.source_to_transport:dict[str,str]={}; used:set[str]=set()
+        for tool in tools:
+            if not constrained or OPENAI_NAME.fullmatch(tool.name): alias=tool.name
+            else:
+                digest=hashlib.sha256(tool.name.encode()).hexdigest()
+                alias=f"aep_{digest[:60]}"
+                counter=0
+                while alias in reserved or alias in used:
+                    counter+=1;alias=f"aep_{hashlib.sha256(f'{tool.name}:{counter}'.encode()).hexdigest()[:60]}"
+            if alias in used: raise ValueError('provider_tool_alias_collision')
+            used.add(alias);self.source_to_transport[tool.name]=alias
+        self.transport_to_source={alias:source for source,alias in self.source_to_transport.items()}
+    def capabilities(self,tools): return tuple(Capability(self.source_to_transport[t.name],t.description,t.input_schema) for t in tools)
+    def source(self,name):
+        try:return self.transport_to_source[name]
+        except KeyError:raise ValueError('unknown_provider_tool') from None
+
+
+def _openai_messages(messages,names):
+    output=[]
+    for message in messages:
+        if isinstance(message,ToolResult): output.append({'role':'tool','tool_call_id':message.call_id,'content':canonical(message.result)})
+        else: output.append(message)
+    return output
+
+
+def _ollama_messages(messages,names):
+    output=[]
+    for message in messages:
+        if isinstance(message,ToolResult): output.append({'role':'tool','tool_name':names.source_to_transport[message.source_name],'content':canonical(message.result)})
+        else: output.append(message)
+    return output
+
+
 class OpenAIExecutionAdapter:
     def __init__(self,model:dict[str,Any]): self.model=model
     async def turn(self,messages,tools,result_schema,remaining,dispatch):
-        payload={'model':self.model['provider_model'],'messages':messages,'tools':_openai_tools(tools),'temperature':0}
+        names=TransportNames(tools,constrained=True);transport=names.capabilities(tools)
+        payload={'model':self.model['provider_model'],'messages':_openai_messages(messages,names),'tools':_openai_tools(transport),'temperature':0}
         if result_schema is not None: payload['response_format']={'type':'json_schema','json_schema':{'name':'source_result','strict':True,'schema':result_schema}}
         async with httpx.AsyncClient(headers=headers(self.model.get('credential')),timeout=remaining) as client:
             response=await client.post(f"{self.model['base_url'].rstrip('/')}/v1/chat/completions",json=payload); response.raise_for_status()
@@ -94,27 +138,30 @@ class OpenAIExecutionAdapter:
             function=raw['function']
             try: arguments=json.loads(function['arguments']) if isinstance(function['arguments'],str) else function['arguments']
             except json.JSONDecodeError: arguments=function['arguments']
-            calls.append(ToolCall(str(raw['id']),function['name'],arguments))
+            calls.append(ToolCall(str(raw['id']),names.source(function['name']),arguments))
         return ProviderReply(message.get('content'),tuple(calls),message)
 
 
 class OllamaExecutionAdapter:
     def __init__(self,model:dict[str,Any]): self.model=model
     async def turn(self,messages,tools,result_schema,remaining,dispatch):
-        payload={'model':self.model['provider_model'],'messages':messages,'tools':[{'type':'function','function':{'name':t.name,'description':t.description,'parameters':t.input_schema}} for t in tools],'stream':False}
+        names=TransportNames(tools,constrained=False);transport=names.capabilities(tools)
+        payload={'model':self.model['provider_model'],'messages':_ollama_messages(messages,names),'tools':[{'type':'function','function':{'name':t.name,'description':t.description,'parameters':t.input_schema}} for t in transport],'stream':False}
         if result_schema is not None: payload['format']=result_schema
         async with httpx.AsyncClient(headers=headers(self.model.get('credential')),timeout=remaining) as client:
             response=await client.post(f"{self.model['base_url'].rstrip('/')}/api/chat",json=payload); response.raise_for_status()
         message=response.json()['message']; calls=[]
         for index,raw in enumerate(message.get('tool_calls') or []):
-            function=raw['function']; calls.append(ToolCall(str(raw.get('id',f'ollama-{index}')),function['name'],function.get('arguments',{})))
+            function=raw['function']; calls.append(ToolCall(str(raw.get('id',f'ollama-{index}')),names.source(function['name']),function.get('arguments',{})))
         return ProviderReply(message.get('content'),tuple(calls),message)
 
 
 class OAuthExecutionAdapter:
     def __init__(self,model:dict[str,Any],runtime:CodexRuntime): self.model=model; self.runtime=runtime
     async def turn(self,messages,tools,result_schema,remaining,dispatch):
-        return await self.runtime.execute_turn(self.model['provider_model'],messages,tools,result_schema,remaining,dispatch)
+        names=TransportNames(tools,constrained=True);transport=names.capabilities(tools)
+        async def routed(call): return await dispatch(ToolCall(call.id,names.source(call.name),call.arguments))
+        return await self.runtime.execute_turn(self.model['provider_model'],messages,transport,result_schema,remaining,routed)
 
 
 def execution_adapter(model:dict[str,Any],runtime:CodexRuntime|None=None):

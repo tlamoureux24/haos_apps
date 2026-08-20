@@ -28,12 +28,12 @@ ALLOWED_METHODS = {
 
 CONFIG = '''forced_login_method = "chatgpt"
 cli_auth_credentials_store = "file"
+web_search = "live"
 
 [features]
 plugins = false
 apps = false
 connectors = false
-web_search = false
 image_generation = false
 collab = false
 multi_agent = false
@@ -240,7 +240,7 @@ class CodexRuntime:
         if process.stdout:
             process.stdout.close()
 
-    async def execute_turn(self, model: str, messages: list[dict[str, object]], tools, result_schema, timeout: float, dispatch):
+    async def execute_turn(self, model: str, messages: list[dict[str, object]], tools, result_schema, timeout: float, dispatch, *, model_provider: str | None = None):
         """Run one ephemeral, unattended execution with only AEP dynamic calls handled."""
         ensure_codex_home(self.codex_home)
         process = await asyncio.create_subprocess_exec(
@@ -257,13 +257,15 @@ class CodexRuntime:
             await write({'id':request_id,'method':method,'params':params}); return await future
         async def run():
             nonlocal final_content
-            initialize=asyncio.create_task(request('initialize',{'clientInfo':{'name':'agent_execution_plane_execution','title':'Agent Execution Plane','version':'0.4.0'},'capabilities':{'experimentalApi':True}}))
+            initialize=asyncio.create_task(request('initialize',{'clientInfo':{'name':'agent_execution_plane_execution','title':'Agent Execution Plane','version':'0.4.1'},'capabilities':{'experimentalApi':True}}))
             while not initialize.done(): await consume_one(); await asyncio.sleep(0)
             result=await initialize
             if CODEX_VERSION not in str(result.get('userAgent','')): raise CodexRuntimeError('runtime_or_model_incompatible')
             await write({'method':'initialized'})
             dynamic=[{'type':'function','name':t.name,'description':t.description,'inputSchema':t.input_schema,'deferLoading':False} for t in tools]
-            thread_task=asyncio.create_task(request('thread/start',{'model':model,'ephemeral':True,'cwd':str(self.codex_home),'approvalPolicy':'never','approvalsReviewer':'user','baseInstructions':'','developerInstructions':'','environments':[],'instructionSources':[],'dynamicTools':dynamic}))
+            thread_params={'model':model,'ephemeral':True,'cwd':str(self.codex_home),'approvalPolicy':'never','approvalsReviewer':'user','baseInstructions':'','developerInstructions':'','environments':[],'instructionSources':[],'dynamicTools':dynamic}
+            if model_provider is not None: thread_params['modelProvider']=model_provider
+            thread_task=asyncio.create_task(request('thread/start',thread_params))
             while not thread_task.done(): await consume_one(); await asyncio.sleep(0)
             thread=(await thread_task)['thread']; thread_id=thread['id']
             text=json.dumps(messages,ensure_ascii=False,sort_keys=True,separators=(',',':'))

@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane est le composant de raisonnement et d’exécution de modèles de la suite. La version `0.4.0` ajoute le moteur interne source-neutre, la boucle exacte d’outils MCP opérationnels fournis par la source, la frontière de fallback et les trois familles de providers d’exécution. Les frontières publiques autonome et ACP restent réservées aux lots suivants.
+Agent Execution Plane est le composant de raisonnement et d’exécution de modèles de la suite. La version `0.4.1` contient le moteur interne source-neutre revu, la boucle exacte d’outils MCP opérationnels fournis par la source, la frontière de fallback et les trois familles de providers d’exécution. Les frontières publiques autonome et ACP restent réservées aux lots suivants.
 
 ## Frontière de responsabilité
 

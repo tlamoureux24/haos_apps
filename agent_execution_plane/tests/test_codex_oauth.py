@@ -46,6 +46,7 @@ class CodexOAuthTests(unittest.TestCase):
         environment = child_environment(home, {"OPENAI_API_KEY": "x", "CODEX_API_KEY": "y", "CODEX_ACCESS_TOKEN": "z", "SAFE": "yes"})
         self.assertEqual(environment["CODEX_HOME"], str(home)); self.assertEqual(environment["SAFE"], "yes")
         self.assertFalse(set(environment) & {"OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"})
+        self.assertIn('web_search = "live"\n\n[features]', CONFIG); self.assertNotIn('web_search = false', CONFIG)
 
     def test_device_login_account_catalogue_and_logout(self):
         runtime = self.runtime()

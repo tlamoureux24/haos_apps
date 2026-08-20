@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+- Add a reproducible real-Codex OAuth execution gate with a deterministic local capture provider.
+- Enable Codex provider-native Web search through the canonical 0.144.4 top-level setting while keeping operational tools MCP-only.
+- Serialize neutral tool results according to Ollama and OpenAI-compatible follow-up contracts.
+- Add deterministic reversible collision-safe provider transport aliases for constrained function names.
+- Keep Ingress views horizontally aligned by reserving a stable root scrollbar gutter.
+
 ## 0.4.0
 
 - Add the source-neutral single-slot execution engine and exact source-supplied MCP operational capability envelope.
