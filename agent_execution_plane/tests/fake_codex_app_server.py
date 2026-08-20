@@ -8,6 +8,7 @@ from pathlib import Path
 connected = os.environ.get("AEP_FAKE_CONNECTED") == "1"
 observation = Path(os.environ["AEP_FAKE_OBSERVATION"])
 execution = os.environ.get("AEP_FAKE_EXECUTION") == "1"
+models = [item for item in os.environ.get("AEP_FAKE_MODELS", "gpt-test").split(",") if item]
 
 
 def send(value):
@@ -35,7 +36,7 @@ for line in sys.stdin:
         connected = False
         result = {}
     elif method == "model/list":
-        result = {"data": [{"model": "gpt-test", "displayName": "GPT Test"}], "nextCursor": None}
+        result = {"data": [{"model": model, "displayName": "GPT Test" if model == "gpt-test" else model} for model in models], "nextCursor": None}
     elif execution and method == "thread/start":
         result = {"thread": {"id": "thread-1"}}
     elif execution and method == "turn/start":

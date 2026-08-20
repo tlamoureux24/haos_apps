@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2
+
+- Clear the model form identity explicitly when opening creation after an edit, so multiple models sharing one ChatGPT OAuth account remain distinct.
+- Add regression coverage for OAuth model creation, edit, persistence, and priority reorder.
+
 ## 0.4.1
 
 - Add a reproducible real-Codex OAuth execution gate with a deterministic local capture provider.

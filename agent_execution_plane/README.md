@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane is the model reasoning and execution component of the suite. Version `0.4.1` contains the reviewed internal source-neutral execution engine, exact source-supplied MCP operational tool loop, model fallback boundary, and three execution-provider families. Public standalone and ACP source boundaries remain reserved for later lots.
+Agent Execution Plane is the model reasoning and execution component of the suite. Version `0.4.2` contains the reviewed internal source-neutral execution engine, exact source-supplied MCP operational tool loop, model fallback boundary, and three execution-provider families. Public standalone and ACP source boundaries remain reserved for later lots.
 
 ## Responsibility boundary
 

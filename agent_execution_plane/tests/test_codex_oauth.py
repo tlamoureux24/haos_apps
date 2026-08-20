@@ -78,6 +78,25 @@ class CodexOAuthTests(unittest.TestCase):
         with self.assertRaises(ValueError): store.save(Candidate("Bad", "openai_chatgpt_oauth", "https://api.openai.com", "gpt-test", None, False, True, 5))
         with self.assertRaises(ValueError): store.save(Candidate("Bad", "openai_chatgpt_oauth", None, "gpt-test", "sk-forbidden", True, True, 5))
 
+    def test_two_oauth_models_survive_edit_reload_and_reorder(self):
+        database = self.root / "aep.db"; initialize(database)
+        runtime = CodexRuntime(self.root / "codex-home", command=(sys.executable, str(FAKE_SERVER)), environment={"AEP_FAKE_OBSERVATION": str(self.observation), "AEP_FAKE_CONNECTED": "1", "AEP_FAKE_MODELS": "gpt-5.6-sol,gpt-5.5"})
+        store = ModelStore(database, self.root / "private", runtime)
+        first, _ = store.save(Candidate("GPT-5.6-Sol", "openai_chatgpt_oauth", None, "gpt-5.6-sol", None, False, True, 5), None)
+        self.assertTrue(first["id"]); self.assertEqual(first["priority"], 1); self.assertEqual(len(store.list()), 1)
+        edited, _ = store.save(Candidate("GPT-5.6-Sol", "openai_chatgpt_oauth", None, "gpt-5.6-sol", None, False, True, 7), first["id"])
+        self.assertEqual(edited["id"], first["id"]); self.assertEqual(len(store.list()), 1)
+        second, _ = store.save(Candidate("GPT-5.5", "openai_chatgpt_oauth", None, "gpt-5.5", None, False, True, 5), None)
+        rows = store.list(); self.assertEqual(len(rows), 2); self.assertNotEqual(first["id"], second["id"])
+        self.assertEqual([(row["display_name"], row["priority"]) for row in rows], [("GPT-5.6-Sol", 1), ("GPT-5.5", 2)])
+        runtime.close()
+        reloaded_runtime = CodexRuntime(self.root / "reloaded-codex-home", command=(sys.executable, str(FAKE_SERVER)), environment={"AEP_FAKE_OBSERVATION": str(self.observation), "AEP_FAKE_CONNECTED": "1", "AEP_FAKE_MODELS": "gpt-5.6-sol,gpt-5.5"})
+        reloaded = ModelStore(database, self.root / "private", reloaded_runtime)
+        self.assertEqual({row["provider_model"] for row in reloaded.list()}, {"gpt-5.6-sol", "gpt-5.5"})
+        reloaded.reorder([second["id"], first["id"]]); reordered = reloaded.list()
+        self.assertEqual([(row["id"], row["priority"]) for row in reordered], [(second["id"], 1), (first["id"], 2)])
+        self.assertEqual({row["provider_model"] for row in reordered}, {"gpt-5.6-sol", "gpt-5.5"}); reloaded_runtime.close()
+
     def test_health_and_validation_never_start_inference(self):
         database = self.root / "aep.db"; initialize(database)
         runtime = self.runtime(connected=True); store = ModelStore(database, self.root / "private", runtime)
@@ -98,6 +117,8 @@ class CodexOAuthTests(unittest.TestCase):
         self.assertIn("Aucun modèle configuré.", ADMIN_JS); self.assertIn("No model configured.", ADMIN_JS)
         self.assertIn("provider:'Fournisseur'", ADMIN_JS); self.assertIn("tr(m.provider_family)", ADMIN_JS)
         self.assertIn("credential:oauth?null", ADMIN_JS); self.assertIn("base_url:oauth?null", ADMIN_JS)
+        self.assertIn("form.reset();form.id.value=model?.id??''", ADMIN_JS)
+        self.assertIn("data={id:f.id.value||null", ADMIN_JS)
         self.assertIn("chatgptDeviceCode", Path(__file__).parents[1].joinpath("src/agent_execution_plane/codex_runtime.py").read_text(encoding="utf-8"))
 
     def test_execution_wrapper_routes_only_dynamic_tools_and_denies_commands(self):

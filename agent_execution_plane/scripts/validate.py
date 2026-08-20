@@ -37,9 +37,9 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
     acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "0.4.1"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    for text in ('slug: "agent_execution_plane"', 'version: "0.4.2"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "0.4.1"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "0.4.2"' not in package: raise RuntimeError("Version sources differ")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 2: raise RuntimeError("Unprivileged two-listener runtime missing")
     if launcher.count("--log-config /app/src/agent_execution_plane/uvicorn_logging.json") != 2: raise RuntimeError("Timestamped listener logging missing")
@@ -64,6 +64,7 @@ def main() -> int:
         if invariant not in apparmor: raise RuntimeError(f"Missing Codex AppArmor rule: {invariant}")
     if "CREATE TABLE IF NOT EXISTS models" not in (ROOT / "src/agent_execution_plane/database.py").read_text(): raise RuntimeError("Missing generation-1 models persistence")
     if 'data-view="models"' not in ui or "explicitWarning" not in ui or "openai_chatgpt_oauth" not in ui or "chatgptAccount" not in ui: raise RuntimeError("Missing bilingual Models administration view")
+    if "form.reset();form.id.value=model?.id??''" not in ui or "data={id:f.id.value||null" not in ui: raise RuntimeError("Explicit model create/edit identity invariant missing")
     codex = (ROOT / "src/agent_execution_plane/codex_runtime.py").read_text()
     for invariant in ('CODEX_VERSION = "0.144.4"', 'forced_login_method = "chatgpt"', 'cli_auth_credentials_store = "file"', '"OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"'):
         if invariant not in codex: raise RuntimeError(f"Missing Codex OAuth isolation invariant: {invariant}")
