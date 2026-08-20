@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Lot 0 repository invariants without third-party packages."""
+"""Validate Agent Execution Plane Lot 1 repository invariants."""
 
 from __future__ import annotations
 
@@ -37,9 +37,9 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
     acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "0.2.0"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    for text in ('slug: "agent_execution_plane"', 'version: "0.3.0"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "0.2.0"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "0.3.0"' not in package: raise RuntimeError("Version sources differ")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 2: raise RuntimeError("Unprivileged two-listener runtime missing")
     if launcher.count("--log-config /app/src/agent_execution_plane/uvicorn_logging.json") != 2: raise RuntimeError("Timestamped listener logging missing")
@@ -47,7 +47,7 @@ def main() -> int:
     for invariant in ("Agent Execution Plane <b>v{__version__}</b>", "/admin/assets/icon.png", "aep-language", "navigator.language", "aep-theme", "prefers-color-scheme", "activityTitle", "app_stopped:'Application arrêtée'", "app_stopped:'Application stopped'"):
         if invariant not in main_py + ui: raise RuntimeError(f"UI invariant missing: {invariant}")
     if ".app{max-width:1840px" not in ui or ".app{max-width:1400px" in ui: raise RuntimeError("Administration layout width must match Agent Control Plane")
-    forbidden = ("/api/v1/execute", "jobs_claim_v1", "tools/call", "pending_result", "active_execution")
+    forbidden = ("/api/v1/execute", "jobs_claim_v1", "tools/call", "pending_result", "active_execution", "thread/start", "turn/start", "chatgptauthtokens")
     source = "".join(p.read_text(errors="ignore") for p in (ROOT / "src").rglob("*.py"))
     for item in forbidden:
         if item in source.lower(): raise RuntimeError(f"Later-lot behavior present: {item}")
@@ -55,12 +55,17 @@ def main() -> int:
     if "capability sys_admin" in apparmor or "network raw" in apparmor or "complain" in apparmor: raise RuntimeError("Excess AppArmor privilege")
     if generic_s6_rules(apparmor) != generic_s6_rules(acp_apparmor): raise RuntimeError("Generic s6-overlay AppArmor rules must match the HAOS-proven Agent Control Plane bootstrap inventory")
     if "agent_control_plane" in apparmor or "credential-pepper" in apparmor: raise RuntimeError("Agent Execution Plane AppArmor must not inherit Agent Control Plane data permissions")
-    for invariant in ("cryptography==46.0.3", "httpx==0.28.1"):
+    for invariant in ("cryptography==46.0.3", "httpx==0.28.1", "openai-codex==0.144.4", "openai-codex-cli-bin==0.144.4"):
         if invariant not in (ROOT / "requirements.txt").read_text(): raise RuntimeError(f"Missing Lot 1 dependency: {invariant}")
     for invariant in ("/data/private/provider-key rwlk,", "/data/private/.provider-key.*.tmp rwlk,"):
         if invariant not in apparmor: raise RuntimeError(f"Missing provider-key AppArmor rule: {invariant}")
+    for invariant in ("/usr/lib/python3*/site-packages/codex_cli_bin/bin/codex ix,", "/data/private/codex-home/** rwlk,"):
+        if invariant not in apparmor: raise RuntimeError(f"Missing Codex AppArmor rule: {invariant}")
     if "CREATE TABLE IF NOT EXISTS models" not in (ROOT / "src/agent_execution_plane/database.py").read_text(): raise RuntimeError("Missing generation-1 models persistence")
-    if 'data-view="models"' not in ui or "explicitWarning" not in ui: raise RuntimeError("Missing bilingual Models administration view")
+    if 'data-view="models"' not in ui or "explicitWarning" not in ui or "openai_chatgpt_oauth" not in ui or "chatgptAccount" not in ui: raise RuntimeError("Missing bilingual Models administration view")
+    codex = (ROOT / "src/agent_execution_plane/codex_runtime.py").read_text()
+    for invariant in ('CODEX_VERSION = "0.144.4"', 'forced_login_method = "chatgpt"', 'cli_auth_credentials_store = "file"', '"OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"'):
+        if invariant not in codex: raise RuntimeError(f"Missing Codex OAuth isolation invariant: {invariant}")
     for name in ("icon.png", "logo.png"):
         path = ROOT / name
         if not path.is_file() or path.stat().st_size < 1000: raise RuntimeError(f"Missing authoritative {name}")

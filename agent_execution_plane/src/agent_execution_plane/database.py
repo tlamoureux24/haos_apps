@@ -51,8 +51,8 @@ def initialize(path: Path) -> None:
             CREATE TABLE IF NOT EXISTS models (
                 id TEXT PRIMARY KEY,
                 display_name TEXT NOT NULL,
-                provider_family TEXT NOT NULL CHECK(provider_family IN ('ollama_compatible','openai_compatible')),
-                base_url TEXT NOT NULL,
+                provider_family TEXT NOT NULL CHECK(provider_family IN ('ollama_compatible','openai_compatible','openai_chatgpt_oauth')),
+                base_url TEXT,
                 provider_model TEXT NOT NULL,
                 encrypted_credential BLOB,
                 enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
@@ -62,9 +62,38 @@ def initialize(path: Path) -> None:
                 diagnostic_code TEXT,
                 checked_at TEXT,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                CHECK (
+                    (provider_family = 'openai_chatgpt_oauth' AND base_url IS NULL AND encrypted_credential IS NULL)
+                    OR
+                    (provider_family != 'openai_chatgpt_oauth' AND base_url IS NOT NULL)
+                )
             );
         """)
+        models_sql = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='models'").fetchone()[0]
+        if "openai_chatgpt_oauth" not in models_sql:
+            db.executescript("""
+                ALTER TABLE models RENAME TO models_before_oauth;
+                CREATE TABLE models (
+                    id TEXT PRIMARY KEY,
+                    display_name TEXT NOT NULL,
+                    provider_family TEXT NOT NULL CHECK(provider_family IN ('ollama_compatible','openai_compatible','openai_chatgpt_oauth')),
+                    base_url TEXT,
+                    provider_model TEXT NOT NULL,
+                    encrypted_credential BLOB,
+                    enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+                    priority INTEGER NOT NULL UNIQUE CHECK(priority > 0),
+                    timeout_minutes REAL NOT NULL CHECK(timeout_minutes > 0),
+                    technical_state TEXT NOT NULL CHECK(technical_state IN ('available','unavailable','incompatible','unverified')),
+                    diagnostic_code TEXT,
+                    checked_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK ((provider_family = 'openai_chatgpt_oauth' AND base_url IS NULL AND encrypted_credential IS NULL) OR (provider_family != 'openai_chatgpt_oauth' AND base_url IS NOT NULL))
+                );
+                INSERT INTO models SELECT * FROM models_before_oauth;
+                DROP TABLE models_before_oauth;
+            """)
         generation = db.execute("SELECT generation FROM schema_info WHERE singleton=1").fetchone()[0]
         if generation != SCHEMA_VERSION:
             raise RuntimeError(f"Unsupported database generation: {generation}")

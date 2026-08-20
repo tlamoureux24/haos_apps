@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Add the official OpenAI ChatGPT OAuth provider family through the exactly pinned Codex 0.144.4 app-server over local stdio JSONL.
+- Add shared device-code login, account/logout state and Codex model catalogue administration without exposing OAuth tokens or API-key fallback.
+- Isolate Codex credentials under `/data/private/codex-home` and keep OAuth validation/health strictly non-inferential.
+
 ## 0.2.0
 
 - Add encrypted configured-model persistence, deterministic ordering, enable/disable and positive per-model timeouts.

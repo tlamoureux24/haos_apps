@@ -21,6 +21,7 @@ from starlette.routing import Route
 
 from agent_execution_plane import __version__
 from agent_execution_plane.admin_ui import ADMIN_CSS, ADMIN_JS
+from agent_execution_plane.codex_runtime import CodexRuntime, CodexRuntimeError
 from agent_execution_plane.database import database_ready, list_activity, record_activity
 from agent_execution_plane.models import Candidate, ModelStore
 from agent_execution_plane.settings import load_settings
@@ -31,7 +32,8 @@ if os.geteuid() != 1000:
 settings = load_settings()
 icon_path = Path(os.environ.get("AGENT_EXECUTION_PLANE_ICON_PATH", "/app/icon.png"))
 csrf_token = secrets.token_urlsafe(32)
-model_store = ModelStore(settings.database_path, settings.data_dir / "private")
+codex_runtime = CodexRuntime(settings.data_dir / "private" / "codex-home")
+model_store = ModelStore(settings.database_path, settings.data_dir / "private", codex_runtime)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -93,7 +95,11 @@ async def models_api(request: Request) -> JSONResponse:
     if not csrf_valid(request): return JSONResponse({"error": {"code": "csrf_failed"}}, status_code=403)
     try:
         data = await json_body(request)
-        candidate = Candidate(str(data.get("display_name", "")), str(data.get("provider_family", "")), str(data.get("base_url", "")), str(data.get("provider_model", "")), data.get("credential") or None, bool(data.get("replace_credential", False)), bool(data.get("enabled", True)), float(data.get("timeout_minutes", 5)))
+        base_url = data.get("base_url")
+        credential = data.get("credential")
+        if base_url is not None and not isinstance(base_url, str): raise ValueError
+        if credential is not None and not isinstance(credential, str): raise ValueError
+        candidate = Candidate(str(data.get("display_name", "")), str(data.get("provider_family", "")), base_url or None, str(data.get("provider_model", "")), credential or None, bool(data.get("replace_credential", False)), bool(data.get("enabled", True)), float(data.get("timeout_minutes", 5)))
         model, check = await asyncio.to_thread(model_store.save, candidate, data.get("id"))
     except OverflowError: return JSONResponse({"error": {"code": "body_too_large"}}, status_code=413)
     except (ValueError, TypeError): return JSONResponse({"error": {"code": "invalid_model"}}, status_code=422)
@@ -117,6 +123,42 @@ async def model_action(request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
+async def oauth_account(_: Request) -> JSONResponse:
+    try:
+        return JSONResponse(await asyncio.to_thread(codex_runtime.login_status))
+    except CodexRuntimeError:
+        return JSONResponse({"status": "error", "code": "runtime_or_model_incompatible"}, status_code=503)
+
+
+async def oauth_models(_: Request) -> JSONResponse:
+    try:
+        return JSONResponse({"models": await asyncio.to_thread(codex_runtime.models)})
+    except CodexRuntimeError as exc:
+        code = "auth_required" if str(exc) == "auth_required" else "runtime_or_model_incompatible"
+        return JSONResponse({"error": {"code": code}}, status_code=422 if code == "auth_required" else 503)
+
+
+async def oauth_action(request: Request) -> JSONResponse:
+    if not csrf_valid(request): return JSONResponse({"error": {"code": "csrf_failed"}}, status_code=403)
+    action = request.path_params["action"]
+    try:
+        if action == "login":
+            result = await asyncio.to_thread(codex_runtime.login_start)
+            record_activity(settings.database_path, "chatgpt_login_started", "configuration", "success")
+            return JSONResponse(result)
+        if action == "cancel":
+            await asyncio.to_thread(codex_runtime.login_cancel)
+            record_activity(settings.database_path, "chatgpt_login_cancelled", "configuration", "success")
+        elif action == "logout":
+            await asyncio.to_thread(codex_runtime.logout)
+            record_activity(settings.database_path, "chatgpt_logout", "configuration", "success")
+        else:
+            return JSONResponse({"error": {"code": "not_found"}}, status_code=404)
+    except CodexRuntimeError:
+        return JSONResponse({"error": {"code": "runtime_or_model_incompatible"}}, status_code=503)
+    return JSONResponse({"status": "ok"})
+
+
 async def asset_css(_: Request) -> Response: return Response(ADMIN_CSS, media_type="text/css")
 async def asset_js(_: Request) -> Response: return Response(ADMIN_JS, media_type="application/javascript")
 async def asset_icon(_: Request) -> Response: return Response(icon_path.read_bytes(), media_type="image/png")
@@ -133,10 +175,11 @@ async def lifespan(_: Starlette):
         yield
     finally:
         if settings.surface == "admin":
+            codex_runtime.close()
             record_activity(settings.database_path, "app_stopped", "system", "success")
 
 
 common = [Route("/health/live", live), Route("/health/ready", ready)]
-admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/models", models_api, methods=["GET", "POST"]), Route("/admin/api/v1/models/{action}", model_action, methods=["POST"])]
+admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/models", models_api, methods=["GET", "POST"]), Route("/admin/api/v1/models/{action}", model_action, methods=["POST"]), Route("/admin/api/v1/oauth/account", oauth_account), Route("/admin/api/v1/oauth/models", oauth_models), Route("/admin/api/v1/oauth/{action}", oauth_action, methods=["POST"])]
 routes = common + (admin if settings.surface == "admin" else [])
 app = Starlette(routes=routes, middleware=[Middleware(SecurityHeadersMiddleware)], lifespan=lifespan)

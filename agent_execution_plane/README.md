@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane is the model reasoning and execution component of the suite. Version `0.2.0` adds Lot 1 configured-model administration and validation while retaining the accepted Lot 0 HAOS shell.
+Agent Execution Plane is the model reasoning and execution component of the suite. Version `0.3.0` extends Lot 1 with official OpenAI ChatGPT OAuth while retaining the accepted Lot 0 HAOS shell.
 
 ## Install and operate
 
@@ -11,5 +11,7 @@ The Ingress header offers visible FR/EN and light/dark controls. On first use, l
 The Activity view retains safe operational metadata for 30 days or 10,000 entries, whichever limit is reached first. It never stores prompts, results, credentials, request bodies, reasoning, or tool payloads.
 
 The Models view supports Ollama-compatible and OpenAI-compatible endpoints, deterministic priority, enable/disable, positive per-model timeouts, and encrypted optional provider credentials. OpenAI-compatible explicit validation performs a small tool-call probe that may consume provider usage. Automatic startup health never performs inference.
+
+OpenAI ChatGPT OAuth uses the exactly pinned official Codex `0.144.4` app-server and a shared device-code ChatGPT login. This family accepts no base URL or API key; Codex alone owns OAuth token persistence and refresh under `/data/private/codex-home`.
 
 Lot 1 deliberately provides no execution submission, ACP polling, execution engine, or MCP loop. See [README.fr.md](README.fr.md) for French documentation.

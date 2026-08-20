@@ -10,6 +10,8 @@ chown "${runtime_uid}:${runtime_gid}" /data
 su-exec agent-execution-plane:agent-execution-plane install -d -m 0700 /data/private
 su-exec agent-execution-plane:agent-execution-plane env PYTHONPATH=/app/src \
   python3 -c 'from pathlib import Path; from agent_execution_plane.security import load_or_create_key; load_or_create_key(Path("/data/private/provider-key"))'
+su-exec agent-execution-plane:agent-execution-plane env PYTHONPATH=/app/src \
+  python3 -c 'from pathlib import Path; from agent_execution_plane.codex_runtime import ensure_codex_home; ensure_codex_home(Path("/data/private/codex-home"))'
 
 if [ -f /data/options.json ]; then
   log_level="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("log_level", "info"))')"

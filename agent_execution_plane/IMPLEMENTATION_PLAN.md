@@ -110,6 +110,9 @@ Make Execution Plane able to configure, validate, order and monitor reasoning mo
 - per-model timeout in minutes, default 5, positive values only and no product maximum;
 - Ollama-compatible adapter;
 - OpenAI-compatible `/v1/chat/completions` adapter;
+- official `openai_chatgpt_oauth` adapter through exactly pinned `openai-codex==0.144.4` and `openai-codex-cli-bin==0.144.4` over local stdio JSONL only;
+- dedicated restrictive `/data/private/codex-home`, forced ChatGPT login and file-owned Codex credential storage with API-key environment variables removed from the child process;
+- shared ChatGPT device-code login/account/logout UI and Codex `model/list` catalogue without OAuth-token handling by AEP;
 - optional provider Bearer/API credential;
 - validate-before-save creation/edit lifecycle;
 - existing configuration preserved when candidate validation fails;
@@ -117,12 +120,13 @@ Make Execution Plane able to configure, validate, order and monitor reasoning mo
 - bounded explicit tool-call inference probe where generic OpenAI-compatible metadata cannot establish required tool support;
 - visible warning that explicit compatibility validation can consume provider usage;
 - non-inference startup/health checks only;
+- non-inference OAuth validation based only on app-server handshake, ChatGPT account state and catalogue membership;
 - `Available`, `Unavailable`, `Incompatible`, `Unverified`, `Disabled`, and `In use` UI states as applicable;
 - priority changes allowed during use at data-model level, while destructive/technical edits are lockable once engine use exists in later lots.
 
 ### Explicit anti-goals
 
-No source job execution, no MCP call loop, no autonomous provider quarantine/reordering, no automatic inference-based health polling.
+No source job execution, no MCP call loop, no Codex thread/turn, no autonomous provider quarantine/reordering, no automatic inference-based health polling and no API-key fallback for `openai_chatgpt_oauth`.
 
 ### CI evidence
 
@@ -133,6 +137,7 @@ No source job execution, no MCP call loop, no autonomous provider quarantine/reo
 - encrypted-secret/non-disclosure tests;
 - timeout and priority tests;
 - startup health behavior with unreachable providers.
+- fake Codex app-server device login/account/catalogue tests, child-environment isolation tests and a real pinned-runtime initialize/initialized smoke test without external authentication.
 
 ### HAOS acceptance
 
@@ -187,6 +192,7 @@ No ACP-specific lease semantics in the engine core, no standalone HTTP lifecycle
 - structured result success/failure;
 - configured timeout covers complete multi-turn attempt;
 - limits fail rather than silently truncate.
+- pinned OAuth runtime request capture proving ephemeral threads, `environments: []`, no native capabilities and exact dynamic-tool isolation: zero AEP tools means zero model-visible tools; N means exactly N and nothing else. Failure to prove this makes the OAuth provider execution-incompatible.
 
 ### Acceptance
 

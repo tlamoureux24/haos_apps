@@ -70,6 +70,10 @@ jobs:
           docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane test -f /data/agent_execution_plane.db
           docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane test -f /data/private/provider-key
           test "$(docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane stat -c '%a' /data/private/provider-key)" = 600
+          docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane test -f /data/private/codex-home/config.toml
+          test "$(docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane stat -c '%a' /data/private/codex-home)" = 700
+          test "$(docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane stat -c '%a' /data/private/codex-home/config.toml)" = 600
+          docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane env PYTHONPATH=/app/src python3 -c 'from pathlib import Path; from agent_execution_plane.codex_runtime import CodexRuntime; runtime=CodexRuntime(Path("/data/private/codex-home")); runtime.smoke(); runtime.close()'
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/models | jq -e '.models == []'
       - name: Record Docker executable inventory (not HAOS AppArmor enforcement)
         run: |

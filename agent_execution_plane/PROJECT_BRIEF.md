@@ -118,16 +118,19 @@ A model/provider that cannot support the required tool/function-calling behavior
 
 ## 7. Model provider scope
 
-The first release supports two provider adapter families:
+The first release supports three provider adapter families:
 
 - **Ollama-compatible** endpoints;
-- **OpenAI-compatible** endpoints.
+- generic **OpenAI-compatible** endpoints with configurable base URL and optional Bearer/API credential;
+- official **OpenAI ChatGPT OAuth** through the pinned Codex app-server runtime and a ChatGPT subscription.
 
-Multiple models may be configured across either family, including local and remote endpoints.
+Multiple models may be configured across these families, including local and remote generic endpoints. `openai_chatgpt_oauth` never accepts an OpenAI Platform API key and never falls back implicitly to API billing. Its shared ChatGPT account login is owned and persisted by the official Codex runtime in an AEP-specific private Codex home; AEP never extracts, copies, stores, returns or logs OAuth tokens.
 
 Provider-specific mechanics belong behind provider adapters rather than spreading provider branches through the execution loop.
 
 Model-provider credentials belong to Agent Execution Plane because it directly invokes the providers.
+
+For `openai_chatgpt_oauth`, the model is selected from the Codex app-server catalogue. Removing one configured OAuth model does not log out the shared ChatGPT account.
 
 ## 8. Configured models and administrator priority
 

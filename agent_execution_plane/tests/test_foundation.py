@@ -40,6 +40,18 @@ class FoundationTests(unittest.TestCase):
         self.assertEqual(entries[0]["event_code"], "app_stopped")
         self.assertEqual(entries[0]["status"], "success")
 
+    def test_generation_one_models_shape_preserves_pre_oauth_rows(self):
+        with closing(sqlite3.connect(self.database)) as db:
+            db.execute("DROP TABLE models")
+            db.execute("CREATE TABLE models (id TEXT PRIMARY KEY,display_name TEXT NOT NULL,provider_family TEXT NOT NULL CHECK(provider_family IN ('ollama_compatible','openai_compatible')),base_url TEXT NOT NULL,provider_model TEXT NOT NULL,encrypted_credential BLOB,enabled INTEGER NOT NULL,priority INTEGER NOT NULL UNIQUE,timeout_minutes REAL NOT NULL,technical_state TEXT NOT NULL,diagnostic_code TEXT,checked_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL)")
+            db.execute("INSERT INTO models VALUES('legacy','Legacy','ollama_compatible','http://localhost:11434','old',NULL,1,1,5,'available',NULL,NULL,'now','now')")
+            db.commit()
+        initialize(self.database)
+        with closing(sqlite3.connect(self.database)) as db:
+            row = db.execute("SELECT id,base_url FROM models").fetchone()
+            schema = db.execute("SELECT sql FROM sqlite_master WHERE name='models'").fetchone()[0]
+        self.assertEqual(row, ("legacy", "http://localhost:11434")); self.assertIn("openai_chatgpt_oauth", schema)
+
     def test_retention_prunes_age_and_count(self):
         old = (datetime.now(timezone.utc) - timedelta(days=31)).isoformat()
         with closing(sqlite3.connect(self.database)) as db:

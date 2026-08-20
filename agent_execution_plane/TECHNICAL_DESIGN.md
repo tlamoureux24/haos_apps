@@ -152,8 +152,8 @@ Each model stores:
 
 - internal ID;
 - administrator-visible name;
-- provider family: `ollama_compatible` or `openai_compatible`;
-- provider base URL;
+- provider family: `ollama_compatible`, `openai_compatible` or `openai_chatgpt_oauth`;
+- provider base URL for the two endpoint-based families, and `NULL` for `openai_chatgpt_oauth`;
 - provider model identifier;
 - optional provider Bearer/API credential;
 - enabled/disabled state;
@@ -164,6 +164,8 @@ Each model stores:
 A newly configured model defaults to a **5-minute timeout**. The only product-level validity rule is that the configured timeout is positive; Execution Plane imposes no caller-derived maximum.
 
 Provider credentials are encrypted at rest and are never returned by administration APIs. Editing a model keeps the existing credential unless the administrator explicitly replaces it.
+
+`openai_chatgpt_oauth` has no configurable base URL and no API-key field. Its `encrypted_credential` is always `NULL`; OAuth persistence and refresh remain exclusively owned by the official Codex runtime under `/data/private/codex-home`.
 
 ## 9. Model validation and health
 
@@ -181,11 +183,27 @@ For version one, “OpenAI-compatible” means an endpoint compatible with the w
 
 Because generic OpenAI-compatible model metadata does not reliably prove tool-call behavior, the explicit administrator-triggered creation/edit validation may perform one tiny bounded inference/tool-call probe. The UI/documentation must state that this manual validation can consume provider tokens/quota. This is not an automatic health check.
 
+### OpenAI ChatGPT OAuth
+
+The `openai_chatgpt_oauth` adapter uses the official, exactly pinned `openai-codex==0.144.4` SDK distribution and its matching `openai-codex-cli-bin==0.144.4` runtime. AEP communicates with `codex app-server` only through local stdio JSONL and exposes no Codex network listener.
+
+Codex uses the dedicated `/data/private/codex-home` with `forced_login_method = "chatgpt"` and `cli_auth_credentials_store = "file"`. The child environment explicitly sets `CODEX_HOME` and removes `OPENAI_API_KEY`, `CODEX_API_KEY` and `CODEX_ACCESS_TOKEN`. AEP uses only a bounded account/catalogue wrapper for device-code login, login cancellation, `account/read`, `account/logout` and `model/list`; it never uses `chatgptAuthTokens`, parses OAuth tokens or calls OpenAI directly with them.
+
+Explicit OAuth-model validation performs no inference. It proves a compatible app-server handshake, a ChatGPT-authenticated account and presence of the selected model in `model/list`. Automatic health uses the same non-inference operations. Authentication absence is `Unavailable/auth_required`; runtime or catalogue incompatibility is `Incompatible/runtime_or_model_incompatible`. Neither affects AEP readiness.
+
+The account UI exposes only disconnected, login pending, connected/optional plan type, or a bounded technical error. Email and other personal identifiers are neither stored nor journaled.
+
 ### Automatic health
 
 Startup/periodic health uses only non-inference endpoints where that can be done without billable model usage. No automatic prompt is sent merely to refresh a health badge. Where a provider cannot be verified for free, state becomes `Unverified` rather than triggering inference.
 
 Health never changes administrator priority or enabled/disabled state.
+
+### Future OAuth execution isolation
+
+Lot 2 may use the pinned runtime's `thread/start.dynamicTools` only after proving that it can expose exactly the source-supplied MCP surface. OAuth execution threads must be ephemeral and use `environments: []`, no root capability, native Codex MCP, skill/plugin/app, shell/exec/apply-patch, web search, image tool, sub-agent/collaboration or other native capability. No `thread/start`, turn or tool-call behavior is implemented in Lot 1.
+
+Lot 2 CI must capture the request actually sent to the provider by the pinned runtime and prove that zero AEP dynamic tools produces zero model-visible tools, while N AEP dynamic tools produces exactly those N and nothing else. If that isolation cannot be demonstrated, `openai_chatgpt_oauth` is incompatible with AEP execution rather than weakening the MCP-only invariant.
 
 ## 10. Provider adapter contract
 

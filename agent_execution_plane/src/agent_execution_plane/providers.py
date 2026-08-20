@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from agent_execution_plane.codex_runtime import CodexRuntime, CodexRuntimeError
+
 PROBE_TIMEOUT_SECONDS = 15.0
 
 
@@ -55,6 +57,19 @@ def openai_check(base_url: str, model: str, credential: str | None, explicit: bo
         return ProviderCheck("unavailable", "provider_unreachable")
 
 
-def check(family: str, base_url: str, model: str, credential: str | None, *, explicit: bool) -> ProviderCheck:
+def oauth_check(runtime: CodexRuntime, model: str) -> ProviderCheck:
+    try:
+        runtime.validate_model(model)
+        return ProviderCheck("available")
+    except CodexRuntimeError as exc:
+        code = str(exc)
+        return ProviderCheck("unavailable" if code == "auth_required" else "incompatible", code)
+
+
+def check(family: str, base_url: str | None, model: str, credential: str | None, *, explicit: bool, codex_runtime: CodexRuntime | None = None) -> ProviderCheck:
+    if family == "openai_chatgpt_oauth":
+        return oauth_check(codex_runtime, model) if codex_runtime else ProviderCheck("incompatible", "runtime_or_model_incompatible")
     adapter = ollama_check if family == "ollama_compatible" else openai_check
+    if base_url is None:
+        return ProviderCheck("incompatible", "runtime_or_model_incompatible")
     return adapter(base_url, model, credential, explicit)
