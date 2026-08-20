@@ -1,35 +1,59 @@
 # Agent Execution Plane
 
-Agent Execution Plane is the model reasoning and execution component of the suite. Version `0.4.2` contains the reviewed internal source-neutral execution engine, exact source-supplied MCP operational tool loop, model fallback boundary, and three execution-provider families. Public standalone and ACP source boundaries remain reserved for later lots.
+Agent Execution Plane `0.5.0` is a standalone-capable model reasoning and execution engine. It applies administrator model priority and the Lot 2 fallback/no-replay rules to exactly the MCP operational capability envelope supplied by the current source.
 
 ## Responsibility boundary
 
-Agent Execution Plane is an **execution plane only**. It does not own task policy, MCP connector configuration, capability selection or operational authorization.
+AEP does not own tasks, connector configuration, capability selection, authorization, scheduling, or execution history. The standalone caller supplies the objective, JSON input, one execution-scoped MCP endpoint and optional Bearer, the exact MCP tool descriptors, and an optional result schema. The caller cannot select a model. MCP `tools/list` is used only to verify the supplied descriptors and never broadens them.
 
-When Agent Control Plane is used, ACP remains the sole authority for work and operational capability governance. ACP owns upstream MCP connectors, administrator task/tool selection, virtual capability construction, effective schemas/restrictions such as `fixed_arguments_v1`, authorization and fail-closed upstream invocation.
+Provider-native planning/public-information helpers remain separate from MCP operational tools and may not access user infrastructure or AEP private state. ACP integration is not implemented in this lot.
 
-A claimed ACP job supplies an authoritative `allowed_capabilities` **MCP operational capability envelope**. AEP may verify that those capabilities are still technically present with the expected effective schemas, but it must not derive a different MCP capability set from ACP's complete MCP `tools/list` inventory.
+## Install and configure
 
-The ACP MCP surface also contains lifecycle operations used by the AEP boundary itself, such as claim, heartbeat, complete and fail. Those lifecycle tools are **not reasoning-model tools** merely because they are callable by the worker identity.
+Install the App, configure one or more models in Ingress, and map internal port `8098/tcp` to the desired host port in Home Assistant’s App **Network** section. Administration remains Ingress-only on internal port `8099`.
 
-Provider-native reasoning/information helpers are a separate category. A model/runtime may use helpers such as internal planning or public Web search when they stay inside the provider/runtime reasoning boundary and cannot operate user infrastructure, access AEP private host state, obtain connector credentials or bypass the source-authorized MCP path.
+Open the **API** view and select **Create credential**. Copy the opaque token immediately: only a PBKDF2 verifier is stored and the clear token cannot be retrieved later. **Rotate** invalidates the previous token immediately; **Revoke** disables authenticated standalone calls. The Activity journal never records either token.
 
-Conceptually:
+## Standalone API
 
-`ACP/source governance -> exact MCP operational capability envelope -> AEP reasoning/execution (+ permitted provider-native reasoning helpers) -> result -> source`
+All execution routes require `Authorization: Bearer <AEP_STANDALONE_TOKEN>`. Health routes remain public and non-sensitive.
 
-For standalone execution, the caller is the source authority and must supply the exact model-invocable MCP operational capability envelope for that execution. AEP still does not invent an authorization policy from MCP discovery.
+```bash
+curl -X POST 'http://HOME_ASSISTANT_HOST:AEP_PORT/api/v1/execute' \
+  -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' \
+  -H 'Content-Type: application/json' \
+  --data '{
+    "objective":"Read the requested metric and return a JSON report.",
+    "input":{"site":"example"},
+    "mcp":{
+      "url":"http://MCP_HOST:8000/mcp",
+      "bearer_token":"<MCP_BEARER_TOKEN>",
+      "tools":[{"name":"read_metric","description":"Read one metric","input_schema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}]
+    },
+    "result_schema":{"type":"object","properties":{"value":{}},"required":["value"]}
+  }'
+```
 
-## Install and operate
+A valid submission returns HTTP `202` with an opaque `execution_id`. Poll without releasing the slot:
 
-Add this repository to the Home Assistant App store, install **Agent Execution Plane**, then start it and open its Ingress panel. The administration listener is available only through Ingress on container port `8099`. Container port `8098` is the future standalone API surface; currently it exposes only `/health/live` and `/health/ready`. Its host port can be selected in the App Network settings or left disabled.
+```bash
+curl -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' \
+  'http://HOME_ASSISTANT_HOST:AEP_PORT/api/v1/executions/<EXECUTION_ID>'
+```
 
-The Ingress header offers visible FR/EN and light/dark controls. On first use, language follows a supported browser preference and otherwise falls back to French; theme follows the browser preference. Manual choices are stored only in browser local storage.
+After durably receiving the result, acknowledge it:
 
-The Activity view retains safe operational metadata for 30 days or 10,000 entries, whichever limit is reached first. It never stores prompts, results, credentials, request bodies, reasoning, or tool payloads.
+```bash
+curl -X POST -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' \
+  'http://HOME_ASSISTANT_HOST:AEP_PORT/api/v1/executions/<EXECUTION_ID>/ack'
+```
 
-The Models view supports Ollama-compatible and OpenAI-compatible endpoints, deterministic priority, enable/disable, positive per-model timeouts, and encrypted optional provider credentials. OpenAI-compatible explicit validation performs a small tool-call probe that may consume provider usage. Automatic startup health never performs inference.
+GET is repeatable and never frees the slot. Until ACK, another submission returns `busy_pending_result`. Active work returns `busy_active`. If delivery is deliberately abandoned, the Ingress Overview offers a confirmed, execution-ID-bound **Abandon pending result** action.
 
-OpenAI ChatGPT OAuth uses the exactly pinned official Codex `0.144.4` app-server and a shared device-code ChatGPT login. This family accepts no base URL or API key; Codex alone owns OAuth token persistence and refresh under `/data/private/codex-home`.
+## Durability and security
 
-Lot 2 deliberately provides no public execution submission or ACP polling. It adds only the source-neutral execution engine and validates that Codex-native reasoning helpers cannot become operational side channels; ACP integration itself remains a later boundary lot. See [README.fr.md](README.fr.md) for French documentation.
+The database stores only a minimal active reference or one pending outcome. Objective, input, MCP URL/Bearer, tool descriptors, arguments/results, prompts, conversation, and reasoning remain execution-scoped memory only. The final result exists only in `pending_result` until ACK/abandonment; no completed history is retained.
+
+After restart, an existing pending result is returned unchanged. A standalone execution that was active becomes `execution_interrupted` for the same ID and is never replayed. Request and final API documents are limited to 4 MiB; the Lot 2 limits of 128 capabilities/dispatches, 512 KiB arguments, and 2 MiB tool results remain in force without truncation.
+
+The UI is bilingual FR/EN, supports light/dark mode, and keeps the stable global scrollbar gutter. See [README.fr.md](README.fr.md) for French documentation and [DOCS.md](DOCS.md) for the complete API status table.

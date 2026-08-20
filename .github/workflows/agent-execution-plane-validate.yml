@@ -48,8 +48,12 @@ jobs:
           wait_ready(){ for attempt in {1..60}; do if curl -fsS http://127.0.0.1:18098/health/ready | jq -e '.status=="ready"' >/dev/null && curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/health/ready | jq -e '.status=="ready"' >/dev/null; then return; fi; sleep 1; done; return 1; }
           start; wait_ready
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/admin/api/v1/standalone)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"objective":"smoke","input":{},"mcp":{"url":"http://127.0.0.1:9/mcp","tools":[]}}' http://127.0.0.1:18098/api/v1/execute)" = 503
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18099/)" = 403
-          page="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/)"
+          curl -fsS -D "${root}/headers" -o "${root}/page" -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/
+          page="$(cat "${root}/page")"
+          csrf="$(sed -n 's/^set-cookie: aep_csrf=\([^;]*\).*/\1/ip' "${root}/headers")"; test -n "${csrf}"
           [[ "${page}" == *"Agent Execution Plane <b>v${version}</b>"* ]]
           [[ "${page}" == *'src="/api/hassio_ingress/ci/admin/assets/icon.png"'* ]]
           [[ "${page}" == *'href="#activity"'* ]]
@@ -58,6 +62,16 @@ jobs:
           [[ "${ui_js}" == *"navigator.language"* && "${ui_js}" == *"aep-language"* && "${ui_js}" == *"aep-theme"* ]]
           [[ "${ui_js}" == *"Overview"* && "${ui_js}" == *"Vue d’ensemble"* && "${ui_js}" == *"Activity"* && "${ui_js}" == *"Activité"* && "${ui_js}" == *"Application stopped"* && "${ui_js}" == *"Application arrêtée"* ]]
           [[ "${ui_css}" == *"html[data-theme=dark]"* ]]
+          credential="$(curl -fsS -X POST -H 'X-Ingress-Path: /api/hassio_ingress/ci' -H "Cookie: aep_csrf=${csrf}" -H "X-CSRF-Token: ${csrf}" http://127.0.0.1:18099/admin/api/v1/standalone/credential/create)"
+          token="$(jq -r '.token' <<<"${credential}")"; test "${#token}" -ge 40
+          standalone_state="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/standalone)"
+          jq -e '.credential_configured == true and (.token|not)' <<<"${standalone_state}" >/dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Authorization: Bearer wrong' -H 'Content-Type: application/json' --data '{"objective":"smoke","input":{},"mcp":{"url":"http://127.0.0.1:9/mcp","tools":[]}}' http://127.0.0.1:18098/api/v1/execute)" = 401
+          accepted="$(curl -fsS -X POST -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' --data '{"objective":"smoke","input":{},"mcp":{"url":"http://127.0.0.1:9/mcp","tools":[]}}' http://127.0.0.1:18098/api/v1/execute)"
+          execution_id="$(jq -r '.execution_id' <<<"${accepted}")"; test "$(jq -r '.status' <<<"${accepted}")" = accepted
+          for attempt in {1..30}; do result="$(curl -fsS -H "Authorization: Bearer ${token}" "http://127.0.0.1:18098/api/v1/executions/${execution_id}")"; [ "$(jq -r '.status' <<<"${result}")" = result_available ] && break; sleep .2; done
+          test "$(jq -r '.outcome.error_code' <<<"${result}")" = no_compatible_model
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' --data '{"objective":"blocked","input":null,"mcp":{"url":"http://127.0.0.1:9/mcp","tools":[]}}' http://127.0.0.1:18098/api/v1/execute)" = 409
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/icon.png -o /tmp/aep-icon.png
           cmp agent_execution_plane/icon.png /tmp/aep-icon.png
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' 'http://127.0.0.1:18099/admin/api/v1/activity?limit=50' | jq -e '.total >= 2 and all(.entries[]; has("event_code") and (has("objective")|not) and (has("result")|not))'
@@ -66,6 +80,10 @@ jobs:
           docker exec aep-smoke /bin/sh -c 'for process in /proc/[0-9]*; do readlink -f "${process}/exe" 2>/dev/null || true; done' > agent_execution_plane-apparmor-executables.txt
           docker stop -t 15 aep-smoke >/dev/null; docker rm aep-smoke >/dev/null
           start; wait_ready
+          recovered="$(curl -fsS -H "Authorization: Bearer ${token}" "http://127.0.0.1:18098/api/v1/executions/${execution_id}")"
+          test "${recovered}" = "${result}"
+          curl -fsS -X POST -H "Authorization: Bearer ${token}" "http://127.0.0.1:18098/api/v1/executions/${execution_id}/ack" | jq -e '.status == "acknowledged"' >/dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${token}" "http://127.0.0.1:18098/api/v1/executions/${execution_id}")" = 404
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' 'http://127.0.0.1:18099/admin/api/v1/activity?limit=50' | jq -e '.total >= 5 and any(.entries[]; .event_code == "app_stopped" and .category == "system" and .status == "success")'
           docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane test -f /data/agent_execution_plane.db
           docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane test -f /data/private/provider-key

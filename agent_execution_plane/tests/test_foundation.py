@@ -28,7 +28,20 @@ class FoundationTests(unittest.TestCase):
         with closing(sqlite3.connect(self.database)) as db:
             tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         self.assertIn("schema_info", tables); self.assertIn("activity", tables); self.assertIn("models", tables)
-        self.assertFalse(tables & {"jobs", "executions", "pending_result", "active_execution"})
+        self.assertTrue({"settings", "pending_result", "active_execution"} <= tables)
+        self.assertFalse(tables & {"jobs", "executions"})
+
+    def test_042_upgrade_is_additive_and_preserves_models_and_activity(self):
+        with closing(sqlite3.connect(self.database)) as db:
+            db.execute("DROP TABLE pending_result");db.execute("DROP TABLE active_execution");db.execute("DROP TABLE settings")
+            db.execute("INSERT INTO activity(occurred_at,event_code,category,status) VALUES('now','legacy_activity','system','success')")
+            db.execute("INSERT INTO models VALUES('legacy-model','Legacy','ollama_compatible','http://localhost:11434','reasoner',NULL,1,1,5,'available',NULL,NULL,'now','now')");db.commit()
+        initialize(self.database)
+        with closing(sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute("SELECT id,priority FROM models").fetchall(),[("legacy-model",1)])
+            self.assertEqual(db.execute("SELECT event_code FROM activity").fetchall(),[("legacy_activity",)])
+            tables={row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        self.assertTrue({"settings","active_execution","pending_result"} <= tables)
 
     def test_activity_is_safe_and_persistent(self):
         record_activity(self.database, "app_ready", "system", "success")

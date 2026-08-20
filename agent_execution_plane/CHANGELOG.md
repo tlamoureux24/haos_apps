@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Add the authenticated asynchronous standalone execution API on port 8098 using the common Lot 2 engine and exact caller-supplied MCP operational envelope.
+- Add one-time opaque credential creation/rotation, revocation, PBKDF2 verifier storage, and bilingual Ingress administration.
+- Add the atomic durable active/pending single-slot lifecycle, repeatable GET, explicit ACK, stale-safe manual abandonment, and no-replay restart recovery.
+- Preserve 0.4.2 models, priorities, activity and Codex state through an additive generation-1 schema extension.
+- Add real Streamable HTTP MCP integration, concurrency, restart, bounds and non-persistence regression coverage.
+
 ## 0.4.2
 
 - Clear the model form identity explicitly when opening creation after an edit, so multiple models sharing one ChatGPT OAuth account remain distinct.

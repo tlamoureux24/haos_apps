@@ -5,4 +5,4 @@ configuration:
 network:
   8098/tcp:
     name: Standalone API port
-    description: Host port for the standalone API; Lot 0 exposes non-sensitive health endpoints only.
+    description: Host port for the Bearer-authenticated standalone execution API; health endpoints remain public and non-sensitive.

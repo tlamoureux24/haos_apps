@@ -1,57 +1,87 @@
-# Agent Execution Plane 0.4.2
+# Agent Execution Plane 0.5.0
 
 ## Français
 
-### Rôle
+### Démarrage standalone
 
-Agent Execution Plane est uniquement le moteur de raisonnement et d’exécution. Il ne gouverne pas les tâches, les connecteurs MCP ni les capacités opérationnelles autorisées.
+1. Configurez au moins un modèle dans **Modèles**. Le caller ne choisit jamais le modèle : AEP utilise l’ordre, les timeouts et le fallback administrateur.
+2. Mappez `8098/tcp` dans la section Réseau Home Assistant.
+3. Dans **API**, créez le credential et copiez immédiatement le token affiché une seule fois. Seul un verifier PBKDF2 salé est persisté. Rotation invalide l’ancien token ; révocation désactive l’API authentifiée.
+4. Soumettez, poll, puis ACK :
 
-Lorsque Agent Control Plane est utilisé, ACP reste l’unique autorité : il possède les connecteurs MCP amont, sélectionne les outils dans les tâches, construit les capacités virtuelles et leurs schémas effectifs, applique les restrictions telles que `fixed_arguments_v1`, puis réautorise/résout chaque invocation côté ACP.
+```bash
+curl -X POST 'http://HOTE:PORT/api/v1/execute' \
+ -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' -H 'Content-Type: application/json' \
+ --data '{"objective":"Produire le rapport demandé","input":{"id":7},"mcp":{"url":"http://MCP:8000/mcp","bearer_token":"<MCP_BEARER_TOKEN>","tools":[{"name":"read_value","description":"Lire une valeur","input_schema":{"type":"object","properties":{"id":{"type":"integer"}},"required":["id"]}}]},"result_schema":{"type":"object","properties":{"value":{}},"required":["value"]}}'
+curl -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' 'http://HOTE:PORT/api/v1/executions/<EXECUTION_ID>'
+curl -X POST -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' 'http://HOTE:PORT/api/v1/executions/<EXECUTION_ID>/ack'
+```
 
-Après `jobs_claim_v1`, le champ `job.allowed_capabilities` fourni par ACP est l’enveloppe autoritaire des **capacités opérationnelles MCP** invocables par le modèle. AEP peut vérifier techniquement que ces capacités existent toujours avec le schéma attendu, mais il ne choisit jamais une autre liste à partir du `tools/list` complet du serveur ACP.
+### Contrat exact
 
-Le même serveur MCP ACP expose aussi des outils de cycle de vie utilisés uniquement par la frontière AEP, notamment claim, heartbeat, complete et fail. Ils ne sont jamais rendus visibles au modèle simplement parce que l’identité worker peut les appeler.
+`POST /api/v1/execute` accepte uniquement `objective` (chaîne non vide), `input` (toute valeur JSON, champ obligatoire), `mcp.url` HTTP(S) sans credential embarqué, `mcp.bearer_token` optionnel, `mcp.tools` obligatoire et `result_schema` optionnel. Chaque outil contient exactement `name`, `description`, `input_schema`. Aucun champ model/provider/fallback/instruction additionnelle n’est accepté.
 
-Les aides natives du provider qui servent au raisonnement ou à la recherche d’information sont séparées de l’autorisation ACP. Des fonctions comme la planification interne ou la recherche Web publique peuvent rester disponibles si elles ne permettent pas d’agir sur l’infrastructure de l’utilisateur, d’accéder à l’état privé de l’hôte AEP, d’obtenir des credentials de connecteurs ou de contourner MCP/ACP.
+Réponse : `202 {"execution_id":"…","status":"accepted"}` après réservation durable. `GET /api/v1/executions/{id}` retourne `running` ou `result_available` et ne libère rien. `POST .../{id}/ack` supprime uniquement le pending correspondant et retourne `acknowledged`.
 
-En standalone futur, le caller fournit lui-même l’enveloppe exacte des capacités opérationnelles MCP du modèle. AEP conserve exactement le même rôle : vérifier techniquement et exécuter, jamais autoriser ou sélectionner.
+| HTTP | Code JSON | Signification |
+|---:|---|---|
+| 400 | `malformed_json` | JSON illisible |
+| 401 | `unauthenticated` | Bearer absent/invalide |
+| 404 | `execution_not_found` | ID absent, acquitté ou abandonné |
+| 409 | `busy_active` | exécution active |
+| 409 | `busy_pending_result` | résultat non acquitté |
+| 409 | `result_not_available` | ACK avant résultat |
+| 413 | `body_too_large` | request > 4 Mio |
+| 422 | `invalid_execution_contract` | structure, URL, schéma ou limite invalide |
+| 503 | `credential_not_configured` | aucun credential standalone |
 
-### Utilisation actuelle
+Un échec modèle/MCP survenant après le `202` devient un outcome technique pending, jamais une erreur rétroactive du POST.
 
-Après le démarrage, ouvrez l’interface Ingress. La vue d’ensemble confirme que l’App est prête et que le moteur est inactif. La vue Activité affiche uniquement des métadonnées opérationnelles persistantes non sensibles. Les sélecteurs FR/EN et clair/sombre sont mémorisés dans le navigateur.
+### Slot, restart et confidentialité
 
-Le port hôte correspondant au port interne `8098/tcp` se règle dans la section Réseau de l’App. À ce stade, seuls `/health/live` et `/health/ready` y existent. Aucun endpoint d’exécution n’est encore disponible.
+Une seule référence `active_execution` ou un seul `pending_result` existe. Il n’y a aucune queue. Un GET peut être répété à l’identique ; l’absence d’ACK bloque volontairement toute nouvelle exécution. L’action Ingress confirmée **Abandonner le résultat en attente** inclut l’ID affiché et ne supprime rien si le pending a changé.
 
-La vue **Modèles** permet d’ajouter, valider, modifier, supprimer, activer et ordonner les modèles. Les credentials restent chiffrés et ne sont jamais retournés. La validation OpenAI-compatible peut consommer quelques tokens ; le health automatique n’en consomme aucun.
-
-La famille **OpenAI ChatGPT OAuth** utilise le flow officiel device-code du runtime Codex `0.144.4`. Elle n’accepte ni URL de base ni clé API. Le compte ChatGPT est partagé entre les modèles OAuth et ses tokens restent exclusivement dans `/data/private/codex-home` sous le contrôle de Codex.
-
-Le Lot 2 ajoute uniquement le moteur d’exécution source-neutral. Son gate OAuth doit garantir que les capacités MCP proviennent exactement de l’enveloppe source et que les aides natives Codex éventuellement présentes restent non opérationnelles vis-à-vis de l’infrastructure et de l’état privé AEP. L’intégration ACP complète, y compris claim/lease/heartbeat/result delivery, appartient au Lot 4 et doit consommer le contrat ACP existant sans recréer sa gouvernance.
+Après restart, un pending est conservé exactement. Une active standalone devient `execution_interrupted` pour le même ID sans replay. Seuls l’ID, la source et les timestamps sont persistés pendant active. Le pending contient l’outcome nécessaire à la livraison. Objectif, input, endpoint/Bearer MCP, outils, arguments/résultats MCP, conversation et raisonnement ne sont jamais persistés ou journalisés. Après ACK/abandon, aucun historique terminé ne reste.
 
 ## English
 
-### Role
+### Standalone setup
 
-Agent Execution Plane is only the reasoning and execution engine. It does not govern tasks, MCP connectors, or authorized operational capabilities.
+1. Configure at least one model in **Models**. The caller never selects it; AEP applies administrator order, timeout, and fallback.
+2. Map `8098/tcp` in Home Assistant Network settings.
+3. In **API**, create the credential and immediately copy the one-time token. Only a salted PBKDF2 verifier persists. Rotation invalidates the old token; revocation disables authenticated API calls.
+4. Submit, poll, then ACK:
 
-When Agent Control Plane is used, ACP remains the sole authority: it owns upstream MCP connectors, selects tools in tasks, constructs virtual capabilities and effective schemas, applies restrictions such as `fixed_arguments_v1`, and reauthorizes/resolves each invocation inside ACP.
+```bash
+curl -X POST 'http://HOST:PORT/api/v1/execute' \
+ -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' -H 'Content-Type: application/json' \
+ --data '{"objective":"Produce the requested report","input":{"id":7},"mcp":{"url":"http://MCP:8000/mcp","bearer_token":"<MCP_BEARER_TOKEN>","tools":[{"name":"read_value","description":"Read one value","input_schema":{"type":"object","properties":{"id":{"type":"integer"}},"required":["id"]}}]},"result_schema":{"type":"object","properties":{"value":{}},"required":["value"]}}'
+curl -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' 'http://HOST:PORT/api/v1/executions/<EXECUTION_ID>'
+curl -X POST -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' 'http://HOST:PORT/api/v1/executions/<EXECUTION_ID>/ack'
+```
 
-After `jobs_claim_v1`, ACP's `job.allowed_capabilities` field is the authoritative **MCP operational capability envelope** for the model. AEP may technically verify that those capabilities still exist with the expected schema, but it never chooses a different list from the ACP server's complete `tools/list` inventory.
+### Exact contract
 
-The same ACP MCP server also exposes lifecycle tools used only by the AEP source boundary, including claim, heartbeat, complete and fail. They are never made model-visible merely because the worker identity can call them.
+`POST /api/v1/execute` accepts only a non-empty string `objective`, required `input` containing any JSON value, HTTP(S) `mcp.url` without embedded credentials, optional `mcp.bearer_token`, required `mcp.tools`, and optional `result_schema`. Every tool contains exactly `name`, `description`, and `input_schema`. Model/provider/fallback/extra-instruction fields are rejected.
 
-Provider-native helpers used for reasoning or information retrieval are separate from ACP authorization. Facilities such as internal planning or public Web search may remain available when they cannot operate user infrastructure, access AEP private host state, obtain connector credentials, or bypass MCP/ACP.
+It returns `202 {"execution_id":"…","status":"accepted"}` only after durable reservation. `GET /api/v1/executions/{id}` returns `running` or `result_available` and never releases state. `POST .../{id}/ack` deletes only the matching pending result and returns `acknowledged`.
 
-In future standalone operation, the caller supplies the exact model MCP operational capability envelope. AEP keeps the same role: technically verify and execute, never authorize or select.
+| HTTP | JSON code | Meaning |
+|---:|---|---|
+| 400 | `malformed_json` | unreadable JSON |
+| 401 | `unauthenticated` | missing/invalid Bearer |
+| 404 | `execution_not_found` | unknown, acknowledged, or abandoned ID |
+| 409 | `busy_active` | active execution |
+| 409 | `busy_pending_result` | unacknowledged result |
+| 409 | `result_not_available` | ACK before result |
+| 413 | `body_too_large` | request over 4 MiB |
+| 422 | `invalid_execution_contract` | invalid structure, URL, schema, or bound |
+| 503 | `credential_not_configured` | no standalone credential |
 
-### Current operation
+Model/MCP failures after `202` become pending technical outcomes, never retroactive POST errors.
 
-After startup, open the Ingress UI. Overview confirms that the App is ready and the engine is idle. Activity displays only persistent, non-sensitive operational metadata. Browser-local storage remembers the FR/EN and light/dark selectors.
+### Slot, restart, and confidentiality
 
-Configure the host port mapped to internal `8098/tcp` in the App Network section. At this stage, only `/health/live` and `/health/ready` exist there. No execution endpoint is available yet.
+Only one `active_execution` or one `pending_result` exists; there is no queue. GET is repeatable, and missing ACK intentionally blocks new submissions. The confirmed Ingress **Abandon pending result** action carries the displayed ID and deletes nothing if pending state changed.
 
-The **Models** view adds, validates, edits, deletes, enables, and orders configured models. Credentials remain encrypted and are never returned. OpenAI-compatible validation may consume a few tokens; automatic health consumes none.
-
-The **OpenAI ChatGPT OAuth** family uses the official device-code flow from Codex runtime `0.144.4`. It accepts neither a base URL nor an API key. The ChatGPT account is shared by OAuth models and its tokens remain exclusively under Codex control in `/data/private/codex-home`.
-
-Lot 2 adds only the source-neutral execution engine. Its OAuth gate must prove that AEP/MCP tools come exactly from the source envelope while any remaining Codex-native helpers stay non-operational with respect to user infrastructure and AEP private state. Full ACP integration, including claim/lease/heartbeat/result delivery, belongs to Lot 4 and must consume the existing ACP contract without recreating its governance.
+Restart preserves a pending result exactly. A standalone active reference becomes `execution_interrupted` under the same ID without replay. Active persistence contains only ID/source/timestamp; pending stores only the deliverable outcome. Objective, input, MCP endpoint/Bearer/tools/arguments/results, conversation, and reasoning are never persisted or journaled. ACK/abandonment leaves no completed history.

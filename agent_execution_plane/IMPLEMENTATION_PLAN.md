@@ -1,6 +1,6 @@
 # Agent Execution Plane — Implementation Plan
 
-Status: **authoritative implementation sequence — Lots 0 and 1 accepted; Lot 2 next**.
+Status: **authoritative implementation sequence — Lots 0, 1 and 2 accepted; Lot 3 implemented in 0.5.0 and awaiting independent review, CI review, and HAOS acceptance**.
 
 This plan is derived from `PROJECT_BRIEF.md`, `TECHNICAL_DESIGN.md` and the root `ARCHITECTURE_CHARTER.md`.
 
@@ -103,7 +103,7 @@ Real HAOS acceptance proved Codex app-server execution under AppArmor, device-co
 
 ## Lot 2 — common execution engine and MCP tool loop
 
-Status: **planned — next implementation lot**.
+Status: **accepted on HAOS in 0.4.2**.
 
 ### Goal
 
@@ -320,7 +320,7 @@ Lot 2 has no public execution source, so real HAOS acceptance is limited to what
 
 ## Lot 3 — standalone API, authentication and durable result lifecycle
 
-Status: **planned**.
+Status: **implemented in 0.5.0 — awaiting independent review, CI review, installation, and HAOS acceptance**.
 
 ### Goal
 

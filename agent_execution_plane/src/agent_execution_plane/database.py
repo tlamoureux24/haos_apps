@@ -23,6 +23,7 @@ def connect(path: Path):
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA foreign_keys=ON")
+    connection.execute("PRAGMA secure_delete=ON")
     try:
         with connection:
             yield connection
@@ -68,6 +69,24 @@ def initialize(path: Path) -> None:
                     OR
                     (provider_family != 'openai_chatgpt_oauth' AND base_url IS NOT NULL)
                 )
+            );
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS active_execution (
+                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                execution_id TEXT NOT NULL UNIQUE,
+                source_kind TEXT NOT NULL CHECK (source_kind IN ('standalone','acp')),
+                started_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS pending_result (
+                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                execution_id TEXT NOT NULL UNIQUE,
+                source_kind TEXT NOT NULL CHECK (source_kind IN ('standalone','acp')),
+                outcome_json TEXT NOT NULL,
+                completed_at TEXT NOT NULL
             );
         """)
         models_sql = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='models'").fetchone()[0]

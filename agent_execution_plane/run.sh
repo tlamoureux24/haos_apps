@@ -46,7 +46,7 @@ su-exec agent-execution-plane:agent-execution-plane env AGENT_EXECUTION_PLANE_SU
   --no-access-log --log-level "${log_level}" --log-config /app/src/agent_execution_plane/uvicorn_logging.json &
 admin_pid=$!
 
-log INFO "Starting standalone API listener on 8098 (health endpoints only)"
+log INFO "Starting authenticated standalone API listener on 8098"
 su-exec agent-execution-plane:agent-execution-plane env AGENT_EXECUTION_PLANE_SURFACE=api \
   python3 -m uvicorn agent_execution_plane.main:app --host 0.0.0.0 --port 8098 \
   --no-access-log --log-level "${log_level}" --log-config /app/src/agent_execution_plane/uvicorn_logging.json &

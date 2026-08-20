@@ -120,7 +120,8 @@ class ExecutionEngine:
         finally:
             async with self._slot: self._occupied=False
 
-    def _validate_request(self, request: ExecutionRequest) -> None:
+    @staticmethod
+    def validate_request(request: ExecutionRequest) -> None:
         if len(request.capabilities)>MAX_CAPABILITIES: raise ExecutionFailure("capability_limit")
         names=[c.name for c in request.capabilities]
         if len(names)!=len(set(names)) or any(not n for n in names): raise ExecutionFailure("invalid_capability_envelope")
@@ -134,7 +135,7 @@ class ExecutionEngine:
         except (ValueError, TypeError, SchemaError): raise ExecutionFailure("invalid_schema") from None
 
     async def _execute(self, request: ExecutionRequest) -> ExecutionOutcome:
-        try: self._validate_request(request)
+        try: self.validate_request(request)
         except ExecutionFailure as exc: return ExecutionOutcome(False,error_code=exc.code)
         models=self.model_store.execution_models()
         if not models: return ExecutionOutcome(False,error_code="no_compatible_model")

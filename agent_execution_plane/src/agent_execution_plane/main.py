@@ -23,8 +23,13 @@ from agent_execution_plane import __version__
 from agent_execution_plane.admin_ui import ADMIN_CSS, ADMIN_JS
 from agent_execution_plane.codex_runtime import CodexRuntime, CodexRuntimeError
 from agent_execution_plane.database import database_ready, list_activity, record_activity
+from agent_execution_plane.execution import ExecutionEngine
+from agent_execution_plane.lifecycle import LifecycleStore
+from agent_execution_plane.mcp_client import session_factory
 from agent_execution_plane.models import Candidate, ModelStore
+from agent_execution_plane.providers import execution_adapter
 from agent_execution_plane.settings import load_settings
+from agent_execution_plane.standalone import StandaloneBoundary
 
 if os.geteuid() != 1000:
     raise RuntimeError("Agent Execution Plane listeners must run with UID 1000")
@@ -34,6 +39,9 @@ icon_path = Path(os.environ.get("AGENT_EXECUTION_PLANE_ICON_PATH", "/app/icon.pn
 csrf_token = secrets.token_urlsafe(32)
 codex_runtime = CodexRuntime(settings.data_dir / "private" / "codex-home")
 model_store = ModelStore(settings.database_path, settings.data_dir / "private", codex_runtime)
+lifecycle_store = LifecycleStore(settings.database_path)
+execution_engine = ExecutionEngine(model_store, lambda model: execution_adapter(model, codex_runtime), session_factory)
+standalone_boundary = StandaloneBoundary(lifecycle_store, execution_engine, settings.database_path)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -66,7 +74,7 @@ async def ready(_: Request) -> JSONResponse:
 async def admin_index(request: Request) -> HTMLResponse:
     prefix = request.headers.get("x-ingress-path", request.scope.get("root_path", "")).rstrip("/")
     safe = html.escape(prefix, quote=True)
-    return HTMLResponse(f'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Execution Plane</title><link rel="stylesheet" href="{safe}/admin/assets/admin.css"></head><body><main class="app" data-base="{safe}"><header class="site-header"><div class="header-main"><a class="brand" href="#overview"><img src="{safe}/admin/assets/icon.png" alt=""><span>Agent Execution Plane <b>v{__version__}</b></span></a><div class="header-actions"><button id="language" class="switch" type="button">EN</button><button id="theme" class="switch" type="button">☾</button></div></div><div class="nav-scroll"><nav class="nav" aria-label="Navigation"><a class="active" data-view="overview" href="#overview" data-i18n="overview">Vue d’ensemble</a><a data-view="activity" href="#activity" data-i18n="activity">Activité</a></nav></div></header><section id="overview" class="view active"><section class="hero"><div><h1 data-i18n="overviewTitle">Vue d’ensemble</h1><p data-i18n="overviewIntro">Consultez l’état opérationnel du moteur d’exécution.</p></div><div class="health"><i></i><span data-i18n="operational">Service opérationnel</span></div></section><section class="metrics"><article class="metric"><strong data-i18n="ready">Prête</strong><span data-i18n="appState">Application</span></article><article class="metric"><strong data-i18n="idle">Inactif</strong><span data-i18n="engineState">Moteur</span></article><article class="metric"><strong data-i18n="shell">Santé uniquement</strong><span data-i18n="apiState">API autonome</span></article></section><article class="card notice"><h2 data-i18n="lotTitle">Fondation du Lot 0</h2><p data-i18n="lotText">Aucun modèle, aucune connexion ACP et aucune exécution ne sont configurés dans ce lot.</p></article></section><section id="activity" class="view"><div class="pagehead"><h1 data-i18n="activityTitle">Activité</h1><p data-i18n="activityIntro">Journal opérationnel persistant, limité aux métadonnées non sensibles.</p></div><article class="card"><div class="tablewrap"><table><thead><tr><th data-i18n="date">Date</th><th data-i18n="event">Événement</th><th data-i18n="category">Catégorie</th><th data-i18n="status">État</th><th data-i18n="source">Source</th></tr></thead><tbody id="activity-rows"></tbody></table></div><div class="pager"><button id="previous" type="button" data-i18n="previous">Précédent</button><button id="next" type="button" data-i18n="next">Suivant</button></div></article></section></main><script src="{safe}/admin/assets/admin.js" defer></script></body></html>''')
+    return HTMLResponse(f'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Execution Plane</title><link rel="stylesheet" href="{safe}/admin/assets/admin.css"></head><body><main class="app" data-base="{safe}"><header class="site-header"><div class="header-main"><a class="brand" href="#overview"><img src="{safe}/admin/assets/icon.png" alt=""><span>Agent Execution Plane <b>v{__version__}</b></span></a><div class="header-actions"><button id="language" class="switch" type="button">EN</button><button id="theme" class="switch" type="button">☾</button></div></div><div class="nav-scroll"><nav class="nav" aria-label="Navigation"><a class="active" data-view="overview" href="#overview" data-i18n="overview">Vue d’ensemble</a><a data-view="activity" href="#activity" data-i18n="activity">Activité</a></nav></div></header><section id="overview" class="view active"><section class="hero"><div><h1 data-i18n="overviewTitle">Vue d’ensemble</h1><p data-i18n="overviewIntro">Consultez l’état opérationnel du moteur d’exécution.</p></div><div class="health"><i></i><span data-i18n="operational">Service opérationnel</span></div></section><section class="metrics"><article class="metric"><strong data-i18n="ready">Prête</strong><span data-i18n="appState">Application</span></article><article class="metric"><strong id="engine-state" data-i18n="idle">Inactif</strong><span data-i18n="engineState">Moteur</span></article><article class="metric"><strong id="api-state" data-i18n="notConfigured">Non configuré</strong><span data-i18n="apiState">API autonome</span></article></section><article id="lifecycle-detail" class="card notice"></article></section><section id="activity" class="view"><div class="pagehead"><h1 data-i18n="activityTitle">Activité</h1><p data-i18n="activityIntro">Journal opérationnel persistant, limité aux métadonnées non sensibles.</p></div><article class="card"><div class="tablewrap"><table><thead><tr><th data-i18n="date">Date</th><th data-i18n="event">Événement</th><th data-i18n="category">Catégorie</th><th data-i18n="status">État</th><th data-i18n="source">Source</th></tr></thead><tbody id="activity-rows"></tbody></table></div><div class="pager"><button id="previous" type="button" data-i18n="previous">Précédent</button><button id="next" type="button" data-i18n="next">Suivant</button></div></article></section></main><script src="{safe}/admin/assets/admin.js" defer></script></body></html>''')
 
 
 async def activity(request: Request) -> JSONResponse:
@@ -159,6 +167,35 @@ async def oauth_action(request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
+async def standalone_admin_state(_: Request) -> JSONResponse:
+    return JSONResponse({"credential_configured": lifecycle_store.credential_configured(), "lifecycle": lifecycle_store.overview()})
+
+
+async def standalone_credential_action(request: Request) -> JSONResponse:
+    if not csrf_valid(request): return JSONResponse({"error": {"code": "csrf_failed"}}, status_code=403)
+    action=request.path_params["action"]
+    try:
+        if action in {"create", "rotate"}:
+            token=await asyncio.to_thread(lifecycle_store.create_credential,rotate=action=="rotate")
+            record_activity(settings.database_path,f"standalone_credential_{'created' if action=='create' else 'rotated'}","configuration","success")
+            return JSONResponse({"status":"configured","token":token},status_code=201)
+        if action=="revoke":
+            if not await asyncio.to_thread(lifecycle_store.revoke_credential): return JSONResponse({"error":{"code":"credential_not_configured"}},status_code=404)
+            record_activity(settings.database_path,"standalone_credential_revoked","configuration","success")
+            return JSONResponse({"status":"not_configured"})
+    except ValueError as exc: return JSONResponse({"error":{"code":str(exc)}},status_code=409)
+    return JSONResponse({"error":{"code":"not_found"}},status_code=404)
+
+
+async def abandon_pending(request: Request) -> JSONResponse:
+    if not csrf_valid(request): return JSONResponse({"error": {"code": "csrf_failed"}}, status_code=403)
+    try: data=await json_body(request); execution_id=data.get("execution_id")
+    except (ValueError,OverflowError): return JSONResponse({"error":{"code":"invalid_request"}},status_code=422)
+    if not isinstance(execution_id,str) or not await asyncio.to_thread(lifecycle_store.abandon,execution_id): return JSONResponse({"error":{"code":"pending_result_changed"}},status_code=409)
+    record_activity(settings.database_path,"pending_result_abandoned","execution","success")
+    return JSONResponse({"execution_id":execution_id,"status":"abandoned"})
+
+
 async def asset_css(_: Request) -> Response: return Response(ADMIN_CSS, media_type="text/css")
 async def asset_js(_: Request) -> Response: return Response(ADMIN_JS, media_type="application/javascript")
 async def asset_icon(_: Request) -> Response: return Response(icon_path.read_bytes(), media_type="image/png")
@@ -171,15 +208,19 @@ async def lifespan(_: Starlette):
         record_activity(settings.database_path, "app_started", "system", "success")
         record_activity(settings.database_path, "app_ready", "system", "success")
         health_task = asyncio.create_task(asyncio.to_thread(model_store.refresh_health))
+    else:
+        recovered = await asyncio.to_thread(lifecycle_store.recover_interrupted)
+        if recovered: record_activity(settings.database_path,"interrupted_execution_recovered","execution","failure")
     try:
         yield
     finally:
+        codex_runtime.close()
         if settings.surface == "admin":
-            codex_runtime.close()
             record_activity(settings.database_path, "app_stopped", "system", "success")
 
 
 common = [Route("/health/live", live), Route("/health/ready", ready)]
-admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/models", models_api, methods=["GET", "POST"]), Route("/admin/api/v1/models/{action}", model_action, methods=["POST"]), Route("/admin/api/v1/oauth/account", oauth_account), Route("/admin/api/v1/oauth/models", oauth_models), Route("/admin/api/v1/oauth/{action}", oauth_action, methods=["POST"])]
-routes = common + (admin if settings.surface == "admin" else [])
+admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/models", models_api, methods=["GET", "POST"]), Route("/admin/api/v1/models/{action}", model_action, methods=["POST"]), Route("/admin/api/v1/oauth/account", oauth_account), Route("/admin/api/v1/oauth/models", oauth_models), Route("/admin/api/v1/oauth/{action}", oauth_action, methods=["POST"]), Route("/admin/api/v1/standalone",standalone_admin_state), Route("/admin/api/v1/standalone/credential/{action}",standalone_credential_action,methods=["POST"]), Route("/admin/api/v1/pending/abandon",abandon_pending,methods=["POST"])]
+api = [Route("/api/v1/execute",standalone_boundary.submit,methods=["POST"]),Route("/api/v1/executions/{execution_id}",standalone_boundary.get,methods=["GET"]),Route("/api/v1/executions/{execution_id}/ack",standalone_boundary.ack,methods=["POST"])]
+routes = common + (admin if settings.surface == "admin" else api)
 app = Starlette(routes=routes, middleware=[Middleware(SecurityHeadersMiddleware)], lifespan=lifespan)

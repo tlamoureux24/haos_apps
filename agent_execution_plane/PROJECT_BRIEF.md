@@ -1,6 +1,6 @@
 # Agent Execution Plane — Foundational Project Brief
 
-Status: **foundational product boundary — Lots 0 and 1 accepted; remaining implementation follows this brief**.
+Status: **foundational product boundary — Lots 0, 1 and 2 accepted; Lot 3 is implemented in 0.5.0 and remains subject to independent review and HAOS acceptance**.
 
 This document defines the strict product boundary and validated behavior of Agent Execution Plane throughout implementation.
 

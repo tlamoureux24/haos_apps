@@ -1,6 +1,6 @@
 name: "Agent Execution Plane"
 slug: "agent_execution_plane"
-version: "0.4.2"
+version: "0.5.0"
 description: "Model reasoning and execution engine shell"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/agent_execution_plane"
 arch:
@@ -24,7 +24,7 @@ ports:
   8098/tcp: null
 
 ports_description:
-  8098/tcp: "Standalone execution API (health only in Lot 0)"
+  8098/tcp: "Authenticated standalone execution API"
 
 options:
   log_level: "info"

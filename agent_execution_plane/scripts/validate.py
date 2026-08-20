@@ -37,9 +37,9 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
     acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "0.4.2"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    for text in ('slug: "agent_execution_plane"', 'version: "0.5.0"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "0.4.2"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "0.5.0"' not in package: raise RuntimeError("Version sources differ")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 2: raise RuntimeError("Unprivileged two-listener runtime missing")
     if launcher.count("--log-config /app/src/agent_execution_plane/uvicorn_logging.json") != 2: raise RuntimeError("Timestamped listener logging missing")
@@ -48,7 +48,7 @@ def main() -> int:
         if invariant not in main_py + ui: raise RuntimeError(f"UI invariant missing: {invariant}")
     if ".app{max-width:1840px" not in ui or ".app{max-width:1400px" in ui: raise RuntimeError("Administration layout width must match Agent Control Plane")
     if ":root{color-scheme:light;scrollbar-gutter:stable;" not in ui: raise RuntimeError("Stable root scrollbar gutter missing")
-    forbidden = ("/api/v1/execute", "jobs_claim_v1", "pending_result", "active_execution", "chatgptauthtokens")
+    forbidden = ("jobs_claim_v1", "chatgptauthtokens")
     source = "".join(p.read_text(errors="ignore") for p in (ROOT / "src").rglob("*.py"))
     for item in forbidden:
         if item in source.lower(): raise RuntimeError(f"Later-lot behavior present: {item}")
@@ -63,8 +63,12 @@ def main() -> int:
     for invariant in ("/usr/lib/python3*/site-packages/codex_cli_bin/bin/codex ix,", "/data/private/codex-home/** rwlk,"):
         if invariant not in apparmor: raise RuntimeError(f"Missing Codex AppArmor rule: {invariant}")
     if "CREATE TABLE IF NOT EXISTS models" not in (ROOT / "src/agent_execution_plane/database.py").read_text(): raise RuntimeError("Missing generation-1 models persistence")
+    for invariant in ("CREATE TABLE IF NOT EXISTS settings", "CREATE TABLE IF NOT EXISTS active_execution", "CREATE TABLE IF NOT EXISTS pending_result"):
+        if invariant not in (ROOT / "src/agent_execution_plane/database.py").read_text(): raise RuntimeError(f"Missing Lot 3 persistence: {invariant}")
     if 'data-view="models"' not in ui or "explicitWarning" not in ui or "openai_chatgpt_oauth" not in ui or "chatgptAccount" not in ui: raise RuntimeError("Missing bilingual Models administration view")
     if "form.reset();form.id.value=model?.id??''" not in ui or "data={id:f.id.value||null" not in ui: raise RuntimeError("Explicit model create/edit identity invariant missing")
+    for invariant in ("/api/v1/execute", "/api/v1/executions/{execution_id}", "StandaloneBoundary", "credential_verifier", "recover_interrupted"):
+        if invariant not in source: raise RuntimeError(f"Missing Lot 3 standalone invariant: {invariant}")
     codex = (ROOT / "src/agent_execution_plane/codex_runtime.py").read_text()
     for invariant in ('CODEX_VERSION = "0.144.4"', 'forced_login_method = "chatgpt"', 'cli_auth_credentials_store = "file"', '"OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"'):
         if invariant not in codex: raise RuntimeError(f"Missing Codex OAuth isolation invariant: {invariant}")
@@ -81,7 +85,7 @@ def main() -> int:
         if not (ROOT / name).is_file(): raise RuntimeError(f"Missing {name}")
     for invariant in ("class ExecutionRequest", "class ExecutionOutcome", "MAX_CAPABILITIES = 128", "mcp_effect_possible"):
         if invariant not in source: raise RuntimeError(f"Missing Lot 2 engine invariant: {invariant}")
-    print("Agent Execution Plane Lot 2 validation passed")
+    print("Agent Execution Plane Lots 0-3 validation passed")
     return 0
 
 

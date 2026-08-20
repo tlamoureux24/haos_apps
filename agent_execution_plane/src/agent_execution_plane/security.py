@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import os
+import base64
+import hashlib
+import hmac
+import secrets
 import tempfile
 from pathlib import Path
 
@@ -33,3 +37,27 @@ def encrypt(key: bytes, value: str) -> bytes:
 
 def decrypt(key: bytes, value: bytes | None) -> str | None:
     return Fernet(key).decrypt(value).decode() if value else None
+
+
+def generate_opaque_credential() -> str:
+    """Return 256 bits of opaque bearer entropy."""
+    return secrets.token_urlsafe(32)
+
+
+def credential_verifier(credential: str, *, salt: bytes | None = None) -> str:
+    salt = salt or secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", credential.encode(), salt, 310_000)
+    return "pbkdf2_sha256$310000$" + base64.urlsafe_b64encode(salt).decode() + "$" + base64.urlsafe_b64encode(digest).decode()
+
+
+def verify_credential(credential: str, verifier: str) -> bool:
+    try:
+        algorithm, iterations, salt_text, expected_text = verifier.split("$", 3)
+        if algorithm != "pbkdf2_sha256" or int(iterations) != 310_000:
+            return False
+        salt = base64.urlsafe_b64decode(salt_text.encode())
+        expected = base64.urlsafe_b64decode(expected_text.encode())
+        actual = hashlib.pbkdf2_hmac("sha256", credential.encode(), salt, int(iterations))
+        return hmac.compare_digest(actual, expected)
+    except (ValueError, TypeError):
+        return False

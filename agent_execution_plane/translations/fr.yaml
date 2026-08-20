@@ -5,4 +5,4 @@ configuration:
 network:
   8098/tcp:
     name: Port de l’API autonome
-    description: Port hôte de l’API autonome ; le Lot 0 expose uniquement les endpoints de santé non sensibles.
+    description: Port hôte de l’API d’exécution autonome protégée par Bearer ; les endpoints de santé restent publics et non sensibles.
