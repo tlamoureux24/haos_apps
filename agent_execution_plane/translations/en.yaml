@@ -1,0 +1,8 @@
+configuration:
+  log_level:
+    name: Log level
+    description: Controls application log verbosity; sensitive execution content is never logged.
+network:
+  8098/tcp:
+    name: Standalone API port
+    description: Host port for the standalone API; Lot 0 exposes non-sensitive health endpoints only.

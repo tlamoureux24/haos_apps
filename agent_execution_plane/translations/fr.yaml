@@ -1,0 +1,8 @@
+configuration:
+  log_level:
+    name: Niveau de journalisation
+    description: Contrôle la verbosité des journaux applicatifs ; le contenu sensible des exécutions n’est jamais journalisé.
+network:
+  8098/tcp:
+    name: Port de l’API autonome
+    description: Port hôte de l’API autonome ; le Lot 0 expose uniquement les endpoints de santé non sensibles.

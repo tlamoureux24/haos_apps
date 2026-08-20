@@ -1,0 +1,33 @@
+name: "Agent Execution Plane"
+slug: "agent_execution_plane"
+version: "0.1.0"
+description: "Model reasoning and execution engine shell"
+url: "https://github.com/tlamoureux24/haos_apps/tree/main/agent_execution_plane"
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+stage: experimental
+apparmor: true
+tmpfs: true
+backup: cold
+ingress: true
+ingress_port: 8099
+panel_icon: "mdi:robot-outline"
+panel_title: "Agent Execution Plane"
+panel_admin: true
+watchdog: "http://[HOST]:[PORT:8098]/health/ready"
+
+ports:
+  8098/tcp: null
+
+ports_description:
+  8098/tcp: "Standalone execution API (health only in Lot 0)"
+
+options:
+  log_level: "info"
+
+schema:
+  log_level: "list(debug|info|warning|error)"

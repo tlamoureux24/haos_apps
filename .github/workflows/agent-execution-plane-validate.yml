@@ -1,0 +1,82 @@
+name: Validate Agent Execution Plane App
+
+on:
+  push:
+    branches: [main]
+    paths: ["agent_execution_plane/**", ".github/workflows/agent-execution-plane-validate.yml"]
+  pull_request:
+    paths: ["agent_execution_plane/**", ".github/workflows/agent-execution-plane-validate.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate metadata, source, and tests
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --requirement agent_execution_plane/requirements.txt
+          python3 agent_execution_plane/scripts/validate.py
+          bash -n agent_execution_plane/run.sh
+          python3 -m compileall -q agent_execution_plane/src agent_execution_plane/tests
+          PYTHONPATH=agent_execution_plane/src python3 -m unittest discover -s agent_execution_plane/tests -v
+      - name: Build amd64 image with base provenance
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
+          docker pull ghcr.io/home-assistant/base:latest
+          base_reference="$(docker image inspect ghcr.io/home-assistant/base:latest --format '{{index .RepoDigests 0}}')"
+          base_digest="${base_reference##*@}"
+          test -n "${base_digest}"
+          docker build --build-arg BUILD_ARCH=amd64 --build-arg "BUILD_VERSION=${version}" --build-arg "BASE_IMAGE_DIGEST=${base_digest}" --tag "agent-execution-plane:${version}" agent_execution_plane
+          test "$(docker image inspect "agent-execution-plane:${version}" --format '{{index .Config.Labels "org.opencontainers.image.base.digest"}}')" = "${base_digest}"
+      - name: Smoke-test listeners, UI, logs, and persistence
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
+          root="${RUNNER_TEMP}/aep-smoke"; mkdir -p "${root}/data"
+          cleanup(){ docker logs aep-smoke 2>&1 || true; docker rm -f aep-smoke >/dev/null 2>&1 || true; docker network rm aep-smoke >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker network create aep-smoke >/dev/null
+          gateway="$(docker network inspect aep-smoke --format '{{(index .IPAM.Config 0).Gateway}}')"
+          start(){ docker run -d --name aep-smoke --network aep-smoke --cap-drop DAC_OVERRIDE --env "AGENT_EXECUTION_PLANE_INGRESS_PROXY_IP=${gateway}" -p 127.0.0.1:18098:8098 -p 127.0.0.1:18099:8099 -v "${root}/data:/data" "agent-execution-plane:${version}" >/dev/null; }
+          wait_ready(){ for attempt in {1..60}; do if curl -fsS http://127.0.0.1:18098/health/ready | jq -e '.status=="ready"' >/dev/null && curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/health/ready | jq -e '.status=="ready"' >/dev/null; then return; fi; sleep 1; done; return 1; }
+          start; wait_ready
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18099/)" = 403
+          page="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/)"
+          [[ "${page}" == *"Agent Execution Plane <b>v${version}</b>"* ]]
+          [[ "${page}" == *'src="/api/hassio_ingress/ci/admin/assets/icon.png"'* ]]
+          [[ "${page}" == *'href="#activity"'* ]]
+          ui_js="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/admin.js)"
+          ui_css="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/admin.css)"
+          [[ "${ui_js}" == *"navigator.language"* && "${ui_js}" == *"aep-language"* && "${ui_js}" == *"aep-theme"* ]]
+          [[ "${ui_js}" == *"Overview"* && "${ui_js}" == *"Vue d’ensemble"* && "${ui_js}" == *"Activity"* && "${ui_js}" == *"Activité"* ]]
+          [[ "${ui_css}" == *"html[data-theme=dark]"* ]]
+          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/icon.png -o /tmp/aep-icon.png
+          cmp agent_execution_plane/icon.png /tmp/aep-icon.png
+          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' 'http://127.0.0.1:18099/admin/api/v1/activity?limit=50' | jq -e '.total >= 2 and all(.entries[]; has("event_code") and (has("objective")|not) and (has("result")|not))'
+          docker logs aep-smoke 2>&1 | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([+-][0-9]{2}:?[0-9]{2}|Z) \[Agent Execution Plane\] (INFO|ERROR):'
+          docker exec aep-smoke /bin/sh -c 'for process in /proc/[0-9]*; do readlink -f "${process}/exe" 2>/dev/null || true; done' > agent_execution_plane-apparmor-executables.txt
+          docker stop -t 15 aep-smoke >/dev/null; docker rm aep-smoke >/dev/null
+          start; wait_ready
+          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' 'http://127.0.0.1:18099/admin/api/v1/activity?limit=50' | jq -e '.total >= 4'
+          docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane test -f /data/agent_execution_plane.db
+      - name: Record initial AppArmor executable inventory
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
+          docker run --rm --entrypoint /bin/sh "agent-execution-plane:${version}" -c 'find /command /package -type f -perm /111 -print 2>/dev/null' >> agent_execution_plane-apparmor-executables.txt
+          sort -u -o agent_execution_plane-apparmor-executables.txt agent_execution_plane-apparmor-executables.txt
+          test -s agent_execution_plane-apparmor-executables.txt
+      - uses: actions/upload-artifact@v6
+        with:
+          name: agent-execution-plane-apparmor-executables
+          path: agent_execution_plane-apparmor-executables.txt
+          if-no-files-found: error
+          retention-days: 7
