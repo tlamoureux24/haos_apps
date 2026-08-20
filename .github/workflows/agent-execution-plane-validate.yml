@@ -61,7 +61,8 @@ jobs:
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/icon.png -o /tmp/aep-icon.png
           cmp agent_execution_plane/icon.png /tmp/aep-icon.png
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' 'http://127.0.0.1:18099/admin/api/v1/activity?limit=50' | jq -e '.total >= 2 and all(.entries[]; has("event_code") and (has("objective")|not) and (has("result")|not))'
-          docker logs aep-smoke 2>&1 | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([+-][0-9]{2}:?[0-9]{2}|Z) \[Agent Execution Plane\] (INFO|ERROR):'
+          docker logs aep-smoke > /tmp/aep-container.log 2>&1
+          grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([+-][0-9]{2}:?[0-9]{2}|Z) \[Agent Execution Plane\] (INFO|ERROR):' /tmp/aep-container.log
           docker exec aep-smoke /bin/sh -c 'for process in /proc/[0-9]*; do readlink -f "${process}/exe" 2>/dev/null || true; done' > agent_execution_plane-apparmor-executables.txt
           docker stop -t 15 aep-smoke >/dev/null; docker rm aep-smoke >/dev/null
           start; wait_ready
