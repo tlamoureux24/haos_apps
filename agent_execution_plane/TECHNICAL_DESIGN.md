@@ -1,6 +1,6 @@
 # Agent Execution Plane — Technical Design
 
-Status: **technical design fixed for implementation planning**.
+Status: **technical design fixed for implementation**.
 
 This document translates the validated product behavior in `PROJECT_BRIEF.md` into a concrete implementation design. It does not create new product responsibilities. If an implementation detail conflicts with the project brief or the root architecture charter, the narrower Execution Plane product boundary wins and the conflicting detail must be corrected.
 
@@ -8,11 +8,13 @@ This document translates the validated product behavior in `PROJECT_BRIEF.md` in
 
 Agent Execution Plane remains one small execution engine:
 
-`source -> execution engine -> configured model + supplied MCP tools -> result -> source`
+`source -> execution engine -> configured model + source-supplied MCP capability envelope -> result -> source`
 
 There is one execution path. Agent Control Plane and the standalone API are thin boundary adapters around that same path; they are not separate modes with separate reasoning semantics.
 
-The implementation must remain understandable without introducing a generic WorkSource framework, workflow engine, scheduler, task database or capability catalogue.
+The implementation must remain understandable without introducing a generic WorkSource framework, workflow engine, scheduler, task database, connector catalogue or authorization policy engine.
+
+The source defines the execution contract. AEP applies it. In particular, AEP never derives authorization from MCP discovery and never replaces the source-supplied model capability envelope with a capability set of its own.
 
 ## 2. Runtime and dependency baseline
 
@@ -68,9 +70,13 @@ Both boundaries translate their input into one small internal `ExecutionRequest`
 - source-provided JSON input;
 - MCP endpoint information required for this execution;
 - optional MCP Bearer credential;
-- exact authorized MCP tool descriptors for this execution;
+- the exact **source-supplied model-invocable MCP capability envelope** for this execution;
 - optional caller-provided result JSON schema;
 - source lifecycle guard where one exists, such as the ACP lease.
+
+The capability envelope is data supplied by the source boundary. It is not calculated by the execution core.
+
+For ACP, it is populated directly from the claimed job's `allowed_capabilities`. For standalone, it is populated directly from the request contract. The common engine never queries a broader inventory and makes a policy decision about what subset should be model-visible.
 
 This value is an internal data structure, not a generic plugin framework or public orchestration abstraction.
 
@@ -96,14 +102,38 @@ ACP polling and standalone submission both acquire the same slot. A standalone s
 
 Execution Plane stores an administrator-configured ACP MCP endpoint and the reversible protected Bearer credential for one ACP worker identity.
 
-While the slot is free and at least one enabled compatible model exists, the boundary polls `jobs_claim_v1` every second. A claim is translated directly into the common execution request using ACP's source-provided objective/input, allowed capability surface and required report schema.
+While the slot is free and at least one enabled compatible model exists, the boundary polls `jobs_claim_v1` every second. A successful claim is translated directly into the common execution request using:
+
+- ACP's objective;
+- ACP's input;
+- ACP's `allowed_capabilities` exactly as returned by the claimed job;
+- ACP's required report schema;
+- the source lifecycle/lease material required only by this boundary.
 
 The same ACP Streamable HTTP MCP surface is used for:
 
 - claim;
 - heartbeat;
-- exact governed tools for the claimed job;
+- virtual task capability calls for the claimed job;
 - completion/failure delivery.
+
+The ACP MCP server can expose both source-boundary lifecycle tools and virtual task capabilities on the same authenticated surface. Those categories must remain separated inside AEP:
+
+- `jobs_claim_v1`, `jobs_heartbeat_v1`, `jobs_complete_v1`, `jobs_fail_v1` and other source-boundary operations are called only by the ACP boundary;
+- only capabilities named in the claimed job's `allowed_capabilities` can enter the model-invocable envelope;
+- a lifecycle tool appearing in `tools/list` must never become model-visible merely because the worker identity is authorized to call it.
+
+ACP remains the sole authority for:
+
+- connector configuration and credentials;
+- connector inventory discovery;
+- task/tool selection;
+- virtual tool naming;
+- effective input schemas;
+- `fixed_arguments_v1` and other ACP-owned restrictions;
+- authorization and fail-closed capability resolution at invocation time.
+
+AEP does not duplicate or reinterpret any of those mechanics.
 
 ACP lease values remain ACP policy. Execution Plane tracks and respects the lease but never derives its model timeout from ACP's lease duration.
 
@@ -115,14 +145,16 @@ Versioned API routes are:
 - `GET /api/v1/executions/{execution_id}`;
 - `POST /api/v1/executions/{execution_id}/ack`.
 
-`POST /execute` accepts the same functional material supplied by ACP:
+`POST /execute` accepts:
 
 - `objective`;
 - `input` as any valid JSON value;
 - `mcp.url`;
 - optional `mcp.bearer_token`;
-- exact `mcp.tools` descriptors;
+- exact `mcp.tools` descriptors defining the caller's model-invocable capability envelope;
 - optional `result_schema`.
+
+The standalone caller is the source authority for that execution. AEP does not turn a broader MCP server inventory into an authorization policy. It only verifies and executes the exact envelope supplied by the caller.
 
 The caller never selects a model.
 
@@ -199,24 +231,35 @@ Startup/periodic health uses only non-inference endpoints where that can be done
 
 Health never changes administrator priority or enabled/disabled state.
 
-### Future OAuth execution isolation
+### OAuth execution isolation
 
-Lot 2 may use the pinned runtime's `thread/start.dynamicTools` only after proving that it can expose exactly the source-supplied MCP surface. OAuth execution threads must be ephemeral and use `environments: []`, no root capability, native Codex MCP, skill/plugin/app, shell/exec/apply-patch, web search, image tool, sub-agent/collaboration or other native capability. No `thread/start`, turn or tool-call behavior is implemented in Lot 1.
+Lot 2 may use the pinned runtime's `thread/start.dynamicTools` only after proving that it can expose exactly the **source-supplied model-invocable envelope** after provider-transport mapping and nothing else.
 
-Lot 2 CI must capture the request actually sent to the provider by the pinned runtime and prove that zero AEP dynamic tools produces zero model-visible tools, while N AEP dynamic tools produces exactly those N and nothing else. If that isolation cannot be demonstrated, `openai_chatgpt_oauth` is incompatible with AEP execution rather than weakening the MCP-only invariant.
+OAuth execution threads must be ephemeral and use `environments: []`, no root capability, native Codex MCP, skill/plugin/app, shell/exec/apply-patch, web search, image tool, sub-agent/collaboration or other native capability.
+
+The proof must capture the request actually sent to the provider by the pinned runtime and establish both:
+
+- an empty source capability envelope produces zero model-visible tools;
+- an envelope containing N capabilities produces exactly those N capabilities after deterministic one-to-one transport mapping, with no native Codex capability added.
+
+This proof is independent of the MCP server's complete tool inventory. The authoritative input is the source envelope, not everything returned by `tools/list`.
+
+If that isolation cannot be demonstrated, `openai_chatgpt_oauth` is incompatible with AEP execution rather than weakening the MCP-only invariant.
 
 ## 10. Provider adapter contract
 
 The execution engine knows only a small provider adapter contract capable of:
 
 - validating configuration;
-- sending the current conversation plus exact tool descriptors;
+- sending the current conversation plus the exact frozen model capability descriptors;
 - receiving either final assistant content or provider tool calls;
 - attaching tool results to the next provider turn;
 - requesting structured output from a caller-provided schema when supported;
 - returning bounded usage/diagnostic metadata.
 
-Provider adapters normalize protocol shapes but do not add business instructions.
+Provider adapters normalize protocol shapes but do not add business instructions and do not select capabilities.
+
+If a provider imposes naming constraints incompatible with an MCP tool name, the adapter may use a deterministic collision-safe **one-to-one transport alias**. Such an alias must map reversibly to exactly one source capability and must not change its description, input schema or authorization meaning.
 
 Provider streaming is not required in version one. Non-streaming calls keep the state machine and timeout handling deterministic.
 
@@ -226,31 +269,60 @@ The model's configured timeout wraps the **entire model attempt**, including all
 
 Execution Plane does not create a hidden business/system prompt.
 
-The source objective and source input are transmitted deterministically as source material. Tool definitions are supplied through the provider's tool/function-calling field. A source-provided result schema is supplied through the provider's structured-output mechanism where available and is always validated locally before delivery.
+The source objective and source input are transmitted deterministically as source material. Tool definitions come only from the frozen source-supplied capability envelope and are supplied through the provider's tool/function-calling field. A source-provided result schema is supplied through the provider's structured-output mechanism where available and is always validated locally before delivery.
+
+Source-boundary lifecycle tools, unrelated MCP inventory entries and provider-native capabilities are not model context.
 
 Provider-specific wrappers needed to serialize the same objective/input are formatting only and must not infer additional goals, policy or context.
 
+For Codex app-server execution, `instructionSources` must be empty and no workspace/project/AGENTS/skill content may be injected into the execution. Provider/runtime system instructions that cannot be removed must be proven not to add a new business objective, local project context or model-invocable capability.
+
 Provider reasoning/thinking fields are neither persisted nor logged.
 
-## 12. MCP client mechanics and fail-closed capability handling
+## 12. MCP client mechanics and capability-envelope consistency
 
 Version one supports MCP **Streamable HTTP** for model-invocable capabilities.
 
-For each execution, Execution Plane:
+For each execution, Execution Plane receives a frozen capability envelope from the source before the model runs.
 
-1. initializes one MCP client session to the supplied endpoint;
-2. retrieves the tool inventory with paginated `tools/list` as required;
-3. verifies that every caller-authorized tool exists and that the effective input schema matches the source-supplied descriptor expected for the execution;
-4. exposes only that exact verified subset to the model;
-5. validates model-produced arguments locally against the authorized input schema before dispatch;
-6. invokes tools only through `tools/call`;
-7. closes the execution MCP session when the execution ends.
+For each capability in that envelope, AEP performs only **technical consistency validation** against the supplied MCP session:
 
-Unlisted tools discovered from the MCP server are ignored and never shown to the model.
+1. initialize one MCP client session to the supplied endpoint;
+2. retrieve the tool inventory with paginated `tools/list` as required;
+3. locate each source-supplied capability by its exact MCP name;
+4. confirm that the effective input schema matches the source-supplied descriptor;
+5. freeze the validated source envelope for the model attempt/execution;
+6. expose only that frozen source envelope to the provider/model;
+7. validate model-produced arguments locally against the same source-supplied effective schema;
+8. invoke only through `tools/call` using the exact MCP tool name after reversing any provider-only transport alias;
+9. close the execution MCP session when the execution ends.
 
-A capability mismatch fails closed. Execution Plane never silently substitutes a changed schema or broadens the list.
+This mechanism does **not** authorize capabilities. It only verifies that the source contract can still be executed against the MCP surface it references.
 
-## 13. Side-effect boundary and fallback
+Tools returned by `tools/list` that are absent from the source envelope are not model tools. AEP does not classify them, authorize them, deny them semantically or use them to construct a replacement envelope. They remain outside the current execution contract.
+
+For ACP this distinction is mandatory because the same MCP server also exposes AEP boundary lifecycle tools. Those tools may be callable by the worker identity yet must remain invisible to the reasoning model unless ACP explicitly placed them in `allowed_capabilities` (the reference ACP contract does not do so).
+
+A missing source capability or effective-schema mismatch fails closed as a factual technical contract inconsistency. Execution Plane never silently substitutes a changed schema or broadens/narrows the source envelope.
+
+If an MCP `tools/list_changed` notification occurs during an execution, AEP must not silently refresh the model-visible capability set. It may revalidate the already-frozen envelope before a subsequent dispatch when needed; if the source contract can no longer be proven applicable, execution fails closed. New capabilities are never added mid-execution.
+
+## 13. Tool-call technical validation
+
+When the model requests a tool:
+
+1. resolve any provider-only transport alias back to the exact source capability;
+2. require that capability to exist in the frozen source envelope;
+3. require valid JSON arguments;
+4. validate arguments locally against the frozen effective input schema;
+5. enforce argument and dispatch-count bounds;
+6. only then issue MCP `tools/call`.
+
+Unknown tool or invalid arguments result in a bounded technical failure with **zero MCP dispatch**.
+
+AEP does not judge whether an argument is operationally safe, semantically authorized or desirable. In ACP mode those decisions and any server-side fixed argument injection remain ACP responsibilities. AEP validates only the technical contract it was supplied.
+
+## 14. Side-effect boundary and fallback
 
 The no-replay boundary is conservative.
 
@@ -263,9 +335,9 @@ Consequences:
 - once any MCP call has been dispatched, no automatic model fallback is allowed;
 - an MCP transport/protocol/tool failure terminates the execution factually rather than trying another model, because switching models does not repair the MCP dependency and may cause replay ambiguity.
 
-Every fallback starts from the original source request and capability surface. No failed-model conversation or reasoning is carried forward.
+Every fallback starts from the original source request and the original frozen capability envelope. No failed-model conversation or reasoning is carried forward.
 
-## 14. Result schema handling
+## 15. Result schema handling
 
 If the source supplies no result schema, the final model text/JSON result is returned as produced within transport bounds.
 
@@ -279,7 +351,7 @@ If the source supplies a JSON schema:
 
 Execution Plane does not judge whether a schema-valid result is semantically “good”.
 
-## 15. Technical bounds
+## 16. Technical bounds
 
 Bounds exist to prevent accidental or hostile unbounded memory/tool loops without turning the App into a business policy engine.
 
@@ -287,7 +359,7 @@ Version-one defaults:
 
 - standalone request body: 4 MiB maximum;
 - final API/result body: 4 MiB maximum;
-- maximum authorized MCP tools in one execution: 128;
+- maximum source-supplied model-invocable MCP capabilities in one execution: 128;
 - maximum MCP tool dispatches in one model attempt: 128;
 - maximum individual tool argument document: 512 KiB;
 - maximum individual MCP tool result accepted into model context: 2 MiB;
@@ -295,9 +367,9 @@ Version-one defaults:
 
 Crossing a bound is a technical failure; content is not silently truncated because truncation could change meaning.
 
-These are implementation safety bounds, not ACP-derived limits.
+These are AEP implementation safety bounds, not ACP authorization limits. If a source supplies an envelope beyond AEP's documented technical capacity, AEP rejects the execution rather than selecting a smaller subset.
 
-## 16. Persistence schema and secret handling
+## 17. Persistence schema and secret handling
 
 SQLite is used because durable state is small, local and transactional.
 
@@ -313,17 +385,17 @@ Small App settings plus encrypted ACP worker credential and ACP endpoint configu
 
 ### `active_execution`
 
-At most one row containing only the source kind, execution/source reference, start metadata and the minimum protected source lifecycle material needed to report an interruption after restart. It does not contain the full model conversation or a durable copy of the source payload.
+At most one row containing only the source kind, execution/source reference, start metadata and the minimum protected source lifecycle material needed to report an interruption after restart. It does not contain the full model conversation, a connector catalogue or a durable copy of ACP governance state.
 
 ### `pending_result`
 
 At most one row containing the final result/technical outcome plus the minimum source delivery information required until explicit acceptance/acknowledgement.
 
-A separate random encryption key lives under `/data/private` with restrictive file permissions and AppArmor rules. Standalone API credentials remain one-way verifiers; reversible encryption is used only for secrets the App must later send outward, such as model and ACP credentials.
+A separate random encryption key lives under `/data/private` with restrictive file permissions and AppArmor rules. Standalone API credentials remain one-way verifiers; reversible encryption is used only for secrets the App must later send outward, such as model and ACP boundary credentials.
 
 No completed execution history is kept in SQLite.
 
-## 17. Restart recovery
+## 18. Restart recovery
 
 Startup recovery is deterministic.
 
@@ -340,7 +412,7 @@ Never rerun it.
 
 This prevents silent replay while keeping the single-slot invariant understandable after a crash.
 
-## 18. ACP lease handling
+## 19. ACP lease handling
 
 ACP heartbeat runs only while an ACP execution is active and while the lease remains valid.
 
@@ -354,7 +426,7 @@ Once validity can no longer be guaranteed:
 
 The ACP lease is never used as a maximum allowed configured model timeout.
 
-## 19. Pending result delivery
+## 20. Pending result delivery
 
 ### ACP
 
@@ -368,7 +440,7 @@ The result remains available through `GET` until explicit `POST .../ack`. Only a
 
 Both boundaries expose the confirmed Ingress action **Abandon pending result** as the exceptional manual escape hatch.
 
-## 20. Administration UI
+## 21. Administration UI
 
 The Ingress UI reuses Agent Control Plane's visual language rather than creating a second design system.
 
@@ -384,12 +456,12 @@ Initial functional views remain small:
 
 - **Overview**: engine state, source/API state, current execution, pending result and dependency diagnostics;
 - **Models**: add/test/edit/delete, enabled state, priority ordering and per-model timeout;
-- **Connections / API**: ACP endpoint/credential management and standalone API credential create/rotate/revoke state;
+- **Connections / API**: ACP endpoint/worker credential management and standalone API credential create/rotate/revoke state;
 - **Diagnostics**: bounded operational information useful for troubleshooting, without a historical job/audit product.
 
-No page becomes a task editor, connector catalogue or execution-history database.
+No page becomes a task editor, connector catalogue, capability selector, authorization editor or execution-history database.
 
-## 21. Logging and redaction
+## 22. Logging and redaction
 
 Logs are operational, bounded and non-semantic.
 
@@ -400,6 +472,7 @@ Allowed examples include:
 - model/provider name and state transitions;
 - source kind/execution ID;
 - phase transitions and durations;
+- MCP tool **name** for dispatch/completion/failure metadata;
 - bounded provider/MCP error codes;
 - result delivery/acknowledgement state.
 
@@ -410,11 +483,12 @@ Never log:
 - tool arguments or tool results;
 - final result bodies;
 - model reasoning/thinking content;
-- standalone Bearer tokens.
+- standalone Bearer tokens;
+- ACP connector endpoint/credential material or hidden fixed arguments.
 
 Administration diagnostics follow the same redaction rules.
 
-## 22. AppArmor and process boundary
+## 23. AppArmor and process boundary
 
 The App has its own `agent_execution_plane` AppArmor profile.
 
@@ -422,49 +496,56 @@ The policy is derived from the executable/runtime inventory of this App, not cop
 
 - the base/s6 startup executables actually required;
 - Python/runtime libraries and read-only App code;
+- the pinned Codex runtime executable needed by the OAuth provider;
 - required outbound IPv4/IPv6 stream networking;
 - writes to `/data`, tightly scoped `/data/private`, `/run` and temporary runtime paths;
 - the minimum startup capabilities required to prepare data ownership and drop to the unprivileged runtime user.
 
-No shell, SSH client, browser runtime, Docker socket, Home Assistant API privilege or host filesystem access is granted unless later implementation evidence proves it is actually required for Execution Plane's own responsibility.
+No shell, SSH client, browser runtime, Docker socket, Home Assistant API privilege or host filesystem access is granted unless later implementation evidence proves it is actually required for Execution Plane's own responsibility. Capability-governance convenience is never a valid reason to broaden AEP AppArmor.
 
 CI records executable inventory and HAOS acceptance verifies startup, normal operation, shutdown and restart under the enforced profile.
 
-## 23. Documentation
+## 24. Documentation
 
 Before release, repository documentation includes complete English and French coverage for:
 
 - purpose and architecture boundary;
+- explicit ACP/AEP responsibility separation;
 - HAOS installation and Network port configuration;
 - Ingress UI;
-- model configuration for both provider families;
-- ACP integration;
+- model configuration for all provider families;
+- ACP integration, including `allowed_capabilities` as the authoritative model capability envelope and ACP lifecycle tools as AEP-boundary-only operations;
 - standalone API authentication and exact request/result/ack lifecycle;
-- MCP tool descriptor contract;
+- standalone source-supplied MCP capability-envelope contract;
 - persistence/restart behavior;
 - security/redaction/AppArmor boundaries;
 - troubleshooting and known compatibility requirements.
 
 The standalone API examples are directly usable and make clear that `GET` does not free the slot; `ack` does.
 
-## 24. CI and acceptance strategy
+## 25. CI and acceptance strategy
 
 CI must prove mechanics without requiring real paid providers:
 
 - unit tests for persistence, state transitions, auth, priority/fallback and bounds;
 - fake Ollama-compatible and OpenAI-compatible HTTP providers including tool calls, errors and structured output;
-- fake Streamable HTTP MCP servers, including inventory drift and side-effect-boundary failures;
+- fake Streamable HTTP MCP servers containing both source-envelope tools and unrelated/lifecycle-like tools;
+- proof that only the source-supplied envelope reaches the model;
+- proof that an empty source envelope stays empty despite a non-empty MCP inventory;
+- missing/schema-mismatched source capability failures;
 - standalone API end-to-end tests;
-- ACP contract integration tests against the actual ACP contract surface or a contract-faithful fixture;
+- ACP contract integration tests against the actual ACP contract surface or a contract-faithful fixture, including `allowed_capabilities` and lifecycle/tool separation;
 - restart recovery tests for active and pending states;
 - container build/smoke tests;
 - AppArmor executable-inventory validation;
 - secret/redaction tests;
 - bilingual/theme/version UI smoke assertions.
 
+For `openai_chatgpt_oauth`, CI additionally captures the actual provider request produced by Codex 0.144.4 and proves that only the frozen source envelope is model-visible, with no native Codex tools or project/workspace instruction sources.
+
 Real HAOS acceptance remains mandatory after each implementation lot reaches CI-conformant state.
 
-## 25. Production-data cutoff
+## 26. Production-data cutoff
 
 Development data is considered disposable only until the first release is explicitly accepted as the production baseline on the user's HAOS installation.
 
