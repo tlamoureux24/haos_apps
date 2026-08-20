@@ -4,19 +4,21 @@ Agent Execution Plane est le composant de raisonnement et d’exécution de mod�
 
 ## Frontière de responsabilité
 
-Agent Execution Plane est **uniquement un plan d’exécution**. Il ne possède ni la politique de tâche, ni la configuration des connecteurs MCP, ni la sélection des capacités, ni l’autorisation opérationnelle.
+Agent Execution Plane est **uniquement un plan d’exécution**. Il ne possède ni la politique de tâche, ni la configuration des connecteurs MCP, ni la sélection des capacités opérationnelles, ni l’autorisation opérationnelle.
 
-Lorsque Agent Control Plane est utilisé, ACP reste l’unique autorité pour la gouvernance du travail et des capacités. ACP possède les connecteurs MCP amont, la sélection administrateur des outils de tâche, la construction des capacités virtuelles, les schémas effectifs et restrictions comme `fixed_arguments_v1`, l’autorisation et la résolution fail-closed jusqu’à l’appel amont.
+Lorsque Agent Control Plane est utilisé, ACP reste l’unique autorité pour la gouvernance du travail et des capacités opérationnelles. ACP possède les connecteurs MCP amont, la sélection administrateur des outils de tâche, la construction des capacités virtuelles, les schémas effectifs et restrictions comme `fixed_arguments_v1`, l’autorisation et la résolution fail-closed jusqu’à l’appel amont.
 
-Un job ACP réclamé fournit une enveloppe `allowed_capabilities` autoritaire. AEP peut vérifier que ces capacités sont toujours techniquement présentes avec les schémas effectifs attendus, mais il ne doit jamais dériver une autre liste de capacités à partir de l’inventaire MCP complet retourné par `tools/list`.
+Un job ACP réclamé fournit une enveloppe `allowed_capabilities` autoritaire pour les **capacités opérationnelles MCP**. AEP peut vérifier que ces capacités sont toujours techniquement présentes avec les schémas effectifs attendus, mais il ne doit jamais dériver une autre liste de capacités MCP à partir de l’inventaire complet retourné par `tools/list`.
 
 La surface MCP d’ACP contient aussi des opérations de cycle de vie utilisées par la frontière AEP elle-même, par exemple claim, heartbeat, complete et fail. Ces outils de cycle de vie **ne sont pas des outils du modèle de raisonnement** simplement parce que l’identité worker peut les appeler.
 
+Les aides natives du provider dédiées au raisonnement ou à l’information constituent une catégorie séparée. Le modèle/runtime peut utiliser des aides comme la planification interne ou la recherche Web publique tant qu’elles restent dans le domaine de raisonnement du provider et ne permettent pas d’agir sur l’infrastructure de l’utilisateur, d’accéder à l’état privé de l’hôte AEP, d’obtenir des credentials de connecteurs ou de contourner le chemin MCP autorisé par la source.
+
 Conceptuellement :
 
-`gouvernance ACP/source -> enveloppe exacte des capacités modèle -> raisonnement/exécution AEP -> résultat -> source`
+`gouvernance ACP/source -> enveloppe exacte des capacités opérationnelles MCP -> raisonnement/exécution AEP (+ aides natives provider autorisées) -> résultat -> source`
 
-En mode standalone, le caller est l’autorité source et doit fournir l’enveloppe MCP exacte qui sera invocable par le modèle pour cette exécution. AEP ne construit toujours pas de politique d’autorisation à partir de la découverte MCP.
+En mode standalone, le caller est l’autorité source et doit fournir l’enveloppe MCP opérationnelle exacte qui sera invocable par le modèle pour cette exécution. AEP ne construit toujours pas de politique d’autorisation à partir de la découverte MCP.
 
 ## Installation et utilisation
 
@@ -30,4 +32,4 @@ La vue Modèles gère les endpoints Ollama-compatible et OpenAI-compatible, la p
 
 OpenAI ChatGPT OAuth utilise l’app-server Codex officiel exactement pinné en `0.144.4` et une connexion ChatGPT device-code partagée. Cette famille n’accepte ni URL de base ni clé API ; Codex reste seul propriétaire de la persistance et du refresh OAuth sous `/data/private/codex-home`.
 
-Le Lot 1 ne fournit volontairement aucune soumission d’exécution, polling ACP, moteur d’exécution ou boucle MCP. Le Lot 2 ajoute uniquement le moteur d’exécution source-neutral ; l’intégration ACP elle-même reste un lot de frontière ultérieur. See [README.md](README.md) for English documentation.
+Le Lot 1 ne fournit volontairement aucune soumission d’exécution, polling ACP, moteur d’exécution ou boucle MCP. Le Lot 2 ajoute uniquement le moteur d’exécution source-neutral et vérifie que les aides natives Codex ne peuvent pas devenir des chemins opérationnels parallèles ; l’intégration ACP elle-même reste un lot de frontière ultérieur. See [README.md](README.md) for English documentation.
