@@ -8,13 +8,15 @@ This document translates the validated product behavior in `PROJECT_BRIEF.md` in
 
 Agent Execution Plane remains one small execution engine:
 
-`source -> execution engine -> configured model + source-supplied MCP capability envelope -> result -> source`
+`source -> execution engine -> configured model + source-supplied MCP operational capability envelope + permitted provider-native reasoning helpers -> result -> source`
 
 There is one execution path. Agent Control Plane and the standalone API are thin boundary adapters around that same path; they are not separate modes with separate reasoning semantics.
 
 The implementation must remain understandable without introducing a generic WorkSource framework, workflow engine, scheduler, task database, connector catalogue or authorization policy engine.
 
-The source defines the execution contract. AEP applies it. In particular, AEP never derives authorization from MCP discovery and never replaces the source-supplied model capability envelope with a capability set of its own.
+The source defines the execution contract. AEP applies it. In particular, AEP never derives authorization from MCP discovery and never replaces the source-supplied MCP operational capability envelope with a capability set of its own.
+
+Provider-native reasoning/information helpers are separate provider mechanics. They may support reasoning, planning or public information retrieval, but they must never become an alternate operational connector path to user infrastructure or AEP private host state.
 
 ## 2. Runtime and dependency baseline
 
@@ -70,13 +72,15 @@ Both boundaries translate their input into one small internal `ExecutionRequest`
 - source-provided JSON input;
 - MCP endpoint information required for this execution;
 - optional MCP Bearer credential;
-- the exact **source-supplied model-invocable MCP capability envelope** for this execution;
+- the exact **source-supplied model-invocable MCP operational capability envelope** for this execution;
 - optional caller-provided result JSON schema;
 - source lifecycle guard where one exists, such as the ACP lease.
 
-The capability envelope is data supplied by the source boundary. It is not calculated by the execution core.
+The MCP capability envelope is data supplied by the source boundary. It is not calculated by the execution core.
 
-For ACP, it is populated directly from the claimed job's `allowed_capabilities`. For standalone, it is populated directly from the request contract. The common engine never queries a broader inventory and makes a policy decision about what subset should be model-visible.
+For ACP, it is populated directly from the claimed job's `allowed_capabilities`. For standalone, it is populated directly from the request contract. The common engine never queries a broader MCP inventory and makes a policy decision about what subset should be model-visible.
+
+Provider-native reasoning/information helpers are not fields of `ExecutionRequest` and are not source-selected authorization data. Their availability and safe handling belong to the provider adapter/runtime contract.
 
 This value is an internal data structure, not a generic plugin framework or public orchestration abstraction.
 
@@ -120,7 +124,7 @@ The same ACP Streamable HTTP MCP surface is used for:
 The ACP MCP server can expose both source-boundary lifecycle tools and virtual task capabilities on the same authenticated surface. Those categories must remain separated inside AEP:
 
 - `jobs_claim_v1`, `jobs_heartbeat_v1`, `jobs_complete_v1`, `jobs_fail_v1` and other source-boundary operations are called only by the ACP boundary;
-- only capabilities named in the claimed job's `allowed_capabilities` can enter the model-invocable envelope;
+- only MCP capabilities named in the claimed job's `allowed_capabilities` can enter the source-authorized operational model envelope;
 - a lifecycle tool appearing in `tools/list` must never become model-visible merely because the worker identity is authorized to call it.
 
 ACP remains the sole authority for:
@@ -134,6 +138,8 @@ ACP remains the sole authority for:
 - authorization and fail-closed capability resolution at invocation time.
 
 AEP does not duplicate or reinterpret any of those mechanics.
+
+Permitted provider-native reasoning/information helpers remain outside ACP's operational capability envelope and may not be used to reach or control ACP-managed infrastructure directly.
 
 ACP lease values remain ACP policy. Execution Plane tracks and respects the lease but never derives its model timeout from ACP's lease duration.
 
@@ -151,10 +157,12 @@ Versioned API routes are:
 - `input` as any valid JSON value;
 - `mcp.url`;
 - optional `mcp.bearer_token`;
-- exact `mcp.tools` descriptors defining the caller's model-invocable capability envelope;
+- exact `mcp.tools` descriptors defining the caller's model-invocable MCP operational capability envelope;
 - optional `result_schema`.
 
-The standalone caller is the source authority for that execution. AEP does not turn a broader MCP server inventory into an authorization policy. It only verifies and executes the exact envelope supplied by the caller.
+The standalone caller is the source authority for that execution. AEP does not turn a broader MCP server inventory into an authorization policy. It only verifies and executes the exact MCP envelope supplied by the caller.
+
+Provider-native reasoning/information helpers, where supported by the selected provider, remain provider mechanics and are not caller-selected operational capabilities.
 
 The caller never selects a model.
 
@@ -231,59 +239,85 @@ Startup/periodic health uses only non-inference endpoints where that can be done
 
 Health never changes administrator priority or enabled/disabled state.
 
-### OAuth execution isolation
+### OAuth execution boundary and native-helper characterization
 
-Lot 2 may use the pinned runtime's `thread/start.dynamicTools` only after proving that it can expose exactly the **source-supplied model-invocable envelope** after provider-transport mapping and nothing else.
+Lot 2 may use the pinned runtime's `thread/start.dynamicTools` only after proving that the **AEP-supplied MCP operational tool surface** is exactly the frozen source MCP envelope and that any additional Codex-native facilities do not create an operational side channel around MCP/ACP.
 
-OAuth execution threads must be ephemeral and use `environments: []`, no root capability, native Codex MCP, skill/plugin/app, shell/exec/apply-patch, web search, image tool, sub-agent/collaboration or other native capability.
+The correct invariant is not “Codex must expose zero native tools”. Codex may retain provider-native reasoning/information helpers required for its normal reasoning behavior, including public Web search or internal planning, provided they cannot operate user infrastructure, access AEP private host/filesystem state, obtain connector credentials, invoke an alternate MCP/connector path, or otherwise bypass the source-authorized operational envelope.
 
-The proof must capture the request actually sent to the provider by the pinned runtime and establish both:
+A real preflight performed on **2026-08-20** with the pinned Codex 0.144.4 runtime, a deterministic local HTTP capture backend and no real OpenAI identity/credential established the following facts about the actual provider request:
 
-- an empty source capability envelope produces zero model-visible tools;
-- an envelope containing N capabilities produces exactly those N capabilities after deterministic one-to-one transport mapping, with no native Codex capability added.
+- the AEP dynamic tool is transmitted correctly;
+- `ephemeral: true` is respected;
+- `instructionSources: []` is respected;
+- Codex also injects native tools including `update_plan`, `request_user_input`, `view_image` and `web_search`;
+- Codex injects generic permission instructions and a catalogue of five system skills;
+- `environment_context` contains shell/filesystem/workspace metadata;
+- `runtimeWorkspaceRoots` contains the dedicated `CODEX_HOME` root.
 
-This proof is independent of the MCP server's complete tool inventory. The authoritative input is the source envelope, not everything returned by `tools/list`.
+This preflight **disproves the former zero-native-tools assumption but does not by itself make OAuth execution incompatible**. The blocking question is whether any injected native facility provides real operational or private-host access outside the AEP-controlled MCP path.
 
-If that isolation cannot be demonstrated, `openai_chatgpt_oauth` is incompatible with AEP execution rather than weakening the MCP-only invariant.
+Before OAuth execution is enabled, CI/implementation analysis must characterize the actual 0.144.4 behavior and prove at least:
+
+- the AEP-supplied MCP dynamic tools correspond exactly one-to-one to the frozen source MCP envelope; no unrelated MCP capability is added;
+- an empty source MCP envelope produces zero AEP-supplied MCP operational tools, even though permitted Codex-native helpers may remain present;
+- `update_plan` is internal reasoning/planning state only and cannot operate external infrastructure;
+- `web_search`, if enabled by the runtime, is limited to provider-side/public information retrieval and is not an arbitrary local-network/vendor-control transport; AEP-owned credentials and hidden MCP secrets are never injected into it;
+- `request_user_input` cannot silently turn an unattended execution into an unbounded wait; if the current AEP source has no interactive user channel, the request is rejected or converted to a bounded factual execution outcome according to the provider adapter contract;
+- `view_image` cannot be used to read arbitrary AEP host files, `/data/private`, Codex OAuth credential files or other local secrets; if the pinned runtime cannot prevent such access, the capability must be disabled/refused or OAuth execution is incompatible;
+- shell/filesystem/workspace metadata in `environment_context` does not imply callable local shell/filesystem authority; no command/file/permission request capable of local access is automatically approved;
+- `runtimeWorkspaceRoots` and system skills do not expose user project data, OAuth credential contents or another operational capability; generic provider/runtime instructions may remain only if they do not add a new business objective or operational authority;
+- no native Codex MCP server/client, plugin, app, connector, browser-control path, sub-agent or collaboration facility can reach user infrastructure outside the source-authorized MCP path;
+- `item/tool/call` for AEP dynamic tools returns through AEP's validated MCP loop;
+- OAuth execution threads remain ephemeral and no durable reasoning/session history is intentionally retained by AEP.
+
+The proof must inspect/capture the request and runtime behavior actually produced by the pinned binary. Checking only AEP's intended `thread/start` payload is insufficient.
+
+If a native Codex facility provides an unavoidable operational or private-host side channel that AEP cannot disable, reject or confine, `openai_chatgpt_oauth` is execution-incompatible. Do not weaken the source-authorized MCP operational boundary and do not replace ChatGPT OAuth with an OpenAI Platform API key.
 
 ## 10. Provider adapter contract
 
 The execution engine knows only a small provider adapter contract capable of:
 
 - validating configuration;
-- sending the current conversation plus the exact frozen model capability descriptors;
-- receiving either final assistant content or provider tool calls;
-- attaching tool results to the next provider turn;
+- sending the current conversation plus the exact frozen **AEP-supplied MCP operational capability descriptors**;
+- exposing/handling only provider-native reasoning/information helpers that satisfy the provider-specific safety boundary;
+- receiving either final assistant content, AEP/MCP tool calls or permitted provider-native helper activity;
+- attaching MCP tool results to the next provider turn;
 - requesting structured output from a caller-provided schema when supported;
 - returning bounded usage/diagnostic metadata.
 
-Provider adapters normalize protocol shapes but do not add business instructions and do not select capabilities.
+Provider adapters normalize protocol shapes but do not add business instructions and do not select MCP operational capabilities.
 
-If a provider imposes naming constraints incompatible with an MCP tool name, the adapter may use a deterministic collision-safe **one-to-one transport alias**. Such an alias must map reversibly to exactly one source capability and must not change its description, input schema or authorization meaning.
+If a provider imposes naming constraints incompatible with an MCP tool name, the adapter may use a deterministic collision-safe **one-to-one transport alias**. Such an alias must map reversibly to exactly one source MCP capability and must not change its description, input schema or authorization meaning.
+
+Provider-native helpers are never transport aliases for hidden operational capabilities.
 
 Provider streaming is not required in version one. Non-streaming calls keep the state machine and timeout handling deterministic.
 
-The model's configured timeout wraps the **entire model attempt**, including all provider turns and MCP exchanges for that model. Individual network operations also use the remaining attempt deadline so no single socket call can outlive it.
+The model's configured timeout wraps the **entire model attempt**, including all provider turns, permitted provider-native helper activity and MCP exchanges for that model. Individual network operations also use the remaining attempt deadline so no single socket call can outlive it.
 
 ## 11. Model context construction
 
 Execution Plane does not create a hidden business/system prompt.
 
-The source objective and source input are transmitted deterministically as source material. Tool definitions come only from the frozen source-supplied capability envelope and are supplied through the provider's tool/function-calling field. A source-provided result schema is supplied through the provider's structured-output mechanism where available and is always validated locally before delivery.
+The source objective and source input are transmitted deterministically as source material. **AEP-supplied MCP operational tool definitions** come only from the frozen source-supplied MCP envelope and are supplied through the provider's supported tool/function-calling mechanism. A source-provided result schema is supplied through the provider's structured-output mechanism where available and is always validated locally before delivery.
 
-Source-boundary lifecycle tools, unrelated MCP inventory entries and provider-native capabilities are not model context.
+Source-boundary lifecycle tools and unrelated MCP inventory entries are not model context.
+
+Provider-native generic reasoning/information helpers and provider/runtime system instructions may additionally be present according to the provider adapter contract. They must remain distinguishable from AEP-supplied MCP operational tools and must not add a new business objective, operational authorization or infrastructure side channel.
 
 Provider-specific wrappers needed to serialize the same objective/input are formatting only and must not infer additional goals, policy or context.
 
-For Codex app-server execution, `instructionSources` must be empty and no workspace/project/AGENTS/skill content may be injected into the execution. Provider/runtime system instructions that cannot be removed must be proven not to add a new business objective, local project context or model-invocable capability.
+For Codex app-server execution, AEP explicitly requests `instructionSources: []` and does not supply a user project/workspace/AGENTS source. Generic Codex system skills/runtime context that the pinned runtime injects may remain only if the OAuth characterization gate proves they do not expose private local content or operational authority.
 
 Provider reasoning/thinking fields are neither persisted nor logged.
 
 ## 12. MCP client mechanics and capability-envelope consistency
 
-Version one supports MCP **Streamable HTTP** for model-invocable capabilities.
+Version one supports MCP **Streamable HTTP** for model-invocable operational capabilities.
 
-For each execution, Execution Plane receives a frozen capability envelope from the source before the model runs.
+For each execution, Execution Plane receives a frozen MCP capability envelope from the source before the model runs.
 
 For each capability in that envelope, AEP performs only **technical consistency validation** against the supplied MCP session:
 
@@ -291,42 +325,49 @@ For each capability in that envelope, AEP performs only **technical consistency 
 2. retrieve the tool inventory with paginated `tools/list` as required;
 3. locate each source-supplied capability by its exact MCP name;
 4. confirm that the effective input schema matches the source-supplied descriptor;
-5. freeze the validated source envelope for the model attempt/execution;
-6. expose only that frozen source envelope to the provider/model;
-7. validate model-produced arguments locally against the same source-supplied effective schema;
-8. invoke only through `tools/call` using the exact MCP tool name after reversing any provider-only transport alias;
-9. close the execution MCP session when the execution ends.
+5. freeze the validated source MCP envelope for the model attempt/execution;
+6. expose exactly that frozen source envelope as AEP-supplied MCP operational tools to the provider/model;
+7. keep any permitted provider-native reasoning/information helpers separate from that MCP envelope;
+8. validate model-produced MCP arguments locally against the same source-supplied effective schema;
+9. invoke only through `tools/call` using the exact MCP tool name after reversing any provider-only transport alias;
+10. close the execution MCP session when the execution ends.
 
-This mechanism does **not** authorize capabilities. It only verifies that the source contract can still be executed against the MCP surface it references.
+This mechanism does **not** authorize capabilities. It only verifies that the source MCP contract can still be executed against the MCP surface it references.
 
-Tools returned by `tools/list` that are absent from the source envelope are not model tools. AEP does not classify them, authorize them, deny them semantically or use them to construct a replacement envelope. They remain outside the current execution contract.
+Tools returned by MCP `tools/list` that are absent from the source envelope are not model MCP tools. AEP does not classify them, authorize them, deny them semantically or use them to construct a replacement envelope. They remain outside the current execution contract.
 
-For ACP this distinction is mandatory because the same MCP server also exposes AEP boundary lifecycle tools. Those lifecycle tools are boundary-only mechanics and must never be exposed to the reasoning model. The model-visible ACP envelope comes exclusively from the task virtual capabilities carried in the claimed job's `allowed_capabilities`.
+For ACP this distinction is mandatory because the same MCP server also exposes AEP boundary lifecycle tools. Those lifecycle tools are boundary-only mechanics and must never be exposed to the reasoning model. The model-visible ACP MCP envelope comes exclusively from the task virtual capabilities carried in the claimed job's `allowed_capabilities`.
 
-A missing source capability or effective-schema mismatch fails closed as a factual technical contract inconsistency. Execution Plane never silently substitutes a changed schema or broadens/narrows the source envelope.
+A missing source capability or effective-schema mismatch fails closed as a factual technical contract inconsistency. Execution Plane never silently substitutes a changed schema or broadens/narrows the source MCP envelope.
 
-If an MCP `tools/list_changed` notification occurs during an execution, AEP must not silently refresh the model-visible capability set. It may revalidate the already-frozen envelope before a subsequent dispatch when needed; if the source contract can no longer be proven applicable, execution fails closed. New capabilities are never added mid-execution.
+If an MCP `tools/list_changed` notification occurs during an execution, AEP must not silently refresh the model-visible MCP capability set. It may revalidate the already-frozen envelope before a subsequent dispatch when needed; if the source contract can no longer be proven applicable, execution fails closed. New MCP capabilities are never added mid-execution.
 
 ## 13. Tool-call technical validation
 
-When the model requests a tool:
+AEP distinguishes **source-authorized MCP operational tool calls** from **permitted provider-native reasoning/information helper activity**.
+
+When the model requests an AEP/MCP operational tool:
 
 1. resolve any provider-only transport alias back to the exact source capability;
-2. require that capability to exist in the frozen source envelope;
+2. require that capability to exist in the frozen source MCP envelope;
 3. require valid JSON arguments;
 4. validate arguments locally against the frozen effective input schema;
 5. enforce argument and dispatch-count bounds;
 6. only then issue MCP `tools/call`.
 
-Unknown tool or invalid arguments result in a bounded technical failure with **zero MCP dispatch**.
+Unknown AEP/MCP tool or invalid arguments result in a bounded technical failure with **zero MCP dispatch**.
 
-AEP does not judge whether an argument is operationally safe, semantically authorized or desirable. In ACP mode those decisions and any server-side fixed argument injection remain ACP responsibilities. AEP validates only the technical contract it was supplied.
+A provider-native helper is never routed to ACP as though it were an MCP capability and never gains operational authorization from its native status. Its handling is limited to the provider-specific helper contract established by the OAuth/provider characterization gate.
+
+AEP does not judge whether an MCP argument is operationally safe, semantically authorized or desirable. In ACP mode those decisions and any server-side fixed argument injection remain ACP responsibilities. AEP validates only the technical contract it was supplied.
 
 ## 14. Side-effect boundary and fallback
 
-The no-replay boundary is conservative.
+The no-replay boundary is conservative for **operational MCP effects**.
 
 `mcp_effect_possible` becomes true **as soon as a `tools/call` request is dispatched to the MCP server**. A lost response can still mean that the upstream action occurred, so waiting for a successful response would be unsafe.
+
+Permitted provider-native reasoning/information helper activity such as internal planning or public Web search does not set `mcp_effect_possible`, because such helpers are not allowed to create user-infrastructure operational effects. If a provider-native facility can create such an effect, it violates the provider boundary and must not be enabled as a helper.
 
 Consequences:
 
@@ -335,7 +376,7 @@ Consequences:
 - once any MCP call has been dispatched, no automatic model fallback is allowed;
 - an MCP transport/protocol/tool failure terminates the execution factually rather than trying another model, because switching models does not repair the MCP dependency and may cause replay ambiguity.
 
-Every fallback starts from the original source request and the original frozen capability envelope. No failed-model conversation or reasoning is carried forward.
+Every fallback starts from the original source request and the original frozen MCP capability envelope. No failed-model conversation or reasoning is carried forward.
 
 ## 15. Result schema handling
 
@@ -361,13 +402,15 @@ Version-one defaults:
 - final API/result body: 4 MiB maximum;
 - maximum source-supplied model-invocable MCP capabilities in one execution: 128;
 - maximum MCP tool dispatches in one model attempt: 128;
-- maximum individual tool argument document: 512 KiB;
+- maximum individual MCP tool argument document: 512 KiB;
 - maximum individual MCP tool result accepted into model context: 2 MiB;
 - objective/input/schema/tool-descriptor subdocuments must each fit inside the overall request bound.
 
 Crossing a bound is a technical failure; content is not silently truncated because truncation could change meaning.
 
-These are AEP implementation safety bounds, not ACP authorization limits. If a source supplies an envelope beyond AEP's documented technical capacity, AEP rejects the execution rather than selecting a smaller subset.
+These are AEP implementation safety bounds, not ACP authorization limits. If a source supplies an MCP envelope beyond AEP's documented technical capacity, AEP rejects the execution rather than selecting a smaller subset.
+
+Provider-native helper behavior remains subject to the whole-attempt deadline and provider/runtime bounds; it must not be used to bypass AEP's MCP argument/result limits for operational work.
 
 ## 17. Persistence schema and secret handling
 
@@ -394,6 +437,8 @@ At most one row containing the final result/technical outcome plus the minimum s
 A separate random encryption key lives under `/data/private` with restrictive file permissions and AppArmor rules. Standalone API credentials remain one-way verifiers; reversible encryption is used only for secrets the App must later send outward, such as model and ACP boundary credentials.
 
 No completed execution history is kept in SQLite.
+
+Provider-native helpers never receive AEP private encryption material, MCP credentials or OAuth token contents from AEP.
 
 ## 18. Restart recovery
 
@@ -480,7 +525,8 @@ Never log:
 
 - model/API/ACP/MCP credentials;
 - objective or input payloads;
-- tool arguments or tool results;
+- MCP tool arguments or MCP tool results;
+- provider-native helper queries/results when they may contain source material;
 - final result bodies;
 - model reasoning/thinking content;
 - standalone Bearer tokens;
@@ -501,7 +547,9 @@ The policy is derived from the executable/runtime inventory of this App, not cop
 - writes to `/data`, tightly scoped `/data/private`, `/run` and temporary runtime paths;
 - the minimum startup capabilities required to prepare data ownership and drop to the unprivileged runtime user.
 
-No shell, SSH client, browser runtime, Docker socket, Home Assistant API privilege or host filesystem access is granted unless later implementation evidence proves it is actually required for Execution Plane's own responsibility. Capability-governance convenience is never a valid reason to broaden AEP AppArmor.
+No shell, SSH client, browser runtime, Docker socket, Home Assistant API privilege or broad host filesystem access is granted merely because a provider advertises a native helper. Provider-native public Web search must remain provider-side and must not justify installing a local browser or broadening AppArmor.
+
+Any Codex command/file/permission request that would require local shell/filesystem authority remains denied unless a later explicit product decision changes the AEP responsibility boundary; the current Lot 2 does not do so.
 
 CI records executable inventory and HAOS acceptance verifies startup, normal operation, shutdown and restart under the enforced profile.
 
@@ -511,10 +559,11 @@ Before release, repository documentation includes complete English and French co
 
 - purpose and architecture boundary;
 - explicit ACP/AEP responsibility separation;
+- distinction between source-authorized MCP operational capabilities and permitted provider-native reasoning/information helpers;
 - HAOS installation and Network port configuration;
 - Ingress UI;
 - model configuration for all provider families;
-- ACP integration, including `allowed_capabilities` as the authoritative model capability envelope and ACP lifecycle tools as AEP-boundary-only operations;
+- ACP integration, including `allowed_capabilities` as the authoritative MCP operational capability envelope and ACP lifecycle tools as AEP-boundary-only operations;
 - standalone API authentication and exact request/result/ack lifecycle;
 - standalone source-supplied MCP capability-envelope contract;
 - persistence/restart behavior;
@@ -530,8 +579,9 @@ CI must prove mechanics without requiring real paid providers:
 - unit tests for persistence, state transitions, auth, priority/fallback and bounds;
 - fake Ollama-compatible and OpenAI-compatible HTTP providers including tool calls, errors and structured output;
 - fake Streamable HTTP MCP servers containing both source-envelope tools and unrelated/lifecycle-like tools;
-- proof that only the source-supplied envelope reaches the model;
-- proof that an empty source envelope stays empty despite a non-empty MCP inventory;
+- proof that only the source-supplied MCP envelope reaches the model as **AEP-supplied MCP operational tools**;
+- proof that an empty source MCP envelope stays empty as an AEP/MCP tool surface despite a non-empty MCP inventory;
+- provider-native reasoning/information helpers may coexist only under their separately tested provider boundary and must never be counted as source-authorized MCP tools;
 - missing/schema-mismatched source capability failures;
 - standalone API end-to-end tests;
 - ACP contract integration tests against the actual ACP contract surface or a contract-faithful fixture, including `allowed_capabilities` and lifecycle/tool separation;
@@ -541,7 +591,12 @@ CI must prove mechanics without requiring real paid providers:
 - secret/redaction tests;
 - bilingual/theme/version UI smoke assertions.
 
-For `openai_chatgpt_oauth`, CI additionally captures the actual provider request produced by Codex 0.144.4 and proves that only the frozen source envelope is model-visible, with no native Codex tools or project/workspace instruction sources.
+For `openai_chatgpt_oauth`, CI additionally captures the actual provider request/runtime behavior produced by Codex 0.144.4 and proves both:
+
+1. **MCP integrity:** the AEP-supplied dynamic MCP tools correspond exactly to the frozen source MCP envelope and unrelated MCP tools never become model-visible;
+2. **native-helper confinement:** every additional Codex-native tool/context/skill that remains present is non-operational with respect to user infrastructure and AEP private host state, or is explicitly denied/refused before it can perform such access.
+
+The known 2026-08-20 preflight observations (`update_plan`, `request_user_input`, `view_image`, `web_search`, permission instructions, five system skills, `environment_context`, `runtimeWorkspaceRoots`) become regression inputs for this characterization rather than a blanket zero-native-tools failure condition.
 
 Real HAOS acceptance remains mandatory after each implementation lot reaches CI-conformant state.
 
