@@ -93,6 +93,8 @@ class CodexOAuthTests(unittest.TestCase):
     def test_bilingual_ui_exposes_oauth_without_api_key_field(self):
         self.assertIn("openai_chatgpt_oauth", ADMIN_JS)
         self.assertIn("Compte OpenAI / ChatGPT", ADMIN_JS); self.assertIn("OpenAI / ChatGPT account", ADMIN_JS)
+        self.assertIn("Aucun modèle configuré.", ADMIN_JS); self.assertIn("No model configured.", ADMIN_JS)
+        self.assertIn("provider:'Fournisseur'", ADMIN_JS); self.assertIn("tr(m.provider_family)", ADMIN_JS)
         self.assertIn("credential:oauth?null", ADMIN_JS); self.assertIn("base_url:oauth?null", ADMIN_JS)
         self.assertIn("chatgptDeviceCode", Path(__file__).parents[1].joinpath("src/agent_execution_plane/codex_runtime.py").read_text(encoding="utf-8"))
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Polish the bilingual Models table empty state, provider heading and provider-family labels.
+
 ## 0.3.0
 
 - Add the official OpenAI ChatGPT OAuth provider family through the exactly pinned Codex 0.144.4 app-server over local stdio JSONL.

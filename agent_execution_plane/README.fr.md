@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane est le composant de raisonnement et d’exécution de modèles de la suite. La version `0.3.0` étend le Lot 1 avec OpenAI ChatGPT OAuth officiel tout en conservant le shell HAOS Lot 0 accepté.
+Agent Execution Plane est le composant de raisonnement et d’exécution de modèles de la suite. La version `0.3.1` clôt le Lot 1 avec OpenAI ChatGPT OAuth officiel et une administration bilingue des modèles finalisée, tout en conservant le shell HAOS Lot 0 accepté.
 
 ## Installation et utilisation
 
