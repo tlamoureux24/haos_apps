@@ -23,7 +23,8 @@ class StandaloneLifecycleTests(unittest.TestCase):
         self.assertFalse(self.store.credential_configured());self.assertEqual(self.store.authenticate("anything"),"not_configured")
         first=self.store.create_credential();self.assertGreaterEqual(len(first),40);self.assertEqual(self.store.authenticate(first),"accepted");self.assertEqual(self.store.authenticate("wrong"),"rejected")
         with sqlite3.connect(self.database) as db: persisted=db.execute("SELECT value FROM settings WHERE key='standalone_credential_verifier'").fetchone()[0]
-        self.assertTrue(persisted.startswith("pbkdf2_sha256$310000$"));self.assertNotIn(first,persisted);self.assertNotIn(first,self.database.read_bytes().decode(errors="ignore"))
+        self.assertTrue(persisted.startswith("opaque_sha256$"));self.assertNotIn(first,persisted);self.assertNotIn(first,self.database.read_bytes().decode(errors="ignore"))
+        for _ in range(100): self.assertEqual(self.store.authenticate(first),"accepted")
         restarted=LifecycleStore(self.database);self.assertEqual(restarted.authenticate(first),"accepted")
         second=restarted.create_credential(rotate=True);self.assertEqual(restarted.authenticate(first),"rejected");self.assertEqual(restarted.authenticate(second),"accepted")
         self.assertTrue(restarted.revoke_credential());self.assertEqual(restarted.authenticate(second),"not_configured")
@@ -52,6 +53,11 @@ class StandaloneLifecycleTests(unittest.TestCase):
         self.store.reserve("pending-id");self.store.complete("pending-id",ExecutionOutcome(True,result={"exact":[1,2,3]},model_id="m",mcp_effect_possible=False))
         before=self.store.execution("pending-id")[1];self.assertIsNone(LifecycleStore(self.database).recover_interrupted());after=LifecycleStore(self.database).execution("pending-id")[1]
         self.assertEqual(before,after);self.assertEqual(LifecycleStore(self.database).ack("pending-id"),"acknowledged")
+
+    def test_successful_null_result_survives_restart_exactly(self):
+        self.store.reserve("null-result-id");self.store.complete("null-result-id",ExecutionOutcome(True,result=None,model_id="m"))
+        before=self.store.execution("null-result-id")[1];self.assertIn("result",before["outcome"]);self.assertIsNone(before["outcome"]["result"])
+        restarted=LifecycleStore(self.database);self.assertIsNone(restarted.recover_interrupted());self.assertEqual(restarted.execution("null-result-id")[1],before)
 
     def test_execution_material_is_not_persisted_except_pending_final_result(self):
         canaries=["OBJECTIVE-CANARY","INPUT-CANARY","MCP-BEARER-CANARY","DESCRIPTION-CANARY","ARGUMENT-CANARY","TOOL-RESULT-CANARY","REASONING-CANARY"]

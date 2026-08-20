@@ -28,7 +28,7 @@ class FoundationTests(unittest.TestCase):
         with closing(sqlite3.connect(self.database)) as db:
             tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         self.assertIn("schema_info", tables); self.assertIn("activity", tables); self.assertIn("models", tables)
-        self.assertTrue({"settings", "pending_result", "active_execution"} <= tables)
+        self.assertTrue({"settings", "pending_result", "active_execution", "model_usage"} <= tables)
         self.assertFalse(tables & {"jobs", "executions"})
 
     def test_042_upgrade_is_additive_and_preserves_models_and_activity(self):

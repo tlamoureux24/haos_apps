@@ -70,6 +70,10 @@ def initialize(path: Path) -> None:
                     (provider_family != 'openai_chatgpt_oauth' AND base_url IS NOT NULL)
                 )
             );
+            CREATE TABLE IF NOT EXISTS model_usage (
+                model_id TEXT PRIMARY KEY REFERENCES models(id) ON DELETE CASCADE,
+                started_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,

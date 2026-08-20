@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
 import sqlite3
 import tempfile
 import threading
@@ -11,6 +12,11 @@ from pathlib import Path
 
 from agent_execution_plane.database import initialize
 from agent_execution_plane.models import Candidate, ModelStore
+
+
+def hold_model_usage(database: str, private_dir: str, model_id: str, ready, release) -> None:
+    store = ModelStore(Path(database), Path(private_dir))
+    store.begin_use(model_id); ready.set(); release.wait(10); store.end_use(model_id)
 
 
 class FakeProvider(BaseHTTPRequestHandler):
@@ -91,12 +97,18 @@ class ModelTests(unittest.TestCase):
 
     def test_in_use_locks_technical_changes_disable_and_delete_but_not_priority(self):
         first,_=self.store.save(self.candidate(name='First'));second,_=self.store.save(self.candidate(name='Second'))
-        self.store.begin_use(first['id']);self.assertTrue(self.store.list()[0]['in_use'])
-        with self.assertRaisesRegex(RuntimeError,'model_in_use'):self.store.delete(first['id'])
-        with self.assertRaisesRegex(RuntimeError,'model_in_use'):self.store.set_enabled(first['id'],False)
-        with self.assertRaisesRegex(RuntimeError,'model_in_use'):self.store.save(self.candidate(name='Changed'),first['id'])
-        self.store.reorder([second['id'],first['id']]);self.assertEqual(self.store.list()[1]['id'],first['id'])
-        self.store.end_use(first['id']);self.assertFalse(self.store.list()[1]['in_use'])
+        admin_store=ModelStore(self.database,Path(self.temp.name)/'private');context=multiprocessing.get_context('spawn');ready=context.Event();release=context.Event()
+        execution_process=context.Process(target=hold_model_usage,args=(str(self.database),str(Path(self.temp.name)/'private'),first['id'],ready,release));execution_process.start()
+        try:
+            self.assertTrue(ready.wait(5));self.assertTrue(admin_store.list()[0]['in_use'])
+            with self.assertRaisesRegex(RuntimeError,'model_in_use'):admin_store.delete(first['id'])
+            with self.assertRaisesRegex(RuntimeError,'model_in_use'):admin_store.set_enabled(first['id'],False)
+            with self.assertRaisesRegex(RuntimeError,'model_in_use'):admin_store.save(self.candidate(name='Changed'),first['id'])
+            admin_store.reorder([second['id'],first['id']]);self.assertEqual(admin_store.list()[1]['id'],first['id'])
+        finally:
+            release.set();execution_process.join(5)
+            if execution_process.is_alive(): execution_process.terminate();execution_process.join(5)
+        self.assertEqual(execution_process.exitcode,0);self.assertFalse(admin_store.list()[1]['in_use'])
 
 
 if __name__ == "__main__": unittest.main()

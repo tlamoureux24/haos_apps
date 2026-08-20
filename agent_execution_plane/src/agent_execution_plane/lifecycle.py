@@ -79,7 +79,7 @@ class LifecycleStore:
         return {"execution_id": execution_id, "source_kind": source_kind, "started_at": timestamp}
 
     def complete(self, execution_id: str, outcome: ExecutionOutcome) -> dict[str, Any]:
-        value = {key: item for key, item in asdict(outcome).items() if item is not None}
+        value = {key: item for key, item in asdict(outcome).items() if item is not None or (key == "result" and outcome.success)}
         encoded = canonical(value)
         api_document={"execution_id":execution_id,"status":"result_available","outcome":value}
         if len(canonical(api_document).encode()) > MAX_RESULT_BYTES: value = {"success": False, "error_code": "result_limit", "mcp_effect_possible": outcome.mcp_effect_possible}; encoded = canonical(value)

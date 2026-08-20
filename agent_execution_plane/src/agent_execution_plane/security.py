@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import base64
 import hashlib
 import hmac
 import secrets
@@ -44,20 +43,14 @@ def generate_opaque_credential() -> str:
     return secrets.token_urlsafe(32)
 
 
-def credential_verifier(credential: str, *, salt: bytes | None = None) -> str:
-    salt = salt or secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", credential.encode(), salt, 310_000)
-    return "pbkdf2_sha256$310000$" + base64.urlsafe_b64encode(salt).decode() + "$" + base64.urlsafe_b64encode(digest).decode()
+def credential_verifier(credential: str) -> str:
+    return "opaque_sha256$" + hashlib.sha256(b"aep-standalone-v1\0" + credential.encode()).hexdigest()
 
 
 def verify_credential(credential: str, verifier: str) -> bool:
     try:
-        algorithm, iterations, salt_text, expected_text = verifier.split("$", 3)
-        if algorithm != "pbkdf2_sha256" or int(iterations) != 310_000:
-            return False
-        salt = base64.urlsafe_b64decode(salt_text.encode())
-        expected = base64.urlsafe_b64decode(expected_text.encode())
-        actual = hashlib.pbkdf2_hmac("sha256", credential.encode(), salt, int(iterations))
-        return hmac.compare_digest(actual, expected)
-    except (ValueError, TypeError):
+        algorithm, expected = verifier.split("$", 1)
+        actual = hashlib.sha256(b"aep-standalone-v1\0" + credential.encode()).hexdigest()
+        return algorithm == "opaque_sha256" and hmac.compare_digest(actual, expected)
+    except (ValueError, TypeError, AttributeError):
         return False

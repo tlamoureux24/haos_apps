@@ -110,6 +110,9 @@ async def models_api(request: Request) -> JSONResponse:
         candidate = Candidate(str(data.get("display_name", "")), str(data.get("provider_family", "")), base_url or None, str(data.get("provider_model", "")), credential or None, bool(data.get("replace_credential", False)), bool(data.get("enabled", True)), float(data.get("timeout_minutes", 5)))
         model, check = await asyncio.to_thread(model_store.save, candidate, data.get("id"))
     except OverflowError: return JSONResponse({"error": {"code": "body_too_large"}}, status_code=413)
+    except RuntimeError as exc:
+        if str(exc) == "model_in_use": return JSONResponse({"error": {"code": "model_in_use"}}, status_code=409)
+        raise
     except (ValueError, TypeError): return JSONResponse({"error": {"code": "invalid_model"}}, status_code=422)
     except KeyError: return JSONResponse({"error": {"code": "model_not_found"}}, status_code=404)
     if model is None: return JSONResponse({"error": {"code": check.code or check.state}, "technical_state": check.state}, status_code=422)
@@ -126,6 +129,9 @@ async def model_action(request: Request) -> JSONResponse:
         elif action == "enabled": found = await asyncio.to_thread(model_store.set_enabled, str(data.get("id", "")), bool(data.get("enabled")))
         elif action == "reorder": await asyncio.to_thread(model_store.reorder, [str(item) for item in data.get("ids", [])]); found = True
         else: return JSONResponse({"error": {"code": "not_found"}}, status_code=404)
+    except RuntimeError as exc:
+        if str(exc) == "model_in_use": return JSONResponse({"error": {"code": "model_in_use"}}, status_code=409)
+        raise
     except ValueError: return JSONResponse({"error": {"code": "invalid_order"}}, status_code=422)
     if not found: return JSONResponse({"error": {"code": "model_not_found"}}, status_code=404)
     return JSONResponse({"status": "ok"})
@@ -209,6 +215,7 @@ async def lifespan(_: Starlette):
         record_activity(settings.database_path, "app_ready", "system", "success")
         health_task = asyncio.create_task(asyncio.to_thread(model_store.refresh_health))
     else:
+        await asyncio.to_thread(model_store.clear_usage)
         recovered = await asyncio.to_thread(lifecycle_store.recover_interrupted)
         if recovered: record_activity(settings.database_path,"interrupted_execution_recovered","execution","failure")
     try:

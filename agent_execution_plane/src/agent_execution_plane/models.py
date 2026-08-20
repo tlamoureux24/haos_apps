@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sqlite3
 import math
-import threading
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -35,7 +34,6 @@ class ModelStore:
         self.database = database
         self.key = load_or_create_key(private_dir / "provider-key")
         self.codex_runtime = codex_runtime
-        self._usage_lock=threading.Lock(); self._in_use:set[str]=set()
 
     def _validate_fields(self, candidate: Candidate) -> Candidate:
         if not candidate.display_name.strip() or len(candidate.display_name) > 120: raise ValueError("invalid_name")
@@ -50,7 +48,7 @@ class ModelStore:
         return candidate
 
     def _public(self, row: sqlite3.Row) -> dict[str, object]:
-        with self._usage_lock: in_use=row['id'] in self._in_use
+        in_use = bool(row["in_use"]) if "in_use" in row.keys() else self._is_in_use(row["id"])
         return {"id": row["id"], "display_name": row["display_name"], "provider_family": row["provider_family"], "base_url": row["base_url"], "provider_model": row["provider_model"], "credential_configured": row["encrypted_credential"] is not None, "enabled": bool(row["enabled"]), "priority": row["priority"], "timeout_minutes": row["timeout_minutes"], "technical_state": "disabled" if not row["enabled"] else row["technical_state"], "provider_state": row["technical_state"], "diagnostic_code": row["diagnostic_code"], "checked_at": row["checked_at"], "in_use": in_use}
 
     def execution_models(self):
@@ -58,16 +56,22 @@ class ModelStore:
         return [dict(row)|{'credential':decrypt(self.key,row['encrypted_credential'])} for row in rows]
 
     def begin_use(self,model_id):
-        with self._usage_lock: self._in_use.add(model_id)
+        try:
+            with connect(self.database) as db: db.execute("INSERT INTO model_usage(model_id,started_at) VALUES(?,?)",(model_id,now_iso()))
+        except sqlite3.IntegrityError: raise RuntimeError("model_in_use") from None
     def end_use(self,model_id):
-        with self._usage_lock: self._in_use.discard(model_id)
-    def _require_not_in_use(self,model_id):
-        with self._usage_lock:
-            if model_id in self._in_use: raise RuntimeError('model_in_use')
+        with connect(self.database) as db: db.execute("DELETE FROM model_usage WHERE model_id=?",(model_id,))
+    def clear_usage(self):
+        with connect(self.database) as db: db.execute("DELETE FROM model_usage")
+    def _is_in_use(self,model_id,db=None):
+        if db is not None: return db.execute("SELECT 1 FROM model_usage WHERE model_id=?",(model_id,)).fetchone() is not None
+        with connect(self.database) as connection: return self._is_in_use(model_id,connection)
+    def _require_not_in_use(self,model_id,db=None):
+        if self._is_in_use(model_id,db): raise RuntimeError('model_in_use')
 
     def list(self) -> list[dict[str, object]]:
         with connect(self.database) as db:
-            rows = db.execute("SELECT * FROM models ORDER BY priority").fetchall()
+            rows = db.execute("SELECT models.*,model_usage.model_id IS NOT NULL AS in_use FROM models LEFT JOIN model_usage ON model_usage.model_id=models.id ORDER BY priority").fetchall()
         return [self._public(row) for row in rows]
 
     def _row(self, model_id: str) -> sqlite3.Row | None:
@@ -85,6 +89,8 @@ class ModelStore:
         timestamp = now_iso()
         with connect(self.database) as db:
             if previous:
+                db.execute("BEGIN IMMEDIATE")
+                self._require_not_in_use(model_id,db)
                 db.execute("UPDATE models SET display_name=?,provider_family=?,base_url=?,provider_model=?,encrypted_credential=?,enabled=?,timeout_minutes=?,technical_state=?,diagnostic_code=?,checked_at=?,updated_at=? WHERE id=?", (candidate.display_name.strip(), candidate.provider_family, candidate.base_url.rstrip('/') if candidate.base_url else None, candidate.provider_model.strip(), encrypted, int(candidate.enabled), candidate.timeout_minutes, result.state, result.code, timestamp, timestamp, model_id))
             else:
                 model_id = str(uuid4())
@@ -96,8 +102,9 @@ class ModelStore:
         return self._public(self._row(model_id)), result
 
     def delete(self, model_id: str) -> bool:
-        self._require_not_in_use(model_id)
         with connect(self.database) as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._require_not_in_use(model_id,db)
             found = db.execute("DELETE FROM models WHERE id=?", (model_id,)).rowcount
             if found:
                 rows = db.execute("SELECT id FROM models ORDER BY priority").fetchall()
@@ -106,8 +113,11 @@ class ModelStore:
         return bool(found)
 
     def set_enabled(self, model_id: str, enabled: bool) -> bool:
-        if not enabled: self._require_not_in_use(model_id)
-        with connect(self.database) as db: found = db.execute("UPDATE models SET enabled=?,updated_at=? WHERE id=?", (int(enabled), now_iso(), model_id)).rowcount
+        with connect(self.database) as db:
+            if not enabled:
+                db.execute("BEGIN IMMEDIATE")
+                self._require_not_in_use(model_id,db)
+            found = db.execute("UPDATE models SET enabled=?,updated_at=? WHERE id=?", (int(enabled), now_iso(), model_id)).rowcount
         if found: record_activity(self.database, "model_enabled" if enabled else "model_disabled", "configuration", "success")
         return bool(found)
 
