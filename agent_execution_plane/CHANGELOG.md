@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- Add the source-neutral single-slot execution engine and exact source-supplied MCP operational capability envelope.
+- Add pinned MCP Streamable HTTP and JSON Schema validation, complete-attempt deadlines, bounded tool dispatch, and conservative no-fallback-after-dispatch behavior.
+- Extend Ollama-compatible, OpenAI-compatible, and ChatGPT OAuth providers with normalized tool loops and structured results.
+- Characterize Codex-native reasoning helpers separately from AEP-supplied MCP operational tools and deny unattended runtime requests outside the bounded dynamic-tool path.
+
 ## Unreleased
 
 - Clarify the normative ACP/AEP responsibility boundary: ACP remains the sole authority for connector governance and operational capability selection; AEP consumes the source-supplied model capability envelope, performs only technical consistency checks, and keeps ACP lifecycle tools outside model visibility.

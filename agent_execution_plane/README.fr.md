@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane est le composant de raisonnement et d’exécution de modèles de la suite. La version `0.3.1` clôt le Lot 1 avec OpenAI ChatGPT OAuth officiel et une administration bilingue des modèles finalisée, tout en conservant le shell HAOS Lot 0 accepté.
+Agent Execution Plane est le composant de raisonnement et d’exécution de modèles de la suite. La version `0.4.0` ajoute le moteur interne source-neutre, la boucle exacte d’outils MCP opérationnels fournis par la source, la frontière de fallback et les trois familles de providers d’exécution. Les frontières publiques autonome et ACP restent réservées aux lots suivants.
 
 ## Frontière de responsabilité
 
@@ -32,4 +32,4 @@ La vue Modèles gère les endpoints Ollama-compatible et OpenAI-compatible, la p
 
 OpenAI ChatGPT OAuth utilise l’app-server Codex officiel exactement pinné en `0.144.4` et une connexion ChatGPT device-code partagée. Cette famille n’accepte ni URL de base ni clé API ; Codex reste seul propriétaire de la persistance et du refresh OAuth sous `/data/private/codex-home`.
 
-Le Lot 1 ne fournit volontairement aucune soumission d’exécution, polling ACP, moteur d’exécution ou boucle MCP. Le Lot 2 ajoute uniquement le moteur d’exécution source-neutral et vérifie que les aides natives Codex ne peuvent pas devenir des chemins opérationnels parallèles ; l’intégration ACP elle-même reste un lot de frontière ultérieur. See [README.md](README.md) for English documentation.
+Le Lot 2 ne fournit volontairement aucune soumission d’exécution publique ni polling ACP. Il ajoute uniquement le moteur d’exécution source-neutre et vérifie que les aides natives Codex ne peuvent pas devenir des chemins opérationnels parallèles ; l’intégration ACP elle-même reste un lot de frontière ultérieur. Voir [README.md](README.md) pour la documentation anglaise.

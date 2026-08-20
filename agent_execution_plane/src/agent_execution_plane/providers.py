@@ -1,12 +1,15 @@
-"""Thin HTTP adapters used only for model validation and non-inference health."""
+"""Thin validation and execution adapters for supported model families."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from typing import Any
 
 import httpx
 
 from agent_execution_plane.codex_runtime import CodexRuntime, CodexRuntimeError
+from agent_execution_plane.execution import Capability, ProviderReply, ToolCall
 
 PROBE_TIMEOUT_SECONDS = 15.0
 
@@ -73,3 +76,50 @@ def check(family: str, base_url: str | None, model: str, credential: str | None,
     if base_url is None:
         return ProviderCheck("incompatible", "runtime_or_model_incompatible")
     return adapter(base_url, model, credential, explicit)
+
+
+def _openai_tools(tools: tuple[Capability,...]) -> list[dict[str,Any]]:
+    return [{'type':'function','function':{'name':t.name,'description':t.description,'parameters':t.input_schema}} for t in tools]
+
+
+class OpenAIExecutionAdapter:
+    def __init__(self,model:dict[str,Any]): self.model=model
+    async def turn(self,messages,tools,result_schema,remaining,dispatch):
+        payload={'model':self.model['provider_model'],'messages':messages,'tools':_openai_tools(tools),'temperature':0}
+        if result_schema is not None: payload['response_format']={'type':'json_schema','json_schema':{'name':'source_result','strict':True,'schema':result_schema}}
+        async with httpx.AsyncClient(headers=headers(self.model.get('credential')),timeout=remaining) as client:
+            response=await client.post(f"{self.model['base_url'].rstrip('/')}/v1/chat/completions",json=payload); response.raise_for_status()
+        message=response.json()['choices'][0]['message']; calls=[]
+        for raw in message.get('tool_calls') or []:
+            function=raw['function']
+            try: arguments=json.loads(function['arguments']) if isinstance(function['arguments'],str) else function['arguments']
+            except json.JSONDecodeError: arguments=function['arguments']
+            calls.append(ToolCall(str(raw['id']),function['name'],arguments))
+        return ProviderReply(message.get('content'),tuple(calls),message)
+
+
+class OllamaExecutionAdapter:
+    def __init__(self,model:dict[str,Any]): self.model=model
+    async def turn(self,messages,tools,result_schema,remaining,dispatch):
+        payload={'model':self.model['provider_model'],'messages':messages,'tools':[{'type':'function','function':{'name':t.name,'description':t.description,'parameters':t.input_schema}} for t in tools],'stream':False}
+        if result_schema is not None: payload['format']=result_schema
+        async with httpx.AsyncClient(headers=headers(self.model.get('credential')),timeout=remaining) as client:
+            response=await client.post(f"{self.model['base_url'].rstrip('/')}/api/chat",json=payload); response.raise_for_status()
+        message=response.json()['message']; calls=[]
+        for index,raw in enumerate(message.get('tool_calls') or []):
+            function=raw['function']; calls.append(ToolCall(str(raw.get('id',f'ollama-{index}')),function['name'],function.get('arguments',{})))
+        return ProviderReply(message.get('content'),tuple(calls),message)
+
+
+class OAuthExecutionAdapter:
+    def __init__(self,model:dict[str,Any],runtime:CodexRuntime): self.model=model; self.runtime=runtime
+    async def turn(self,messages,tools,result_schema,remaining,dispatch):
+        return await self.runtime.execute_turn(self.model['provider_model'],messages,tools,result_schema,remaining,dispatch)
+
+
+def execution_adapter(model:dict[str,Any],runtime:CodexRuntime|None=None):
+    family=model['provider_family']
+    if family=='ollama_compatible': return OllamaExecutionAdapter(model)
+    if family=='openai_compatible': return OpenAIExecutionAdapter(model)
+    if runtime is None: raise RuntimeError('runtime_or_model_incompatible')
+    return OAuthExecutionAdapter(model,runtime)

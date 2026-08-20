@@ -8,9 +8,12 @@ import os
 import selectors
 import subprocess
 import threading
+import asyncio
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4
+
+from agent_execution_plane.execution import ProviderReply, ToolCall
 
 CODEX_VERSION = "0.144.4"
 FORBIDDEN_AUTH_ENV = {"OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"}
@@ -236,3 +239,81 @@ class CodexRuntime:
             process.wait(timeout=2)
         if process.stdout:
             process.stdout.close()
+
+    async def execute_turn(self, model: str, messages: list[dict[str, object]], tools, result_schema, timeout: float, dispatch):
+        """Run one ephemeral, unattended execution with only AEP dynamic calls handled."""
+        ensure_codex_home(self.codex_home)
+        process = await asyncio.create_subprocess_exec(
+            *(self.command or (bundled_codex(), "app-server", "--listen", "stdio://")),
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            cwd=self.codex_home, env=child_environment(self.codex_home,self.environment),
+        )
+        pending: dict[str, asyncio.Future] = {}
+        final_content = None
+        async def write(value):
+            process.stdin.write((json.dumps(value,separators=(",",":"))+"\n").encode()); await process.stdin.drain()
+        async def request(method,params):
+            request_id=uuid4().hex; future=asyncio.get_running_loop().create_future(); pending[request_id]=future
+            await write({'id':request_id,'method':method,'params':params}); return await future
+        async def run():
+            nonlocal final_content
+            initialize=asyncio.create_task(request('initialize',{'clientInfo':{'name':'agent_execution_plane_execution','title':'Agent Execution Plane','version':'0.4.0'},'capabilities':{'experimentalApi':True}}))
+            while not initialize.done(): await consume_one(); await asyncio.sleep(0)
+            result=await initialize
+            if CODEX_VERSION not in str(result.get('userAgent','')): raise CodexRuntimeError('runtime_or_model_incompatible')
+            await write({'method':'initialized'})
+            dynamic=[{'type':'function','name':t.name,'description':t.description,'inputSchema':t.input_schema,'deferLoading':False} for t in tools]
+            thread_task=asyncio.create_task(request('thread/start',{'model':model,'ephemeral':True,'cwd':str(self.codex_home),'approvalPolicy':'never','approvalsReviewer':'user','baseInstructions':'','developerInstructions':'','environments':[],'instructionSources':[],'dynamicTools':dynamic}))
+            while not thread_task.done(): await consume_one(); await asyncio.sleep(0)
+            thread=(await thread_task)['thread']; thread_id=thread['id']
+            text=json.dumps(messages,ensure_ascii=False,sort_keys=True,separators=(',',':'))
+            params={'threadId':thread_id,'input':[{'type':'text','text':text,'text_elements':[]}]}
+            if result_schema is not None: params['outputSchema']=result_schema
+            turn_task=asyncio.create_task(request('turn/start',params))
+            while not turn_task.done(): await consume_one(); await asyncio.sleep(0)
+            turn_id=(await turn_task)['turn']['id']
+            while True:
+                message=await consume_one()
+                if message.get('method')=='turn/completed' and message.get('params',{}).get('turn',{}).get('id')==turn_id:
+                    turn=message['params']['turn']
+                    if turn.get('status')!='completed': raise CodexRuntimeError('provider_failure')
+                    return ProviderReply(final_content)
+        async def consume_one():
+            nonlocal final_content
+            line=await process.stdout.readline()
+            if not line: raise CodexRuntimeError('provider_failure')
+            try: message=json.loads(line)
+            except json.JSONDecodeError: raise CodexRuntimeError('provider_failure') from None
+            if 'id' in message and ('result' in message or 'error' in message):
+                future=pending.pop(str(message['id']),None)
+                if future:
+                    if 'error' in message: future.set_exception(CodexRuntimeError('provider_failure'))
+                    else: future.set_result(message['result'])
+                return message
+            method=message.get('method'); params=message.get('params',{})
+            if 'id' in message:
+                if method=='item/tool/call' and isinstance(params,dict) and any(t.name==params.get('tool') for t in tools):
+                    call=ToolCall(str(params.get('callId','')),str(params['tool']),params.get('arguments'))
+                    try:
+                        output=await dispatch(call); response={'contentItems':[{'type':'inputText','text':json.dumps(output,ensure_ascii=False,separators=(',',':'))}],'success':True}
+                    except Exception:
+                        response={'contentItems':[{'type':'inputText','text':'technical_failure'}],'success':False}
+                        await write({'id':message['id'],'result':response})
+                        raise
+                    await write({'id':message['id'],'result':response})
+                else:
+                    await write({'id':message['id'],'error':{'code':-32000,'message':'unattended_request_denied'}})
+                return message
+            if method=='item/completed':
+                item=params.get('item',{}) if isinstance(params,dict) else {}
+                if item.get('type')=='agentMessage': final_content=item.get('text') or item.get('content')
+            return message
+        try:
+            return await asyncio.wait_for(run(),timeout=timeout)
+        except asyncio.TimeoutError: raise CodexRuntimeError('attempt_timeout') from None
+        finally:
+            if process.stdin: process.stdin.close()
+            if process.returncode is None:
+                process.terminate()
+                try: await asyncio.wait_for(process.wait(),2)
+                except asyncio.TimeoutError: process.kill(); await process.wait()

@@ -89,5 +89,14 @@ class ModelTests(unittest.TestCase):
     def test_known_incompatible_ollama_is_not_saved(self):
         FakeProvider.ollama_tools=False; model,result=self.store.save(self.candidate()); self.assertIsNone(model); self.assertEqual(result.state,"incompatible"); self.assertEqual(self.store.list(),[])
 
+    def test_in_use_locks_technical_changes_disable_and_delete_but_not_priority(self):
+        first,_=self.store.save(self.candidate(name='First'));second,_=self.store.save(self.candidate(name='Second'))
+        self.store.begin_use(first['id']);self.assertTrue(self.store.list()[0]['in_use'])
+        with self.assertRaisesRegex(RuntimeError,'model_in_use'):self.store.delete(first['id'])
+        with self.assertRaisesRegex(RuntimeError,'model_in_use'):self.store.set_enabled(first['id'],False)
+        with self.assertRaisesRegex(RuntimeError,'model_in_use'):self.store.save(self.candidate(name='Changed'),first['id'])
+        self.store.reorder([second['id'],first['id']]);self.assertEqual(self.store.list()[1]['id'],first['id'])
+        self.store.end_use(first['id']);self.assertFalse(self.store.list()[1]['in_use'])
+
 
 if __name__ == "__main__": unittest.main()

@@ -14,6 +14,7 @@ from agent_execution_plane.admin_ui import ADMIN_JS
 from agent_execution_plane.codex_runtime import CODEX_VERSION, CONFIG, CodexRuntime, CodexRuntimeError, child_environment, ensure_codex_home
 from agent_execution_plane.database import initialize
 from agent_execution_plane.models import Candidate, ModelStore
+from agent_execution_plane.execution import Capability
 
 FAKE_SERVER = Path(__file__).with_name("fake_codex_app_server.py")
 
@@ -97,6 +98,18 @@ class CodexOAuthTests(unittest.TestCase):
         self.assertIn("provider:'Fournisseur'", ADMIN_JS); self.assertIn("tr(m.provider_family)", ADMIN_JS)
         self.assertIn("credential:oauth?null", ADMIN_JS); self.assertIn("base_url:oauth?null", ADMIN_JS)
         self.assertIn("chatgptDeviceCode", Path(__file__).parents[1].joinpath("src/agent_execution_plane/codex_runtime.py").read_text(encoding="utf-8"))
+
+    def test_execution_wrapper_routes_only_dynamic_tools_and_denies_commands(self):
+        async def scenario():
+            environment={"AEP_FAKE_OBSERVATION":str(self.observation),"AEP_FAKE_EXECUTION":"1","OPENAI_API_KEY":"forbidden"}
+            runtime=CodexRuntime(self.root/'codex-home',command=(sys.executable,str(FAKE_SERVER)),environment=environment);calls=[]
+            async def dispatch(call):calls.append(call);return {'accepted':call.arguments['value']}
+            reply=await runtime.execute_turn('gpt-test',[{'role':'user','content':'source'}],(Capability('source_tool','source',{'type':'object'}),),None,10,dispatch)
+            self.assertEqual(reply.content,'done');self.assertEqual([(c.name,c.arguments) for c in calls],[('source_tool',{'value':4})])
+        import asyncio;asyncio.run(scenario())
+        observed=self.observations();start=next(x for x in observed if x['method']=='thread/start')['params']
+        self.assertTrue(start['ephemeral']);self.assertEqual(start['environments'],[]);self.assertEqual(start['instructionSources'],[]);self.assertEqual([x['name'] for x in start['dynamicTools']],['source_tool'])
+        denial=next(x for x in observed if x['method']=='observed_denial')['response'];self.assertEqual(denial['error']['message'],'unattended_request_denied')
 
 
 if __name__ == "__main__": unittest.main()

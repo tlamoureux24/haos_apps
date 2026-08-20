@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import math
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -34,6 +35,7 @@ class ModelStore:
         self.database = database
         self.key = load_or_create_key(private_dir / "provider-key")
         self.codex_runtime = codex_runtime
+        self._usage_lock=threading.Lock(); self._in_use:set[str]=set()
 
     def _validate_fields(self, candidate: Candidate) -> Candidate:
         if not candidate.display_name.strip() or len(candidate.display_name) > 120: raise ValueError("invalid_name")
@@ -48,7 +50,20 @@ class ModelStore:
         return candidate
 
     def _public(self, row: sqlite3.Row) -> dict[str, object]:
-        return {"id": row["id"], "display_name": row["display_name"], "provider_family": row["provider_family"], "base_url": row["base_url"], "provider_model": row["provider_model"], "credential_configured": row["encrypted_credential"] is not None, "enabled": bool(row["enabled"]), "priority": row["priority"], "timeout_minutes": row["timeout_minutes"], "technical_state": "disabled" if not row["enabled"] else row["technical_state"], "provider_state": row["technical_state"], "diagnostic_code": row["diagnostic_code"], "checked_at": row["checked_at"], "in_use": False}
+        with self._usage_lock: in_use=row['id'] in self._in_use
+        return {"id": row["id"], "display_name": row["display_name"], "provider_family": row["provider_family"], "base_url": row["base_url"], "provider_model": row["provider_model"], "credential_configured": row["encrypted_credential"] is not None, "enabled": bool(row["enabled"]), "priority": row["priority"], "timeout_minutes": row["timeout_minutes"], "technical_state": "disabled" if not row["enabled"] else row["technical_state"], "provider_state": row["technical_state"], "diagnostic_code": row["diagnostic_code"], "checked_at": row["checked_at"], "in_use": in_use}
+
+    def execution_models(self):
+        with connect(self.database) as db: rows=db.execute("SELECT * FROM models WHERE enabled=1 AND technical_state NOT IN ('incompatible') ORDER BY priority").fetchall()
+        return [dict(row)|{'credential':decrypt(self.key,row['encrypted_credential'])} for row in rows]
+
+    def begin_use(self,model_id):
+        with self._usage_lock: self._in_use.add(model_id)
+    def end_use(self,model_id):
+        with self._usage_lock: self._in_use.discard(model_id)
+    def _require_not_in_use(self,model_id):
+        with self._usage_lock:
+            if model_id in self._in_use: raise RuntimeError('model_in_use')
 
     def list(self) -> list[dict[str, object]]:
         with connect(self.database) as db:
@@ -59,6 +74,7 @@ class ModelStore:
         with connect(self.database) as db: return db.execute("SELECT * FROM models WHERE id=?", (model_id,)).fetchone()
 
     def save(self, candidate: Candidate, model_id: str | None = None) -> tuple[dict[str, object] | None, ProviderCheck]:
+        if model_id: self._require_not_in_use(model_id)
         candidate = self._validate_fields(candidate)
         previous = self._row(model_id) if model_id else None
         if model_id and previous is None: raise KeyError("model_not_found")
@@ -80,6 +96,7 @@ class ModelStore:
         return self._public(self._row(model_id)), result
 
     def delete(self, model_id: str) -> bool:
+        self._require_not_in_use(model_id)
         with connect(self.database) as db:
             found = db.execute("DELETE FROM models WHERE id=?", (model_id,)).rowcount
             if found:
@@ -89,6 +106,7 @@ class ModelStore:
         return bool(found)
 
     def set_enabled(self, model_id: str, enabled: bool) -> bool:
+        if not enabled: self._require_not_in_use(model_id)
         with connect(self.database) as db: found = db.execute("UPDATE models SET enabled=?,updated_at=? WHERE id=?", (int(enabled), now_iso(), model_id)).rowcount
         if found: record_activity(self.database, "model_enabled" if enabled else "model_disabled", "configuration", "success")
         return bool(found)
