@@ -30,6 +30,8 @@ class StandaloneLifecycleTests(unittest.TestCase):
         self.assertTrue(restarted.revoke_credential());self.assertEqual(restarted.authenticate(second),"not_configured")
         self.assertIn("tokenOnce",ADMIN_JS);self.assertIn("navigator.clipboard.writeText",ADMIN_JS);self.assertNotIn("localStorage.setItem('standalone",ADMIN_JS);self.assertNotIn("sessionStorage",ADMIN_JS)
         self.assertIn("function clearStandaloneToken()",ADMIN_JS);self.assertIn("if(view!=='api')clearStandaloneToken()",ADMIN_JS)
+        self.assertIn("id=\"hide-token\"",ADMIN_JS);self.assertIn("document.getElementById('hide-token').onclick=clearStandaloneToken",ADMIN_JS)
+        self.assertEqual(ADMIN_JS.count("setInterval("),1);self.assertIn("clearInterval(viewTimer)",ADMIN_JS);self.assertIn("refreshView(view);viewTimer=setInterval",ADMIN_JS);self.assertNotIn("setTimeout(loadOAuthAccount",ADMIN_JS)
 
     def test_atomic_single_slot_active_pending_ack_and_stale_abandon(self):
         barrier=threading.Barrier(2)

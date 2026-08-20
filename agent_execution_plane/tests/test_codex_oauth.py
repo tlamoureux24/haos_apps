@@ -10,7 +10,7 @@ import unittest
 from contextlib import closing
 from pathlib import Path
 
-from agent_execution_plane.admin_ui import ADMIN_JS
+from agent_execution_plane.admin_ui import ADMIN_CSS, ADMIN_JS
 from agent_execution_plane.codex_runtime import CODEX_VERSION, CONFIG, CodexRuntime, CodexRuntimeError, child_environment, ensure_codex_home
 from agent_execution_plane.database import initialize
 from agent_execution_plane.models import Candidate, ModelStore
@@ -119,6 +119,10 @@ class CodexOAuthTests(unittest.TestCase):
         self.assertIn("credential:oauth?null", ADMIN_JS); self.assertIn("base_url:oauth?null", ADMIN_JS)
         self.assertIn("form.reset();form.id.value=model?.id??''", ADMIN_JS)
         self.assertIn("data={id:f.id.value||null", ADMIN_JS)
+        self.assertGreaterEqual(ADMIN_JS.count("${m.in_use?'disabled':''}"),3)
+        self.assertIn(".primary:disabled,.secondary:disabled,.danger:disabled",ADMIN_CSS)
+        self.assertIn("model_in_use:'Ce modèle est en cours d’utilisation.'",ADMIN_JS);self.assertIn("model_in_use:'This model is currently in use.'",ADMIN_JS)
+        self.assertIn("if(!response.ok)actionMessage.textContent=tr((await response.json()).error.code)",ADMIN_JS)
         self.assertIn("chatgptDeviceCode", Path(__file__).parents[1].joinpath("src/agent_execution_plane/codex_runtime.py").read_text(encoding="utf-8"))
 
     def test_execution_wrapper_routes_only_dynamic_tools_and_denies_commands(self):
