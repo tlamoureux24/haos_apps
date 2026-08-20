@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane is the model reasoning and execution component of the suite. Version `0.1.1` implements only the Lot 0 executable Home Assistant OS App shell: secure listeners, Ingress administration, health checks, generation-1 SQLite plumbing, and a safe persistent activity journal.
+Agent Execution Plane is the model reasoning and execution component of the suite. Version `0.1.2` implements only the Lot 0 executable Home Assistant OS App shell: secure listeners, Ingress administration, health checks, generation-1 SQLite plumbing, and a safe persistent activity journal.
 
 ## Install and operate
 

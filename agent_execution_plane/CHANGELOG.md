@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Align the Ingress administration container maximum width with Agent Control Plane at 1840 px.
+
 ## 0.1.1
 
 - Align the generic s6-overlay AppArmor bootstrap rules with the HAOS-proven Agent Control Plane profile, including explicit directory traversal permissions.

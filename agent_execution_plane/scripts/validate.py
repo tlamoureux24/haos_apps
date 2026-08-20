@@ -37,15 +37,16 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
     acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "0.1.1"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    for text in ('slug: "agent_execution_plane"', 'version: "0.1.2"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "0.1.1"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "0.1.2"' not in package: raise RuntimeError("Version sources differ")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 2: raise RuntimeError("Unprivileged two-listener runtime missing")
     if launcher.count("--log-config /app/src/agent_execution_plane/uvicorn_logging.json") != 2: raise RuntimeError("Timestamped listener logging missing")
     if "os.geteuid() != 1000" not in main_py or "ingress_only" not in main_py or "x-ingress-path" not in main_py: raise RuntimeError("Ingress boundary missing")
     for invariant in ("Agent Execution Plane <b>v{__version__}</b>", "/admin/assets/icon.png", "aep-language", "navigator.language", "aep-theme", "prefers-color-scheme", "activityTitle", "app_stopped:'Application arrêtée'", "app_stopped:'Application stopped'"):
         if invariant not in main_py + ui: raise RuntimeError(f"UI invariant missing: {invariant}")
+    if ".app{max-width:1840px" not in ui or ".app{max-width:1400px" in ui: raise RuntimeError("Administration layout width must match Agent Control Plane")
     forbidden = ("/api/v1/execute", "jobs_claim_v1", "tools/call", "ollama", "chat/completions")
     source = "".join(p.read_text(errors="ignore") for p in (ROOT / "src").rglob("*.py"))
     for item in forbidden:
