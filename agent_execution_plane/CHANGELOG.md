@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Clarify the normative ACP/AEP responsibility boundary: ACP remains the sole authority for connector governance and operational capability selection; AEP consumes the source-supplied model capability envelope, performs only technical consistency checks, and keeps ACP lifecycle tools outside model visibility.
+
 ## 0.3.1
 
 - Polish the bilingual Models table empty state, provider heading and provider-family labels.
