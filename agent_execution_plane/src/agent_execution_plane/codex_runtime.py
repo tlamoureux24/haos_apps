@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+import logging
 import os
+import re
 import selectors
 import subprocess
 import threading
@@ -18,6 +20,10 @@ from agent_execution_plane.execution import ProviderReply, ToolCall
 CODEX_VERSION = "0.144.4"
 FORBIDDEN_AUTH_ENV = {"OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"}
 REQUEST_TIMEOUT_SECONDS = 15.0
+CODEX_DIAG_PREFIX = "AEP_CODEX_DIAG"
+CODEX_STDERR_LINE_LIMIT = 512
+CODEX_STDERR_TOTAL_LIMIT = 8192
+LOGGER = logging.getLogger("uvicorn.error")
 ALLOWED_METHODS = {
     "account/login/start",
     "account/login/cancel",
@@ -45,6 +51,22 @@ apply_patch_freeform = false
 
 class CodexRuntimeError(RuntimeError):
     """Bounded runtime/protocol failure with no upstream payload attached."""
+
+
+def _safe_label(value: object) -> str:
+    return re.sub(r"[^A-Za-z0-9_./:-]", "_", str(value))[:120]
+
+
+def _sanitize_codex_stderr(value: str) -> str:
+    """Bound one stderr line and remove likely secrets, URLs, and payloads."""
+    text = value.replace("\r", " ").replace("\n", " ")
+    text = re.sub(r"https?://\S+", "[REDACTED_URL]", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?i)\bBearer\s+\S+", "Bearer [REDACTED]", text)
+    text = re.sub(r"(?i)\b(authorization|token|credential|secret|api[_-]?key)\b\s*[:=]\s*[^\s,;]+", r"\1=[REDACTED]", text)
+    text = re.sub(r"([\[{]).*?([\]}])", r"\1REDACTED_PAYLOAD\2", text)
+    text = re.sub(r"([\"']).{8,}?\1", r"\1REDACTED\1", text)
+    text = re.sub(r"\b[A-Za-z0-9_+/=-]{32,}\b", "[REDACTED_OPAQUE]", text)
+    return text[:CODEX_STDERR_LINE_LIMIT]
 
 
 def ensure_codex_home(path: Path) -> None:
@@ -89,6 +111,7 @@ class CodexRuntime:
         self.command = command
         self.environment = environment
         self._process: subprocess.Popen[str] | None = None
+        self._stderr_thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._pending_login: dict[str, str] | None = None
 
@@ -102,13 +125,16 @@ class CodexRuntime:
                 command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 text=True,
                 encoding="utf-8",
                 cwd=self.codex_home,
                 env=child_environment(self.codex_home, self.environment),
                 bufsize=1,
             )
+            LOGGER.debug("%s subprocess_start mode=account", CODEX_DIAG_PREFIX)
+            self._stderr_thread = threading.Thread(target=self._drain_stderr, args=(self._process,), daemon=True, name="aep-codex-stderr")
+            self._stderr_thread.start()
             result = self._exchange("initialize", {"clientInfo": {"name": "agent_execution_plane", "title": "Agent Execution Plane", "version": "0.3.0"}, "capabilities": {"experimentalApi": False}}, allow_initialize=True)
             if CODEX_VERSION not in str(result.get("userAgent", "")):
                 raise CodexRuntimeError("runtime_or_model_incompatible")
@@ -122,6 +148,18 @@ class CodexRuntime:
             raise CodexRuntimeError("runtime_or_model_incompatible")
         self._process.stdin.write(json.dumps(message, separators=(",", ":")) + "\n")
         self._process.stdin.flush()
+
+    @staticmethod
+    def _drain_stderr(process: subprocess.Popen[str]) -> None:
+        if process.stderr is None:
+            return
+        consumed = 0
+        while chunk := process.stderr.read(4096):
+            if consumed < CODEX_STDERR_TOTAL_LIMIT:
+                safe = _sanitize_codex_stderr(chunk)
+                consumed += len(safe)
+                if safe:
+                    LOGGER.debug("%s stderr text=%s", CODEX_DIAG_PREFIX, safe)
 
     def _read(self) -> dict[str, object]:
         if self._process is None or self._process.stdout is None:
@@ -227,6 +265,7 @@ class CodexRuntime:
 
     def _close_unlocked(self) -> None:
         process, self._process = self._process, None
+        stderr_thread, self._stderr_thread = self._stderr_thread, None
         if process is None:
             return
         if process.stdin:
@@ -239,30 +278,46 @@ class CodexRuntime:
             process.wait(timeout=2)
         if process.stdout:
             process.stdout.close()
+        if stderr_thread:
+            stderr_thread.join(timeout=2)
+        if process.stderr:
+            process.stderr.close()
 
     async def execute_turn(self, model: str, messages: list[dict[str, object]], tools, result_schema, timeout: float, dispatch, *, model_provider: str | None = None):
         """Run one ephemeral, unattended execution with only AEP dynamic calls handled."""
         ensure_codex_home(self.codex_home)
         process = await asyncio.create_subprocess_exec(
             *(self.command or (bundled_codex(), "app-server", "--listen", "stdio://")),
-            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
             cwd=self.codex_home, env=child_environment(self.codex_home,self.environment),
         )
+        LOGGER.debug("%s subprocess_start mode=turn", CODEX_DIAG_PREFIX)
         pending: dict[str, asyncio.Future] = {}
         final_content = None
+        turn_outcome = "failure"
+        async def drain_stderr():
+            consumed=0
+            while True:
+                chunk=await process.stderr.read(4096)
+                if not chunk:return
+                if consumed>=CODEX_STDERR_TOTAL_LIMIT:continue
+                safe=_sanitize_codex_stderr(chunk.decode('utf-8',errors='replace'));consumed+=len(safe)
+                if safe:LOGGER.debug("%s stderr text=%s",CODEX_DIAG_PREFIX,safe)
+        stderr_task=asyncio.create_task(drain_stderr(),name='aep-codex-stderr')
         async def write(value):
             process.stdin.write((json.dumps(value,separators=(",",":"))+"\n").encode()); await process.stdin.drain()
         async def request(method,params):
             request_id=uuid4().hex; future=asyncio.get_running_loop().create_future(); pending[request_id]=future
             await write({'id':request_id,'method':method,'params':params}); return await future
         async def run():
-            nonlocal final_content
-            initialize=asyncio.create_task(request('initialize',{'clientInfo':{'name':'agent_execution_plane_execution','title':'Agent Execution Plane','version':'0.5.3'},'capabilities':{'experimentalApi':True}}))
+            nonlocal final_content,turn_outcome
+            initialize=asyncio.create_task(request('initialize',{'clientInfo':{'name':'agent_execution_plane_execution','title':'Agent Execution Plane','version':'0.5.4'},'capabilities':{'experimentalApi':True}}))
             while not initialize.done(): await consume_one(); await asyncio.sleep(0)
             result=await initialize
             if CODEX_VERSION not in str(result.get('userAgent','')): raise CodexRuntimeError('runtime_or_model_incompatible')
             await write({'method':'initialized'})
             dynamic=[{'type':'function','name':t.name,'description':t.description,'inputSchema':t.input_schema,'deferLoading':False} for t in tools]
+            LOGGER.debug("%s dynamic_tools count=%d names=%s",CODEX_DIAG_PREFIX,len(dynamic),','.join(_safe_label(t.name) for t in tools) or '-')
             thread_params={'model':model,'ephemeral':True,'cwd':str(self.codex_home),'approvalPolicy':'never','approvalsReviewer':'user','baseInstructions':'','developerInstructions':'','environments':[],'instructionSources':[],'dynamicTools':dynamic}
             if model_provider is not None: thread_params['modelProvider']=model_provider
             thread_task=asyncio.create_task(request('thread/start',thread_params))
@@ -279,6 +334,7 @@ class CodexRuntime:
                 if message.get('method')=='turn/completed' and message.get('params',{}).get('turn',{}).get('id')==turn_id:
                     turn=message['params']['turn']
                     if turn.get('status')!='completed': raise CodexRuntimeError('provider_failure')
+                    turn_outcome='success'
                     return ProviderReply(final_content)
         async def consume_one():
             nonlocal final_content
@@ -293,17 +349,23 @@ class CodexRuntime:
                     else: future.set_result(message['result'])
                 return message
             method=message.get('method'); params=message.get('params',{})
+            if isinstance(method,str):LOGGER.debug("%s rpc_received method=%s",CODEX_DIAG_PREFIX,_safe_label(method))
             if 'id' in message:
                 if method=='item/tool/call' and isinstance(params,dict) and any(t.name==params.get('tool') for t in tools):
+                    LOGGER.debug("%s tool_call_received name=%s",CODEX_DIAG_PREFIX,_safe_label(params.get('tool')))
                     call=ToolCall(str(params.get('callId','')),str(params['tool']),params.get('arguments'))
                     try:
+                        LOGGER.debug("%s dispatch_start name=%s",CODEX_DIAG_PREFIX,_safe_label(call.name))
                         output=await dispatch(call); response={'contentItems':[{'type':'inputText','text':json.dumps(output,ensure_ascii=False,separators=(',',':'))}],'success':True}
-                    except Exception:
+                        LOGGER.debug("%s dispatch_success name=%s",CODEX_DIAG_PREFIX,_safe_label(call.name))
+                    except Exception as exc:
+                        LOGGER.debug("%s dispatch_failure name=%s error_type=%s",CODEX_DIAG_PREFIX,_safe_label(call.name),_safe_label(type(exc).__name__))
                         response={'contentItems':[{'type':'inputText','text':'technical_failure'}],'success':False}
                         await write({'id':message['id'],'result':response})
                         raise
                     await write({'id':message['id'],'result':response})
                 else:
+                    LOGGER.debug("%s server_request_denied method=%s",CODEX_DIAG_PREFIX,_safe_label(method))
                     await write({'id':message['id'],'error':{'code':-32000,'message':'unattended_request_denied'}})
                 return message
             if method=='item/completed':
@@ -319,3 +381,7 @@ class CodexRuntime:
                 process.terminate()
                 try: await asyncio.wait_for(process.wait(),2)
                 except asyncio.TimeoutError: process.kill(); await process.wait()
+            try:await asyncio.wait_for(stderr_task,2)
+            except asyncio.TimeoutError:
+                stderr_task.cancel();await asyncio.gather(stderr_task,return_exceptions=True)
+            LOGGER.debug("%s turn_end outcome=%s exit_code=%s",CODEX_DIAG_PREFIX,turn_outcome,process.returncode)

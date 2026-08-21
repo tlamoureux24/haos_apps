@@ -10,6 +10,11 @@ observation = Path(os.environ["AEP_FAKE_OBSERVATION"])
 execution = os.environ.get("AEP_FAKE_EXECUTION") == "1"
 models = [item for item in os.environ.get("AEP_FAKE_MODELS", "gpt-test").split(",") if item]
 
+if stderr_text := os.environ.get("AEP_FAKE_STDERR"):
+    sys.stderr.write(stderr_text + "\n")
+    sys.stderr.write("x" * 131072 + "\n")
+    sys.stderr.flush()
+
 
 def send(value):
     sys.stdout.write(json.dumps(value) + "\n")

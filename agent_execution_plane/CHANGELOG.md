@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.4
+
+- Add bounded, sanitized DEBUG diagnostics for Codex subprocess lifecycle, JSON-RPC methods, unattended request refusals, and dynamic-tool dispatch without logging execution payloads or secrets.
+- Drain Codex stderr concurrently and clean up its reader with the subprocess while preserving the existing unattended request policy and dispatch behavior.
+
 ## 0.5.3
 
 - Align the Activity freshness indicator, credential workflow, and model forms with the ACP polling and right-drawer interaction patterns.

@@ -11,7 +11,7 @@ from contextlib import closing
 from pathlib import Path
 
 from agent_execution_plane.admin_ui import ADMIN_CSS, ADMIN_JS
-from agent_execution_plane.codex_runtime import CODEX_VERSION, CONFIG, CodexRuntime, CodexRuntimeError, child_environment, ensure_codex_home
+from agent_execution_plane.codex_runtime import CODEX_STDERR_LINE_LIMIT, CODEX_VERSION, CONFIG, CodexRuntime, CodexRuntimeError, child_environment, ensure_codex_home
 from agent_execution_plane.database import initialize
 from agent_execution_plane.models import Candidate, ModelStore
 from agent_execution_plane.execution import Capability
@@ -132,15 +132,38 @@ class CodexOAuthTests(unittest.TestCase):
 
     def test_execution_wrapper_routes_only_dynamic_tools_and_denies_commands(self):
         async def scenario():
-            environment={"AEP_FAKE_OBSERVATION":str(self.observation),"AEP_FAKE_EXECUTION":"1","OPENAI_API_KEY":"forbidden"}
+            environment={"AEP_FAKE_OBSERVATION":str(self.observation),"AEP_FAKE_EXECUTION":"1","AEP_FAKE_STDERR":'Authorization: Bearer stderr-secret https://mcp.invalid/path {"prompt":"PAYLOAD-CANARY"}',"OPENAI_API_KEY":"forbidden"}
             runtime=CodexRuntime(self.root/'codex-home',command=(sys.executable,str(FAKE_SERVER)),environment=environment);calls=[]
             async def dispatch(call):calls.append(call);return {'accepted':call.arguments['value']}
-            reply=await runtime.execute_turn('gpt-test',[{'role':'user','content':'source'}],(Capability('source_tool','source',{'type':'object'}),),None,10,dispatch)
+            with self.assertLogs('uvicorn.error',level='DEBUG') as captured:
+                reply=await runtime.execute_turn('gpt-test',[{'role':'user','content':'PROMPT-CANARY'}],(Capability('source_tool','DESCRIPTION-CANARY',{'type':'object','title':'SCHEMA-CANARY'}),),None,10,dispatch)
             self.assertEqual(reply.content,'done');self.assertEqual([(c.name,c.arguments) for c in calls],[('source_tool',{'value':4})])
+            logs='\n'.join(captured.output)
+            for marker in ('subprocess_start mode=turn','dynamic_tools count=1 names=source_tool','rpc_received method=item/commandExecution/requestApproval','server_request_denied method=item/commandExecution/requestApproval','tool_call_received name=source_tool','dispatch_start name=source_tool','dispatch_success name=source_tool','turn_end outcome=success'):
+                self.assertIn('AEP_CODEX_DIAG '+marker,logs)
+            for secret in ('stderr-secret','mcp.invalid','PAYLOAD-CANARY','PROMPT-CANARY','DESCRIPTION-CANARY','SCHEMA-CANARY','{"value":4}',"{'value': 4}"):
+                self.assertNotIn(secret,logs)
+            stderr_lines=[line for line in captured.output if 'AEP_CODEX_DIAG stderr text=' in line]
+            self.assertTrue(stderr_lines);self.assertTrue(all(len(line.rsplit('text=',1)[1])<=CODEX_STDERR_LINE_LIMIT for line in stderr_lines))
+            self.assertFalse(any(task.get_name()=='aep-codex-stderr' for task in asyncio.all_tasks()))
         import asyncio;asyncio.run(scenario())
         observed=self.observations();start=next(x for x in observed if x['method']=='thread/start')['params']
         self.assertTrue(start['ephemeral']);self.assertEqual(start['environments'],[]);self.assertEqual(start['instructionSources'],[]);self.assertEqual([x['name'] for x in start['dynamicTools']],['source_tool'])
         denial=next(x for x in observed if x['method']=='observed_denial')['response'];self.assertEqual(denial['error']['message'],'unattended_request_denied')
+
+    def test_execution_diagnostics_log_dispatch_failure_and_cleanup(self):
+        async def scenario():
+            environment={"AEP_FAKE_OBSERVATION":str(self.observation),"AEP_FAKE_EXECUTION":"1"}
+            runtime=CodexRuntime(self.root/'codex-home',command=(sys.executable,str(FAKE_SERVER)),environment=environment)
+            async def dispatch(_):raise RuntimeError('DISPATCH-SECRET')
+            with self.assertLogs('uvicorn.error',level='DEBUG') as captured:
+                with self.assertRaises(RuntimeError):
+                    await runtime.execute_turn('gpt-test',[],(Capability('source_tool','source',{'type':'object'}),),None,10,dispatch)
+            logs='\n'.join(captured.output)
+            self.assertIn('AEP_CODEX_DIAG dispatch_failure name=source_tool error_type=RuntimeError',logs)
+            self.assertIn('AEP_CODEX_DIAG turn_end outcome=failure',logs);self.assertNotIn('DISPATCH-SECRET',logs)
+            self.assertFalse(any(task.get_name()=='aep-codex-stderr' for task in asyncio.all_tasks()))
+        import asyncio;asyncio.run(scenario())
 
 
 if __name__ == "__main__": unittest.main()
