@@ -11,6 +11,17 @@ from validate_apparmor_inventory import covered, executable_rules, main
 
 
 class AppArmorInventoryTests(unittest.TestCase):
+    def test_chromium_proc_and_font_roots_are_explicitly_readable(self):
+        profile = (Path(__file__).resolve().parents[1] / "apparmor.txt").read_text(encoding="utf-8")
+        for rule in (
+            "/proc/ r,",
+            "/proc/** r,",
+            "/etc/fonts/{,**} r,",
+            "/var/cache/fontconfig/{,**} r,",
+        ):
+            with self.subTest(rule=rule):
+                self.assertIn(rule, profile)
+
     def test_exact_and_version_wildcard_rules_cover_observed_paths(self):
         rules = executable_rules("  /bin/sh ix,\n  /usr/bin/python3.* ix,\n  \"/path/with space\" rix,\n")
         self.assertTrue(covered("/bin/sh", rules))

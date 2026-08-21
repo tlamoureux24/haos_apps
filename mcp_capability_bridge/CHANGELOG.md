@@ -2,6 +2,14 @@
 
 All notable changes to MCP Capability Bridge will be documented in this file.
 
+## 0.4.3 — 2026-08-21
+
+### Fixed
+
+- Allow Chromium to open the `/proc/` directory itself, as required by its Linux process utility before browser startup.
+- Allow targeted read access to the installed Fontconfig configuration and cache roots used by headless Chromium.
+- Keep Chromium arguments, network policy, MCP behavior, and all other AppArmor permissions unchanged.
+
 ## 0.4.2 — 2026-08-21
 
 ### Fixed

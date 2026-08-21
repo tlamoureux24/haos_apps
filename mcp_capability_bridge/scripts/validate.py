@@ -27,13 +27,13 @@ def main() -> int:
     security = (ROOT / "src/mcp_capability_bridge/security.py").read_text(encoding="utf-8")
 
     for value in (
-        'slug: "mcp_capability_bridge"', 'version: "0.4.2"',
+        'slug: "mcp_capability_bridge"', 'version: "0.4.3"',
         "  - aarch64", "  - amd64", "init: false", "apparmor: true",
         "tmpfs: true", "backup: cold", "ingress: true", "ingress_port: 8099",
         "  8098/tcp: null",
     ):
         require(config, value, "App metadata invariant")
-    require(package, '__version__ = "0.4.2"', "synchronized package version")
+    require(package, '__version__ = "0.4.3"', "synchronized package version")
     for dependency in ("mcp==1.28.1", "jsonschema[format-nongpl]==4.26.0", "cryptography==50.0.0", "asyncssh==2.24.0", "selenium==4.46.0"):
         require(requirements, dependency, "pinned dependency")
     require(dockerfile, "adduser -S -D -H", "unprivileged user")
@@ -82,6 +82,10 @@ def main() -> int:
         "/data/mcp_capability_bridge.db-{journal,shm,wal} rwlk,",
         "/data/private/credential-pepper rwlk,",
         "/data/private/target-secret-key rwlk,",
+        "/proc/ r,",
+        "/proc/** r,",
+        "/etc/fonts/{,**} r,",
+        "/var/cache/fontconfig/{,**} r,",
     ):
         require(apparmor, rule, "AppArmor runtime rule")
     for forbidden in ("/bin/** ix,", "/usr/bin/** ix,", "/package/** ix,", "/data/**"):
