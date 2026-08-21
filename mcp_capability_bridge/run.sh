@@ -7,6 +7,9 @@ export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH=/app/src
 
 chown "${runtime_uid}:${runtime_gid}" /data
+su-exec mcp-capability-bridge:mcp-capability-bridge install -d -m 0700 /data/private
+su-exec mcp-capability-bridge:mcp-capability-bridge env PYTHONPATH=/app/src \
+  python3 -c 'from pathlib import Path; from mcp_capability_bridge.security import load_or_create_key; load_or_create_key(Path("/data/private/credential-pepper")); load_or_create_key(Path("/data/private/target-secret-key"))'
 
 if [ -f /data/options.json ]; then
   log_level="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("log_level", "info"))')"

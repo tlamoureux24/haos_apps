@@ -30,10 +30,10 @@ https://github.com/tlamoureux24/haos_apps
 
 #### MCP Capability Bridge
 
-Socle expérimental d’une App MCP autonome transformant des accès techniques
-non-MCP en capacités strictement bornées. La version 0.1.0 fournit uniquement
-le shell HAOS, les surfaces réseau isolées et l’interface Ingress commune à la
-suite ; aucun endpoint MCP ni adaptateur n’est encore activé.
+App MCP autonome expérimentale destinée à transformer des accès techniques
+non-MCP en capacités strictement bornées. La version 0.2.0 fournit le serveur
+MCP authentifié, les namespaces multi-clients isolés et l’interface Ingress ;
+aucun adaptateur SSH ou Web n’est encore activé.
 
 Documentation détaillée :
 
@@ -275,10 +275,10 @@ https://github.com/tlamoureux24/haos_apps
 
 #### MCP Capability Bridge
 
-Experimental foundation for an independent MCP App that turns non-MCP
-technical access into strictly bounded capabilities. Version 0.1.0 contains
-only the HAOS shell, isolated network surfaces and suite-aligned Ingress UI;
-no MCP endpoint or adapter is enabled yet.
+Experimental independent MCP App intended to turn non-MCP technical access
+into strictly bounded capabilities. Version 0.2.0 provides the authenticated
+MCP server, isolated multi-client namespaces and Ingress UI; no SSH or Web
+adapter is enabled yet.
 
 Detailed documentation:
 

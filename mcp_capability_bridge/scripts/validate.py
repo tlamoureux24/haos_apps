@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate MCP Capability Bridge Lot 0 repository invariants."""
+"""Validate MCP Capability Bridge Lot 0-1 repository invariants."""
 
 from __future__ import annotations
 
@@ -22,15 +22,20 @@ def main() -> int:
     main_source = (ROOT / "src/mcp_capability_bridge/main.py").read_text(encoding="utf-8")
     apparmor = (ROOT / "apparmor.txt").read_text(encoding="utf-8")
     plan = (ROOT / "IMPLEMENTATION_PLAN.md").read_text(encoding="utf-8")
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    mcp_source = (ROOT / "src/mcp_capability_bridge/mcp_api.py").read_text(encoding="utf-8")
+    security = (ROOT / "src/mcp_capability_bridge/security.py").read_text(encoding="utf-8")
 
     for value in (
-        'slug: "mcp_capability_bridge"', 'version: "0.1.0"',
+        'slug: "mcp_capability_bridge"', 'version: "0.2.0"',
         "  - aarch64", "  - amd64", "init: false", "apparmor: true",
         "tmpfs: true", "backup: cold", "ingress: true", "ingress_port: 8099",
         "  8098/tcp: null",
     ):
         require(config, value, "App metadata invariant")
-    require(package, '__version__ = "0.1.0"', "synchronized package version")
+    require(package, '__version__ = "0.2.0"', "synchronized package version")
+    for dependency in ("mcp==1.28.1", "jsonschema[format-nongpl]==4.26.0", "cryptography==46.0.3"):
+        require(requirements, dependency, "pinned Lot 1 dependency")
     require(dockerfile, "adduser -S -D -H", "unprivileged user")
     require(dockerfile, 'org.opencontainers.image.base.digest="${BASE_IMAGE_DIGEST}"', "base provenance")
     require(dockerfile, "COPY icon.png /app/icon.png", "authoritative icon packaging")
@@ -43,14 +48,19 @@ def main() -> int:
         raise RuntimeError("Launcher must not split listeners across processes")
     for value in ("asyncio.gather", "ManagedServer", "signal.SIGTERM", "signal.SIGINT"):
         require(runtime, value, "shared runtime/shutdown invariant")
-    for value in ('Route("/health/live"', 'Route("/health/ready"', "routes=health"):
+    for value in ('Route("/health/live"', 'Route("/health/ready"', "*health"):
         require(main_source, value, "health route")
-    if 'Route("/mcp"' in main_source:
-        raise RuntimeError("Lot 0 must not expose an MCP endpoint")
-    if any(term in main_source.lower() for term in ("bearer", "credential_verifier", "ssh client", "selenium")):
-        raise RuntimeError("Lot 0 application source exceeds its boundary")
+    for value in ("NamespaceMCP", "OpaqueBearerMiddleware", "streamable_http_app", "session_manager.run"):
+        require(main_source + mcp_source, value, "authenticated MCP invariant")
+    for value in ("secrets.token_urlsafe(32)", "hmac.compare_digest", "TOKEN_PATTERN", "SecretBox"):
+        require(security, value, "credential/secret security invariant")
+    for forbidden in ("paramiko", "asyncssh", "selenium", "playwright", "chromium"):
+        if forbidden in requirements.lower() or forbidden in main_source.lower():
+            raise RuntimeError(f"Lot 1 must not install an adapter runtime: {forbidden}")
     if "Status: **accepted on HAOS — 2026-08-21**." not in plan:
         raise RuntimeError("Implementation plan Lot 0 status must match delivery state")
+    if "Status: **implemented — awaiting HAOS acceptance**." not in plan:
+        raise RuntimeError("Implementation plan Lot 1 status must match delivery state")
     if "capability sys_admin" in apparmor or "network raw" in apparmor or "complain" in apparmor:
         raise RuntimeError("AppArmor contains an excessive permission")
     for rule in (
@@ -58,6 +68,8 @@ def main() -> int:
         "/run/s6/{,**} rwk,", "/run/service/{,**} rwk,",
         "/data/mcp_capability_bridge.db rwlk,",
         "/data/mcp_capability_bridge.db-{journal,shm,wal} rwlk,",
+        "/data/private/credential-pepper rwlk,",
+        "/data/private/target-secret-key rwlk,",
     ):
         require(apparmor, rule, "AppArmor runtime rule")
     for forbidden in ("/bin/** ix,", "/usr/bin/** ix,", "/package/** ix,", "/data/**"):

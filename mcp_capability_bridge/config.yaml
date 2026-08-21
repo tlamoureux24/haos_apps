@@ -1,6 +1,6 @@
 name: "MCP Capability Bridge"
 slug: "mcp_capability_bridge"
-version: "0.1.0"
+version: "0.2.0"
 description: "Bounded technical capabilities exposed through standard MCP"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/mcp_capability_bridge"
 arch:
@@ -24,7 +24,7 @@ ports:
   8098/tcp: null
 
 ports_description:
-  8098/tcp: "Public MCP surface (health only until Lot 1)"
+  8098/tcp: "Authenticated MCP Streamable HTTP surface"
 
 options:
   log_level: "info"

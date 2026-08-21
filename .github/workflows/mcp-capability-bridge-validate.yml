@@ -55,13 +55,35 @@ jobs:
           start
           wait_ready
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/)" = 404
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/mcp)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/mcp)" = 401
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/admin/api/v1/status)" = 404
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18099/)" = 403
-          page="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/)"
+          curl -fsS -D "${root}/headers" -o "${root}/page" -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/
+          page="$(cat "${root}/page")"
+          csrf="$(sed -n 's/^set-cookie: mcb_csrf=\([^;]*\).*/\1/ip' "${root}/headers")"
+          test -n "${csrf}"
           [[ "${page}" == *"MCP Capability Bridge <b>v${version}</b>"* ]]
           [[ "${page}" == *'src="/api/hassio_ingress/ci/admin/assets/icon.png"'* ]]
-          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/status | jq -e '.status=="ready" and .database_generation==1 and .public_surface=="health_only"' >/dev/null
+          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/status | jq -e '.status=="ready" and .database_generation==1 and .public_surface=="authenticated_mcp" and .adapters==[]' >/dev/null
+          first="$(curl -fsS -X POST -H 'X-Ingress-Path: /api/hassio_ingress/ci' -H "Cookie: mcb_csrf=${csrf}" -H "X-CSRF-Token: ${csrf}" -H 'Content-Type: application/json' --data '{"key":"ci_first","display_name":"CI first"}' http://127.0.0.1:18099/admin/api/v1/namespaces)"
+          first_id="$(jq -r '.namespace.id' <<<"${first}")"
+          first_token="$(jq -r '.token' <<<"${first}")"
+          second="$(curl -fsS -X POST -H 'X-Ingress-Path: /api/hassio_ingress/ci' -H "Cookie: mcb_csrf=${csrf}" -H "X-CSRF-Token: ${csrf}" -H 'Content-Type: application/json' --data '{"key":"ci_second","display_name":"CI second"}' http://127.0.0.1:18099/admin/api/v1/namespaces)"
+          second_token="$(jq -r '.token' <<<"${second}")"
+          listed="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/namespaces)"
+          [[ "${listed}" != *"${first_token}"* && "${listed}" != *"${second_token}"* && "${listed}" != *credential_verifier* ]]
+          PYTHONPATH=agent_control_plane/src python3 -c 'import asyncio,sys; from agent_control_plane.connectors import discover_streamable_http; tools=asyncio.run(discover_streamable_http("http://127.0.0.1:18098/mcp",sys.argv[1])); assert tools == []' "${first_token}"
+          rotated="$(curl -fsS -X POST -H 'X-Ingress-Path: /api/hassio_ingress/ci' -H "Cookie: mcb_csrf=${csrf}" -H "X-CSRF-Token: ${csrf}" -H 'Content-Type: application/json' --data "{\"id\":\"${first_id}\"}" http://127.0.0.1:18099/admin/api/v1/namespaces/rotate)"
+          rotated_token="$(jq -r '.token' <<<"${rotated}")"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${first_token}" http://127.0.0.1:18098/mcp)" = 401
+          PYTHONPATH=agent_control_plane/src python3 -c 'import asyncio,sys; from agent_control_plane.connectors import discover_streamable_http; assert asyncio.run(discover_streamable_http("http://127.0.0.1:18098/mcp",sys.argv[1])) == []' "${rotated_token}"
+          curl -fsS -X POST -H 'X-Ingress-Path: /api/hassio_ingress/ci' -H "Cookie: mcb_csrf=${csrf}" -H "X-CSRF-Token: ${csrf}" -H 'Content-Type: application/json' --data "{\"id\":\"${first_id}\"}" http://127.0.0.1:18099/admin/api/v1/namespaces/revoke | jq -e '.status=="revoked"' >/dev/null
+          curl -fsS -X POST -H 'X-Ingress-Path: /api/hassio_ingress/ci' -H "Cookie: mcb_csrf=${csrf}" -H "X-CSRF-Token: ${csrf}" -H 'Content-Type: application/json' --data "{\"id\":\"${first_id}\"}" http://127.0.0.1:18099/admin/api/v1/namespaces/archive | jq -e '.status=="archived"' >/dev/null
+          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/namespaces | jq -e 'all(.namespaces[]; .key!="ci_first")' >/dev/null
+          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' 'http://127.0.0.1:18099/admin/api/v1/namespaces?include_archived=true' | jq -e 'any(.namespaces[]; .key=="ci_first" and .status=="archived")' >/dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${rotated_token}" http://127.0.0.1:18098/mcp)" = 401
+          ! grep -aF "${first_token}" "${root}/data/mcp_capability_bridge.db"
+          ! grep -aF "${second_token}" "${root}/data/mcp_capability_bridge.db"
           css="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/admin.css)"
           js="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/admin.js)"
           [[ "${css}" == *'scrollbar-gutter:stable'* && "${css}" == *'html[data-theme=dark]'* ]]
@@ -70,11 +92,15 @@ jobs:
           test "$(printf '%s\n' "${python_processes}" | sed '/^$/d' | wc -l)" = 1
           test "$(docker exec mcb-smoke /bin/sh -c 'for process in /proc/[0-9]*; do command="$(tr "\0" " " < "${process}/cmdline" 2>/dev/null || true)"; case "${command}" in "python3 -m mcp_capability_bridge.runtime "*) stat -c %u "${process}";; esac; done')" = 1000
           docker exec mcb-smoke su-exec mcp-capability-bridge:mcp-capability-bridge test -f /data/mcp_capability_bridge.db
+          test "$(docker exec mcb-smoke stat -c '%a' /data/private/credential-pepper)" = 600
+          test "$(docker exec mcb-smoke stat -c '%a' /data/private/target-secret-key)" = 600
           docker exec mcb-smoke /bin/sh -c 'for process in /proc/[0-9]*; do readlink -f "${process}/exe" 2>/dev/null || true; done' > mcp-capability-bridge-apparmor-executables.txt
+          python3 mcp_capability_bridge/scripts/validate_apparmor_inventory.py mcp_capability_bridge/apparmor.txt mcp-capability-bridge-apparmor-executables.txt
           docker stop -t 15 mcb-smoke >/dev/null
           docker rm mcb-smoke >/dev/null
           start
           wait_ready
+          PYTHONPATH=agent_control_plane/src python3 -c 'import asyncio,sys; from agent_control_plane.connectors import discover_streamable_http; assert asyncio.run(discover_streamable_http("http://127.0.0.1:18098/mcp",sys.argv[1])) == []' "${second_token}"
           docker stop -t 15 mcb-smoke >/dev/null
       - name: Record image executable inventory
         run: |

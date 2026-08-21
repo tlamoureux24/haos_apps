@@ -1,0 +1,241 @@
+"""Durable namespace, target and publication state."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import sqlite3
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from mcp_capability_bridge.contracts import AdapterRegistry, Capability
+from mcp_capability_bridge.database import connect
+from mcp_capability_bridge.security import IssuedCredential, SecretBox, issue_credential, token_lookup, verify_token
+
+KEY = re.compile(r"^[a-z][a-z0-9_]{1,31}$")
+
+
+def now_iso() -> str:
+    return datetime.now().astimezone().isoformat(timespec="milliseconds")
+
+
+@dataclass(frozen=True)
+class NamespaceContext:
+    namespace_id: str
+    key: str
+    credential_generation: int
+    inventory_revision: int
+
+
+@dataclass(frozen=True)
+class PublishedCapability:
+    namespace_id: str
+    target_id: str
+    target_key: str
+    adapter_type: str
+    configuration: dict[str, Any]
+    encrypted_secret: bytes | None
+    capability: Capability
+
+
+class NamespaceStore:
+    def __init__(self, database_path: Path, pepper: bytes, secret_box: SecretBox, registry: AdapterRegistry):
+        self.database_path = database_path
+        self.pepper = pepper
+        self.secret_box = secret_box
+        self.registry = registry
+
+    def create_namespace(self, key: str, display_name: str) -> tuple[dict[str, object], IssuedCredential]:
+        key = key.strip()
+        display_name = display_name.strip()
+        if not KEY.fullmatch(key) or not 1 <= len(display_name) <= 100:
+            raise ValueError("invalid_namespace")
+        namespace_id = uuid.uuid4().hex
+        credential = issue_credential(namespace_id, self.pepper)
+        timestamp = now_iso()
+        try:
+            with connect(self.database_path) as database:
+                database.execute(
+                    "INSERT INTO namespaces(id,key,display_name,status,credential_id,credential_verifier,credential_generation,inventory_revision,created_at,updated_at) VALUES(?,?,?,'active',?,?,1,1,?,?)",
+                    (namespace_id, key, display_name, credential.credential_id, credential.verifier, timestamp, timestamp),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError("namespace_key_exists") from exc
+        return self.get_namespace(namespace_id), credential
+
+    def get_namespace(self, namespace_id: str) -> dict[str, object]:
+        with connect(self.database_path) as database:
+            row = database.execute(
+                "SELECT id,key,display_name,status,credential_generation,inventory_revision,created_at,updated_at,revoked_at,archived_at FROM namespaces WHERE id=?",
+                (namespace_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError("namespace_not_found")
+        return dict(row)
+
+    def list_namespaces(self, include_archived: bool = False) -> list[dict[str, object]]:
+        where = "" if include_archived else "WHERE status != 'archived'"
+        with connect(self.database_path) as database:
+            rows = database.execute(
+                f"SELECT id,key,display_name,status,credential_generation,inventory_revision,created_at,updated_at,revoked_at,archived_at FROM namespaces {where} ORDER BY created_at,id"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def authenticate(self, token: str) -> NamespaceContext:
+        lookup = token_lookup(token)
+        if lookup is None:
+            raise PermissionError("invalid_credential")
+        namespace_id, credential_id = lookup
+        with connect(self.database_path) as database:
+            row = database.execute(
+                "SELECT id,key,status,credential_id,credential_verifier,credential_generation,inventory_revision FROM namespaces WHERE credential_id=?",
+                (credential_id,),
+            ).fetchone()
+        if row is None or row["id"] != namespace_id or row["status"] != "active" or not verify_token(token, self.pepper, row["credential_verifier"]):
+            raise PermissionError("invalid_credential")
+        return NamespaceContext(row["id"], row["key"], row["credential_generation"], row["inventory_revision"])
+
+    def rotate(self, namespace_id: str) -> IssuedCredential:
+        timestamp = now_iso()
+        with connect(self.database_path) as database:
+            row = database.execute("SELECT status FROM namespaces WHERE id=?", (namespace_id,)).fetchone()
+            if row is None:
+                raise KeyError("namespace_not_found")
+            if row["status"] != "active":
+                raise ValueError("namespace_not_active")
+            credential = issue_credential(namespace_id, self.pepper)
+            database.execute(
+                "UPDATE namespaces SET credential_id=?,credential_verifier=?,credential_generation=credential_generation+1,updated_at=? WHERE id=?",
+                (credential.credential_id, credential.verifier, timestamp, namespace_id),
+            )
+        return credential
+
+    def revoke(self, namespace_id: str) -> bool:
+        timestamp = now_iso()
+        with connect(self.database_path) as database:
+            row = database.execute("SELECT status FROM namespaces WHERE id=?", (namespace_id,)).fetchone()
+            if row is None:
+                raise KeyError("namespace_not_found")
+            if row["status"] == "archived":
+                raise ValueError("namespace_archived")
+            if row["status"] == "revoked":
+                return False
+            database.execute(
+                "UPDATE namespaces SET status='revoked',credential_generation=credential_generation+1,revoked_at=?,updated_at=? WHERE id=?",
+                (timestamp, timestamp, namespace_id),
+            )
+        return True
+
+    def archive(self, namespace_id: str) -> None:
+        timestamp = now_iso()
+        with connect(self.database_path) as database:
+            row = database.execute("SELECT status FROM namespaces WHERE id=?", (namespace_id,)).fetchone()
+            if row is None:
+                raise KeyError("namespace_not_found")
+            if row["status"] != "revoked":
+                raise ValueError("namespace_must_be_revoked")
+            database.execute(
+                "UPDATE namespaces SET status='archived',archived_at=?,updated_at=? WHERE id=?",
+                (timestamp, timestamp, namespace_id),
+            )
+
+    def create_target(self, key: str, display_name: str, adapter_type: str, configuration: dict[str, Any], secret: bytes | None = None) -> dict[str, object]:
+        if not KEY.fullmatch(key) or not 1 <= len(display_name.strip()) <= 100:
+            raise ValueError("invalid_target")
+        adapter = self.registry.get(adapter_type)
+        adapter.validate_target(configuration, secret)
+        capabilities = adapter.capabilities(configuration)
+        if len({item.capability_id for item in capabilities}) != len(capabilities):
+            raise ValueError("duplicate_capability")
+        for capability in capabilities:
+            capability.validated()
+        target_id = uuid.uuid4().hex
+        timestamp = now_iso()
+        envelope = self.secret_box.encrypt(secret) if secret is not None else None
+        encoded = json.dumps(configuration, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        with connect(self.database_path) as database:
+            database.execute(
+                "INSERT INTO targets(id,key,display_name,adapter_type,configuration_json,encrypted_secret,enabled,technical_state,created_at,updated_at) VALUES(?,?,?,?,?,?,1,'valid',?,?)",
+                (target_id, key, display_name.strip(), adapter_type, encoded, envelope, timestamp, timestamp),
+            )
+        return {"id": target_id, "key": key, "display_name": display_name.strip(), "adapter_type": adapter_type, "enabled": True, "technical_state": "valid"}
+
+    def list_targets(self) -> list[dict[str, object]]:
+        with connect(self.database_path) as database:
+            rows = database.execute("SELECT id,key,display_name,adapter_type,enabled,technical_state,created_at,updated_at FROM targets ORDER BY created_at,id").fetchall()
+        return [{**dict(row), "enabled": bool(row["enabled"])} for row in rows]
+
+    def publish(self, namespace_id: str, target_id: str, capability_id: str) -> int:
+        published = self._target_capability(target_id, capability_id)
+        timestamp = now_iso()
+        with connect(self.database_path) as database:
+            namespace = database.execute("SELECT status FROM namespaces WHERE id=?", (namespace_id,)).fetchone()
+            if namespace is None:
+                raise KeyError("namespace_not_found")
+            if namespace["status"] != "active":
+                raise ValueError("namespace_not_active")
+            database.execute(
+                "INSERT INTO publications(namespace_id,target_id,capability_id,published_name,created_at) VALUES(?,?,?,?,?)",
+                (namespace_id, target_id, capability_id, published.capability.name, timestamp),
+            )
+            database.execute("UPDATE namespaces SET inventory_revision=inventory_revision+1,updated_at=? WHERE id=?", (timestamp, namespace_id))
+            revision = database.execute("SELECT inventory_revision FROM namespaces WHERE id=?", (namespace_id,)).fetchone()[0]
+        return revision
+
+    def unpublish(self, namespace_id: str, published_name: str) -> int:
+        timestamp = now_iso()
+        with connect(self.database_path) as database:
+            cursor = database.execute("DELETE FROM publications WHERE namespace_id=? AND published_name=?", (namespace_id, published_name))
+            if cursor.rowcount != 1:
+                raise KeyError("publication_not_found")
+            database.execute("UPDATE namespaces SET inventory_revision=inventory_revision+1,updated_at=? WHERE id=?", (timestamp, namespace_id))
+            return database.execute("SELECT inventory_revision FROM namespaces WHERE id=?", (namespace_id,)).fetchone()[0]
+
+    def list_publications(self) -> list[dict[str, object]]:
+        with connect(self.database_path) as database:
+            rows = database.execute("SELECT p.namespace_id,n.key namespace_key,p.target_id,t.key target_key,p.capability_id,p.published_name,n.inventory_revision FROM publications p JOIN namespaces n ON n.id=p.namespace_id JOIN targets t ON t.id=p.target_id ORDER BY n.key,p.published_name").fetchall()
+        return [dict(row) for row in rows]
+
+    def visible_capabilities(self, namespace_id: str) -> list[PublishedCapability]:
+        with connect(self.database_path) as database:
+            rows = database.execute(
+                "SELECT p.target_id,p.capability_id,t.key target_key,t.adapter_type,t.configuration_json,t.encrypted_secret FROM publications p JOIN targets t ON t.id=p.target_id JOIN namespaces n ON n.id=p.namespace_id WHERE p.namespace_id=? AND n.status='active' AND t.enabled=1 AND t.technical_state='valid' ORDER BY p.published_name",
+                (namespace_id,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            try:
+                published = self._row_capability(namespace_id, row)
+            except ValueError:
+                continue
+            result.append(published)
+        return result
+
+    def resolve(self, namespace_id: str, published_name: str) -> PublishedCapability:
+        for capability in self.visible_capabilities(namespace_id):
+            if capability.capability.name == published_name:
+                return capability
+        raise KeyError("capability_not_available")
+
+    def _target_capability(self, target_id: str, capability_id: str) -> PublishedCapability:
+        with connect(self.database_path) as database:
+            row = database.execute("SELECT id target_id,key target_key,adapter_type,configuration_json,encrypted_secret FROM targets WHERE id=? AND enabled=1 AND technical_state='valid'", (target_id,)).fetchone()
+        if row is None:
+            raise KeyError("target_not_available")
+        return self._row_capability("", {**dict(row), "capability_id": capability_id})
+
+    def _row_capability(self, namespace_id: str, row) -> PublishedCapability:
+        configuration = json.loads(row["configuration_json"])
+        adapter = self.registry.get(row["adapter_type"])
+        capability = next((item.validated() for item in adapter.capabilities(configuration) if item.capability_id == row["capability_id"]), None)
+        if capability is None:
+            raise ValueError("capability_not_available")
+        return PublishedCapability(namespace_id, row["target_id"], row["target_key"], row["adapter_type"], configuration, row["encrypted_secret"], capability)
+
+    def publication_fingerprint(self, namespace_id: str) -> str:
+        encoded = json.dumps([(item.capability.name, item.capability.input_schema) for item in self.visible_capabilities(namespace_id)], sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(encoded.encode()).hexdigest()

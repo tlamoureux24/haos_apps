@@ -80,7 +80,7 @@ Accepted on real HAOS with version 0.1.0: generation-one initialization, the sha
 
 ## Lot 1 — namespaces, authenticated MCP and adapter core
 
-Status: **planned**.
+Status: **implemented — awaiting HAOS acceptance**.
 
 ### Goal
 

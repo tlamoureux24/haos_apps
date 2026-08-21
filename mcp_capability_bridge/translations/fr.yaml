@@ -5,4 +5,4 @@ configuration:
 network:
   8098/tcp:
     name: Port MCP public
-    description: Port hôte de la surface MCP ; seuls les endpoints de santé existent dans le Lot 0.
+    description: Port hôte du serveur MCP Streamable HTTP authentifié ; les endpoints de santé restent publics.

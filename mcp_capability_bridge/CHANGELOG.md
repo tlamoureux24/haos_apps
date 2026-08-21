@@ -2,6 +2,23 @@
 
 All notable changes to MCP Capability Bridge will be documented in this file.
 
+## 0.2.0 — 2026-08-21
+
+### Added
+
+- Added the authenticated MCP 1.28.1 Streamable HTTP endpoint with an intentionally empty production adapter registry.
+- Added isolated MCP client namespaces with 256-bit one-time Bearer credentials, indexed HMAC-SHA-256 verification, constant-time comparison, rotation, revocation and revoke-before-archive lifecycle.
+- Added separate atomic private keys for credential verification and authenticated target-secret encryption; clear credentials and target secrets are never stored.
+- Added generic static adapter, target, capability and namespace-publication contracts with ACP-compatible tool-name and JSON Schema validation.
+- Added namespace-scoped inventory revisions, `tools/list_changed` notification support, global/per-namespace operation limits, shared counters and emergency cancellation on credential rotation/revocation.
+- Added functional MCP Clients, Targets and MCP Access views with one-time credential drawers and archived-client filtering.
+- Added real contract tests against the current ACP MCP connector, including empty discovery, test-double publication/call, cross-namespace isolation and credential rotation.
+
+### Security
+
+- Public administration routes remain absent from port 8098, while `/mcp` rejects missing, unknown, rotated, revoked and archived credentials.
+- AppArmor now permits only the two exact Bridge private-key files and their atomic temporary names in `/data/private`.
+
 ## 0.1.0 — 2026-08-21
 
 ### Added
