@@ -81,15 +81,12 @@ class AcpContractIntegrationTests(unittest.IsolatedAsyncioTestCase):
         denied = await invoke_streamable_http(self.url, second_token.token, "test_fixture_overview", {"value": "blocked"})
         self.assertTrue(denied["isError"])
         self.assertNotIn("blocked", str(denied))
-
-    async def test_rotation_invalidates_old_acp_connection_credential(self):
-        namespace, issued = self.state.store.create_namespace("acp_client", "ACP client")
-        self.assertEqual(await discover_streamable_http(self.url, issued.token), [])
-        rotated = self.state.store.rotate(namespace["id"])
+        rotated = self.state.store.rotate(first["id"])
         async with httpx.AsyncClient() as client:
-            denied = await client.get(self.url, headers={"Authorization": f"Bearer {issued.token}"})
-        self.assertEqual(denied.status_code, 401)
-        self.assertEqual(await discover_streamable_http(self.url, rotated.token), [])
+            rejected = await client.get(self.url, headers={"Authorization": f"Bearer {first_token.token}"})
+        self.assertEqual(rejected.status_code, 401)
+        rotated_inventory = await discover_streamable_http(self.url, rotated.token)
+        self.assertEqual([tool["name"] for tool in rotated_inventory], ["test_fixture_overview"])
 
 
 if __name__ == "__main__":
