@@ -5,3 +5,4 @@ mcp==1.28.1
 jsonschema[format-nongpl]==4.26.0
 cryptography==50.0.0
 asyncssh==2.24.0
+selenium==4.46.0

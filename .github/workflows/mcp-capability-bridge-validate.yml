@@ -40,6 +40,17 @@ jobs:
             --tag "mcp-capability-bridge:${version}" \
             mcp_capability_bridge
           test "$(docker image inspect "mcp-capability-bridge:${version}" --format '{{index .Config.Labels "org.opencontainers.image.base.digest"}}')" = "${base_digest}"
+      - name: Validate browser executable inventory and unprivileged launch
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' mcp_capability_bridge/config.yaml)"
+          docker run --rm --entrypoint python3 \
+            -v "${PWD}/mcp_capability_bridge/scripts/validate_browser_inventory.py:/tmp/validate_browser_inventory.py:ro" \
+            "mcp-capability-bridge:${version}" /tmp/validate_browser_inventory.py inventory > mcp-capability-bridge-browser-executables.txt
+          python3 mcp_capability_bridge/scripts/validate_browser_inventory.py validate mcp-capability-bridge-browser-executables.txt mcp_capability_bridge/apparmor.txt
+          docker run --rm --user 1000 --cap-drop ALL --security-opt no-new-privileges --shm-size 64m \
+            --env HOME=/tmp --env PYTHONPATH=/app/src --entrypoint python3 "mcp-capability-bridge:${version}" -c \
+            'from mcp_capability_bridge.browser_runtime import BrowserRuntime; from mcp_capability_bridge.web_adapter import NetworkPolicy; from pathlib import Path; from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer; import tempfile,threading; H=type("H",(BaseHTTPRequestHandler,),{"do_GET":lambda s:(s.send_response(200),s.end_headers(),s.wfile.write(b"<title>ok</title>")),"log_message":lambda *a:None}); server=ThreadingHTTPServer(("127.0.0.1",0),H); threading.Thread(target=server.serve_forever,daemon=True).start(); url=f"http://127.0.0.1:{server.server_port}"; c={"base_url":url,"resolved_addresses":["127.0.0.1"],"navigation_origins":[url],"authentication_origins":[],"resource_origins":[url],"websocket_origins":[],"verify_tls":True,"inactivity_seconds":300,"absolute_seconds":1800}; r=BrowserRuntime(Path(tempfile.mkdtemp())); assert r._probe_sync(c,NetworkPolicy(c))["status"]=="reachable"; server.shutdown()'
       - name: Smoke-test topology, isolation, UI, restart, and shutdown
         run: |
           set -euo pipefail
@@ -64,7 +75,7 @@ jobs:
           test -n "${csrf}"
           [[ "${page}" == *"MCP Capability Bridge <b>v${version}</b>"* ]]
           [[ "${page}" == *'src="/api/hassio_ingress/ci/admin/assets/icon.png"'* ]]
-          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/status | jq -e '.status=="ready" and .database_generation==1 and .public_surface=="authenticated_mcp" and .adapters==[{"type_key":"ssh","display_name":"SSH"}]' >/dev/null
+          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/status | jq -e '.status=="ready" and .database_generation==1 and .public_surface=="authenticated_mcp" and (.adapters|map(.type_key)|sort)==["ssh","web"]' >/dev/null
           first="$(curl -fsS -X POST -H 'X-Ingress-Path: /api/hassio_ingress/ci' -H "Cookie: mcb_csrf=${csrf}" -H "X-CSRF-Token: ${csrf}" -H 'Content-Type: application/json' --data '{"key":"ci_first","display_name":"CI first"}' http://127.0.0.1:18099/admin/api/v1/namespaces)"
           first_id="$(jq -r '.namespace.id' <<<"${first}")"
           first_token="$(jq -r '.token' <<<"${first}")"
@@ -118,6 +129,8 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: mcp-capability-bridge-apparmor-executables
-          path: mcp-capability-bridge-apparmor-executables.txt
+          path: |
+            mcp-capability-bridge-apparmor-executables.txt
+            mcp-capability-bridge-browser-executables.txt
           if-no-files-found: error
           retention-days: 7

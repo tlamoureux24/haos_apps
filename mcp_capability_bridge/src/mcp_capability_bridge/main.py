@@ -13,6 +13,7 @@ import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -22,6 +23,7 @@ from starlette.routing import Mount, Route
 
 from mcp_capability_bridge import __version__
 from mcp_capability_bridge.admin_ui import ADMIN_CSS, ADMIN_JS
+from mcp_capability_bridge.browser_runtime import BrowserRuntime
 from mcp_capability_bridge.contracts import AdapterRegistry
 from mcp_capability_bridge.database import database_ready
 from mcp_capability_bridge.mcp_api import NamespaceMCP, OpaqueBearerMiddleware
@@ -30,6 +32,7 @@ from mcp_capability_bridge.security import SecretBox, load_or_create_key
 from mcp_capability_bridge.settings import Settings
 from mcp_capability_bridge.ssh_adapter import SSHAdapter, scan_host_key
 from mcp_capability_bridge.store import NamespaceStore
+from mcp_capability_bridge.web_adapter import WebAdapter, origin, resolve_host
 
 
 @dataclass(frozen=True)
@@ -39,14 +42,17 @@ class RuntimeState:
     counters: RuntimeCounters
     csrf_token: str
     host_scans: dict[str, tuple[float, object]]
+    web_resolutions: dict[str, tuple[float, str, tuple[str, ...]]]
+    browser: BrowserRuntime
 
 
 def build_runtime_state(settings: Settings, registry: AdapterRegistry | None = None) -> RuntimeState:
     private = settings.data_dir / "private"
     pepper = load_or_create_key(private / "credential-pepper")
     target_key = load_or_create_key(private / "target-secret-key")
-    store = NamespaceStore(settings.database_path, pepper, SecretBox(target_key), registry or AdapterRegistry((SSHAdapter(),)))
-    return RuntimeState(settings, store, RuntimeCounters(), secrets.token_urlsafe(32), {})
+    store = NamespaceStore(settings.database_path, pepper, SecretBox(target_key), registry or AdapterRegistry((SSHAdapter(),WebAdapter())))
+    browser=BrowserRuntime();browser.prepare()
+    return RuntimeState(settings, store, RuntimeCounters(), secrets.token_urlsafe(32), {}, {}, browser)
 
 
 class SecurityHeadersMiddleware:
@@ -202,6 +208,37 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
             code = str(exc) if isinstance(exc, ValueError) and str(exc) else "ssh_host_scan_failed"
             return JSONResponse({"error": {"code": code}}, status_code=422)
 
+    async def web_resolve(request:Request)->JSONResponse:
+        if not csrf_valid(request):return JSONResponse({"error":{"code":"csrf_failed"}},status_code=403)
+        try:
+            data=await json_body(request);base=origin(str(data.get("base_url","")));parsed=urlparse(base);addresses=await resolve_host(parsed.hostname or "",parsed.port or (443 if parsed.scheme=="https" else 80));resolution_id=secrets.token_urlsafe(24)
+            state.web_resolutions.clear();state.web_resolutions[resolution_id]=(time.monotonic(),base,addresses)
+            return JSONResponse({"resolution_id":resolution_id,"origin":base,"resolved_addresses":addresses})
+        except (ValueError,OverflowError,json.JSONDecodeError) as exc:return JSONResponse({"error":{"code":str(exc) or "invalid_web_target"}},status_code=422)
+
+    async def web_targets(request:Request)->JSONResponse:
+        if request.method=="GET":return JSONResponse({"targets":[item for item in state.store.list_targets() if item["adapter_type"]=="web"]})
+        if not csrf_valid(request):return JSONResponse({"error":{"code":"csrf_failed"}},status_code=403)
+        try:
+            data=await json_body(request);created_at,base,addresses=state.web_resolutions.pop(str(data.get("resolution_id","")))
+            if time.monotonic()-created_at>300 or base!=origin(str(data.get("base_url",""))):raise ValueError("web_resolution_expired")
+            configuration={"base_url":str(data.get("base_url","")),"resolved_addresses":list(addresses),"navigation_origins":[base],"authentication_origins":[],"resource_origins":[base],"websocket_origins":[],"verify_tls":bool(data.get("verify_tls",True)),"inactivity_seconds":int(data.get("inactivity_seconds",300)),"absolute_seconds":int(data.get("absolute_seconds",1800))}
+            target=state.store.create_target(str(data.get("key","")),str(data.get("display_name","")),"web",configuration)
+            return JSONResponse({"target":target},status_code=201)
+        except KeyError:return JSONResponse({"error":{"code":"web_resolution_not_found"}},status_code=404)
+        except sqlite3.IntegrityError:return JSONResponse({"error":{"code":"target_key_exists"}},status_code=409)
+        except (ValueError,TypeError,OverflowError,json.JSONDecodeError) as exc:return JSONResponse({"error":{"code":str(exc) or "invalid_web_target"}},status_code=422)
+
+    async def web_test(request:Request)->JSONResponse:
+        if not csrf_valid(request):return JSONResponse({"error":{"code":"csrf_failed"}},status_code=403)
+        try:
+            data=await json_body(request);target_id=str(data.get("id",""));target=state.store.get_target(target_id)
+            if target["adapter_type"]!="web":raise ValueError("invalid_web_target")
+            async with state.counters.operation("__admin__",target_id,"web"):result=await state.browser.probe(state.store.get_target_configuration(target_id))
+            return JSONResponse(result)
+        except KeyError:return JSONResponse({"error":{"code":"target_not_found"}},status_code=404)
+        except (ValueError,RuntimeError,PermissionError) as exc:return JSONResponse({"error":{"code":str(exc) or "web_probe_failed"}},status_code=422)
+
     async def target_action(request: Request) -> JSONResponse:
         if not csrf_valid(request):
             return JSONResponse({"error": {"code": "csrf_failed"}}, status_code=403)
@@ -326,12 +363,13 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
         return Response(path.read_bytes(), media_type="image/png")
 
     health = [Route("/health/live", live), Route("/health/ready", ready)]
-    admin = Starlette(routes=[Route("/", index), Route("/admin/assets/admin.css", css), Route("/admin/assets/admin.js", js), Route("/admin/assets/icon.png", icon), Route("/admin/api/v1/status", status), Route("/admin/api/v1/namespaces", namespaces, methods=["GET", "POST"]), Route("/admin/api/v1/namespaces/{action}", namespace_action, methods=["POST"]), Route("/admin/api/v1/targets", targets, methods=["GET", "POST"]), Route("/admin/api/v1/targets/detail/{target_id}", target_detail, methods=["GET"]), Route("/admin/api/v1/targets/{action}", target_action, methods=["POST"]), Route("/admin/api/v1/ssh/scan", ssh_scan, methods=["POST"]), Route("/admin/api/v1/ssh/capabilities/{action}", capabilities, methods=["POST"]), Route("/admin/api/v1/publications", publications, methods=["GET"]), Route("/admin/api/v1/publications/{action}", publications, methods=["POST"]), *health], middleware=[Middleware(SecurityHeadersMiddleware, admin=True, ingress_proxy_ip=state.settings.ingress_proxy_ip)])
+    admin = Starlette(routes=[Route("/", index), Route("/admin/assets/admin.css", css), Route("/admin/assets/admin.js", js), Route("/admin/assets/icon.png", icon), Route("/admin/api/v1/status", status), Route("/admin/api/v1/namespaces", namespaces, methods=["GET", "POST"]), Route("/admin/api/v1/namespaces/{action}", namespace_action, methods=["POST"]), Route("/admin/api/v1/targets", targets, methods=["GET", "POST"]), Route("/admin/api/v1/targets/detail/{target_id}", target_detail, methods=["GET"]), Route("/admin/api/v1/targets/{action}", target_action, methods=["POST"]), Route("/admin/api/v1/ssh/scan", ssh_scan, methods=["POST"]), Route("/admin/api/v1/ssh/capabilities/{action}", capabilities, methods=["POST"]), Route("/admin/api/v1/web/resolve",web_resolve,methods=["POST"]),Route("/admin/api/v1/web/targets",web_targets,methods=["GET","POST"]),Route("/admin/api/v1/web/test",web_test,methods=["POST"]), Route("/admin/api/v1/publications", publications, methods=["GET"]), Route("/admin/api/v1/publications/{action}", publications, methods=["POST"]), *health], middleware=[Middleware(SecurityHeadersMiddleware, admin=True, ingress_proxy_ip=state.settings.ingress_proxy_ip)])
 
     @asynccontextmanager
     async def public_lifespan(_: Starlette):
         async with mcp_server.session_manager.run():
-            yield
+            try:yield
+            finally:await state.browser.close()
 
     public = Starlette(routes=[*health, Mount("/", app=OpaqueBearerMiddleware(mcp_application, state.store))], middleware=[Middleware(SecurityHeadersMiddleware, admin=False, ingress_proxy_ip=state.settings.ingress_proxy_ip)], lifespan=public_lifespan)
     admin.state.runtime = state
@@ -342,13 +380,14 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
 
 def admin_page(prefix: str) -> str:
     navigation = "".join(f'<a data-view="{key}" href="#{key}" data-i18n="{key}">{label}</a>' for key, label in (("overview", "Vue d’ensemble"), ("clients", "Clients MCP"), ("targets", "Cibles"), ("access", "Accès MCP"), ("ssh", "Capacités SSH"), ("web", "Cibles Web"), ("sessions", "Sessions")))
-    planned = "".join(f'<section id="{key}" class="view"><div class="pagehead"><div><h1 data-i18n="{key}"></h1><p data-i18n="plannedText"></p></div></div><article class="card"><h2 data-i18n="plannedTitle"></h2><p data-i18n="plannedText"></p></article></section>' for key in ("web", "sessions"))
+    planned = '<section id="sessions" class="view"><div class="pagehead"><div><h1 data-i18n="sessions"></h1><p data-i18n="plannedText"></p></div></div><article class="card"><h2 data-i18n="plannedTitle"></h2><p data-i18n="plannedText"></p></article></section>'
     return f'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MCP Capability Bridge</title><link rel="stylesheet" href="{prefix}/admin/assets/admin.css"></head><body><main class="app" data-base="{prefix}"><header class="site-header"><div class="header-main"><a class="brand" href="#overview"><img src="{prefix}/admin/assets/icon.png" alt=""><span>MCP Capability Bridge <b>v{__version__}</b></span></a><div class="header-actions"><button id="language" class="switch" type="button">EN</button><button id="theme" class="switch" type="button">☾</button></div></div><div class="nav-scroll"><nav class="nav" aria-label="Navigation">{navigation}</nav></div></header>
 <section id="overview" class="view active"><div class="pagehead"><div><h1 data-i18n="overviewTitle"></h1><p data-i18n="overviewIntro"></p></div><button id="status-open" class="primary" type="button" data-i18n="statusAction"></button></div><section class="metrics"><article class="metric"><strong class="state" data-i18n="ready"></strong><span data-i18n="appState"></span></article><article class="metric"><strong data-i18n="authenticatedMcp"></strong><span data-i18n="publicSurface"></span></article><article class="metric"><strong id="namespace-count">0</strong><span data-i18n="clients"></span></article></section><article class="card notice"><h2 data-i18n="coreTitle"></h2><p data-i18n="coreText"></p></article></section>
 <section id="clients" class="view"><div class="pagehead"><div><h1 data-i18n="clients"></h1><p data-i18n="clientsIntro"></p></div><button id="namespace-create-open" class="primary" type="button" data-i18n="createClient"></button></div><label class="filter"><input id="show-archived" type="checkbox"> <span data-i18n="showArchived"></span></label><div id="namespace-list" class="card-list"></div></section>
 <section id="targets" class="view"><div class="pagehead"><div><h1 data-i18n="targets"></h1><p data-i18n="targetsIntro"></p></div><button id="target-create-open" class="primary" type="button" data-i18n="createTarget"></button></div><div id="target-list" class="card-list"></div></section>
 <section id="access" class="view"><div class="pagehead"><div><h1 data-i18n="access"></h1><p data-i18n="accessIntro"></p></div><button id="publication-open" class="primary" type="button" data-i18n="publishCapability"></button></div><div id="publication-list" class="card-list"></div></section>
-<section id="ssh" class="view"><div class="pagehead"><div><h1 data-i18n="ssh"></h1><p data-i18n="sshIntro"></p></div><button id="capability-open" class="primary" type="button" data-i18n="createCapability"></button></div><div id="capability-list" class="card-list"></div></section>{planned}</main>
+<section id="ssh" class="view"><div class="pagehead"><div><h1 data-i18n="ssh"></h1><p data-i18n="sshIntro"></p></div><button id="capability-open" class="primary" type="button" data-i18n="createCapability"></button></div><div id="capability-list" class="card-list"></div></section>
+<section id="web" class="view"><div class="pagehead"><div><h1 data-i18n="web"></h1><p data-i18n="webIntro"></p></div><button id="web-target-open" class="primary" type="button" data-i18n="createWebTarget"></button></div><div id="web-target-list" class="card-list"></div></section>{planned}</main>
 <div id="drawer-shell" class="drawer-shell" hidden><div class="drawer-overlay"></div><aside id="admin-drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" tabindex="-1"><header class="drawer-head"><h2 id="drawer-title"></h2><button id="drawer-close" class="secondary drawer-close" type="button" data-i18n-aria="close">×</button></header><div class="drawer-body">
 <section id="status-panel" class="drawer-panel"><dl><dt data-i18n="runtime"></dt><dd data-i18n="singleRuntime"></dd><dt data-i18n="listeners"></dt><dd data-i18n="listenerValuesMcp"></dd><dt data-i18n="scope"></dt><dd data-i18n="scopeValue2"></dd></dl></section>
 <section id="namespace-form-panel" class="drawer-panel" hidden><form id="namespace-form" class="form-grid"><label><span data-i18n="technicalKey"></span><input name="key" required pattern="[a-z][a-z0-9_]{{1,31}}" maxlength="32"></label><label><span data-i18n="displayName"></span><input name="display_name" required maxlength="100"></label><p class="warning" data-i18n="credentialWarning"></p><p id="namespace-message" class="message"></p><div class="actions"><button class="primary" type="submit" data-i18n="create"></button><button class="secondary cancel" type="button" data-i18n="cancel"></button></div></form></section>
@@ -356,4 +395,5 @@ def admin_page(prefix: str) -> str:
 <section id="target-form-panel" class="drawer-panel" hidden><form id="target-form" class="form-grid"><input name="id" type="hidden"><label><span data-i18n="technicalKey"></span><input name="key" required pattern="[a-z][a-z0-9_]{{1,31}}" maxlength="32"></label><label><span data-i18n="displayName"></span><input name="display_name" required maxlength="100"></label><label><span data-i18n="host"></span><input name="host" required maxlength="253"></label><label><span data-i18n="port"></span><input name="port" type="number" value="22" min="1" max="65535" required></label><label><span data-i18n="username"></span><input name="username" required maxlength="128"></label><label><span data-i18n="authMode"></span><select name="auth_mode"><option value="password" data-i18n="password"></option><option value="private_key" data-i18n="privateKey"></option></select></label><label class="password-field"><span data-i18n="password"></span><input name="password" type="password"></label><label class="key-field" hidden><span data-i18n="privateKey"></span><textarea name="private_key" rows="7"></textarea></label><label class="key-field" hidden><span data-i18n="passphrase"></span><input name="passphrase" type="password"></label><div id="scan-result" class="warning" hidden></div><p id="target-message" class="message"></p><div class="actions"><button id="target-scan" class="primary" type="button" data-i18n="scanHostKey"></button><button id="target-confirm" class="primary" type="submit" data-i18n="confirmAndCreate" hidden></button><button class="secondary cancel" type="button" data-i18n="cancel"></button></div></form></section>
 <section id="capability-form-panel" class="drawer-panel" hidden><form id="capability-form" class="form-grid"><input name="id" type="hidden"><label><span data-i18n="target"></span><select name="target_id" required></select></label><label><span data-i18n="technicalKey"></span><input name="key" required pattern="[a-z][a-z0-9_]{{1,31}}"></label><label><span data-i18n="displayName"></span><input name="display_name" required maxlength="100"></label><label><span data-i18n="description"></span><textarea name="description" required maxlength="2000"></textarea></label><label><span data-i18n="executable"></span><input name="executable" required placeholder="/usr/bin/uptime"></label><label><span data-i18n="templateJson"></span><textarea name="template" rows="4">[]</textarea></label><label><span data-i18n="schemaJson"></span><textarea name="input_schema" rows="8">{{"type":"object","properties":{{}},"required":[],"additionalProperties":false}}</textarea></label><label><span data-i18n="timeout"></span><input name="timeout_seconds" type="number" value="30" min="1" max="300"></label><label><span data-i18n="stdoutLimit"></span><input name="stdout_limit" type="number" value="65536" min="0" max="262144"></label><label><span data-i18n="stderrLimit"></span><input name="stderr_limit" type="number" value="16384" min="0" max="262144"></label><label><input name="enabled" type="checkbox" checked> <span data-i18n="enabled"></span></label><label><input name="effect_capable" type="checkbox"> <span data-i18n="effectCapable"></span></label><p id="capability-message" class="message"></p><div class="actions"><button class="primary" type="submit" data-i18n="save"></button><button class="secondary cancel" type="button" data-i18n="cancel"></button></div></form></section>
 <section id="publication-form-panel" class="drawer-panel" hidden><form id="publication-form" class="form-grid"><label><span data-i18n="client"></span><select name="namespace_id" required></select></label><label><span data-i18n="target"></span><select name="target_id" required></select></label><label><span data-i18n="capability"></span><select name="capability_id" required></select></label><p id="publication-message" class="message"></p><div class="actions"><button class="primary" type="submit" data-i18n="publish"></button><button class="secondary cancel" type="button" data-i18n="cancel"></button></div></form></section>
+<section id="web-target-form-panel" class="drawer-panel" hidden><form id="web-target-form" class="form-grid"><label><span data-i18n="technicalKey"></span><input name="key" required pattern="[a-z][a-z0-9_]{{1,31}}" maxlength="32"></label><label><span data-i18n="displayName"></span><input name="display_name" required maxlength="100"></label><label><span data-i18n="baseUrl"></span><input name="base_url" type="url" required></label><label><input name="verify_tls" type="checkbox" checked> <span data-i18n="verifyTls"></span></label><label><span data-i18n="inactivityLimit"></span><input name="inactivity_seconds" type="number" min="30" max="3600" value="300"></label><label><span data-i18n="absoluteLimit"></span><input name="absolute_seconds" type="number" min="30" max="14400" value="1800"></label><div id="web-resolution" class="warning" hidden></div><p class="warning" data-i18n="noWebToolsYet"></p><p class="message"></p><div class="actions"><button id="web-resolve" class="primary" type="button" data-i18n="resolveAndConfirm"></button><button id="web-save" class="primary" type="submit" data-i18n="confirmAndCreate" hidden></button><button class="secondary cancel" type="button" data-i18n="cancel"></button></div></form></section>
 </div></aside></div><script src="{prefix}/admin/assets/admin.js" defer></script></body></html>'''

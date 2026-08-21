@@ -2,6 +2,20 @@
 
 All notable changes to MCP Capability Bridge will be documented in this file.
 
+## 0.4.0 — 2026-08-21
+
+### Added
+
+- Added pinned Alpine Chromium 151.0.7922.108, matching ChromeDriver and Selenium 4.46.0 with executable inventory/AppArmor drift validation.
+- Added the disposable browser runtime gate: UID 1000, bounded launch, fresh `/tmp` profiles, startup stale-profile cleanup, deterministic shutdown, disabled downloads/popups/background services and no writes under `/data`.
+- Added static Web targets with explicit origin categories, administrator-confirmed DNS addresses, DNS-rebinding refusal, TLS policy and session lifetime limits.
+- Added bilingual responsive Web target administration and an explicit disposable browser connectivity test while publishing zero Web MCP tools.
+
+### Security
+
+- Chromium uses the HAOS container/AppArmor boundary with no Linux capabilities and `no-new-privileges`; its unavailable container-internal sandbox is explicitly disabled rather than silently assumed.
+- Browser resolution is pinned to confirmed addresses and all unlisted hostnames resolve to `~NOTFOUND`; unsupported schemes and origin-category escalation fail closed.
+
 ## 0.3.0 — 2026-08-21
 
 ### Added

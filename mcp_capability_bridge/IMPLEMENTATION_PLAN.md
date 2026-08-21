@@ -171,7 +171,7 @@ Accepted on real HAOS with version 0.3.0: a restricted SSH target and capability
 
 ## Lot 3A — browser runtime and confinement gate
 
-Status: **planned; entry gate open after Lot 2 HAOS acceptance**.
+Status: **implemented in 0.4.0; awaiting real HAOS acceptance**.
 
 ### Goal
 

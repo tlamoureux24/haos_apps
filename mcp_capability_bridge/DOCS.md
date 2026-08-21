@@ -1,8 +1,8 @@
-# MCP Capability Bridge 0.3.0
+# MCP Capability Bridge 0.4.0
 
 ## Français
 
-Cette version ajoute l’adaptateur SSH borné du Lot 2 au serveur MCP multi-client du Lot 1.
+Cette version ajoute le sas navigateur confiné du Lot 3A sans publier d’outil MCP Web.
 
 Après installation ou mise à jour :
 
@@ -18,7 +18,7 @@ Pour la recette HAOS, enrôlez une cible de test restreinte et une capacité ino
 
 ## English
 
-This release adds the bounded Lot 2 SSH adapter to the Lot 1 multi-client MCP server.
+This release adds the confined Lot 3A browser gate without publishing any Web MCP tool.
 
 After installation or update:
 

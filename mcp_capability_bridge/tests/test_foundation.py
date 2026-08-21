@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 
@@ -87,11 +87,11 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.3.0</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.4.0</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
             self.assertEqual(status["public_surface"], "authenticated_mcp")
-            self.assertEqual(status["adapters"], [{"type_key": "ssh", "display_name": "SSH"}])
+            self.assertEqual(status["adapters"], [{"type_key": "ssh", "display_name": "SSH"}, {"type_key": "web", "display_name": "Web"}])
             self.assertEqual((await self.request(self.admin, "GET", "/mcp", headers=headers)).status_code, 404)
         asyncio.run(scenario())
 
@@ -112,6 +112,54 @@ class SurfaceTests(unittest.TestCase):
             listed = await self.request(self.admin, "GET", "/admin/api/v1/namespaces", headers={"X-Ingress-Path": ingress})
             self.assertNotIn(token, listed.text)
             self.assertNotIn("credential_verifier", listed.text)
+        asyncio.run(scenario())
+
+    def test_web_target_requires_confirmed_resolution_and_publishes_no_tool(self) -> None:
+        async def scenario() -> None:
+            ingress = "/api/hassio_ingress/test"
+            headers = {
+                "X-Ingress-Path": ingress,
+                "Cookie": f"mcb_csrf={self.state.csrf_token}",
+                "X-CSRF-Token": self.state.csrf_token,
+            }
+            with patch(
+                "mcp_capability_bridge.main.resolve_host",
+                new=AsyncMock(return_value=("10.0.0.8",)),
+            ):
+                resolved = await self.request(
+                    self.admin,
+                    "POST",
+                    "/admin/api/v1/web/resolve",
+                    headers=headers,
+                    json={"base_url": "https://app.internal/path"},
+                )
+            self.assertEqual(resolved.status_code, 200)
+            created = await self.request(
+                self.admin,
+                "POST",
+                "/admin/api/v1/web/targets",
+                headers=headers,
+                json={
+                    "resolution_id": resolved.json()["resolution_id"],
+                    "key": "web_test",
+                    "display_name": "Web test",
+                    "base_url": "https://app.internal/path",
+                    "verify_tls": True,
+                    "inactivity_seconds": 300,
+                    "absolute_seconds": 1800,
+                },
+            )
+            self.assertEqual(created.status_code, 201)
+            target = created.json()["target"]
+            self.assertEqual(target["adapter_type"], "web")
+            listed = next(item for item in self.state.store.list_targets() if item["id"] == target["id"])
+            self.assertEqual(listed["capabilities"], [])
+            configuration = self.state.store.get_target_configuration(target["id"])
+            self.assertEqual(configuration["navigation_origins"], ["https://app.internal"])
+            self.assertEqual(configuration["resource_origins"], ["https://app.internal"])
+            self.assertEqual(configuration["authentication_origins"], [])
+            self.assertEqual(configuration["websocket_origins"], [])
+
         asyncio.run(scenario())
 
 
@@ -138,7 +186,8 @@ class AdministrationUiTests(unittest.TestCase):
             self.assertIn(contract, ADMIN_JS)
         for contract in ("target-form", "capability-form", "publication-form", "scanHostKey", "effectCapable"):
             self.assertIn(contract, ADMIN_JS)
-        self.assertNotIn("web-form", ADMIN_JS)
+        for contract in ("web-target-form", "web-resolve", "data-test-web", "webResolutionId"):
+            self.assertIn(contract, ADMIN_JS)
 
 
 class RuntimeTopologyTests(unittest.TestCase):
