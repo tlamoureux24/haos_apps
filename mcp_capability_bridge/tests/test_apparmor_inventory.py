@@ -18,6 +18,8 @@ class AppArmorInventoryTests(unittest.TestCase):
             "/proc/** r,",
             "/etc/fonts/{,**} r,",
             "/var/cache/fontconfig/{,**} r,",
+            "/usr/share/fonts/{,**} r,",
+            "/usr/share/fontconfig/{,**} r,",
         ):
             with self.subTest(rule=rule):
                 self.assertIn(rule, profile)

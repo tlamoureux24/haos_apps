@@ -2,6 +2,13 @@
 
 All notable changes to MCP Capability Bridge will be documented in this file.
 
+## 0.4.4 — 2026-08-21
+
+### Fixed
+
+- Allow Chromium to read the `/usr/share/fonts/` and `/usr/share/fontconfig/` directory roots themselves, in addition to their contents.
+- Preserve the existing targeted AppArmor policy and all browser, network, and MCP behavior.
+
 ## 0.4.3 — 2026-08-21
 
 ### Fixed

@@ -2,7 +2,7 @@
 
 Français | [English](README.md)
 
-Version actuelle : **0.4.3 — correction AppArmor ciblée pour Chromium, en attente de recette HAOS**.
+Version actuelle : **0.4.4 — correction ciblée de la découverte des polices Chromium, en attente de recette HAOS**.
 
 MCP Capability Bridge sera une App Home Assistant OS autonome transformant des accès techniques non-MCP, délibérément bornés, en outils MCP Streamable HTTP standards.
 
