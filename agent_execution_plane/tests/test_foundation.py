@@ -7,7 +7,7 @@ from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from agent_execution_plane.admin_ui import ADMIN_CSS
+from agent_execution_plane.admin_ui import ADMIN_CSS, ADMIN_JS
 
 from agent_execution_plane.database import MAX_ACTIVITY_ENTRIES, database_ready, initialize, list_activity, prune, record_activity
 
@@ -16,6 +16,15 @@ class FoundationTests(unittest.TestCase):
     def test_root_reserves_stable_scrollbar_gutter_without_changing_app_width(self):
         self.assertIn(':root{color-scheme:light;scrollbar-gutter:stable;',ADMIN_CSS)
         self.assertIn('.app{max-width:1840px',ADMIN_CSS)
+
+    def test_activity_freshness_and_overview_lifecycle_ui(self):
+        main_source = Path(__file__).parents[1].joinpath("src/agent_execution_plane/main.py").read_text(encoding="utf-8")
+        self.assertIn('data-freshness="activity"', main_source)
+        for text in ("Actualisé à l’instant", "Actualisé il y a ${seconds} s", "Actualisé il y a ${minutes} min"):
+            self.assertIn(text, ADMIN_JS)
+        self.assertIn("viewRefreshes=new Map()", ADMIN_JS); self.assertIn("document.visibilityState!=='visible'", ADMIN_JS)
+        self.assertIn("`${tr('lifecycleState')}: ${tr(lifecycle)}`", ADMIN_JS)
+        self.assertNotIn("`${tr('standaloneState')}: ${tr(configured?'configured':'notConfigured')}`", ADMIN_JS)
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.database = Path(self.temp.name) / "agent_execution_plane.db"

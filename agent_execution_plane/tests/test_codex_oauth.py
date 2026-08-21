@@ -123,6 +123,11 @@ class CodexOAuthTests(unittest.TestCase):
         self.assertIn(".primary:disabled,.secondary:disabled,.danger:disabled",ADMIN_CSS)
         self.assertIn("model_in_use:'Ce modèle est en cours d’utilisation.'",ADMIN_JS);self.assertIn("model_in_use:'This model is currently in use.'",ADMIN_JS)
         self.assertIn("if(!response.ok)actionMessage.textContent=tr((await response.json()).error.code)",ADMIN_JS)
+        self.assertIn('id="model-drawer-panel"', ADMIN_JS); self.assertNotIn('id="model-dialog"', ADMIN_JS)
+        self.assertIn("openDrawer(tr(model?'edit':'addModel'),'model-drawer-panel',trigger)", ADMIN_JS)
+        self.assertIn("document.querySelector('.drawer-overlay').onclick=closeDrawer", ADMIN_JS)
+        self.assertIn("if(event.key==='Escape')", ADMIN_JS); self.assertIn("restoreTarget?.focus()", ADMIN_JS)
+        self.assertIn('.drawer{position:absolute;inset:0 0 0 auto', ADMIN_CSS); self.assertIn('@media(max-width:560px){.drawer{width:100vw}', ADMIN_CSS)
         self.assertIn("chatgptDeviceCode", Path(__file__).parents[1].joinpath("src/agent_execution_plane/codex_runtime.py").read_text(encoding="utf-8"))
 
     def test_execution_wrapper_routes_only_dynamic_tools_and_denies_commands(self):

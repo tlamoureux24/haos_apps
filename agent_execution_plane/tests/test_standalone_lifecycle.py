@@ -28,10 +28,11 @@ class StandaloneLifecycleTests(unittest.TestCase):
         restarted=LifecycleStore(self.database);self.assertEqual(restarted.authenticate(first),"accepted")
         second=restarted.create_credential(rotate=True);self.assertEqual(restarted.authenticate(first),"rejected");self.assertEqual(restarted.authenticate(second),"accepted")
         self.assertTrue(restarted.revoke_credential());self.assertEqual(restarted.authenticate(second),"not_configured")
-        self.assertIn("tokenOnce",ADMIN_JS);self.assertIn("navigator.clipboard.writeText",ADMIN_JS);self.assertNotIn("localStorage.setItem('standalone",ADMIN_JS);self.assertNotIn("sessionStorage",ADMIN_JS)
-        self.assertIn("function clearStandaloneToken()",ADMIN_JS);self.assertIn("if(view!=='api')clearStandaloneToken()",ADMIN_JS)
-        self.assertIn("id=\"hide-token\"",ADMIN_JS);self.assertIn("document.getElementById('hide-token').onclick=clearStandaloneToken",ADMIN_JS)
-        self.assertEqual(ADMIN_JS.count("setInterval("),1);self.assertIn("clearInterval(viewTimer)",ADMIN_JS);self.assertIn("refreshView(view);viewTimer=setInterval",ADMIN_JS);self.assertNotIn("setTimeout(loadOAuthAccount",ADMIN_JS)
+        self.assertNotIn("localStorage.setItem('standalone",ADMIN_JS);self.assertNotIn("sessionStorage",ADMIN_JS)
+        self.assertIn("function clearStandaloneToken(){document.getElementById('standalone-token').textContent=''}",ADMIN_JS)
+        self.assertIn("id=\"credential-dismiss\"",ADMIN_JS);self.assertIn("document.getElementById('credential-dismiss').onclick=closeDrawer",ADMIN_JS)
+        self.assertIn("if(drawerShell.hidden){clearStandaloneToken();return}",ADMIN_JS)
+        self.assertEqual(ADMIN_JS.count("setInterval("),1);self.assertIn("clearTimeout(pollTimer)",ADMIN_JS);self.assertIn("scheduleViewPolling(view)",ADMIN_JS);self.assertNotIn("setTimeout(loadOAuthAccount",ADMIN_JS)
 
     def test_atomic_single_slot_active_pending_ack_and_stale_abandon(self):
         barrier=threading.Barrier(2)

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3
+
+- Align the Activity freshness indicator, credential workflow, and model forms with the ACP polling and right-drawer interaction patterns.
+- Keep standalone API configuration in its dedicated metric while the overview detail reports only the execution lifecycle.
+
 ## 0.5.0
 
 - Add the authenticated asynchronous standalone execution API on port 8098 using the common Lot 2 engine and exact caller-supplied MCP operational envelope.
