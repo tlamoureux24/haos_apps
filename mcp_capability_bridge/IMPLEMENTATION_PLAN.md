@@ -1,6 +1,6 @@
 # MCP Capability Bridge — Implementation Plan
 
-Status: **authoritative revised sequence — implementation not started**.
+Status: **authoritative sequence — Lots 0 through 3A accepted on HAOS**.
 
 This plan derives from `PROJECT_BRIEF.md`, `TECHNICAL_DESIGN.md`, `THREAT_MODEL.md` and `ARCHITECTURE_CHARTER.md`.
 
@@ -171,7 +171,7 @@ Accepted on real HAOS with version 0.3.0: a restricted SSH target and capability
 
 ## Lot 3A — browser runtime and confinement gate
 
-Status: **implemented in 0.4.0; awaiting real HAOS acceptance**.
+Status: **accepted on HAOS — 2026-08-21**.
 
 ### Goal
 
@@ -201,6 +201,41 @@ Package and confine a real browser safely before exposing any browser MCP tool.
 ### HAOS acceptance
 
 Configure a harmless local Web fixture, run explicit connectivity/browser tests, inspect processes/temp storage/AppArmor, crash the browser and restart the App, confirming no restored session or broad permission requirement.
+
+Accepted on real HAOS with version 0.4.4: startup, desktop/mobile UI, Web target creation and restart persistence, two consecutive browser tests, forbidden URL/scheme rejection, cross-origin redirect rejection, absence of premature Web MCP tools, SSH non-regression and recovery after an unreachable target were verified. Chromium required only the focused AppArmor corrections delivered in 0.4.3 and 0.4.4; final logs contained no application error or AppArmor denial.
+
+## Micro-lot UX — generated technical keys
+
+Status: **planned; must remain separate from adapter feature lots**.
+
+### Goal
+
+Remove unnecessary technical-key entry from ordinary administration flows while preserving stable public MCP identifiers and every existing reference.
+
+### Scope
+
+- inventory every user-visible technical key for MCP clients, targets, capabilities and future adapter entities;
+- classify keys as internal identifiers or intentionally user-controlled public contract names;
+- derive eligible keys from the display name in the backend at creation time;
+- normalize deterministically and resolve collisions without crossing namespace boundaries;
+- keep generated keys immutable when a display name is edited;
+- hide generated keys from primary forms, with optional read-only display only where operationally useful;
+- preserve all existing API/MCP contracts, stored references, namespace isolation and audit semantics.
+
+### Anti-goals
+
+- no key regeneration on rename;
+- no silent mutation of existing keys;
+- no migration or historical compatibility work unless separately justified;
+- no adapter, browser, SSH, ACP or AEP behavior change.
+
+### CI evidence
+
+- deterministic normalization covers accents, whitespace, punctuation, empty output and length bounds;
+- collisions produce distinct stable keys under the correct uniqueness scope;
+- rename leaves the key and all publications/references unchanged;
+- creation through the UI and administration API uses the same backend generation rule;
+- fields that must remain explicit for a public contract are documented and tested as such.
 
 ## Lot 3B — isolated read-only Web sessions
 

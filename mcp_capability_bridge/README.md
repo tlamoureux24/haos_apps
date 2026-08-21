@@ -2,7 +2,7 @@
 
 [Français](README.fr.md) | English
 
-Current release: **0.4.4 — targeted Chromium font discovery fix, awaiting HAOS acceptance**.
+Current release: **0.4.4 — Lot 3A browser runtime and confinement gate accepted on HAOS**.
 
 MCP Capability Bridge will be an independent Home Assistant OS App that exposes deliberately bounded access to non-MCP technical systems through standard MCP Streamable HTTP tools.
 

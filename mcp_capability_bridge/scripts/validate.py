@@ -71,7 +71,7 @@ def main() -> int:
         require(browser,value,"browser confinement invariant")
     for value in ("web_resolution_changed","web_origin_denied","class WebAdapter"):
         require(web,value,"Web target confinement invariant")
-    if "Status: **implemented in 0.4.0; awaiting real HAOS acceptance**." not in plan:
+    if "Accepted on real HAOS with version 0.4.4:" not in plan:
         raise RuntimeError("Implementation plan Lot 3A status must match delivery state")
     if "capability sys_admin" in apparmor or "network raw" in apparmor or "complain" in apparmor:
         raise RuntimeError("AppArmor contains an excessive permission")
