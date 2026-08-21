@@ -1,6 +1,6 @@
 # Agent Execution Plane — Implementation Plan
 
-Status: **authoritative implementation sequence — Lots 0, 1 and 2 accepted; Lot 3 implemented in 0.5.0 and awaiting independent review, CI review, and HAOS acceptance**.
+Status: **authoritative implementation sequence — Lots 0, 1, 2 and 3 accepted; Lot 4 planned**.
 
 This plan is derived from `PROJECT_BRIEF.md`, `TECHNICAL_DESIGN.md` and the root `ARCHITECTURE_CHARTER.md`.
 
@@ -320,7 +320,7 @@ Lot 2 has no public execution source, so real HAOS acceptance is limited to what
 
 ## Lot 3 — standalone API, authentication and durable result lifecycle
 
-Status: **implemented in 0.5.0 — awaiting independent review, CI review, installation, and HAOS acceptance**.
+Status: **accepted on HAOS in 0.5.5**.
 
 ### Goal
 
@@ -370,6 +370,8 @@ Make Agent Execution Plane fully useful independently of Agent Control Plane.
 Run a real standalone execution against a configured model and a test MCP server whose inventory contains both requested and unrelated tools. Confirm only the caller-supplied envelope reaches the model **as AEP/MCP operational tools**, while permitted provider-native reasoning/information helpers remain separate; retrieve the result, prove the engine remains blocked before ACK, ACK it, then prove a new execution is accepted. Repeat the pending-result step across an App restart.
 
 Acceptance of this lot proves the independence invariant: Execution Plane is useful with no ACP installed/configured.
+
+Real HAOS acceptance completed on **2026-08-21** with AEP **0.5.5**, commit `aba385af34cba3f856a4c155e8dd5d1e90f01c6b`, and green CI run `32448390300` (59 tests). Manual acceptance covered standalone authentication/contract errors, durable GET/ACK lifecycle, blocked pending-result behavior, a real ChatGPT OAuth execution with the exact caller-supplied `ha_get_overview` capability, successful AEP dynamic-tool dispatch through HA-MCP to Home Assistant with `mcp_effect_possible=true`, and the 4 MiB body bound. During acceptance, 0.5.4 exposed a Codex helper execution denial; 0.5.5 corrected AppArmor for the complete installed Codex executable inventory and added CI coverage so future Codex helpers cannot silently escape the confinement allow-list.
 
 ## Lot 4 — Agent Control Plane boundary
 
