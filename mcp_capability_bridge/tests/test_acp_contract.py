@@ -21,7 +21,7 @@ from mcp_capability_bridge.database import initialize
 from mcp_capability_bridge.main import build_runtime_state, create_apps
 from mcp_capability_bridge.settings import Settings
 from mcp_capability_bridge.ssh_adapter import SSHAdapter
-from tests.test_ssh_adapter import SSHFixture, capability
+from test_ssh_adapter import SSHFixture, capability
 
 
 class ContractAdapter:
