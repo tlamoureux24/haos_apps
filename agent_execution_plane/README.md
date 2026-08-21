@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane `0.6.0` is a standalone-capable model reasoning and execution engine. It applies administrator model priority and the common fallback/no-replay rules to exactly the MCP operational capability envelope supplied by the current source.
+Agent Execution Plane `0.6.1` is a standalone-capable model reasoning and execution engine. It applies administrator model priority and the common fallback/no-replay rules to exactly the MCP operational capability envelope supplied by the current source.
 
 ## Responsibility boundary
 
@@ -13,6 +13,8 @@ Provider-native planning/public-information helpers remain separate from MCP ope
 The optional **Control Plane** view accepts one MCP Streamable HTTP URL and a protected worker Bearer credential. AEP validates the existing ACP lifecycle tools before saving, then polls `jobs_claim_v1` once per second only while a compatible model and the shared execution slot are available. ACP remains the authority for jobs, leases, connector resolution, fixed arguments, capability authorization, retries, and report policy.
 
 For each claim, AEP maps `objective`, `input`, `required_report_schema`, and exactly `allowed_capabilities` into the same execution engine used by standalone requests. ACP lifecycle tools and unrelated tools from `tools/list` never enter the model envelope. AEP heartbeats the lease, prevents new MCP dispatch after lease loss, persists the outcome before `jobs_complete_v1`/`jobs_fail_v1`, retries delivery without rerunning the model, and reconciles interrupted work after restart. ACP availability never affects `/health/ready`, and leaving Control Plane unconfigured preserves full standalone operation.
+
+Connection validation checks the lifecycle tools' input signatures, not only their names. Failure delivery carries the same durable completion key on every retry; one consecutive transient heartbeat error is tolerated, while a second stops execution. An already-expired persisted lease is released locally during restart reconciliation so it cannot retain AEP's shared slot.
 
 ## Install and configure
 

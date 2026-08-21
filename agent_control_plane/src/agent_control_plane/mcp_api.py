@@ -242,14 +242,15 @@ def create_mcp(control_plane: ControlPlane) -> GovernedMCP:
         return {"job_id": job_id, "state": "completed", "report_id": report_id}
 
     @server.tool(name="jobs_fail_v1", structured_output=True)
-    async def jobs_fail(job_id: str, lease_token: str, reason: str, retryable: bool, ctx: Context) -> dict[str, object]:
-        """Finish an owned lease as failed with a bounded reason."""
+    async def jobs_fail(job_id: str, lease_token: str, completion_key: str, reason: str, retryable: bool, ctx: Context) -> dict[str, object]:
+        """Idempotently finish an owned lease as failed with a bounded reason."""
         identity = await anyio.to_thread.run_sync(control_plane.authenticate, request_token(ctx))
         state = await anyio.to_thread.run_sync(
             control_plane.fail_job,
             identity,
             job_id,
             lease_token,
+            completion_key,
             reason,
             retryable,
             "mcp-fail",

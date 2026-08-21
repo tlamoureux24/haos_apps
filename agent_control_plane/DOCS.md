@@ -347,6 +347,9 @@ notée comme ignorée/échouée et l'échéance suivante est calculée normaleme
 
 Un lease vaut initialement 5 minutes et peut être prolongé par heartbeat jusqu'à
 30 minutes maximum depuis sa prise en charge.
+Les appels terminaux `jobs_complete_v1` et `jobs_fail_v1` utilisent une
+`completion_key` opaque afin qu'une livraison puisse être répétée sans rejouer la
+transition après une réponse réseau perdue.
 
 Le rapport final contient `schema_version`, un `summary` non vide et un tableau
 `findings`.
@@ -699,6 +702,8 @@ Main states:
 
 A lease initially lasts 5 minutes and may be extended by heartbeat up to 30
 minutes from claim time.
+The terminal `jobs_complete_v1` and `jobs_fail_v1` calls use an opaque
+`completion_key`, allowing safe delivery retries after a lost network response.
 
 Final reports contain `schema_version`, a non-empty `summary`, and a `findings`
 array.

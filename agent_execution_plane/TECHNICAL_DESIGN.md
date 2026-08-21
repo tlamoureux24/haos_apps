@@ -124,6 +124,7 @@ The same ACP Streamable HTTP MCP surface is used for:
 The ACP MCP server can expose both source-boundary lifecycle tools and virtual task capabilities on the same authenticated surface. Those categories must remain separated inside AEP:
 
 - `jobs_claim_v1`, `jobs_heartbeat_v1`, `jobs_complete_v1`, `jobs_fail_v1` and other source-boundary operations are called only by the ACP boundary;
+- connection validation requires the exact lifecycle input signatures, including the opaque `completion_key` used for idempotent complete/fail delivery;
 - only MCP capabilities named in the claimed job's `allowed_capabilities` can enter the source-authorized operational model envelope;
 - a lifecycle tool appearing in `tools/list` must never become model-visible merely because the worker identity is authorized to call it.
 

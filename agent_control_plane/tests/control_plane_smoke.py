@@ -158,10 +158,20 @@ for attempt_number in range(2, 4):
         worker,
         failed.job_id,
         failed_lease.lease_token,
+        f"ci-failure-{attempt_number}",
         "bounded transient CI failure",
         True,
         f"ci-fail-{attempt_number}",
     )
+    assert control_plane.fail_job(
+        worker,
+        failed.job_id,
+        failed_lease.lease_token,
+        f"ci-failure-{attempt_number}",
+        "bounded transient CI failure",
+        True,
+        f"ci-fail-replay-{attempt_number}",
+    ) == state
     if attempt_number < 3:
         assert state == "queued"
         failed_lease = control_plane.claim_job(worker, f"ci-retry-{attempt_number}")

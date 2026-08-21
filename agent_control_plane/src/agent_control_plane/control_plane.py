@@ -1660,15 +1660,23 @@ class ControlPlane:
             self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.complete", target_type="job", target_id=job_id, decision="allowed", reason_code="completed", correlation_id=correlation_id, metadata={"report_id": report_id})
         return report_id
 
-    def fail_job(self, identity, job_id: str, lease_token: str, reason: str, retryable: bool, correlation_id: str) -> str:
+    def fail_job(self, identity, job_id: str, lease_token: str, completion_key: str, reason: str, retryable: bool, correlation_id: str) -> str:
         self.authorize(identity, "jobs.fail")
+        if not completion_key or len(completion_key) > 160:
+            raise ValueError("invalid_completion_key")
         if not reason.strip() or len(reason) > 500:
             raise ValueError("invalid_failure_reason")
         now = utc_now()
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                "SELECT j.state FROM job_attempts a JOIN jobs j ON j.id=a.job_id WHERE a.job_id=? AND a.completion_key=? AND a.outcome='failed'",
+                (job_id, completion_key),
+            ).fetchone()
+            if existing:
+                return existing["state"]
             attempt = self._leased_attempt(connection, identity, job_id, lease_token)
-            connection.execute("UPDATE job_attempts SET finished_at=?,outcome='failed',failure_reason=? WHERE id=?", (now, reason.strip(), attempt["id"]))
+            connection.execute("UPDATE job_attempts SET finished_at=?,outcome='failed',failure_reason=?,completion_key=? WHERE id=?", (now, reason.strip(), completion_key, attempt["id"]))
             maximum = connection.execute("SELECT t.max_attempts FROM jobs j JOIN task_revisions t ON t.id=j.task_revision_id WHERE j.id=?", (job_id,)).fetchone()[0]
             state = "queued" if retryable and attempt["attempt_number"] < maximum else ("dead_letter" if retryable else "failed")
             connection.execute("UPDATE jobs SET state=?,updated_at=? WHERE id=? AND state='leased'", (state, now, job_id))

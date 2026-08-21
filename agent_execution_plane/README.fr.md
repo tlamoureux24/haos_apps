@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane `0.6.0` est un moteur de raisonnement et d’exécution utilisable en mode autonome. Il applique la priorité administrateur des modèles et les règles communes de fallback/non-replay à l’enveloppe exacte des capacités opérationnelles MCP fournie par la source courante.
+Agent Execution Plane `0.6.1` est un moteur de raisonnement et d’exécution utilisable en mode autonome. Il applique la priorité administrateur des modèles et les règles communes de fallback/non-replay à l’enveloppe exacte des capacités opérationnelles MCP fournie par la source courante.
 
 ## Frontière de responsabilité
 
@@ -13,6 +13,8 @@ Les aides natives provider de planification/information publique restent sépar�
 La vue facultative **Control Plane** accepte une URL MCP Streamable HTTP et le credential Bearer protégé d’une identité worker. AEP valide les outils de cycle de vie ACP existants avant enregistrement, puis interroge `jobs_claim_v1` chaque seconde uniquement lorsqu’un modèle compatible et le slot partagé sont disponibles. ACP reste seul responsable des jobs, leases, connecteurs, arguments fixes, autorisations de capacités, retries et politique de rapport.
 
 Pour chaque claim, AEP transmet `objective`, `input`, `required_report_schema` et exactement `allowed_capabilities` au même moteur que l’API autonome. Les outils de cycle de vie ACP et les outils étrangers découverts par `tools/list` ne sont jamais exposés au modèle. AEP maintient le heartbeat, bloque tout nouveau dispatch MCP après perte du lease, persiste l’outcome avant `jobs_complete_v1`/`jobs_fail_v1`, retente la livraison sans rejouer le modèle et réconcilie une interruption après restart. L’indisponibilité ACP ne dégrade jamais `/health/ready` et l’absence de configuration Control Plane conserve intégralement le mode autonome.
+
+La validation de connexion vérifie les signatures d’entrée des outils lifecycle, et pas seulement leurs noms. La livraison d’échec conserve la même clé de complétion à chaque tentative ; une erreur heartbeat transitoire consécutive est tolérée, la seconde arrête l’exécution. Au redémarrage, un lease persisté déjà expiré est libéré localement afin de ne jamais retenir le slot partagé AEP.
 
 ## Installation et configuration
 

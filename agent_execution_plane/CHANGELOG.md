@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+- Release the local slot after restart when the persisted ACP lease is already expired, while retaining no-replay reconciliation for leases that remain valid.
+- Retry failure delivery safely with ACP's idempotent completion key and enforce the documented single consecutive transient heartbeat failure allowance.
+- Validate lifecycle tool input signatures before saving an ACP connection and add contract tests against the current ACP implementation for schema validation, expiry recovery, heartbeat, idempotent failure, and no replay.
+
 ## 0.6.0
 
 - Add the optional generic MCP Agent Control Plane boundary with validate-before-save encrypted worker configuration and ACP-independent readiness/standalone operation.
