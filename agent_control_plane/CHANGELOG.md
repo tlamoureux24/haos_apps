@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.46.11
+
+- Allow revoked identities to be archived without deleting credentials, policy
+  bindings, jobs or audit history; active identities are rejected server-side.
+- Hide archived identities by default and add the same explicit archived-items
+  filter used by tasks, without any restore or reactivation action.
+- Persist the presentation-only archive timestamp in existing durable metadata
+  so installed databases require no migration or reset.
+
 ## 0.46.10
 
 - Define report `findings` as an array of strings in the generated task result

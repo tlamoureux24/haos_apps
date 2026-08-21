@@ -1102,6 +1102,7 @@ class ControlPlane:
             rows = connection.execute(
                 """
                 SELECT i.id,i.display_name,i.identity_type,i.status,i.created_at,
+                       m.value AS archived_at,
                        p.document_json,
                        count(c.id) AS credential_count,
                        max(c.last_used_at) AS last_used_at
@@ -1109,7 +1110,8 @@ class ControlPlane:
                 JOIN policy_bindings b ON b.identity_id=i.id
                 JOIN policy_revisions p ON p.id=b.policy_revision_id
                 LEFT JOIN credentials c ON c.identity_id=i.id AND c.revoked_at IS NULL
-                GROUP BY i.id,p.id
+                LEFT JOIN control_plane_metadata m ON m.key='identity_archived:' || i.id
+                GROUP BY i.id,p.id,m.value
                 ORDER BY i.created_at DESC
                 """
             ).fetchall()
@@ -1122,6 +1124,7 @@ class ControlPlane:
                     "display_name": row["display_name"],
                     "identity_type": row["identity_type"],
                     "status": row["status"],
+                    "archived_at": row["archived_at"],
                     "created_at": row["created_at"],
                     "last_used_at": row["last_used_at"],
                     "active_credentials": row["credential_count"],
@@ -1155,6 +1158,38 @@ class ControlPlane:
                     actor_identity_id=None,
                     credential_id=None,
                     action="identities.revoke",
+                    target_type="identity",
+                    target_id=identity_id,
+                    decision="allowed",
+                    reason_code="ingress_admin",
+                    correlation_id=correlation_id,
+                    metadata={},
+                )
+        return True
+
+    def archive_identity(self, identity_id: str, correlation_id: str) -> bool:
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT status FROM identities WHERE id=?", (identity_id,)
+            ).fetchone()
+            if row is None:
+                return False
+            if row["status"] != "revoked":
+                raise ValueError("identity_not_revoked")
+            key = f"identity_archived:{identity_id}"
+            if connection.execute(
+                "SELECT 1 FROM control_plane_metadata WHERE key=?", (key,)
+            ).fetchone() is None:
+                connection.execute(
+                    "INSERT INTO control_plane_metadata(key,value) VALUES(?,?)", (key, now)
+                )
+                self._append_audit(
+                    connection,
+                    actor_identity_id=None,
+                    credential_id=None,
+                    action="identities.archive",
                     target_type="identity",
                     target_id=identity_id,
                     decision="allowed",

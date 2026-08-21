@@ -121,6 +121,20 @@ class AdministrationInterfaceTests(unittest.TestCase):
         self.assertIn("event.key==='Escape'", ADMIN_JS)
         self.assertIn("document.body.classList.add('drawer-open')", ADMIN_JS)
 
+    def test_revoked_identity_archiving_uses_the_existing_filter_pattern(self) -> None:
+        main_source = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "agent_control_plane"
+            / "main.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('id="identity-show-archived"', main_source)
+        self.assertIn("showArchivedIdentities||!i.archived_at", ADMIN_JS)
+        self.assertIn("i.status==='active'?", ADMIN_JS)
+        self.assertIn("!i.archived_at?`<button class=\"danger identity-archive\"", ADMIN_JS)
+        self.assertIn("/admin/api/v1/identities/archive", ADMIN_JS)
+        self.assertNotIn("identity-restore", ADMIN_JS)
+
     def test_operational_cockpit_and_configuration_drawers_are_wired(self) -> None:
         main_source = (
             Path(__file__).resolve().parents[1]
@@ -788,6 +802,52 @@ class CredentialTests(unittest.TestCase):
             self.assertEqual(len(set(peppers)), 1)
             self.assertEqual(len(peppers[0]), 32)
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+
+class IdentityArchivingTests(unittest.TestCase):
+    def test_only_revoked_identity_can_be_archived_without_losing_history(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "control-plane.db"
+            initialize_database(path)
+            control_plane = ControlPlane(path, root / "private")
+            created = control_plane.create_identity(
+                "Historical worker", "client", ["jobs.claim"], "identity-create"
+            )
+            with self.assertRaisesRegex(ValueError, "identity_not_revoked"):
+                control_plane.archive_identity(created.identity_id, "identity-active-archive")
+            self.assertIsNone(control_plane.list_identities()[0]["archived_at"])
+            self.assertTrue(control_plane.revoke_identity(created.identity_id, "identity-revoke"))
+            self.assertTrue(control_plane.archive_identity(created.identity_id, "identity-archive"))
+            archived = control_plane.list_identities()[0]
+            self.assertEqual(archived["status"], "revoked")
+            self.assertIsNotNone(archived["archived_at"])
+            with sqlite3.connect(path) as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT count(*) FROM identities WHERE id=?", (created.identity_id,)
+                    ).fetchone()[0],
+                    1,
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT count(*) FROM credentials WHERE identity_id=?",
+                        (created.identity_id,),
+                    ).fetchone()[0],
+                    1,
+                )
+            archive_entries = [
+                entry
+                for entry in control_plane.list_audit_entries()
+                if entry["action"] == "identities.archive"
+            ]
+            self.assertEqual(len(archive_entries), 1)
+            self.assertTrue(control_plane.archive_identity(created.identity_id, "identity-archive-again"))
+            self.assertEqual(
+                len([entry for entry in control_plane.list_audit_entries() if entry["action"] == "identities.archive"]),
+                1,
+            )
+            self.assertTrue(control_plane.verify_audit_chain()["valid"])
 
 
 class PolicyTests(unittest.TestCase):

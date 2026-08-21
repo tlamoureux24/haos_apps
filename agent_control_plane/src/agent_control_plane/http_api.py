@@ -25,6 +25,7 @@ from agent_control_plane.contracts import (
     EventMappingIdRequest,
     EventMappingUpdateRequest,
     IdentityCreateRequest,
+    IdentityArchiveRequest,
     IdentityRevokeRequest,
     JobCancelRequest,
     TaskCreateRequest,
@@ -955,6 +956,31 @@ async def admin_revoke_identity(request: Request) -> JSONResponse:
     if not found:
         return error_response(404, "identity_not_found", correlation_id)
     return JSONResponse({"identity_id": contract.identity_id, "status": "revoked"})
+
+
+async def admin_archive_identity(request: Request) -> JSONResponse:
+    correlation_id = request.state.correlation_id
+    if not csrf_valid(request):
+        await audit_denial(request, "identities.archive", "csrf_failed")
+        return error_response(403, "csrf_failed", correlation_id)
+    try:
+        contract = await json_contract(request, IdentityArchiveRequest)
+        found = await run_in_threadpool(
+            request.app.state.control_plane.archive_identity,
+            contract.identity_id,
+            correlation_id,
+        )
+    except OverflowError:
+        return error_response(413, "body_too_large", correlation_id)
+    except ValidationError:
+        return error_response(422, "invalid_request", correlation_id)
+    except ValueError as exc:
+        if str(exc) == "identity_not_revoked":
+            return error_response(409, "identity_not_revoked", correlation_id)
+        return error_response(422, "invalid_request", correlation_id)
+    if not found:
+        return error_response(404, "identity_not_found", correlation_id)
+    return JSONResponse({"identity_id": contract.identity_id, "status": "archived"})
 
 
 async def effective_permissions(request: Request) -> JSONResponse:

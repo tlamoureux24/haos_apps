@@ -1,3 +1,3 @@
 """Agent Control Plane application package."""
 
-__version__ = "0.46.10"
+__version__ = "0.46.11"
