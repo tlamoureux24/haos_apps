@@ -21,10 +21,23 @@ ACP_URL_KEY="acp_mcp_url"
 ACP_CREDENTIAL_KEY="acp_mcp_credential"
 ACP_STATUS_KEY="acp_connectivity"
 LIFECYCLE_TOOLS={"jobs_claim_v1","jobs_heartbeat_v1","jobs_complete_v1","jobs_fail_v1"}
+LIFECYCLE_INPUTS={
+    "jobs_claim_v1":{},
+    "jobs_heartbeat_v1":{"job_id":"string","lease_token":"string"},
+    "jobs_complete_v1":{"job_id":"string","lease_token":"string","completion_key":"string","report":"object"},
+    "jobs_fail_v1":{"job_id":"string","lease_token":"string","completion_key":"string","reason":"string","retryable":"boolean"},
+}
 
 
 def _timestamp(value: str) -> float:
     return datetime.fromisoformat(value.replace("Z","+00:00")).timestamp()
+
+
+def _valid_lifecycle_schema(name:str,schema:dict[str,Any])->bool:
+    expected=LIFECYCLE_INPUTS[name]
+    properties=schema.get("properties");required=schema.get("required",[])
+    if schema.get("type")!="object" or not isinstance(properties,dict) or not isinstance(required,list) or set(properties)!=set(expected) or set(required)!=set(expected):return False
+    return all(isinstance(properties[field],dict) and properties[field].get("type")==kind for field,kind in expected.items())
 
 
 class AcpStore:
@@ -91,11 +104,11 @@ class AcpBoundary:
         if parsed.scheme not in {"http","https"} or not parsed.netloc or parsed.username or parsed.password:raise ValueError("invalid_acp_url")
         config={"url":url,"credential":credential}
         async with self.mcp_factory(self._request(config)) as session:
-            inventory=[];cursor=None
+            inventory={};cursor=None
             while True:
-                page,cursor=await session.list_tools(cursor);inventory.extend(t.name for t in page)
+                page,cursor=await session.list_tools(cursor);inventory.update((tool.name,tool.input_schema) for tool in page)
                 if cursor is None:break
-        if not LIFECYCLE_TOOLS.issubset(inventory):raise ValueError("incompatible_acp_contract")
+        if not all(name in inventory and _valid_lifecycle_schema(name,inventory[name]) for name in LIFECYCLE_TOOLS):raise ValueError("incompatible_acp_contract")
     async def configure(self,url,credential,replace):
         current=self.store.configuration(include_credential=True);effective=credential if replace or not current else current.get("credential")
         if not effective:raise ValueError("acp_credential_required")
@@ -140,7 +153,7 @@ class AcpBoundary:
         job,token,expires,capabilities,schema=self._claim_contract(claim);execution_id="acp-"+secrets.token_urlsafe(18);completion_key=secrets.token_urlsafe(24)
         try:self.store.reserve_claim(execution_id,job["id"],token,expires,completion_key)
         except LifecycleBusy:
-            await self._call("jobs_fail_v1",{"job_id":job["id"],"lease_token":token,"reason":"aep_busy","retryable":True},config);return
+            await self._call("jobs_fail_v1",{"job_id":job["id"],"lease_token":token,"completion_key":completion_key,"reason":"aep_busy","retryable":True},config);return
         record_activity(self.database,"acp_job_claimed","execution","success")
         lease={"expires":expires,"lost":False}
         async def guard():
@@ -154,6 +167,7 @@ class AcpBoundary:
         self.lifecycle.complete(execution_id,outcome);self.store.pending(execution_id);record_activity(self.database,"acp_result_pending_delivery","execution","success" if outcome.success else "failure")
         await self._deliver(self.store.metadata())
     async def _heartbeat(self,job_id,token,lease,config):
+        transient_failures=0
         while True:
             remaining=_timestamp(lease["expires"])-datetime.now(timezone.utc).timestamp()
             await asyncio.sleep(max(0,min(self.heartbeat_interval,remaining)))
@@ -161,18 +175,23 @@ class AcpBoundary:
             try:
                 result=await self._call("jobs_heartbeat_v1",{"job_id":job_id,"lease_token":token},config)
                 lease["expires"]=result["lease_expires_at"];self.store.update_expiry(lease["expires"])
+                transient_failures=0
             except Exception:
-                if datetime.now(timezone.utc).timestamp()>=_timestamp(lease["expires"]):raise
+                transient_failures+=1
+                if transient_failures>1 or datetime.now(timezone.utc).timestamp()>=_timestamp(lease["expires"]):raise
     async def _deliver(self,meta):
         state=self.lifecycle.state();outcome=state.get("outcome") if state.get("execution_id")==meta["execution_id"] else None
         if not outcome:return
         if outcome.get("success"):
             await self._call("jobs_complete_v1",{"job_id":meta["job_id"],"lease_token":meta["lease_token"],"completion_key":meta["completion_key"],"report":outcome.get("result")})
         else:
-            await self._call("jobs_fail_v1",{"job_id":meta["job_id"],"lease_token":meta["lease_token"],"reason":outcome.get("error_code","execution_failed"),"retryable":False})
+            await self._call("jobs_fail_v1",{"job_id":meta["job_id"],"lease_token":meta["lease_token"],"completion_key":meta["completion_key"],"reason":outcome.get("error_code","execution_failed"),"retryable":False})
         self.lifecycle.ack(meta["execution_id"]);self.store.clear();self.connectivity="connected";self.store.set_connectivity("connected");record_activity(self.database,"acp_result_delivered","execution","success")
     async def _reconcile_interrupted(self,meta):
-        await self._call("jobs_fail_v1",{"job_id":meta["job_id"],"lease_token":meta["lease_token"],"reason":"execution_interrupted","retryable":True})
+        if datetime.now(timezone.utc).timestamp()<_timestamp(meta["lease_expires_at"]):
+            try:await self._call("jobs_fail_v1",{"job_id":meta["job_id"],"lease_token":meta["lease_token"],"completion_key":meta["completion_key"],"reason":"execution_interrupted","retryable":True})
+            except Exception:
+                if datetime.now(timezone.utc).timestamp()<_timestamp(meta["lease_expires_at"]):raise
         self.lifecycle.clear_active(meta["execution_id"]);self.store.clear();record_activity(self.database,"acp_interruption_reconciled","execution","success")
     def abandon(self,execution_id):
         meta=self.store.metadata()

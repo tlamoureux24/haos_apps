@@ -375,7 +375,7 @@ Real HAOS acceptance completed on **2026-08-21** with AEP **0.5.5**, commit `aba
 
 ## Lot 4 — Agent Control Plane boundary
 
-Status: **implemented in 0.6.0; HAOS acceptance pending**.
+Status: **implemented in 0.6.0 and corrected in 0.6.1; HAOS acceptance pending**.
 
 ### Goal
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.46.9
+
+- Make `jobs_fail_v1` idempotent with a caller-supplied completion key, matching successful completion delivery and making retries safe after a lost response.
+- Publish and regression-test the updated lifecycle tool schema used by Agent Execution Plane workers without changing ACP governance or connector behavior.
+
 ## 0.46.8
 
 - Finalize the pre-production product and Home Assistant App identity as Agent Control Plane before persistent production configuration begins; no user-data migration is required at this cutoff.

@@ -6,7 +6,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from agent_execution_plane.acp import AcpBoundary, AcpStore, LIFECYCLE_TOOLS
+from agent_execution_plane.acp import AcpBoundary, AcpStore, LIFECYCLE_INPUTS, LIFECYCLE_TOOLS
 from agent_execution_plane.database import initialize
 from agent_execution_plane.execution import Capability, ExecutionOutcome
 from agent_execution_plane.lifecycle import LifecycleStore
@@ -28,8 +28,9 @@ class Session:
     async def __aenter__(self):return self
     async def __aexit__(self,*_):pass
     async def list_tools(self,cursor=None):
-        tools=[Capability(name,"",{"type":"object"}) for name in sorted(LIFECYCLE_TOOLS)]
+        tools=[Capability(name,"",{"type":"object","properties":{field:{"type":kind} for field,kind in LIFECYCLE_INPUTS[name].items()},"required":list(LIFECYCLE_INPUTS[name])}) for name in sorted(LIFECYCLE_TOOLS)]
         if self.owner.incompatible:tools=tools[:-1]
+        if self.owner.bad_schema:tools[-1]=Capability(tools[-1].name,"",{"type":"object","properties":{}})
         tools += [Capability("virtual.read","governed",{"type":"object","properties":{"value":{"type":"integer"}},"required":["value"]}),Capability("unrelated","",{})]
         return tools,None
     async def call_tool(self,name,arguments):
@@ -48,7 +49,7 @@ class Session:
 
 class Factory:
     def __init__(self):
-        self.calls=[];self.claimed=False;self.fail_delivery=False;self.heartbeat_failures=0;self.incompatible=False
+        self.calls=[];self.claimed=False;self.fail_delivery=False;self.heartbeat_failures=0;self.incompatible=False;self.bad_schema=False
         self.expiry=(datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat().replace("+00:00","Z")
     def __call__(self,_):return Session(self)
 
@@ -67,7 +68,9 @@ class AcpBoundaryTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError,"acp_credential_required"):await self.boundary.configure("https://acp.invalid/mcp",None,True)
         self.factory.incompatible=True
         with self.assertRaisesRegex(ValueError,"incompatible_acp_contract"):await self.boundary.configure("https://acp.invalid/mcp","WORKER-SECRET",True)
-        self.assertIsNone(self.store.configuration());self.factory.incompatible=False
+        self.assertIsNone(self.store.configuration());self.factory.incompatible=False;self.factory.bad_schema=True
+        with self.assertRaisesRegex(ValueError,"incompatible_acp_contract"):await self.boundary.configure("https://acp.invalid/mcp","WORKER-SECRET",True)
+        self.assertIsNone(self.store.configuration());self.factory.bad_schema=False
         await self.configure();public=self.store.configuration();self.assertEqual(public,{"url":"https://acp.invalid/mcp","credential_configured":True})
         self.assertNotIn("WORKER-SECRET",self.database.read_bytes().decode(errors="ignore"));self.assertEqual(self.boundary.state()["connectivity"],"connected")
 
@@ -100,6 +103,13 @@ class AcpBoundaryTests(unittest.IsolatedAsyncioTestCase):
         await restarted.step();self.assertEqual(restarted_engine.requests,[]);self.assertEqual(self.lifecycle.state(),{"state":"idle"})
         self.assertTrue(any(name=="jobs_fail_v1" and args["reason"]=="execution_interrupted" for name,args in self.factory.calls))
 
+    async def test_restart_with_expired_lease_clears_local_slot_without_remote_failure(self):
+        await self.configure();expired=(datetime.now(timezone.utc)-timedelta(seconds=1)).isoformat().replace("+00:00","Z")
+        self.store.reserve_claim("acp-execution","job-1","LEASE-SECRET",expired,"completion")
+        await self.boundary.step()
+        self.assertEqual(self.lifecycle.state(),{"state":"idle"});self.assertIsNone(self.store.metadata())
+        self.assertFalse(any(name=="jobs_fail_v1" for name,_ in self.factory.calls))
+
     async def test_heartbeat_transient_failure_recovers_before_expiry(self):
         await self.configure();self.factory.heartbeat_failures=1;self.boundary.heartbeat_interval=.01
         lease={"expires":(datetime.now(timezone.utc)+timedelta(seconds=.2)).isoformat().replace("+00:00","Z"),"lost":False}
@@ -113,6 +123,13 @@ class AcpBoundaryTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError,"lease_expired"):
             await self.boundary._heartbeat("job-1","LEASE-SECRET",lease,self.store.configuration(include_credential=True))
         self.assertFalse(any(name=="jobs_heartbeat_v1" for name,_ in self.factory.calls))
+
+    async def test_second_consecutive_heartbeat_error_is_not_tolerated(self):
+        await self.configure();self.factory.heartbeat_failures=2;self.boundary.heartbeat_interval=.01
+        lease={"expires":(datetime.now(timezone.utc)+timedelta(seconds=1)).isoformat().replace("+00:00","Z"),"lost":False}
+        with self.assertRaisesRegex(RuntimeError,"temporary"):
+            await self.boundary._heartbeat("job-1","LEASE-SECRET",lease,self.store.configuration(include_credential=True))
+        self.assertEqual(sum(name=="jobs_heartbeat_v1" for name,_ in self.factory.calls),2)
 
 
 if __name__=="__main__":unittest.main()

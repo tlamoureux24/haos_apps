@@ -31,6 +31,12 @@ Streamable HTTP sous forme SSE lorsque cela est nécessaire pour transmettre les
 notifications dynamiques de changement de liste d’outils après une réclamation,
 une fin ou un échec de travail.
 
+Les outils lifecycle worker sont `jobs_claim_v1`, `jobs_heartbeat_v1`,
+`jobs_complete_v1` et `jobs_fail_v1`. Les deux opérations terminales exigent une
+`completion_key` opaque. ACP conserve cette clé avec la tentative : répéter le
+même appel après une réponse réseau perdue restitue l’état déjà enregistré sans
+appliquer une seconde transition.
+
 ### Révisions du protocole
 
 Le SDK Python MCP 1.28.1 utilisé par Agent Control Plane annonce les révisions prises
@@ -119,6 +125,12 @@ is tool-only.
 The public server is HTTP-stateless. It keeps a Streamable HTTP response as SSE
 when required to deliver dynamic tool-list change notifications after job claim,
 completion, or failure.
+
+The worker lifecycle tools are `jobs_claim_v1`, `jobs_heartbeat_v1`,
+`jobs_complete_v1`, and `jobs_fail_v1`. Both terminal operations require an
+opaque `completion_key`. ACP stores that key with the attempt, so replaying the
+same call after a lost network response returns the recorded state without a
+second transition.
 
 ### Protocol revisions
 
