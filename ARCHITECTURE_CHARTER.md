@@ -205,6 +205,6 @@ Before adding a cross-cutting feature, apply these tests:
 
 ## 14. Current sequencing decision
 
-The suite architecture is established before implementation of the two new components.
+Agent Control Plane and Agent Execution Plane are established as independent applications with a generic MCP boundary between them.
 
-The next implementation focus is **Agent Execution Plane**. Its validated project brief, technical design and authoritative implementation plan define the work sequence. MCP Capability Bridge now also has a validated project brief, fixed technical design and authoritative implementation plan; its implementation remains intentionally sequenced after Agent Execution Plane is sufficiently stable to confirm the shared boundaries without duplicating responsibilities.
+MCP Capability Bridge is the next separately planned application. Its revised project brief, technical design, threat model and implementation plan define a lot-by-lot sequence beginning with the HAOS shell and multi-client MCP namespace boundary. Implementation starts only when explicitly requested and must not reopen the validated ACP/AEP responsibilities.

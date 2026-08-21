@@ -1,285 +1,308 @@
 # MCP Capability Bridge — Implementation Plan
 
-Status: **authoritative implementation sequence — implementation not started**.
+Status: **authoritative revised sequence — implementation not started**.
 
-This plan is derived from `PROJECT_BRIEF.md`, `TECHNICAL_DESIGN.md` and the root `ARCHITECTURE_CHARTER.md`.
-
-The plan is finite. Product scope is fixed; implementation lots must not reopen it unless code/HAOS evidence exposes a contradiction that cannot be solved within the validated boundary.
+This plan derives from `PROJECT_BRIEF.md`, `TECHNICAL_DESIGN.md`, `THREAT_MODEL.md` and `ARCHITECTURE_CHARTER.md`.
 
 For every lot:
 
 `planned -> implemented -> independently reviewed -> CI conformant -> deployed on HAOS -> real acceptance tested -> accepted`
 
-Codex implements one bounded lot at a time. A Codex summary is not acceptance evidence.
+Only one bounded lot is implemented at a time. Findings from review or HAOS return to a focused corrective patch; they do not silently expand the next lot.
 
 ## Global invariants
 
-Every lot must preserve:
+Every lot preserves:
 
-- independent generic MCP server; no required Agent Control Plane or Agent Execution Plane dependency;
-- adapter-oriented core; Web and SSH are initial adapters only;
-- no reasoning models, tasks, jobs, leases, schedules or workflow engine;
-- standard MCP Streamable HTTP only;
-- one Bridge-owned opaque Bearer credential initially;
-- target identity and credentials remain administrator-controlled;
-- target secrets remain inside the Bridge;
-- no durable invocation queue/history or automatic replay/retry;
-- **runtime target sessions are disposable**;
-- each Web session starts clean and leaves no reusable browser state after close/expiry/restart;
-- each SSH tool invocation uses a fresh connection and leaves no persistent SSH session/output history;
-- unprivileged HAOS runtime and least-privilege AppArmor;
-- configurable MCP host port through HAOS Network settings;
-- Ingress UI follows ACP visual language, FR/EN, light/dark, product name + version;
-- the committed `mcp_capability_bridge/icon.png` and `mcp_capability_bridge/logo.png` are the authoritative branding assets and must not be replaced, regenerated or substituted without an explicit later product decision;
-- dedicated FR/EN documentation;
-- appliance names never become core logic.
+- independent generic MCP server with no required ACP/AEP dependency;
+- ordinary MCP-only suite integration;
+- isolated MCP client namespaces from the first authenticated release;
+- adapter-oriented statically packaged core, with no runtime executable plugins;
+- SSH and Web as initial adapters, not hard-coded product limits;
+- no models, tasks, jobs, schedules, reports or business policy;
+- target and namespace secrets owned only by the Bridge;
+- no unrestricted SSH command string;
+- Web authority equal to the configured target account and explicit network envelope;
+- no automatic operation retry or durable invocation queue/history;
+- disposable browser sessions and fresh SSH connections;
+- one authoritative runtime for 8098/8099 state;
+- unprivileged HAOS and evidence-based AppArmor;
+- ACP/AEP visual conventions for the Ingress UI;
+- committed `icon.png` and `logo.png` unchanged unless explicitly re-approved;
+- FR/EN, light/dark, responsive UI and stable scrollbar geometry;
+- no production-data cutoff before all adapters and upgrades are accepted on HAOS.
 
-## Lot 0 — executable HAOS App shell
+## Lot 0 — HAOS shell and shared suite UI
 
 Status: **planned**.
 
 ### Goal
 
-Create the smallest real MCP Capability Bridge HAOS App that installs, starts and exposes a safe administration shell before MCP tools or adapters exist.
+Create the executable App shell and prove the single-runtime/two-surface topology before persistence, MCP authentication or adapters exist.
 
 ### Scope
 
-- HAOS App metadata under `mcp_capability_bridge/`;
-- initial version source and `MCP Capability Bridge vX.Y.Z` header;
-- preserve the committed root `icon.png` and `logo.png` unchanged as the HAOS App's authoritative icon/logo assets so Home Assistant repository/Supervisor presentation uses those files rather than generated substitutes;
-- the Ingress header must visibly render the committed `icon.png` (or an exact packaged copy of the same asset) immediately with the `MCP Capability Bridge vX.Y.Z` product identity; `logo.png` may additionally be reused elsewhere in the UI but does not replace this mandatory header icon;
-- Home Assistant base image and provenance discipline comparable to ACP;
-- unprivileged runtime user;
-- startup/graceful-shutdown foundation;
-- SQLite generation-1 initialization plumbing;
-- Ingress listener `8099`;
-- public/MCP listener foundation `8098`, with configurable HAOS host-port mapping;
-- non-sensitive `/health/live` and `/health/ready`;
-- first least-privilege AppArmor profile from actual runtime inventory;
-- ACP-style Ingress shell;
+- HAOS metadata and initial synchronized version source;
+- preserve/package authoritative icon and logo;
+- one unprivileged application runtime starting separate administration and public ASGI applications;
+- Ingress-only 8099 and public 8098 health endpoints;
+- configurable host mapping for 8098;
+- database generation-one initialization plumbing without product tables beyond metadata;
+- graceful shutdown foundation;
+- first observed AppArmor executable inventory;
+- ACP/AEP-style header, navigation, cards, `pagehead split`, right drawer foundation, colors and spacing;
+- stable `scrollbar-gutter` and responsive mobile layout;
 - FR/EN and light/dark controls;
-- Overview showing only real App readiness;
-- basic FR/EN installation docs;
-- dedicated GitHub Actions workflow;
-- image/listener/restart/persistence/AppArmor smoke tests.
+- Overview showing only real readiness;
+- CI workflow and basic bilingual installation documentation.
 
 ### Anti-goals
 
-No MCP tools, Bearer issuance, targets, browser, SSH, adapter implementation or fake/sample tools.
+No MCP endpoint, credentials, namespaces, targets, adapter registry, SSH or browser packages.
 
 ### CI evidence
 
-- committed `icon.png` and `logo.png` are present in the packaged App unchanged and the Ingress header resolves/renders the authoritative `icon.png` asset rather than an emoji, generated icon or unrelated substitute;
-- metadata/source validation;
-- Python compile/tests;
-- image build and startup;
-- both health endpoints;
-- Ingress-prefix correctness;
-- bilingual/theme/version/icon UI assertions;
-- listener isolation and configurable MCP host-port mapping;
-- restart/persistence smoke test;
-- initial AppArmor executable inventory.
+- metadata/version/assets synchronized;
+- Python/shell syntax and unit tests;
+- image build/provenance;
+- one runtime owns both listener servers;
+- strict route/listener isolation;
+- Ingress-prefix-safe assets;
+- shared UI conventions, drawer focus behavior and no horizontal shift;
+- restart and shutdown;
+- AppArmor executable inventory.
 
 ### HAOS acceptance
 
-1. install the App from the repository and confirm Home Assistant presents the committed App icon/logo correctly;
-2. confirm clean logs/startup;
-3. open Ingress and confirm the committed icon is visible with the product name + version in the header;
-4. verify FR/EN and light/dark;
-5. verify configurable 8098 host port;
-6. restart App and HAOS cleanly and confirm the branding assets remain unchanged.
+Install, start, open Ingress, verify product/version/icon, menu, top-right actions, drawer behavior, FR/EN, light/dark, mobile/desktop scrollbar stability, configurable 8098 mapping and clean restart.
 
-## Lot 1 — authenticated MCP server and generic adapter foundation
+## Lot 1 — namespaces, authenticated MCP and adapter core
 
 Status: **planned**.
 
 ### Goal
 
-Create the real standalone MCP endpoint, secure target persistence and generic adapter registration without implementing target operations yet.
+Deliver the secure standalone MCP core, multi-client namespace isolation, protected configuration storage and empty adapter registry.
 
 ### Scope
 
-- exact stable official MCP Python SDK v2 pin;
-- Streamable HTTP `/mcp`;
-- compatibility with current and ACP-era MCP clients on one endpoint;
-- tools-only MCP surface;
-- opaque Bearer issue/replace/revoke lifecycle;
-- one-time token display and verifier-only storage;
-- App-local secret-encryption key under `/data/private`;
-- encrypted reversible target-secret utilities;
-- generic target persistence: stable key, display name, adapter type, enabled state, bounded config envelope, encrypted secret payload;
-- internal adapter registration interface for validation/tool definition/invocation/cleanup/status;
-- bounded global concurrency accounting foundation;
-- Ingress MCP access + Targets views;
-- deterministic empty tool inventory until adapters are implemented;
-- no fake/echo tool.
+- exact MCP SDK pin compatible with current ACP code;
+- authenticated Streamable HTTP `/mcp`;
+- tools-only surface with empty inventory initially;
+- namespace create, one-time credential display, rotate, revoke and revoke-then-archive lifecycle;
+- 256-bit opaque credentials, indexed HMAC verifier and constant-time comparison;
+- encrypted target-secret utility with a separate atomic key;
+- generic targets and static adapter registry interfaces;
+- namespace-to-capability publication model;
+- global/per-namespace concurrency foundation;
+- shared operation/session counters visible to administration;
+- MCP Clients, Targets and MCP Access views using shared drawers/filters;
+- no fake or echo production tool.
+
+### Required behavior
+
+- different namespace credentials discover only their own publications;
+- an unknown/revoked/archived namespace cannot initialize MCP;
+- rotation invalidates the old token immediately;
+- administration and MCP observe the same runtime state;
+- public APIs never expose admin routes or clear secrets.
 
 ### CI evidence
 
-Prove authenticated MCP discovery, old-token invalidation, no clear token recovery, encrypted secret persistence, target CRUD/restart persistence, empty tool inventory and adapter registration tests with test doubles only.
+- credential non-disclosure and restart persistence;
+- cross-namespace discovery/call denial with adapter test doubles;
+- publication revision and `tools/list_changed` behavior;
+- encrypted target-secret persistence;
+- active-use mutation tests across both listener applications;
+- current ACP connects as an ordinary client, validates the real MCP contract and discovers the expected empty/published test-double inventory;
+- tool names and schemas satisfy ACP limits/admitted JSON Schema subset;
+- no clear token/secret in database, logs, responses or UI after acknowledgement.
 
 ### HAOS acceptance
 
-Issue/rotate MCP token, connect generic client, confirm empty authenticated tool list, create/restart/delete a disabled target, confirm no secret disclosure.
+Create two namespaces, issue/rotate credentials, connect two generic MCP clients plus ACP, prove isolated inventories, revoke one without affecting the other, archive it through the filter and restart with only configuration preserved.
 
-## Lot 2 — interactive Web administration adapter
+## Lot 2 — bounded SSH adapter
 
 Status: **planned**.
 
 ### Goal
 
-Let a tool-calling model operate administrator-configured HTTP/HTTPS administration interfaces through short-lived isolated browser sessions.
-
-### Browser implementation gate
-
-Do **not** hard-code Chromium as a product requirement.
-
-Start with the simplest HAOS-proven candidate, expected to be system Chromium + ChromeDriver/Selenium because Alpine packages them together and temporary clean profiles are naturally supported.
-
-If Firefox/geckodriver or another standards-compatible stack proves cleaner under real HAOS/AppArmor testing, it may be used instead without changing the MCP contract.
-
-The lot is not accepted if the chosen engine requires privileged mode, broad host filesystem/device access or an unjustifiably broad AppArmor profile.
+Prove the adapter architecture with independently configured, precisely bounded SSH capabilities.
 
 ### Scope
 
-- Web target with fixed HTTP/HTTPS origin, allowed origins, TLS policy, enabled state and encrypted auth material;
-- initial auth modes: none, HTTP Basic, bounded configured form login;
-- target-scoped Web MCP tool family equivalent to open/snapshot/navigate/click/fill/select/press/wait/screenshot/close;
-- text/accessibility snapshot with Bridge-issued opaque element references;
-- no model-supplied selectors or arbitrary JavaScript;
-- no arbitrary URL/origin escape;
-- no uploads/downloads or filesystem access;
-- no DevTools/remote-control surface;
-- bounded session concurrency, inactivity TTL and absolute lifetime;
-- optional screenshot path, text path normative;
-- AppArmor extended only for proven browser runtime requirements.
-
-### Disposable-session rule
-
-Every `web_open` creates a **fresh isolated session**.
-
-The session may span several MCP calls, but:
-
-- no cookies, history, cache, localStorage, sessionStorage, IndexedDB or browser profile are loaded from a previous session;
-- no browser storage state is exported for later reuse;
-- no HAR/video/trace archive is retained in normal operation;
-- temporary profile/context exists only for that runtime session;
-- close, expiry, browser failure, App shutdown or restart destroys it;
-- a new session to the same target must start clean again.
-
-### CI evidence
-
-Use a deterministic local Web fixture to prove:
-
-- configured login works without exposing credentials;
-- non-vision text/tool-calling path works end to end;
-- element refs work and stale refs fail safely;
-- allowed navigation works and origin escape is blocked;
-- two consecutive sessions to the same target do **not** share cookies/storage/history/login state except where the Bridge explicitly logs in again using stored target credentials;
-- no reusable profile/storage file remains after close;
-- forced browser crash/timeout cleans the session;
-- App restart invalidates all handles and leaves no restored browser session;
-- browser runtime remains within accepted AppArmor boundary.
-
-### HAOS acceptance
-
-Configure a harmless administration fixture, open/use/close a session, confirm stored login remains invisible, then open a second session and verify it starts clean. Restart App/HAOS and verify no browser process/session/state returns.
-
-## Lot 3 — bounded SSH adapter
-
-Status: **planned**.
-
-### Goal
-
-Expose bounded SSH operations as MCP tools with a fresh connection for every invocation and no persistent remote session.
-
-### Scope
-
-- SSH target with fixed host/IP, port, username, enabled state, encrypted credential and mandatory pinned/trusted host key;
-- connectivity/authentication/host-key test without arbitrary remote command;
-- bounded SSH capability definitions with stable MCP tool name, strict input schema, fixed command head, ordered literal/input argument template, timeout and output bounds;
-- safe argument construction;
-- no whole caller command string;
-- no PTY, arbitrary env map or unrestricted stdin;
-- no automatic retry;
-- Ingress SSH capability CRUD/test/status;
-- target/capability in-use mutation protection.
-
-### Disposable-connection rule
-
-For every SSH `tools/call`:
-
-`open new connection -> authenticate + verify host key -> execute one bounded command -> collect bounded result -> close connection`
-
-Do not retain or reuse connection/session handles, shells, PTYs, multiplexing, agent-forwarding state, remote working directories, command history, arguments, stdout or stderr between calls or in persistent storage.
-
-Only administrator target/capability configuration, encrypted credential and trusted host-key material remain durable.
+- SSH target CRUD and encrypted password/private-key authentication;
+- two-step host-key scan, fingerprint display, explicit confirmation and rotation;
+- explicit POSIX remote-command contract;
+- SSH capability CRUD with stable tool key, absolute executable and quoted token template;
+- scalar typed parameters and strict ACP-compatible schemas;
+- timeout and separate stdout/stderr bounds;
+- fresh connection per call, no PTY, forwarding, agent, environment map, stdin or multiplexing;
+- publication to one or more namespaces;
+- target/capability in-use mutation protection;
+- safe effect-possible errors and no retry;
+- SSH views/drawers matching suite UI.
 
 ### CI evidence
 
 Use a deterministic local SSH fixture to prove:
 
-- a new connection is established per invocation;
-- the prior connection is closed after success, failure and timeout;
-- no shell/PTY/multiplex state survives between calls;
-- host-key validation fails closed;
-- argument injection remains data rather than syntax;
-- secrets, arguments and stdout/stderr are absent from persistent DB/history/logging paths;
-- output/time bounds and no automatic retry.
+- exact host-key enrollment and changed-key refusal;
+- password/key secret protection;
+- one new connection per call and deterministic close on success/failure/timeout/cancellation;
+- token-template injection remains one POSIX argument, including hostile metacharacters/newlines/control cases;
+- no caller-controlled command head, shell operator, PTY or forwarding;
+- output truncation without unbounded buffering;
+- no arguments/stdout/stderr/secret persistence or logging;
+- ambiguous post-exec response loss returns `effect_possible: true` and is not replayed;
+- namespace publication isolation;
+- current ACP discovers/calls the real SSH tool and AEP receives the bounded result through ACP without special handling.
 
 ### HAOS acceptance
 
-Against a restricted test account, call a harmless bounded command twice and verify each invocation is independent, credentials stay hidden, no shell state carries over and disabled capability disappears from discovery.
+Enroll a restricted test host key, configure a harmless read capability, publish it to one namespace, call twice through a generic client and once through ACP/AEP, prove distinct connections, hidden credentials, bounded output, clean disable and denial-free AppArmor operation.
 
-## Lot 4 — hardening, interoperability, documentation and production cutoff
+## Lot 3A — browser runtime and confinement gate
 
 Status: **planned**.
 
 ### Goal
 
-Close the first production-ready release after Web and SSH are accepted on real HAOS.
+Package and confine a real browser safely before exposing any browser MCP tool.
 
 ### Scope
 
-- complete threat-model review;
-- finalized hard resource limits;
-- concurrency/busy tests;
-- malformed/oversized MCP cases;
-- forced browser/SSH failure cleanup;
-- repeated Web session isolation/leak tests;
-- repeated SSH connection-isolation tests;
-- graceful shutdown verification;
-- credential rotation safety;
-- polished bilingual Ingress UI;
-- final presentation review while preserving the committed authoritative `icon.png` and `logo.png`; replacing either asset requires an explicit later product decision;
-- complete README/README.fr/HAOS docs;
-- generic MCP client examples;
-- ACP interoperability through ordinary MCP only;
-- supported architecture image builds where repository infrastructure permits;
-- real AppArmor HAOS startup/use/shutdown/restart acceptance;
-- declare production-data preservation cutoff.
+- evidence-driven selection of unprivileged browser/driver stack;
+- exact installed executable/helper/library inventory;
+- dedicated non-persistent temporary profile root and bounded shared memory;
+- process-tree supervision and cleanup;
+- internal network/origin request guard foundation;
+- browser global/per-namespace/per-target resource limits;
+- startup cleanup of stale validated temporary directories;
+- Web target static configuration UI without enabled MCP tools.
 
-### Release invariants
+### CI evidence
 
-Before production cutoff:
-
-- Bridge works without ACP/Execution Plane;
-- adding a future adapter does not require core redesign;
-- Web works through text/tool calling without model-specific Browser mode;
-- no Web runtime state survives session destruction or restart;
-- every SSH invocation is connection-isolated and leaves no persistent runtime/output state;
-- clients cannot change configured target identity;
-- credentials are never disclosed;
-- no automatic operation replay/retry exists;
-- no permanent invocation/session history exists;
-- authoritative `icon.png`/`logo.png` remain the packaged HAOS branding assets and the Ingress header continues to render the authoritative `icon.png`.
+- browser/driver versions reproducible on supported architectures;
+- every executable has Unix execute permission and targeted AppArmor coverage;
+- future executable additions fail CI until reviewed;
+- local fixture launch/terminate/crash/timeout leaves no process or reusable profile;
+- no browser write under `/data` except encrypted target configuration;
+- unapproved scheme/origin/address/frame/popup/WebSocket/download requests blocked;
+- one browser failure does not make the App restart-loop or affect SSH.
 
 ### HAOS acceptance
 
-Perform clean install/UI/auth checks, confirm authoritative app icon/logo and Ingress header icon presentation, Web end-to-end including second-session clean-state proof, SSH end-to-end including fresh-connection proof, generic client + ACP discovery/calls, restart during/after Web activity, persistence of configuration only, and AppArmor denial-free normal operation without unjustified permissions.
+Configure a harmless local Web fixture, run explicit connectivity/browser tests, inspect processes/temp storage/AppArmor, crash the browser and restart the App, confirming no restored session or broad permission requirement.
 
-After acceptance, target/credential/SSH-capability configuration is production data. Future schema evolution requires explicit deterministic tested migrations.
+## Lot 3B — isolated read-only Web sessions
+
+Status: **planned**.
+
+### Goal
+
+Expose the non-vision read path and prove namespace/session/reference isolation before effect-capable actions exist.
+
+### Scope
+
+- Web authentication modes none, Basic and bounded configured form login;
+- target-scoped `open`, `snapshot`, bounded read-only `wait` and `close` tools;
+- random namespace/generation-bound handles;
+- one lock per session;
+- textual/accessibility snapshots with total/node/depth/field bounds;
+- password/hidden/cookie/storage/script/style/raw-HTML exclusion;
+- known-secret redaction;
+- inactivity/absolute expiry and unified cleanup;
+- no screenshot.
+
+### CI evidence
+
+- two namespaces on the same target cannot use each other's handles;
+- rotation/revocation closes only the owning namespace's sessions;
+- two consecutive sessions never share cookies/storage/history/profile state;
+- login secrets never enter schemas/results/logs;
+- stale generation and concurrent calls fail closed;
+- browser crash, timeout, close, App shutdown and restart clean everything;
+- text path works through generic MCP, current ACP and AEP without vision support.
+
+### HAOS acceptance
+
+Use read-only credentials against a fixture, open/snapshot/close directly and through ACP/AEP, verify clean second session, namespace isolation, expiry, rotation cleanup and no persistent browser state.
+
+## Lot 3C — interactive Web actions
+
+Status: **planned**.
+
+### Goal
+
+Add effect-capable interaction while explicitly preserving the configured Web account as the real authority boundary.
+
+### Scope
+
+- target-scoped relative navigation, click, fill, select, press and bounded wait;
+- categorized navigation/auth/resource/WebSocket origin policy;
+- confirmed address set and DNS-change failure;
+- one top-level context, no popups/downloads/uploads/filesystem access;
+- generation-bound element fingerprints and immediate pre-action revalidation;
+- invalidate all references after every attempted action;
+- no model-driven password-field filling;
+- `effect_possible` transitions and no retry;
+- prominent least-privilege account/TLS warnings in UI and docs.
+
+### CI evidence
+
+- read-only target account cannot perform fixture admin operations;
+- admin target account can perform only operations the fixture exposes to it;
+- Bridge/ACP do not claim finer click authorization;
+- origin, redirect, iframe, popup, WebSocket, scheme and DNS-rebinding escapes fail closed;
+- semantic element replacement between snapshot/action produces `stale_reference`;
+- simultaneous actions serialize;
+- lost response after a fixture side effect is not replayed and reports ambiguity;
+- no unknown URL, selector, script, credential, upload or download surface exists.
+
+### HAOS acceptance
+
+Test one dedicated read-only account and one deliberately privileged fixture account, demonstrate the difference in actual target authority, verify every confinement rule, then repeat through ACP/AEP with only the chosen Web tools authorized.
+
+## Lot 4 — hardening, documentation and production cutoff
+
+Status: **planned**.
+
+### Goal
+
+Close the first production-ready release only after SSH and Web have independent real HAOS acceptance.
+
+### Scope
+
+- complete threat-model audit against actual code;
+- malformed/oversized MCP and concurrency stress cases;
+- cancellation/shutdown/lost-response matrix;
+- credential/target mutation races;
+- long repeated Web cleanup and SSH isolation runs;
+- final AppArmor and supported-architecture image evidence;
+- polished bilingual Ingress and complete README/README.fr/HAOS documentation;
+- standalone examples and ordinary ACP/AEP integration examples;
+- backup/restore and deterministic upgrade strategy;
+- production-data preservation cutoff declaration.
+
+### Release invariants
+
+- multiple namespaces remain isolated;
+- Bridge works independently;
+- ACP sees only its namespace publications and further narrows them per task;
+- AEP receives/calls tools only through existing MCP boundaries;
+- Web authority is never overstated beyond the target account;
+- SSH has no generic command primitive;
+- no runtime sessions/output/history survive;
+- no automatic replay exists;
+- UI is visibly and behaviorally consistent with ACP/AEP;
+- no unjustified HAOS/AppArmor privilege exists.
+
+### HAOS acceptance
+
+Perform clean install, upgrade, backup/restore, UI, multi-client auth, SSH, read-only Web, privileged Web, generic client, ACP/AEP, restart-during-operation, cleanup, rotation/revocation, AppArmor and resource-bound tests. Only then mark the plan accepted and make future schema migrations mandatory.
 
 ## Delivery discipline
 
-For each lot, derive one precise Codex instruction from this plan. After Codex pushes, independently inspect actual diff/code/tests and CI; request focused micro-patches only for real defects/drift; deploy only conformant code; run HAOS acceptance one practical step at a time; mark the lot accepted only after real HAOS success.
+Each future Codex instruction is derived from one lot and repeats its invariants, anti-goals, tests and terminal acceptance boundary. Documentation status is updated only after independent review, green CI and real HAOS evidence.
