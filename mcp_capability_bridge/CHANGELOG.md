@@ -2,6 +2,16 @@
 
 All notable changes to MCP Capability Bridge will be documented in this file.
 
+## 0.4.6 — 2026-08-21
+
+### Fixed
+
+- Replace the obsolete Lot 2-only status scope with the currently available bounded SSH and confined Web adapters in FR/EN.
+
+### Validation
+
+- The generated technical-key UX micro-lot from 0.4.5 was accepted on real HAOS: hidden fields, collision handling and rename stability all passed.
+
 ## 0.4.5 — 2026-08-21
 
 ### Changed

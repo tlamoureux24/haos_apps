@@ -206,7 +206,7 @@ Accepted on real HAOS with version 0.4.4: startup, desktop/mobile UI, Web target
 
 ## Micro-lot UX — generated technical keys
 
-Status: **implemented in 0.4.5; awaiting real HAOS acceptance**.
+Status: **accepted on HAOS — 2026-08-21**.
 
 ### Goal
 
@@ -236,6 +236,8 @@ Remove unnecessary technical-key entry from ordinary administration flows while 
 - rename leaves the key and all publications/references unchanged;
 - creation through the UI and administration API uses the same backend generation rule;
 - fields that must remain explicit for a public contract are documented and tested as such.
+
+Accepted on real HAOS with version 0.4.5: technical-key fields were absent from the client, SSH target, Web target and SSH capability creation flows; duplicate display names produced distinct coexisting records; and renaming preserved the generated technical key and functional references.
 
 ## Lot 3B — isolated read-only Web sessions
 

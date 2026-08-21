@@ -88,7 +88,7 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.4.5</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.4.6</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
@@ -183,6 +183,9 @@ class AdministrationUiTests(unittest.TestCase):
             "function clearSecrets()", "clearSecrets();scanId='';shell.hidden=true",
         ):
             self.assertIn(contract, ADMIN_JS)
+        self.assertIn("scopeAdapters:'SSH borné · Web confiné'", ADMIN_JS)
+        self.assertIn("scopeAdapters:'Bounded SSH · Confined Web'", ADMIN_JS)
+        self.assertNotIn("scopeValue2", ADMIN_JS)
 
     def test_lot_two_ui_preserves_namespaces_and_adds_bounded_ssh_forms(self) -> None:
         for contract in ("createClient", "credentialOnce", "data-rotate", "data-revoke", "data-archive", "show-archived"):
