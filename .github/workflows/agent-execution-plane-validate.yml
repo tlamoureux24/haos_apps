@@ -35,6 +35,19 @@ jobs:
           test -n "${base_digest}"
           docker build --build-arg BUILD_ARCH=amd64 --build-arg "BUILD_VERSION=${version}" --build-arg "BASE_IMAGE_DIGEST=${base_digest}" --tag "agent-execution-plane:${version}" agent_execution_plane
           test "$(docker image inspect "agent-execution-plane:${version}" --format '{{index .Config.Labels "org.opencontainers.image.base.digest"}}')" = "${base_digest}"
+      - name: Validate Codex executable AppArmor coverage
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
+          docker run --rm --entrypoint python3 \
+            --volume "${PWD}/agent_execution_plane/scripts/validate_codex_apparmor.py:/tmp/validate_codex_apparmor.py:ro" \
+            "agent-execution-plane:${version}" /tmp/validate_codex_apparmor.py inventory \
+            > agent_execution_plane-codex-executables.txt
+          test -s agent_execution_plane-codex-executables.txt
+          python3 agent_execution_plane/scripts/validate_codex_apparmor.py validate \
+            --inventory agent_execution_plane-codex-executables.txt \
+            --apparmor agent_execution_plane/apparmor.txt
+          cat agent_execution_plane-codex-executables.txt
       - name: Smoke-test listeners, UI, logs, and persistence
         run: |
           set -euo pipefail
@@ -98,6 +111,7 @@ jobs:
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
           docker run --rm --entrypoint /bin/sh "agent-execution-plane:${version}" -c 'find /command /package -type f -perm /111 -print 2>/dev/null' >> agent_execution_plane-apparmor-executables.txt
+          cat agent_execution_plane-codex-executables.txt >> agent_execution_plane-apparmor-executables.txt
           sort -u -o agent_execution_plane-apparmor-executables.txt agent_execution_plane-apparmor-executables.txt
           test -s agent_execution_plane-apparmor-executables.txt
           {

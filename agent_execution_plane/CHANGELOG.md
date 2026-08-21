@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.5
+
+- Allow inheritance execution of every executable shipped by the pinned Codex 0.144.4 runtime: Codex, code-mode host, ripgrep, bubblewrap, and zsh.
+- Validate the complete Codex executable inventory and Unix execute modes inside the amd64 image against the targeted AppArmor rules.
+
 ## 0.5.4
 
 - Add bounded, sanitized DEBUG diagnostics for Codex subprocess lifecycle, JSON-RPC methods, unattended request refusals, and dynamic-tool dispatch without logging execution payloads or secrets.

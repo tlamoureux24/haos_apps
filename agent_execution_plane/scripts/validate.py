@@ -37,9 +37,9 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
     acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "0.5.4"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    for text in ('slug: "agent_execution_plane"', 'version: "0.5.5"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "0.5.4"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "0.5.5"' not in package: raise RuntimeError("Version sources differ")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 2: raise RuntimeError("Unprivileged two-listener runtime missing")
     if launcher.count("--log-config /app/src/agent_execution_plane/uvicorn_logging.json") != 2: raise RuntimeError("Timestamped listener logging missing")
@@ -60,7 +60,7 @@ def main() -> int:
         if invariant not in (ROOT / "requirements.txt").read_text(): raise RuntimeError(f"Missing Lot 1 dependency: {invariant}")
     for invariant in ("/data/private/provider-key rwlk,", "/data/private/.provider-key.*.tmp rwlk,"):
         if invariant not in apparmor: raise RuntimeError(f"Missing provider-key AppArmor rule: {invariant}")
-    for invariant in ("/usr/lib/python3*/site-packages/codex_cli_bin/bin/codex ix,", "/data/private/codex-home/** rwlk,"):
+    for invariant in ("/usr/lib/python3*/site-packages/codex_cli_bin/bin/codex ix,", "/usr/lib/python3*/site-packages/codex_cli_bin/bin/codex-code-mode-host ix,", "/usr/lib/python3*/site-packages/codex_cli_bin/codex-path/rg ix,", "/usr/lib/python3*/site-packages/codex_cli_bin/codex-resources/bwrap ix,", "/usr/lib/python3*/site-packages/codex_cli_bin/codex-resources/zsh/bin/zsh ix,", "/data/private/codex-home/** rwlk,"):
         if invariant not in apparmor: raise RuntimeError(f"Missing Codex AppArmor rule: {invariant}")
     if "CREATE TABLE IF NOT EXISTS models" not in (ROOT / "src/agent_execution_plane/database.py").read_text(): raise RuntimeError("Missing generation-1 models persistence")
     for invariant in ("CREATE TABLE IF NOT EXISTS settings", "CREATE TABLE IF NOT EXISTS active_execution", "CREATE TABLE IF NOT EXISTS pending_result"):
