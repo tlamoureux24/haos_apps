@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane `0.6.2` is a standalone-capable model reasoning and execution engine. It applies administrator model priority and the common fallback/no-replay rules to exactly the MCP operational capability envelope supplied by the current source.
+Agent Execution Plane `0.6.3` is a standalone-capable model reasoning and execution engine. It applies administrator model priority and the common fallback/no-replay rules to exactly the MCP operational capability envelope supplied by the current source.
 
 ## Responsibility boundary
 
@@ -15,6 +15,8 @@ The optional **Control Plane** view accepts one MCP Streamable HTTP URL and a pr
 For each claim, AEP maps `objective`, `input`, `required_report_schema`, and exactly `allowed_capabilities` into the same execution engine used by standalone requests. ACP lifecycle tools and unrelated tools from `tools/list` never enter the model envelope. AEP heartbeats the lease, prevents new MCP dispatch after lease loss, persists the outcome before `jobs_complete_v1`/`jobs_fail_v1`, retries delivery without rerunning the model, and reconciles interrupted work after restart. ACP availability never affects `/health/ready`, and leaving Control Plane unconfigured preserves full standalone operation.
 
 Connection validation checks the lifecycle tools' input signatures, not only their names. Failure delivery carries the same durable completion key on every retry; one consecutive transient heartbeat error is tolerated, while a second stops execution. An already-expired persisted lease is released locally during restart reconciliation so it cannot retain AEP's shared slot.
+
+AEP keeps exactly one optional Control Plane connection. Overview exposes its safe operational state, last successful claim poll, last ACP response, `0`/`1` availability from that claim response, successful poll count, and last bounded error. Editing the connection replaces that singleton after validation; it never creates another ACP source.
 
 ## Install and configure
 

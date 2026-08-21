@@ -27,8 +27,13 @@ class FoundationTests(unittest.TestCase):
         self.assertNotIn("`${tr('standaloneState')}: ${tr(configured?'configured':'notConfigured')}`", ADMIN_JS)
 
     def test_control_plane_configuration_has_page_action_and_explicit_feedback(self):
-        self.assertIn('id="acp-save" class="page-action primary"',ADMIN_JS)
-        self.assertIn('form="acp-form"',ADMIN_JS)
+        main_source=Path(__file__).parents[1].joinpath("src/agent_execution_plane/main.py").read_text(encoding="utf-8")
+        self.assertIn('id="acp-edit" class="page-action"',ADMIN_JS)
+        self.assertIn('id="acp-drawer-panel"',ADMIN_JS)
+        self.assertIn("openDrawer(tr(acpData?.configured?'editConnection':'configureConnection'),'acp-drawer-panel',trigger)",ADMIN_JS)
+        self.assertIn('id="acp-overview-state"',main_source);self.assertIn('id="acp-overview-detail"',main_source)
+        self.assertIn("lastPollSuccess",ADMIN_JS);self.assertIn("lastAcpResponse",ADMIN_JS);self.assertIn("availableJobs",ADMIN_JS);self.assertIn("successfulPolls",ADMIN_JS);self.assertIn("lastError",ADMIN_JS)
+        self.assertIn("singleAcpHelp",ADMIN_JS)
         self.assertIn("acp_validation_pending",ADMIN_JS)
         self.assertIn("acp_validation_timeout",ADMIN_JS)
         self.assertIn("acp_request_failed",ADMIN_JS)

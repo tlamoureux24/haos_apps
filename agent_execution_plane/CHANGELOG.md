@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.3
+
+- Present the configured singleton Control Plane connection as read-only state and move configure/replace actions into the shared administration drawer.
+- Add durable generic ACP telemetry to Overview and the Control Plane page: connectivity, last successful claim poll, last ACP response, last-poll job availability, successful poll count, and last safe error.
+- Keep telemetry source-neutral by deriving availability only from `jobs_claim_v1`, without querying ACP storage or introducing ACP-specific dependencies.
+
 ## 0.6.2
 
 - Bound ACP connection validation to 15 seconds and emit safe `AEP_ACP_CONFIG` success/refusal diagnostics without logging the endpoint or credential.

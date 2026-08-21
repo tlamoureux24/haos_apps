@@ -20,6 +20,7 @@ from agent_execution_plane.security import decrypt, encrypt
 ACP_URL_KEY="acp_mcp_url"
 ACP_CREDENTIAL_KEY="acp_mcp_credential"
 ACP_STATUS_KEY="acp_connectivity"
+ACP_TELEMETRY_KEY="acp_telemetry"
 LIFECYCLE_TOOLS={"jobs_claim_v1","jobs_heartbeat_v1","jobs_complete_v1","jobs_fail_v1"}
 LIFECYCLE_INPUTS={
     "jobs_claim_v1":{},
@@ -68,6 +69,32 @@ class AcpStore:
         return row["value"] if row else "not_configured"
     def set_connectivity(self,value):
         with self._open() as db:db.execute("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",(ACP_STATUS_KEY,value,now_iso()));db.commit()
+    def telemetry(self):
+        with self._open() as db:row=db.execute("SELECT value FROM settings WHERE key=?",(ACP_TELEMETRY_KEY,)).fetchone()
+        defaults={"last_poll_success_at":None,"last_response_at":None,"available_jobs":None,"successful_polls":0,"last_error_at":None,"last_error_code":None}
+        if not row:return defaults
+        try:value=json.loads(row["value"])
+        except (TypeError,json.JSONDecodeError):return defaults
+        if not isinstance(value,dict):return defaults
+        return {**defaults,**{key:value.get(key) for key in defaults}}
+    def _update_telemetry(self,updates,*,increment_polls=False):
+        with self._open() as db:
+            db.execute("BEGIN IMMEDIATE");row=db.execute("SELECT value FROM settings WHERE key=?",(ACP_TELEMETRY_KEY,)).fetchone()
+            try:value=json.loads(row["value"]) if row else {}
+            except (TypeError,json.JSONDecodeError):value={}
+            if not isinstance(value,dict):value={}
+            value.update(updates)
+            if increment_polls:
+                try:polls=int(value.get("successful_polls",0))
+                except (TypeError,ValueError):polls=0
+                value["successful_polls"]=polls+1
+            stamp=now_iso();db.execute("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",(ACP_TELEMETRY_KEY,json.dumps(value,separators=(",",":"),sort_keys=True),stamp));db.commit()
+    def reset_telemetry(self):
+        stamp=now_iso();self._update_telemetry({"last_poll_success_at":None,"last_response_at":stamp,"available_jobs":None,"successful_polls":0,"last_error_at":None,"last_error_code":None})
+    def record_response(self):self._update_telemetry({"last_response_at":now_iso()})
+    def record_poll(self,available_jobs):
+        stamp=now_iso();self._update_telemetry({"last_poll_success_at":stamp,"last_response_at":stamp,"available_jobs":available_jobs,"last_error_at":None,"last_error_code":None},increment_polls=True)
+    def record_error(self,code):self._update_telemetry({"last_error_at":now_iso(),"last_error_code":code})
     def reserve_claim(self,execution_id,job_id,lease_token,lease_expires_at,completion_key):
         with self._open() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -92,13 +119,15 @@ class AcpBoundary:
         self.poll_interval=poll_interval;self.heartbeat_interval=heartbeat_interval;self.validation_timeout=validation_timeout;self._stop=asyncio.Event();self._runner=None;self.connectivity="not_configured"
     def state(self):
         config=self.store.configuration();meta=self.store.metadata()
-        return {"configured":config is not None,"credential_configured":bool(config and config["credential_configured"]),"connectivity":self.store.connectivity(),"delivery":meta["phase"] if meta else None}
+        return {"configured":config is not None,"credential_configured":bool(config and config["credential_configured"]),"connectivity":self.store.connectivity(),"delivery":meta["phase"] if meta else None,"telemetry":self.store.telemetry()}
     def _request(self,config,capabilities=(),guard=None,job=None):
         return ExecutionRequest("boundary","boundary",str((job or {}).get("objective","boundary")),(job or {}).get("input",{}),config["url"],config.get("credential"),tuple(capabilities),(job or {}).get("required_report_schema"),guard)
-    async def _call(self,name,args,config=None):
+    async def _call(self,name,args,config=None,*,record_response=True):
         config=config or self.store.configuration(include_credential=True)
         if not config:raise RuntimeError("acp_not_configured")
-        async with self.mcp_factory(self._request(config)) as session:return await session.call_tool(name,args)
+        async with self.mcp_factory(self._request(config)) as session:result=await session.call_tool(name,args)
+        if record_response:self.store.record_response()
+        return result
     async def validate_configuration(self,url,credential):
         parsed=urlparse(url)
         if parsed.scheme not in {"http","https"} or not parsed.netloc or parsed.username or parsed.password:raise ValueError("invalid_acp_url")
@@ -116,7 +145,7 @@ class AcpBoundary:
         except asyncio.TimeoutError as exc:raise RuntimeError("acp_validation_timeout") from exc
         except ValueError:raise
         except Exception as exc:raise RuntimeError("acp_unavailable") from exc
-        self.store.save_configuration(url,credential,replace);self.connectivity="connected";self.store.set_connectivity("connected")
+        self.store.save_configuration(url,credential,replace);self.store.reset_telemetry();self.connectivity="connected";self.store.set_connectivity("connected")
     async def start(self):
         self._stop.clear();self._runner=asyncio.create_task(self.run(),name="aep-acp-boundary")
     async def stop(self):
@@ -126,7 +155,7 @@ class AcpBoundary:
         while not self._stop.is_set():
             try:await self.step()
             except asyncio.CancelledError:raise
-            except Exception:self.connectivity="unavailable";self.store.set_connectivity("unavailable")
+            except Exception:self.connectivity="unavailable";self.store.set_connectivity("unavailable");self.store.record_error("acp_unavailable")
             await asyncio.sleep(self.poll_interval)
     async def step(self):
         config=self.store.configuration(include_credential=True)
@@ -137,7 +166,8 @@ class AcpBoundary:
             else:await self._reconcile_interrupted(meta)
             return
         if self.lifecycle.state()["state"]!="idle" or not self.model_store.execution_models():return
-        claim=await self._call("jobs_claim_v1",{},config);self.connectivity="connected";self.store.set_connectivity("connected")
+        claim=await self._call("jobs_claim_v1",{},config,record_response=False);self.connectivity="connected";self.store.set_connectivity("connected")
+        self.store.record_poll(1 if isinstance(claim,dict) and claim.get("claimed") else 0)
         if not isinstance(claim,dict) or not claim.get("claimed"):return
         await self._accept_claim(claim,config)
     def _claim_contract(self,claim):
