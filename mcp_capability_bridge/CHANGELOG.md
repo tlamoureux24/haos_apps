@@ -5,6 +5,7 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 ## 0.2.0 — 2026-08-21
 
 - Validate private-key Unix modes under the unprivileged service identity so the container smoke test preserves its deliberate `DAC_OVERRIDE` removal.
+- Keep credential-persistence and ACP rotation contract tests deterministic for URL-safe secrets and rejected sessions.
 
 ### Added
 

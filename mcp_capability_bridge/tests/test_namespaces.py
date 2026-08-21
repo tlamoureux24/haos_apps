@@ -60,7 +60,7 @@ class NamespaceStoreTests(unittest.TestCase):
         self.assertEqual(authenticated.namespace_id, first["id"])
         database_bytes = (self.path / "mcp_capability_bridge.db").read_bytes()
         self.assertNotIn(issued.token.encode(), database_bytes)
-        self.assertNotIn(issued.token.rsplit("_", 1)[1].encode(), database_bytes)
+        self.assertNotIn(issued.token.split("_", 3)[3].encode(), database_bytes)
         restarted = build_runtime_state(Settings(self.path, "info", "127.0.0.1"), AdapterRegistry((FakeAdapter(),)))
         self.assertEqual(restarted.store.authenticate(issued.token).namespace_id, first["id"])
 

@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import httpx
 import uvicorn
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -85,8 +86,9 @@ class AcpContractIntegrationTests(unittest.IsolatedAsyncioTestCase):
         namespace, issued = self.state.store.create_namespace("acp_client", "ACP client")
         self.assertEqual(await discover_streamable_http(self.url, issued.token), [])
         rotated = self.state.store.rotate(namespace["id"])
-        with self.assertRaises(Exception):
-            await discover_streamable_http(self.url, issued.token)
+        async with httpx.AsyncClient() as client:
+            denied = await client.get(self.url, headers={"Authorization": f"Bearer {issued.token}"})
+        self.assertEqual(denied.status_code, 401)
         self.assertEqual(await discover_streamable_http(self.url, rotated.token), [])
 
 
