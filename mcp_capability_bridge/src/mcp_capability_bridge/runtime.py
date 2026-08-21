@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import signal
@@ -15,6 +16,15 @@ from mcp_capability_bridge.main import build_runtime_state, create_apps
 from mcp_capability_bridge.settings import load_settings
 
 logger = logging.getLogger("mcp_capability_bridge")
+
+
+def load_log_configuration(level: str) -> dict[str, object]:
+    path = Path(__file__).with_name("uvicorn_logging.json")
+    configuration = json.loads(path.read_text(encoding="utf-8"))
+    configuration["loggers"]["mcp_capability_bridge"] = {
+        "handlers": ["default"], "level": level.upper(), "propagate": False,
+    }
+    return configuration
 
 
 class ManagedServer(uvicorn.Server):
@@ -30,7 +40,7 @@ async def serve() -> None:
         raise RuntimeError("MCP Capability Bridge must run with UID 1000")
     settings = load_settings()
     admin_app, public_app = create_apps(build_runtime_state(settings))
-    log_config = str(Path(__file__).with_name("uvicorn_logging.json"))
+    log_config = load_log_configuration(settings.log_level)
     servers = (
         ManagedServer(uvicorn.Config(admin_app, host=settings.admin_host,
                                      port=settings.admin_port, log_level=settings.log_level,

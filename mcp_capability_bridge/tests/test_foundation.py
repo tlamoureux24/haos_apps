@@ -15,6 +15,7 @@ from mcp_capability_bridge import __version__
 from mcp_capability_bridge.admin_ui import ADMIN_CSS, ADMIN_JS
 from mcp_capability_bridge.database import database_ready, initialize
 from mcp_capability_bridge.main import build_runtime_state, create_apps
+from mcp_capability_bridge.runtime import load_log_configuration
 from mcp_capability_bridge.settings import Settings, load_settings
 
 
@@ -87,7 +88,7 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.4.1</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.4.2</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
             self.assertEqual(status["public_surface"], "authenticated_mcp")
@@ -191,6 +192,14 @@ class AdministrationUiTests(unittest.TestCase):
 
 
 class RuntimeTopologyTests(unittest.TestCase):
+    def test_application_logger_follows_configured_level(self) -> None:
+        for level in ("debug", "info", "warning", "error"):
+            with self.subTest(level=level):
+                logger = load_log_configuration(level)["loggers"]["mcp_capability_bridge"]
+                self.assertEqual(logger["level"], level.upper())
+                self.assertEqual(logger["handlers"], ["default"])
+                self.assertFalse(logger["propagate"])
+
     def test_launcher_starts_one_python_runtime(self) -> None:
         root = Path(__file__).resolve().parents[1]
         launcher = (root / "run.sh").read_text(encoding="utf-8")

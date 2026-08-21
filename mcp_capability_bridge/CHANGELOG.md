@@ -2,6 +2,13 @@
 
 All notable changes to MCP Capability Bridge will be documented in this file.
 
+## 0.4.2 — 2026-08-21
+
+### Fixed
+
+- Apply the configured App log level to the `mcp_capability_bridge` logger so `MCB_BROWSER_DIAG` details are actually emitted in DEBUG and suppressed at INFO.
+- Keep Selenium and urllib3 at WARNING independently of the App level to prevent their unsanitized request payloads from reaching DEBUG logs.
+
 ## 0.4.1 — 2026-08-21
 
 ### Fixed
