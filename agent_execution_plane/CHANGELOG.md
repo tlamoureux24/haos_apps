@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.4
+
+- Bound every ACP lifecycle exchange so a stalled MCP session cannot freeze job polling indefinitely.
+- Supervise and automatically restart the ACP polling worker after an unexpected interruption while preserving normal shutdown cancellation.
+- Expose safe bilingual timeout/restart diagnostics and verify recovery without restarting AEP.
+
 ## 0.6.3
 
 - Present the configured singleton Control Plane connection as read-only state and move configure/replace actions into the shared administration drawer.

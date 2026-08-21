@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import secrets
 import sqlite3
 from contextlib import contextmanager
@@ -28,6 +29,7 @@ LIFECYCLE_INPUTS={
     "jobs_complete_v1":{"job_id":"string","lease_token":"string","completion_key":"string","report":"object"},
     "jobs_fail_v1":{"job_id":"string","lease_token":"string","completion_key":"string","reason":"string","retryable":"boolean"},
 }
+logger=logging.getLogger(__name__)
 
 
 def _timestamp(value: str) -> float:
@@ -114,9 +116,9 @@ class AcpStore:
 
 
 class AcpBoundary:
-    def __init__(self,store:AcpStore,lifecycle:LifecycleStore,engine,model_store,mcp_factory,database:Path,*,poll_interval=1.0,heartbeat_interval=60.0,validation_timeout=15.0):
+    def __init__(self,store:AcpStore,lifecycle:LifecycleStore,engine,model_store,mcp_factory,database:Path,*,poll_interval=1.0,heartbeat_interval=60.0,validation_timeout=15.0,request_timeout=15.0):
         self.store=store;self.lifecycle=lifecycle;self.engine=engine;self.model_store=model_store;self.mcp_factory=mcp_factory;self.database=database
-        self.poll_interval=poll_interval;self.heartbeat_interval=heartbeat_interval;self.validation_timeout=validation_timeout;self._stop=asyncio.Event();self._runner=None;self.connectivity="not_configured"
+        self.poll_interval=poll_interval;self.heartbeat_interval=heartbeat_interval;self.validation_timeout=validation_timeout;self.request_timeout=request_timeout;self._stop=asyncio.Event();self._runner=None;self._worker=None;self.connectivity="not_configured"
     def state(self):
         config=self.store.configuration();meta=self.store.metadata()
         return {"configured":config is not None,"credential_configured":bool(config and config["credential_configured"]),"connectivity":self.store.connectivity(),"delivery":meta["phase"] if meta else None,"telemetry":self.store.telemetry()}
@@ -125,7 +127,10 @@ class AcpBoundary:
     async def _call(self,name,args,config=None,*,record_response=True):
         config=config or self.store.configuration(include_credential=True)
         if not config:raise RuntimeError("acp_not_configured")
-        async with self.mcp_factory(self._request(config)) as session:result=await session.call_tool(name,args)
+        async def exchange():
+            async with self.mcp_factory(self._request(config)) as session:return await session.call_tool(name,args)
+        try:result=await asyncio.wait_for(exchange(),timeout=self.request_timeout)
+        except asyncio.TimeoutError as exc:raise RuntimeError("acp_request_timeout") from exc
         if record_response:self.store.record_response()
         return result
     async def validate_configuration(self,url,credential):
@@ -147,15 +152,33 @@ class AcpBoundary:
         except Exception as exc:raise RuntimeError("acp_unavailable") from exc
         self.store.save_configuration(url,credential,replace);self.store.reset_telemetry();self.connectivity="connected";self.store.set_connectivity("connected")
     async def start(self):
-        self._stop.clear();self._runner=asyncio.create_task(self.run(),name="aep-acp-boundary")
+        if self._runner and not self._runner.done():return
+        self._stop.clear();self._runner=asyncio.create_task(self._supervise(),name="aep-acp-boundary-supervisor")
     async def stop(self):
         self._stop.set()
         if self._runner:self._runner.cancel();await asyncio.gather(self._runner,return_exceptions=True)
+        self._runner=None;self._worker=None
+    def _record_worker_failure(self,code,exc):
+        changed=self.store.connectivity()!="unavailable" or self.store.telemetry().get("last_error_code")!=code
+        self.connectivity="unavailable";self.store.set_connectivity("unavailable");self.store.record_error(code)
+        if changed:logger.warning("AEP_ACP_WORKER state=retrying code=%s cause=%s",code,type(exc).__name__)
+    async def _supervise(self):
+        while not self._stop.is_set():
+            self._worker=asyncio.create_task(self.run(),name="aep-acp-boundary-worker")
+            try:await self._worker
+            except asyncio.CancelledError as exc:
+                if self._stop.is_set():raise
+                self._record_worker_failure("acp_worker_interrupted",exc)
+            except Exception as exc:self._record_worker_failure("acp_worker_failed",exc)
+            finally:self._worker=None
+            if not self._stop.is_set():await asyncio.sleep(self.poll_interval)
     async def run(self):
         while not self._stop.is_set():
             try:await self.step()
             except asyncio.CancelledError:raise
-            except Exception:self.connectivity="unavailable";self.store.set_connectivity("unavailable");self.store.record_error("acp_unavailable")
+            except Exception as exc:
+                code="acp_request_timeout" if str(exc)=="acp_request_timeout" else "acp_unavailable"
+                self._record_worker_failure(code,exc)
             await asyncio.sleep(self.poll_interval)
     async def step(self):
         config=self.store.configuration(include_credential=True)

@@ -38,6 +38,9 @@ class Session:
     async def call_tool(self,name,arguments):
         self.owner.calls.append((name,arguments))
         if name=="jobs_claim_v1":
+            if self.owner.hang_claim:
+                try:await self.owner.claim_gate.wait()
+                finally:self.owner.cancelled_claims+=1
             if self.owner.claim_error:raise RuntimeError("temporary")
             if self.owner.claimed:return {"claimed":False}
             self.owner.claimed=True
@@ -52,7 +55,7 @@ class Session:
 
 class Factory:
     def __init__(self):
-        self.calls=[];self.claimed=False;self.fail_delivery=False;self.heartbeat_failures=0;self.incompatible=False;self.bad_schema=False;self.connect_delay=0;self.claim_error=False
+        self.calls=[];self.claimed=False;self.fail_delivery=False;self.heartbeat_failures=0;self.incompatible=False;self.bad_schema=False;self.connect_delay=0;self.claim_error=False;self.hang_claim=False;self.claim_gate=asyncio.Event();self.cancelled_claims=0
         self.expiry=(datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat().replace("+00:00","Z")
     def __call__(self,_):return Session(self)
 
@@ -65,6 +68,11 @@ class AcpBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):self.temp.cleanup()
 
     async def configure(self):await self.boundary.configure("https://acp.invalid/mcp","WORKER-SECRET",True)
+    async def wait_until(self,predicate):
+        for _ in range(100):
+            if predicate():return
+            await asyncio.sleep(.005)
+        self.fail("condition_not_reached")
 
     async def test_configuration_is_validate_before_save_encrypted_and_optional(self):
         self.assertFalse(self.boundary.state()["configured"])
@@ -100,6 +108,20 @@ class AcpBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.factory.claim_error=True;runner=asyncio.create_task(self.boundary.run());await asyncio.sleep(.03);self.boundary._stop.set();runner.cancel();await asyncio.gather(runner,return_exceptions=True)
         telemetry=AcpStore(self.database,self.store.key).telemetry();self.assertEqual(telemetry["last_error_code"],"acp_unavailable");self.assertIsNotNone(telemetry["last_error_at"])
         persisted=self.database.read_bytes().decode(errors="ignore");self.assertNotIn("WORKER-SECRET",persisted);self.assertNotIn("temporary",persisted)
+
+    async def test_stalled_claim_times_out_and_polling_recovers_without_restart(self):
+        await self.configure();self.factory.hang_claim=True;self.boundary.request_timeout=.01
+        await self.boundary.start();await self.wait_until(lambda:self.factory.cancelled_claims>=1)
+        self.assertGreaterEqual(self.factory.cancelled_claims,1);self.assertEqual(self.boundary.state()["telemetry"]["last_error_code"],"acp_request_timeout")
+        self.factory.hang_claim=False;self.factory.claimed=True;await self.wait_until(lambda:self.boundary.state()["telemetry"]["successful_polls"]>=1);await self.boundary.stop()
+        telemetry=self.boundary.state()["telemetry"]
+        self.assertGreaterEqual(telemetry["successful_polls"],1);self.assertEqual(telemetry["last_error_code"],None);self.assertEqual(self.boundary.state()["connectivity"],"connected")
+
+    async def test_supervisor_restarts_an_interrupted_polling_worker(self):
+        await self.configure();self.factory.claimed=True;await self.boundary.start();await self.wait_until(lambda:self.boundary.state()["telemetry"]["successful_polls"]>=1)
+        first=self.boundary._worker;polls=self.boundary.state()["telemetry"]["successful_polls"];first.cancel();await self.wait_until(lambda:self.boundary._worker is not None and self.boundary._worker is not first and self.boundary.state()["telemetry"]["successful_polls"]>polls)
+        self.assertIsNotNone(self.boundary._worker);self.assertIsNot(first,self.boundary._worker);self.assertGreater(self.boundary.state()["telemetry"]["successful_polls"],polls)
+        await self.boundary.stop()
 
     async def test_pending_delivery_retries_after_restart_without_rerunning_model(self):
         await self.configure();self.factory.fail_delivery=True
