@@ -17,6 +17,7 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 ### Acceptance
 
 - Lot 0 was accepted on real HAOS: both listeners ran under one PID, Ingress navigation and drawer behavior were correct, FR/EN and light/dark modes worked, mobile and desktop layouts remained stable, and stop/restart completed without error or AppArmor denial.
+- Repository validation now requires the final HAOS-accepted Lot 0 status instead of its former pre-acceptance status.
 
 ### Design
 

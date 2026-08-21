@@ -49,7 +49,7 @@ def main() -> int:
         raise RuntimeError("Lot 0 must not expose an MCP endpoint")
     if any(term in main_source.lower() for term in ("bearer", "credential_verifier", "ssh client", "selenium")):
         raise RuntimeError("Lot 0 application source exceeds its boundary")
-    if "Status: **implemented — awaiting HAOS acceptance**." not in plan:
+    if "Status: **accepted on HAOS — 2026-08-21**." not in plan:
         raise RuntimeError("Implementation plan Lot 0 status must match delivery state")
     if "capability sys_admin" in apparmor or "network raw" in apparmor or "complain" in apparmor:
         raise RuntimeError("AppArmor contains an excessive permission")
