@@ -4,6 +4,8 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 
 ## 0.2.0 — 2026-08-21
 
+- Validate private-key Unix modes under the unprivileged service identity so the container smoke test preserves its deliberate `DAC_OVERRIDE` removal.
+
 ### Added
 
 - Added the authenticated MCP 1.28.1 Streamable HTTP endpoint with an intentionally empty production adapter registry.

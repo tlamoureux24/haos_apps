@@ -92,8 +92,8 @@ jobs:
           test "$(printf '%s\n' "${python_processes}" | sed '/^$/d' | wc -l)" = 1
           test "$(docker exec mcb-smoke /bin/sh -c 'for process in /proc/[0-9]*; do command="$(tr "\0" " " < "${process}/cmdline" 2>/dev/null || true)"; case "${command}" in "python3 -m mcp_capability_bridge.runtime "*) stat -c %u "${process}";; esac; done')" = 1000
           docker exec mcb-smoke su-exec mcp-capability-bridge:mcp-capability-bridge test -f /data/mcp_capability_bridge.db
-          test "$(docker exec mcb-smoke stat -c '%a' /data/private/credential-pepper)" = 600
-          test "$(docker exec mcb-smoke stat -c '%a' /data/private/target-secret-key)" = 600
+          test "$(docker exec mcb-smoke su-exec mcp-capability-bridge:mcp-capability-bridge stat -c '%a' /data/private/credential-pepper)" = 600
+          test "$(docker exec mcb-smoke su-exec mcp-capability-bridge:mcp-capability-bridge stat -c '%a' /data/private/target-secret-key)" = 600
           docker exec mcb-smoke /bin/sh -c 'for process in /proc/[0-9]*; do readlink -f "${process}/exe" 2>/dev/null || true; done' > mcp-capability-bridge-apparmor-executables.txt
           python3 mcp_capability_bridge/scripts/validate_apparmor_inventory.py mcp_capability_bridge/apparmor.txt mcp-capability-bridge-apparmor-executables.txt
           docker stop -t 15 mcb-smoke >/dev/null
