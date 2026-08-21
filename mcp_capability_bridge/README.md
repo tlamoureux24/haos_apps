@@ -2,7 +2,7 @@
 
 [Français](README.fr.md) | English
 
-Status: **design complete, implementation not started**.
+Current release: **0.1.0 — Lot 0 implemented, awaiting HAOS acceptance**.
 
 MCP Capability Bridge will be an independent Home Assistant OS App that exposes deliberately bounded access to non-MCP technical systems through standard MCP Streamable HTTP tools.
 
@@ -22,4 +22,4 @@ Authoritative design documents:
 - [Threat model](THREAT_MODEL.md)
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
 
-No App is installable from this directory yet.
+Version 0.1.0 is installable as a HAOS App shell. It deliberately exposes no MCP endpoint, namespace, credential or adapter yet. See [installation and acceptance notes](DOCS.md).

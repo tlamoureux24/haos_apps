@@ -2,7 +2,17 @@
 
 All notable changes to MCP Capability Bridge will be documented in this file.
 
-## Unreleased
+## 0.1.0 — 2026-08-21
+
+### Added
+
+- Added the installable HAOS App shell with synchronized metadata, authoritative assets and bilingual installation documentation.
+- Added one unprivileged Python runtime owning isolated Ingress 8099 and public 8098 ASGI applications.
+- Exposed only non-sensitive liveness/readiness routes on the public surface; MCP remains intentionally absent until Lot 1.
+- Added generation-one metadata-only SQLite initialization and graceful shared-listener shutdown.
+- Added the ACP/AEP visual foundation with FR/EN, light/dark themes, stable scrollbar geometry, responsive navigation, top-right action and accessible right drawer.
+- Added a bounded AppArmor profile based on observed ACP/AEP S6 runtime executables and exact Bridge persistence paths.
+- Added Lot 0 unit, repository, image, listener-isolation, restart and executable-inventory validation.
 
 ### Design
 

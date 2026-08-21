@@ -1,0 +1,97 @@
+name: Validate MCP Capability Bridge App
+
+on:
+  push:
+    branches: [main]
+    paths: ["mcp_capability_bridge/**", ".github/workflows/mcp-capability-bridge-validate.yml"]
+  pull_request:
+    paths: ["mcp_capability_bridge/**", ".github/workflows/mcp-capability-bridge-validate.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate metadata, source, and tests
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --requirement mcp_capability_bridge/requirements.txt
+          python3 mcp_capability_bridge/scripts/validate.py
+          bash -n mcp_capability_bridge/run.sh
+          python3 -m compileall -q mcp_capability_bridge/src mcp_capability_bridge/tests
+          PYTHONPATH=mcp_capability_bridge/src python3 -m unittest discover -s mcp_capability_bridge/tests -v
+      - name: Build amd64 image with base provenance
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' mcp_capability_bridge/config.yaml)"
+          docker pull ghcr.io/home-assistant/base:latest
+          base_reference="$(docker image inspect ghcr.io/home-assistant/base:latest --format '{{index .RepoDigests 0}}')"
+          base_digest="${base_reference##*@}"
+          test -n "${base_digest}"
+          docker build \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg "BUILD_VERSION=${version}" \
+            --build-arg "BASE_IMAGE_DIGEST=${base_digest}" \
+            --tag "mcp-capability-bridge:${version}" \
+            mcp_capability_bridge
+          test "$(docker image inspect "mcp-capability-bridge:${version}" --format '{{index .Config.Labels "org.opencontainers.image.base.digest"}}')" = "${base_digest}"
+      - name: Smoke-test topology, isolation, UI, restart, and shutdown
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' mcp_capability_bridge/config.yaml)"
+          root="${RUNNER_TEMP}/mcb-smoke"
+          mkdir -p "${root}/data"
+          cleanup(){ docker logs mcb-smoke 2>&1 || true; docker rm -f mcb-smoke >/dev/null 2>&1 || true; docker network rm mcb-smoke >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker network create mcb-smoke >/dev/null
+          gateway="$(docker network inspect mcb-smoke --format '{{(index .IPAM.Config 0).Gateway}}')"
+          start(){ docker run -d --name mcb-smoke --network mcb-smoke --cap-drop DAC_OVERRIDE --env "MCP_CAPABILITY_BRIDGE_INGRESS_PROXY_IP=${gateway}" -p 127.0.0.1:18098:8098 -p 127.0.0.1:18099:8099 -v "${root}/data:/data" "mcp-capability-bridge:${version}" >/dev/null; }
+          wait_ready(){ for attempt in {1..60}; do if curl -fsS http://127.0.0.1:18098/health/ready | jq -e '.status=="ready"' >/dev/null && curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/health/ready | jq -e '.status=="ready"' >/dev/null; then return; fi; sleep 1; done; return 1; }
+          start
+          wait_ready
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/mcp)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/admin/api/v1/status)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18099/)" = 403
+          page="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/)"
+          [[ "${page}" == *"MCP Capability Bridge <b>v${version}</b>"* ]]
+          [[ "${page}" == *'src="/api/hassio_ingress/ci/admin/assets/icon.png"'* ]]
+          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/status | jq -e '.status=="ready" and .database_generation==1 and .public_surface=="health_only"' >/dev/null
+          css="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/admin.css)"
+          js="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/admin.js)"
+          [[ "${css}" == *'scrollbar-gutter:stable'* && "${css}" == *'html[data-theme=dark]'* ]]
+          [[ "${js}" == *'navigator.language'* && "${js}" == *'Vue d’ensemble'* && "${js}" == *'Overview'* && "${js}" == *"event.key==='Escape'"* ]]
+          python_processes="$(docker exec mcb-smoke /bin/sh -c 'for process in /proc/[0-9]*; do command="$(tr "\0" " " < "${process}/cmdline" 2>/dev/null || true)"; case "${command}" in "python3 -m mcp_capability_bridge.runtime "*) echo "${command}";; esac; done')"
+          test "$(printf '%s\n' "${python_processes}" | sed '/^$/d' | wc -l)" = 1
+          test "$(docker exec mcb-smoke /bin/sh -c 'for process in /proc/[0-9]*; do command="$(tr "\0" " " < "${process}/cmdline" 2>/dev/null || true)"; case "${command}" in "python3 -m mcp_capability_bridge.runtime "*) stat -c %u "${process}";; esac; done')" = 1000
+          docker exec mcb-smoke su-exec mcp-capability-bridge:mcp-capability-bridge test -f /data/mcp_capability_bridge.db
+          docker exec mcb-smoke /bin/sh -c 'for process in /proc/[0-9]*; do readlink -f "${process}/exe" 2>/dev/null || true; done' > mcp-capability-bridge-apparmor-executables.txt
+          docker stop -t 15 mcb-smoke >/dev/null
+          docker rm mcb-smoke >/dev/null
+          start
+          wait_ready
+          docker stop -t 15 mcb-smoke >/dev/null
+      - name: Record image executable inventory
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' mcp_capability_bridge/config.yaml)"
+          docker run --rm --entrypoint /bin/sh "mcp-capability-bridge:${version}" -c 'find /command /package -type f -perm /111 -print 2>/dev/null' >> mcp-capability-bridge-apparmor-executables.txt
+          sort -u -o mcp-capability-bridge-apparmor-executables.txt mcp-capability-bridge-apparmor-executables.txt
+          test -s mcp-capability-bridge-apparmor-executables.txt
+          cat mcp-capability-bridge-apparmor-executables.txt
+          {
+            echo '### MCP Capability Bridge AppArmor evidence'
+            echo
+            echo 'This executable inventory is Docker evidence. Final AppArmor enforcement remains part of real HAOS acceptance.'
+          } >> "${GITHUB_STEP_SUMMARY}"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: mcp-capability-bridge-apparmor-executables
+          path: mcp-capability-bridge-apparmor-executables.txt
+          if-no-files-found: error
+          retention-days: 7

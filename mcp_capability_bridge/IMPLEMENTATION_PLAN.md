@@ -34,7 +34,7 @@ Every lot preserves:
 
 ## Lot 0 — HAOS shell and shared suite UI
 
-Status: **planned**.
+Status: **implemented — awaiting HAOS acceptance**.
 
 ### Goal
 

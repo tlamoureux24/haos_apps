@@ -1,0 +1,8 @@
+configuration:
+  log_level:
+    name: Niveau de journalisation
+    description: Contrôle la verbosité des journaux du Bridge.
+network:
+  8098/tcp:
+    name: Port MCP public
+    description: Port hôte de la surface MCP ; seuls les endpoints de santé existent dans le Lot 0.

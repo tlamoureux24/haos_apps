@@ -1,0 +1,8 @@
+configuration:
+  log_level:
+    name: Log level
+    description: Controls Bridge log verbosity.
+network:
+  8098/tcp:
+    name: Public MCP port
+    description: Host port for the MCP surface; only health endpoints exist in Lot 0.
