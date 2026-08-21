@@ -14,6 +14,10 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 - Added a bounded AppArmor profile based on observed ACP/AEP S6 runtime executables and exact Bridge persistence paths.
 - Added Lot 0 unit, repository, image, listener-isolation, restart and executable-inventory validation.
 
+### Acceptance
+
+- Lot 0 was accepted on real HAOS: both listeners ran under one PID, Ingress navigation and drawer behavior were correct, FR/EN and light/dark modes worked, mobile and desktop layouts remained stable, and stop/restart completed without error or AppArmor denial.
+
 ### Design
 
 - Reframed the Bridge as an independent, adapter-oriented MCP server that also integrates with ACP/AEP through their existing generic MCP boundary.

@@ -34,7 +34,7 @@ Every lot preserves:
 
 ## Lot 0 — HAOS shell and shared suite UI
 
-Status: **implemented — awaiting HAOS acceptance**.
+Status: **accepted on HAOS — 2026-08-21**.
 
 ### Goal
 
@@ -75,6 +75,8 @@ No MCP endpoint, credentials, namespaces, targets, adapter registry, SSH or brow
 ### HAOS acceptance
 
 Install, start, open Ingress, verify product/version/icon, menu, top-right actions, drawer behavior, FR/EN, light/dark, mobile/desktop scrollbar stability, configurable 8098 mapping and clean restart.
+
+Accepted on real HAOS with version 0.1.0: generation-one initialization, the shared PID for both listeners, all navigation views, drawer behavior, FR/EN, light/dark, mobile layout, stable horizontal geometry, stop and restart were verified without startup error or AppArmor denial.
 
 ## Lot 1 — namespaces, authenticated MCP and adapter core
 
