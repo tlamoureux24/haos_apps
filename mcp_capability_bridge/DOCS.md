@@ -1,4 +1,4 @@
-# MCP Capability Bridge 0.4.0
+# MCP Capability Bridge 0.4.1
 
 ## Français
 

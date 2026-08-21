@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -11,10 +13,26 @@ from urllib.parse import urlparse
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from selenium.common.exceptions import WebDriverException
 
 from mcp_capability_bridge.web_adapter import NetworkPolicy
 
 BROWSER_ROOT=Path("/tmp/mcp-capability-bridge-browser")
+DIAGNOSTIC_LIMIT=8192
+logger=logging.getLogger("mcp_capability_bridge.browser")
+logging.getLogger("selenium").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+
+def sanitize_diagnostic(value:str)->str:
+    text=value.replace("\x00","")
+    text=re.sub(r"(?i)\b(?:https?|wss?)://[^\s\"'<>]+","[REDACTED_URL]",text)
+    text=re.sub(r"(?i)\b(authorization|cookie|set-cookie)\s*[:=]\s*[^\r\n]+",r"\1=[REDACTED]",text)
+    text=re.sub(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+","Bearer [REDACTED]",text)
+    text=re.sub(r"--(host-resolver-rules|user-data-dir)=[^\s\]]+",r"--\1=[REDACTED]",text)
+    text="".join(character if character in "\n\t" or ord(character)>=32 else "?" for character in text)
+    if len(text)>DIAGNOSTIC_LIMIT:text=text[:DIAGNOSTIC_LIMIT//2]+"\n[TRUNCATED]\n"+text[-DIAGNOSTIC_LIMIT//2:]
+    return text.strip()
 
 
 class BrowserRuntime:
@@ -32,7 +50,7 @@ class BrowserRuntime:
         except asyncio.TimeoutError as exc:raise RuntimeError("browser_probe_timeout") from exc
         finally:self._active.discard(task)
     def _probe_sync(self,configuration,policy):
-        profile=Path(tempfile.mkdtemp(prefix="profile-",dir=self.root));driver=None;service=Service("/usr/bin/chromedriver")
+        profile=Path(tempfile.mkdtemp(prefix="profile-",dir=self.root));driver=None;diagnostic_path=profile/"chromedriver.log";diagnostic=diagnostic_path.open("w+",encoding="utf-8",errors="replace");service=Service("/usr/bin/chromedriver",service_args=["--log-level=WARNING"],log_output=diagnostic)
         try:
             parsed=urlparse(configuration["base_url"]);rules=", ".join([*(f"MAP {parsed.hostname} {address}" for address in policy.addresses),"MAP * ~NOTFOUND"])
             options=Options()
@@ -44,6 +62,10 @@ class BrowserRuntime:
             policy.authorize(driver.current_url,"navigation_origins")
             if len(driver.window_handles)!=1:raise RuntimeError("browser_popup_denied")
             return {"status":"reachable","origin":policy.base_origin}
+        except WebDriverException as exc:
+            logger.info("MCB_BROWSER_DIAG session_failed error=%s",type(exc).__name__)
+            logger.debug("MCB_BROWSER_DIAG webdriver text=%s",sanitize_diagnostic(str(exc)))
+            raise RuntimeError("browser_session_failed") from exc
         finally:
             if driver is not None:
                 try:driver.quit()
@@ -52,6 +74,8 @@ class BrowserRuntime:
             if process is not None and process.poll() is None:
                 try:process.kill();process.wait(timeout=2)
                 except (OSError,ProcessLookupError):pass
+            diagnostic.flush();diagnostic.seek(0);captured=sanitize_diagnostic(diagnostic.read());diagnostic.close()
+            if captured:logger.debug("MCB_BROWSER_DIAG chromedriver text=%s",captured)
             shutil.rmtree(profile,ignore_errors=True)
     async def close(self):
         self._closing=True

@@ -2,6 +2,14 @@
 
 All notable changes to MCP Capability Bridge will be documented in this file.
 
+## 0.4.1 — 2026-08-21
+
+### Fixed
+
+- Capture bounded, sanitized ChromeDriver/Chromium diagnostics under the stable `MCB_BROWSER_DIAG` DEBUG prefix when a HAOS browser session aborts.
+- Convert Selenium session termination into the stable `browser_session_failed` API/UI error instead of an unhandled ASGI traceback.
+- Preserve deterministic driver, process, diagnostic-file and disposable-profile cleanup on browser startup or navigation failure.
+
 ## 0.4.0 — 2026-08-21
 
 ### Added

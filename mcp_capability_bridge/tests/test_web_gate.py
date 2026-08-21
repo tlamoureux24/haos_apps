@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock,patch
 
-from mcp_capability_bridge.browser_runtime import BrowserRuntime
+from selenium.common.exceptions import WebDriverException
+
+from mcp_capability_bridge.browser_runtime import BrowserRuntime,sanitize_diagnostic
 from mcp_capability_bridge.web_adapter import NetworkPolicy,WebAdapter,origin
 
 
@@ -15,6 +18,20 @@ def configuration():
 
 
 class WebGateTests(unittest.IsolatedAsyncioTestCase):
+    def test_third_party_browser_loggers_cannot_leak_payload_at_debug(self):
+        self.assertGreaterEqual(logging.getLogger("selenium").getEffectiveLevel(),logging.WARNING)
+        self.assertGreaterEqual(logging.getLogger("urllib3").getEffectiveLevel(),logging.WARNING)
+
+    def test_browser_diagnostics_are_bounded_and_redact_sensitive_payloads(self):
+        secret="opaque-secret-value"
+        raw=f"GET https://user:{secret}@app.internal/private?token={secret}\nAuthorization: Bearer {secret}\n"+("x"*12000)
+        sanitized=sanitize_diagnostic(raw)
+        self.assertNotIn(secret,sanitized)
+        self.assertNotIn("/private",sanitized)
+        self.assertIn("[REDACTED_URL]",sanitized)
+        self.assertIn("[TRUNCATED]",sanitized)
+        self.assertLessEqual(len(sanitized),8205)
+
     def test_static_adapter_publishes_no_tools_and_validates_exact_contract(self):
         adapter=WebAdapter();adapter.validate_target(configuration(),None);self.assertEqual(adapter.capabilities(configuration()),())
         for bad in ("file:///etc/passwd","javascript:alert(1)","data:text/html,x"):
@@ -42,6 +59,20 @@ class WebGateTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(NetworkPolicy,"verify_resolution",new=AsyncMock()),patch.object(runtime,"_probe_sync",return_value={"status":"reachable","origin":"https://app.internal"}):
                 self.assertEqual((await runtime.probe(configuration()))["status"],"reachable")
             await runtime.close();self.assertEqual(list(Path(temporary).glob("profile-*")),[])
+
+    async def test_webdriver_crash_is_logged_safely_and_returned_as_stable_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            runtime=BrowserRuntime(Path(temporary));runtime.prepare()
+            failure=WebDriverException("failed at https://app.internal/private Authorization: Bearer opaque-secret")
+            with patch("mcp_capability_bridge.browser_runtime.webdriver.Chrome",side_effect=failure),self.assertLogs("mcp_capability_bridge.browser",level="DEBUG") as captured:
+                with self.assertRaisesRegex(RuntimeError,"browser_session_failed"):
+                    runtime._probe_sync(configuration(),NetworkPolicy(configuration()))
+            logs="\n".join(captured.output)
+            self.assertIn("MCB_BROWSER_DIAG session_failed",logs)
+            self.assertIn("MCB_BROWSER_DIAG webdriver",logs)
+            self.assertNotIn("opaque-secret",logs)
+            self.assertNotIn("/private",logs)
+            self.assertEqual(list(Path(temporary).glob("profile-*")),[])
 
 
 if __name__=="__main__":unittest.main()
