@@ -2,6 +2,23 @@
 
 All notable changes to MCP Capability Bridge will be documented in this file.
 
+## 0.3.0 — 2026-08-21
+
+### Added
+
+- Added the bounded SSH adapter with password or private-key authentication encrypted at rest, fresh connections, no PTY/agent/forwarding/stdin/environment map, and deterministic cleanup.
+- Added two-step host-key enrollment and explicit pinned-key rotation, SSH target/capability CRUD, and namespace publication through the existing generic MCP contract.
+- Added absolute executable plus POSIX-token templates, scalar ACP-compatible schemas, per-call timeouts, separate bounded stdout/stderr drainage, secret redaction and explicit `effect_possible` failures.
+- Added bilingual Ingress target, SSH capability and MCP access workflows using the established responsive right-drawer pattern.
+- Added real SSH fixture tests for host-key refusal, password/private-key authentication, hostile token quoting, bounded output, timeouts, cleanup and fresh connections.
+- Added a contract test proving that the current ACP discovers and invokes a real published SSH capability without Bridge-specific handling.
+
+### Security
+
+- Target and capability mutations are refused while the target is in use, and dispatch resolves the publication again under its lease to close administration races.
+- Clear authentication secrets, arguments and remote output are neither persisted nor logged; known credentials echoed by a remote command are redacted from returned output.
+- The SSH adapter exposes no caller-controlled command head or generic shell-command primitive.
+
 ## 0.2.0 — 2026-08-21
 
 - Validate private-key Unix modes under the unprivileged service identity so the container smoke test preserves its deliberate `DAC_OVERRIDE` removal.

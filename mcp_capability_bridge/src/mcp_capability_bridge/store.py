@@ -167,7 +167,109 @@ class NamespaceStore:
     def list_targets(self) -> list[dict[str, object]]:
         with connect(self.database_path) as database:
             rows = database.execute("SELECT id,key,display_name,adapter_type,enabled,technical_state,created_at,updated_at FROM targets ORDER BY created_at,id").fetchall()
-        return [{**dict(row), "enabled": bool(row["enabled"])} for row in rows]
+        result = []
+        for row in rows:
+            item = {**dict(row), "enabled": bool(row["enabled"])}
+            item["capabilities"] = self.list_target_capabilities(row["id"])
+            result.append(item)
+        return result
+
+    def get_target(self, target_id: str) -> dict[str, object]:
+        with connect(self.database_path) as database:
+            row = database.execute("SELECT id,key,display_name,adapter_type,enabled,technical_state,configuration_json,created_at,updated_at FROM targets WHERE id=?", (target_id,)).fetchone()
+        if row is None:
+            raise KeyError("target_not_found")
+        result = dict(row)
+        configuration = json.loads(result.pop("configuration_json"))
+        configuration.pop("host_public_key", None)
+        result["configuration"] = configuration
+        result["enabled"] = bool(result["enabled"])
+        return result
+
+    def get_target_configuration(self, target_id: str) -> dict[str, Any]:
+        with connect(self.database_path) as database:
+            row = database.execute("SELECT configuration_json FROM targets WHERE id=?", (target_id,)).fetchone()
+        if row is None:
+            raise KeyError("target_not_found")
+        return json.loads(row["configuration_json"])
+
+    def list_target_capabilities(self, target_id: str) -> list[dict[str, object]]:
+        configuration = self.get_target_configuration(target_id)
+        return [{key: value for key, value in item.items() if key not in {"template"}} | {"template_entries": len(item["template"])} for item in configuration.get("capabilities", [])]
+
+    def update_target(self, target_id: str, display_name: str, configuration: dict[str, Any], secret: bytes | None = None) -> list[str]:
+        display_name = display_name.strip()
+        if not 1 <= len(display_name) <= 100:
+            raise ValueError("invalid_target")
+        with connect(self.database_path) as database:
+            row = database.execute("SELECT adapter_type,encrypted_secret FROM targets WHERE id=?", (target_id,)).fetchone()
+            if row is None:
+                raise KeyError("target_not_found")
+            envelope = self.secret_box.encrypt(secret) if secret is not None else row["encrypted_secret"]
+            clear = secret if secret is not None else (self.secret_box.decrypt(envelope) if envelope is not None else None)
+            self.registry.get(row["adapter_type"]).validate_target(configuration, clear)
+            encoded = json.dumps(configuration, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+            database.execute("UPDATE targets SET display_name=?,configuration_json=?,encrypted_secret=?,technical_state='valid',updated_at=? WHERE id=?", (display_name, encoded, envelope, now_iso(), target_id))
+        return self.touch_target_inventory(target_id)
+
+    def set_target_enabled(self, target_id: str, enabled: bool) -> list[str]:
+        with connect(self.database_path) as database:
+            cursor = database.execute("UPDATE targets SET enabled=?,updated_at=? WHERE id=?", (int(enabled), now_iso(), target_id))
+            if cursor.rowcount != 1:
+                raise KeyError("target_not_found")
+        return self.touch_target_inventory(target_id)
+
+    def delete_target(self, target_id: str) -> list[str]:
+        with connect(self.database_path) as database:
+            namespaces = [row[0] for row in database.execute("SELECT namespace_id FROM publications WHERE target_id=?", (target_id,)).fetchall()]
+            cursor = database.execute("DELETE FROM targets WHERE id=?", (target_id,))
+            if cursor.rowcount != 1:
+                raise KeyError("target_not_found")
+            self._bump_inventory(database, namespaces)
+        return namespaces
+
+    def save_capability(self, target_id: str, capability: dict[str, Any]) -> list[str]:
+        configuration = self.get_target_configuration(target_id)
+        capabilities = configuration.setdefault("capabilities", [])
+        existing = next((index for index, item in enumerate(capabilities) if item["id"] == capability["id"]), None)
+        if existing is None:
+            capabilities.append(capability)
+        else:
+            if capabilities[existing]["key"] != capability.get("key"):
+                raise ValueError("capability_key_immutable")
+            capabilities[existing] = capability
+        with connect(self.database_path) as database:
+            row = database.execute("SELECT adapter_type,encrypted_secret FROM targets WHERE id=?", (target_id,)).fetchone()
+            if row is None:
+                raise KeyError("target_not_found")
+            secret = self.secret_box.decrypt(row["encrypted_secret"]) if row["encrypted_secret"] is not None else None
+            self.registry.get(row["adapter_type"]).validate_target(configuration, secret)
+            database.execute("UPDATE targets SET configuration_json=?,updated_at=? WHERE id=?", (json.dumps(configuration, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False), now_iso(), target_id))
+        return self.touch_target_inventory(target_id)
+
+    def delete_capability(self, target_id: str, capability_id: str) -> list[str]:
+        configuration = self.get_target_configuration(target_id)
+        before = len(configuration.get("capabilities", []))
+        configuration["capabilities"] = [item for item in configuration.get("capabilities", []) if item["id"] != capability_id]
+        if len(configuration["capabilities"]) == before:
+            raise KeyError("capability_not_found")
+        with connect(self.database_path) as database:
+            namespaces = [row[0] for row in database.execute("SELECT DISTINCT namespace_id FROM publications WHERE target_id=? AND capability_id=?", (target_id, capability_id)).fetchall()]
+            database.execute("DELETE FROM publications WHERE target_id=? AND capability_id=?", (target_id, capability_id))
+            database.execute("UPDATE targets SET configuration_json=?,updated_at=? WHERE id=?", (json.dumps(configuration, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False), now_iso(), target_id))
+            self._bump_inventory(database, namespaces)
+        return namespaces
+
+    def touch_target_inventory(self, target_id: str) -> list[str]:
+        with connect(self.database_path) as database:
+            namespaces = [row[0] for row in database.execute("SELECT DISTINCT namespace_id FROM publications WHERE target_id=?", (target_id,)).fetchall()]
+            self._bump_inventory(database, namespaces)
+        return namespaces
+
+    def _bump_inventory(self, database, namespace_ids: list[str]) -> None:
+        timestamp = now_iso()
+        for namespace_id in namespace_ids:
+            database.execute("UPDATE namespaces SET inventory_revision=inventory_revision+1,updated_at=? WHERE id=?", (timestamp, namespace_id))
 
     def publish(self, namespace_id: str, target_id: str, capability_id: str) -> int:
         published = self._target_capability(target_id, capability_id)

@@ -8,18 +8,21 @@ from contextlib import asynccontextmanager
 
 
 class RuntimeCounters:
-    def __init__(self, global_limit: int = 8, namespace_limit: int = 2):
+    def __init__(self, global_limit: int = 8, namespace_limit: int = 2, adapter_limit: int = 4):
         self._global = asyncio.Semaphore(global_limit)
         self._namespace_limit = namespace_limit
         self._namespace_semaphores: dict[str, asyncio.Semaphore] = {}
+        self._adapter_limit = adapter_limit
+        self._adapter_semaphores: dict[str, asyncio.Semaphore] = {}
         self._active_namespaces: Counter[str] = Counter()
         self._active_targets: Counter[str] = Counter()
         self._namespace_tasks: dict[str, set[asyncio.Task]] = {}
 
     @asynccontextmanager
-    async def operation(self, namespace_id: str, target_id: str):
+    async def operation(self, namespace_id: str, target_id: str, adapter_type: str = "core"):
         namespace = self._namespace_semaphores.setdefault(namespace_id, asyncio.Semaphore(self._namespace_limit))
-        async with self._global, namespace:
+        adapter = self._adapter_semaphores.setdefault(adapter_type, asyncio.Semaphore(self._adapter_limit))
+        async with self._global, namespace, adapter:
             task = asyncio.current_task()
             if task is None:
                 raise RuntimeError("operation_task_missing")
@@ -44,6 +47,9 @@ class RuntimeCounters:
     def ensure_target_mutable(self, target_id: str) -> None:
         if self._active_targets[target_id] > 0:
             raise RuntimeError("target_in_use")
+
+    def target_in_use(self, target_id: str) -> bool:
+        return self._active_targets[target_id] > 0
 
     async def cancel_namespace(self, namespace_id: str) -> None:
         current = asyncio.current_task()

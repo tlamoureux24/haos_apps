@@ -64,7 +64,7 @@ jobs:
           test -n "${csrf}"
           [[ "${page}" == *"MCP Capability Bridge <b>v${version}</b>"* ]]
           [[ "${page}" == *'src="/api/hassio_ingress/ci/admin/assets/icon.png"'* ]]
-          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/status | jq -e '.status=="ready" and .database_generation==1 and .public_surface=="authenticated_mcp" and .adapters==[]' >/dev/null
+          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/status | jq -e '.status=="ready" and .database_generation==1 and .public_surface=="authenticated_mcp" and .adapters==[{"type_key":"ssh","display_name":"SSH"}]' >/dev/null
           first="$(curl -fsS -X POST -H 'X-Ingress-Path: /api/hassio_ingress/ci' -H "Cookie: mcb_csrf=${csrf}" -H "X-CSRF-Token: ${csrf}" -H 'Content-Type: application/json' --data '{"key":"ci_first","display_name":"CI first"}' http://127.0.0.1:18099/admin/api/v1/namespaces)"
           first_id="$(jq -r '.namespace.id' <<<"${first}")"
           first_token="$(jq -r '.token' <<<"${first}")"
@@ -87,7 +87,7 @@ jobs:
           css="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/admin.css)"
           js="$(curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/assets/admin.js)"
           [[ "${css}" == *'scrollbar-gutter:stable'* && "${css}" == *'html[data-theme=dark]'* ]]
-          [[ "${js}" == *'navigator.language'* && "${js}" == *'Vue d’ensemble'* && "${js}" == *'Overview'* && "${js}" == *"event.key==='Escape'"* ]]
+          [[ "${js}" == *'navigator.language'* && "${js}" == *'Vue d’ensemble'* && "${js}" == *'Overview'* && "${js}" == *"e.key==='Escape'"* ]]
           python_processes="$(docker exec mcb-smoke /bin/sh -c 'for process in /proc/[0-9]*; do command="$(tr "\0" " " < "${process}/cmdline" 2>/dev/null || true)"; case "${command}" in "python3 -m mcp_capability_bridge.runtime "*) echo "${command}";; esac; done')"
           test "$(printf '%s\n' "${python_processes}" | sed '/^$/d' | wc -l)" = 1
           test "$(docker exec mcb-smoke /bin/sh -c 'for process in /proc/[0-9]*; do command="$(tr "\0" " " < "${process}/cmdline" 2>/dev/null || true)"; case "${command}" in "python3 -m mcp_capability_bridge.runtime "*) stat -c %u "${process}";; esac; done')" = 1000

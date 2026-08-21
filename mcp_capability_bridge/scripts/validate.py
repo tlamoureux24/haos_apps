@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate MCP Capability Bridge Lot 0-1 repository invariants."""
+"""Validate MCP Capability Bridge Lot 0-2 repository invariants."""
 
 from __future__ import annotations
 
@@ -27,15 +27,15 @@ def main() -> int:
     security = (ROOT / "src/mcp_capability_bridge/security.py").read_text(encoding="utf-8")
 
     for value in (
-        'slug: "mcp_capability_bridge"', 'version: "0.2.0"',
+        'slug: "mcp_capability_bridge"', 'version: "0.3.0"',
         "  - aarch64", "  - amd64", "init: false", "apparmor: true",
         "tmpfs: true", "backup: cold", "ingress: true", "ingress_port: 8099",
         "  8098/tcp: null",
     ):
         require(config, value, "App metadata invariant")
-    require(package, '__version__ = "0.2.0"', "synchronized package version")
-    for dependency in ("mcp==1.28.1", "jsonschema[format-nongpl]==4.26.0", "cryptography==46.0.3"):
-        require(requirements, dependency, "pinned Lot 1 dependency")
+    require(package, '__version__ = "0.3.0"', "synchronized package version")
+    for dependency in ("mcp==1.28.1", "jsonschema[format-nongpl]==4.26.0", "cryptography==50.0.0", "asyncssh==2.24.0"):
+        require(requirements, dependency, "pinned Lot 2 dependency")
     require(dockerfile, "adduser -S -D -H", "unprivileged user")
     require(dockerfile, 'org.opencontainers.image.base.digest="${BASE_IMAGE_DIGEST}"', "base provenance")
     require(dockerfile, "COPY icon.png /app/icon.png", "authoritative icon packaging")
@@ -54,9 +54,9 @@ def main() -> int:
         require(main_source + mcp_source, value, "authenticated MCP invariant")
     for value in ("secrets.token_urlsafe(32)", "hmac.compare_digest", "TOKEN_PATTERN", "SecretBox"):
         require(security, value, "credential/secret security invariant")
-    for forbidden in ("paramiko", "asyncssh", "selenium", "playwright", "chromium"):
+    for forbidden in ("paramiko", "selenium", "playwright", "chromium"):
         if forbidden in requirements.lower() or forbidden in main_source.lower():
-            raise RuntimeError(f"Lot 1 must not install an adapter runtime: {forbidden}")
+            raise RuntimeError(f"Unsupported adapter runtime: {forbidden}")
     if "Accepted on real HAOS with version 0.1.0:" not in plan:
         raise RuntimeError("Implementation plan Lot 0 status must match delivery state")
     if "Accepted on real HAOS with version 0.2.0:" not in plan:

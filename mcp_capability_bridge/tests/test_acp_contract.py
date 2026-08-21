@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import shlex
 import socket
 import sys
 import tempfile
@@ -18,6 +20,8 @@ from mcp_capability_bridge.contracts import AdapterRegistry, Capability
 from mcp_capability_bridge.database import initialize
 from mcp_capability_bridge.main import build_runtime_state, create_apps
 from mcp_capability_bridge.settings import Settings
+from mcp_capability_bridge.ssh_adapter import SSHAdapter
+from tests.test_ssh_adapter import SSHFixture, capability
 
 
 class ContractAdapter:
@@ -87,6 +91,40 @@ class AcpContractIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rejected.status_code, 401)
         rotated_inventory = await discover_streamable_http(self.url, rotated.token)
         self.assertEqual([tool["name"] for tool in rotated_inventory], ["test_fixture_overview"])
+
+    async def test_current_acp_discovers_and_calls_real_bounded_ssh_tool(self):
+        fixture = await SSHFixture().start()
+        try:
+            directory = tempfile.TemporaryDirectory()
+            settings = Settings(Path(directory.name), "error", "127.0.0.1")
+            initialize(settings.database_path)
+            state = build_runtime_state(settings, AdapterRegistry((SSHAdapter(),)))
+            _, public = create_apps(state)
+            port = available_port()
+            server = uvicorn.Server(uvicorn.Config(public, host="127.0.0.1", port=port, log_level="error", access_log=False))
+            task = asyncio.create_task(server.serve())
+            for _ in range(100):
+                if server.started:
+                    break
+                await asyncio.sleep(0.02)
+            namespace, issued = state.store.create_namespace("ssh_acp", "SSH ACP")
+            secret = json.dumps({"mode": "password", "password": fixture.password}).encode()
+            target = state.store.create_target("ssh_fixture", "SSH fixture", "ssh", fixture.configuration(capability()), secret)
+            state.store.publish(namespace["id"], target["id"], "overview")
+            url = f"http://127.0.0.1:{port}/mcp"
+            inventory = await discover_streamable_http(url, issued.token)
+            self.assertEqual([tool["name"] for tool in inventory], ["ssh_overview"])
+            result = await invoke_streamable_http(url, issued.token, "ssh_overview", {"value": "through-acp"})
+            self.assertFalse(result["isError"])
+            self.assertEqual(shlex.split(fixture.commands[-1]), ["/usr/bin/fixture", "show", "through-acp"])
+            self.assertNotIn(fixture.password, str(result))
+        finally:
+            if "server" in locals():
+                server.should_exit = True
+                await task
+            if "directory" in locals():
+                directory.cleanup()
+            await fixture.stop()
 
 
 if __name__ == "__main__":

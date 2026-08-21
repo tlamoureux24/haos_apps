@@ -128,7 +128,7 @@ Accepted on real HAOS with version 0.2.0: Ingress, FR/EN, light/dark, empty targ
 
 ## Lot 2 — bounded SSH adapter
 
-Status: **planned**.
+Status: **implemented in 0.3.0; awaiting real HAOS acceptance**.
 
 ### Goal
 

@@ -8,11 +8,13 @@ from typing import Any
 import anyio
 from jsonschema import Draft202012Validator
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.fastmcp.server import Settings as FastMCPSettings
 from mcp.types import TextContent, Tool as MCPTool
 from starlette.responses import JSONResponse
 
 from mcp_capability_bridge.runtime_state import RuntimeCounters
+from mcp_capability_bridge.ssh_adapter import SSHCallError
 from mcp_capability_bridge.store import NamespaceContext, NamespaceStore
 
 MAX_RESULT_BYTES = 256 * 1024
@@ -90,9 +92,15 @@ class NamespaceMCP(FastMCP):
             Draft202012Validator(published.capability.input_schema).validate(arguments)
         except Exception:
             raise ValueError("invalid_arguments") from None
-        adapter = self.store.registry.get(published.adapter_type)
-        secret = self.store.secret_box.decrypt(published.encrypted_secret) if published.encrypted_secret is not None else None
-        async with self.counters.operation(namespace.namespace_id, published.target_id):
+        async with self.counters.operation(namespace.namespace_id, published.target_id, published.adapter_type):
+            # Resolve again under the target lease. An admin mutation may have
+            # happened while this call was waiting for a concurrency slot.
+            try:
+                published = await anyio.to_thread.run_sync(self.store.resolve, namespace.namespace_id, name)
+            except KeyError:
+                raise ValueError("capability_not_available") from None
+            adapter = self.store.registry.get(published.adapter_type)
+            secret = self.store.secret_box.decrypt(published.encrypted_secret) if published.encrypted_secret is not None else None
             try:
                 result = await adapter.invoke(
                     published.capability.capability_id,
@@ -100,8 +108,11 @@ class NamespaceMCP(FastMCP):
                     secret,
                     arguments,
                 )
+            except SSHCallError as exc:
+                error = json.dumps({"error": {"code": exc.code, "effect_possible": exc.effect_possible}}, separators=(",", ":"))
+                raise ToolError(error) from None
             except Exception:
-                raise ValueError("adapter_call_failed") from None
+                raise ToolError('{"error":{"code":"adapter_call_failed","effect_possible":false}}') from None
         payload = {"result": result, "effect_possible": bool(published.capability.effect_capable)}
         try:
             encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)

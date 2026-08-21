@@ -87,11 +87,11 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.2.0</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.3.0</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
             self.assertEqual(status["public_surface"], "authenticated_mcp")
-            self.assertEqual(status["adapters"], [])
+            self.assertEqual(status["adapters"], [{"type_key": "ssh", "display_name": "SSH"}])
             self.assertEqual((await self.request(self.admin, "GET", "/mcp", headers=headers)).status_code, 404)
         asyncio.run(scenario())
 
@@ -127,16 +127,17 @@ class AdministrationUiTests(unittest.TestCase):
             self.assertIn(contract, ADMIN_CSS)
         for contract in (
             "navigator.language", "mcb-language", "mcb-theme",
-            "Vue d’ensemble", "Overview", "event.key==='Escape'",
-            "returnFocus?.focus()", "event.key!=='Tab'",
-            "function clearToken()", "clearToken();shell.hidden=true",
+            "Vue d’ensemble", "Overview", "e.key==='Escape'",
+            "returnFocus?.focus()", "e.key!=='Tab'",
+            "function clearSecrets()", "clearSecrets();scanId='';shell.hidden=true",
         ):
             self.assertIn(contract, ADMIN_JS)
 
-    def test_lot_one_ui_has_namespace_lifecycle_without_adapter_forms(self) -> None:
+    def test_lot_two_ui_preserves_namespaces_and_adds_bounded_ssh_forms(self) -> None:
         for contract in ("createClient", "credentialOnce", "data-rotate", "data-revoke", "data-archive", "show-archived"):
             self.assertIn(contract, ADMIN_JS)
-        self.assertNotIn("ssh-form", ADMIN_JS)
+        for contract in ("target-form", "capability-form", "publication-form", "scanHostKey", "effectCapable"):
+            self.assertIn(contract, ADMIN_JS)
         self.assertNotIn("web-form", ADMIN_JS)
 
 
