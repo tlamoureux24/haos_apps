@@ -5,6 +5,19 @@
 - Align the Activity freshness indicator, credential workflow, and model forms with the ACP polling and right-drawer interaction patterns.
 - Keep standalone API configuration in its dedicated metric while the overview detail reports only the execution lifecycle.
 
+## 0.5.2
+
+- Refresh the active Ingress view every five seconds while avoiding duplicate OAuth polling and preserving one-time credential disclosure semantics.
+- Disable model edit, enable/disable, and delete actions while a model is in use, and surface `model_in_use` conflicts in the administration UI.
+- Add an explicit one-time credential dismissal action and clear the displayed token when leaving the API view.
+
+## 0.5.1
+
+- Make model in-use state durable across execution and administration processes with SQLite-backed usage locking, while keeping priority reorder available.
+- Return explicit `409 model_in_use` conflicts for unsafe model edits, disable operations, and deletes during execution.
+- Preserve successful `null` execution results exactly across persistence and restart recovery.
+- Replace the standalone credential verifier with a deterministic domain-separated SHA-256 verifier while continuing to store no recoverable credential.
+
 ## 0.5.0
 
 - Add the authenticated asynchronous standalone execution API on port 8098 using the common Lot 2 engine and exact caller-supplied MCP operational envelope.
