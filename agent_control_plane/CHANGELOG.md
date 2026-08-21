@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.46.10
+
+- Define report `findings` as an array of strings in the generated task result
+  schema, matching the documented ACP report contract and making that schema
+  admissible as a Codex/OpenAI structured output.
+- Regression-test the exact report schema delivered to an AEP worker so a task
+  can reach its permitted dynamic tool instead of failing early with
+  `provider_failure`.
+
 ## 0.46.9
 
 - Make `jobs_fail_v1` idempotent with a caller-supplied completion key, matching successful completion delivery and making retries safe after a lost response.

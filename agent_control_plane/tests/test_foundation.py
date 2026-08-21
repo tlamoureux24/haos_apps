@@ -1235,6 +1235,20 @@ class TaskCompositionTests(unittest.TestCase):
             manual_job_id = control_plane.enqueue_manual_task(manual_task_id, {}, "test-manual-run")
             self.assertEqual(control_plane.get_job(manual_job_id)["state"], "queued")
             self.assertIsNone(control_plane.get_job(manual_job_id)["event_id"])
+            identity = control_plane.authenticate(
+                control_plane.create_identity(
+                    "Schema worker",
+                    "client",
+                    ["jobs.claim"],
+                    "test-report-schema-worker",
+                ).credential.token
+            )
+            lease = control_plane.claim_job(identity, "test-report-schema-claim")
+            self.assertIsNotNone(lease)
+            self.assertEqual(
+                lease.job["required_report_schema"]["properties"]["findings"],
+                {"type": "array", "items": {"type": "string"}, "maxItems": 100},
+            )
             with self.assertRaisesRegex(TaskExecutionActiveError, "task_execution_active"):
                 control_plane.enqueue_manual_task(manual_task_id, {}, "test-manual-duplicate")
             self.assertEqual(control_plane.list_tasks()[0]["active_job_count"], 1)

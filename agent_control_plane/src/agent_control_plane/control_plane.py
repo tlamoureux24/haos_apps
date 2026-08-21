@@ -261,7 +261,7 @@ class ControlPlane:
             "properties": {
                 "schema_version": {"type": "integer"},
                 "summary": {"type": "string", "minLength": 1, "maxLength": 2000},
-                "findings": {"type": "array", "maxItems": 100},
+                "findings": {"type": "array", "items": {"type": "string"}, "maxItems": 100},
             },
         }
         with connect(self.database_path) as connection:
