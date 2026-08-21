@@ -2,7 +2,7 @@
 
 [Français](README.fr.md) | English
 
-Current release: **0.4.4 — Lot 3A browser runtime and confinement gate accepted on HAOS**.
+Current release: **0.4.5 — generated technical-key UX micro-lot, awaiting HAOS acceptance**.
 
 MCP Capability Bridge will be an independent Home Assistant OS App that exposes deliberately bounded access to non-MCP technical systems through standard MCP Streamable HTTP tools.
 

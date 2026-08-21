@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import unicodedata
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -17,6 +18,23 @@ from mcp_capability_bridge.database import connect
 from mcp_capability_bridge.security import IssuedCredential, SecretBox, issue_credential, token_lookup, verify_token
 
 KEY = re.compile(r"^[a-z][a-z0-9_]{1,31}$")
+
+
+def generated_key(display_name: str, existing: set[str], fallback: str) -> str:
+    normalized = unicodedata.normalize("NFKD", display_name).encode("ascii", "ignore").decode("ascii").lower()
+    base = re.sub(r"[^a-z0-9]+", "_", normalized).strip("_")
+    if not base or not base[0].isalpha():
+        base = fallback
+    if len(base) == 1:
+        base += "_"
+    base = base[:32] or fallback
+    candidate = base
+    suffix = 2
+    while candidate in existing:
+        marker = f"_{suffix}"
+        candidate = f"{base[:32 - len(marker)].rstrip('_')}{marker}"
+        suffix += 1
+    return candidate
 
 
 def now_iso() -> str:
@@ -52,13 +70,18 @@ class NamespaceStore:
     def create_namespace(self, key: str, display_name: str) -> tuple[dict[str, object], IssuedCredential]:
         key = key.strip()
         display_name = display_name.strip()
-        if not KEY.fullmatch(key) or not 1 <= len(display_name) <= 100:
+        if not 1 <= len(display_name) <= 100:
             raise ValueError("invalid_namespace")
         namespace_id = uuid.uuid4().hex
         credential = issue_credential(namespace_id, self.pepper)
         timestamp = now_iso()
         try:
             with connect(self.database_path) as database:
+                if not key:
+                    existing = {row[0] for row in database.execute("SELECT key FROM namespaces")}
+                    key = generated_key(display_name, existing, "client")
+                if not KEY.fullmatch(key):
+                    raise ValueError("invalid_namespace")
                 database.execute(
                     "INSERT INTO namespaces(id,key,display_name,status,credential_id,credential_verifier,credential_generation,inventory_revision,created_at,updated_at) VALUES(?,?,?,'active',?,?,1,1,?,?)",
                     (namespace_id, key, display_name, credential.credential_id, credential.verifier, timestamp, timestamp),
@@ -144,7 +167,8 @@ class NamespaceStore:
             )
 
     def create_target(self, key: str, display_name: str, adapter_type: str, configuration: dict[str, Any], secret: bytes | None = None) -> dict[str, object]:
-        if not KEY.fullmatch(key) or not 1 <= len(display_name.strip()) <= 100:
+        key = key.strip()
+        if not 1 <= len(display_name.strip()) <= 100:
             raise ValueError("invalid_target")
         adapter = self.registry.get(adapter_type)
         adapter.validate_target(configuration, secret)
@@ -158,6 +182,11 @@ class NamespaceStore:
         envelope = self.secret_box.encrypt(secret) if secret is not None else None
         encoded = json.dumps(configuration, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
         with connect(self.database_path) as database:
+            if not key:
+                existing = {row[0] for row in database.execute("SELECT key FROM targets")}
+                key = generated_key(display_name, existing, "target")
+            if not KEY.fullmatch(key):
+                raise ValueError("invalid_target")
             database.execute(
                 "INSERT INTO targets(id,key,display_name,adapter_type,configuration_json,encrypted_secret,enabled,technical_state,created_at,updated_at) VALUES(?,?,?,?,?,?,1,'valid',?,?)",
                 (target_id, key, display_name.strip(), adapter_type, encoded, envelope, timestamp, timestamp),
@@ -233,10 +262,16 @@ class NamespaceStore:
         capabilities = configuration.setdefault("capabilities", [])
         existing = next((index for index, item in enumerate(capabilities) if item["id"] == capability["id"]), None)
         if existing is None:
+            key = str(capability.get("key", "")).strip()
+            if not key:
+                key = generated_key(str(capability.get("display_name", "")), {str(item["key"]) for item in capabilities}, "capability")
+            capability["key"] = key
             capabilities.append(capability)
         else:
-            if capabilities[existing]["key"] != capability.get("key"):
+            supplied_key = str(capability.get("key", "")).strip()
+            if supplied_key and capabilities[existing]["key"] != supplied_key:
                 raise ValueError("capability_key_immutable")
+            capability["key"] = capabilities[existing]["key"]
             capabilities[existing] = capability
         with connect(self.database_path) as database:
             row = database.execute("SELECT adapter_type,encrypted_secret FROM targets WHERE id=?", (target_id,)).fetchone()

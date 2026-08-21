@@ -206,7 +206,7 @@ Accepted on real HAOS with version 0.4.4: startup, desktop/mobile UI, Web target
 
 ## Micro-lot UX — generated technical keys
 
-Status: **planned; must remain separate from adapter feature lots**.
+Status: **implemented in 0.4.5; awaiting real HAOS acceptance**.
 
 ### Goal
 

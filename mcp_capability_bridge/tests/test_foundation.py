@@ -88,8 +88,9 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.4.4</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.4.5</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
+            self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
             self.assertEqual(status["public_surface"], "authenticated_mcp")
             self.assertEqual(status["adapters"], [{"type_key": "ssh", "display_name": "SSH"}, {"type_key": "web", "display_name": "Web"}])
@@ -106,9 +107,10 @@ class SurfaceTests(unittest.TestCase):
             }
             created = await self.request(
                 self.admin, "POST", "/admin/api/v1/namespaces", headers=headers,
-                json={"key": "client_one", "display_name": "Client one"},
+                json={"display_name": "Client one"},
             )
             self.assertEqual(created.status_code, 201)
+            self.assertEqual(created.json()["namespace"]["key"], "client_one")
             token = created.json()["token"]
             listed = await self.request(self.admin, "GET", "/admin/api/v1/namespaces", headers={"X-Ingress-Path": ingress})
             self.assertNotIn(token, listed.text)
@@ -142,7 +144,6 @@ class SurfaceTests(unittest.TestCase):
                 headers=headers,
                 json={
                     "resolution_id": resolved.json()["resolution_id"],
-                    "key": "web_test",
                     "display_name": "Web test",
                     "base_url": "https://app.internal/path",
                     "verify_tls": True,
@@ -153,6 +154,7 @@ class SurfaceTests(unittest.TestCase):
             self.assertEqual(created.status_code, 201)
             target = created.json()["target"]
             self.assertEqual(target["adapter_type"], "web")
+            self.assertEqual(target["key"], "web_test")
             listed = next(item for item in self.state.store.list_targets() if item["id"] == target["id"])
             self.assertEqual(listed["capabilities"], [])
             configuration = self.state.store.get_target_configuration(target["id"])
@@ -189,6 +191,8 @@ class AdministrationUiTests(unittest.TestCase):
             self.assertIn(contract, ADMIN_JS)
         for contract in ("web-target-form", "web-resolve", "data-test-web", "webResolutionId"):
             self.assertIn(contract, ADMIN_JS)
+        self.assertNotIn('name="key"', ADMIN_JS)
+        self.assertNotIn("key:f.key.value", ADMIN_JS)
 
 
 class RuntimeTopologyTests(unittest.TestCase):

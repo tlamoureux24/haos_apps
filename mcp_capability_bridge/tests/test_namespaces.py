@@ -13,6 +13,7 @@ from mcp_capability_bridge.main import build_runtime_state
 from mcp_capability_bridge.mcp_api import SessionHub
 from mcp_capability_bridge.security import SecretBox, load_or_create_key, token_lookup
 from mcp_capability_bridge.settings import Settings
+from mcp_capability_bridge.store import generated_key
 
 
 class FakeAdapter:
@@ -63,6 +64,22 @@ class NamespaceStoreTests(unittest.TestCase):
         self.assertNotIn(issued.token.split("_", 3)[3].encode(), database_bytes)
         restarted = build_runtime_state(Settings(self.path, "info", "127.0.0.1"), AdapterRegistry((FakeAdapter(),)))
         self.assertEqual(restarted.store.authenticate(issued.token).namespace_id, first["id"])
+
+    def test_generated_keys_are_normalized_unique_and_stable(self):
+        self.assertEqual(generated_key("État général !", set(), "item"), "etat_general")
+        self.assertEqual(generated_key("123", set(), "item"), "item")
+        self.assertEqual(generated_key("X", set(), "item"), "x_")
+        self.assertEqual(generated_key("A" * 40, {"a" * 32}, "item"), f"{'a' * 30}_2")
+
+        first, _ = self.store.create_namespace("", "Client Démo")
+        second, _ = self.store.create_namespace("", "Client Démo")
+        self.assertEqual((first["key"], second["key"]), ("client_demo", "client_demo_2"))
+
+        target = self.store.create_target("", "Cible Démo", "test_adapter", {"prefix": "fixture"})
+        other = self.store.create_target("", "Cible Démo", "test_adapter", {"prefix": "other"})
+        self.assertEqual((target["key"], other["key"]), ("cible_demo", "cible_demo_2"))
+        self.store.update_target(target["id"], "Cible renommée", {"prefix": "fixture"})
+        self.assertEqual(self.store.get_target(target["id"])["key"], "cible_demo")
 
     def test_rotation_revoke_archive_and_isolation(self):
         first, old = self.store.create_namespace("client_one", "Client one")

@@ -159,14 +159,25 @@ class SSHRuntimeTests(unittest.TestCase):
                 async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
                     scan = await client.post("/admin/api/v1/ssh/scan", headers=headers, json={"host": "127.0.0.1", "port": fixture.port})
                     self.assertEqual(scan.status_code, 200)
-                    created = await client.post("/admin/api/v1/targets", headers=headers, json={"scan_id": scan.json()["scan_id"], "key": "fixture", "display_name": "Fixture", "username": "bridge", "auth_mode": "password", "password": fixture.password})
+                    created = await client.post("/admin/api/v1/targets", headers=headers, json={"scan_id": scan.json()["scan_id"], "display_name": "Fixture", "username": "bridge", "auth_mode": "password", "password": fixture.password})
                     self.assertEqual(created.status_code, 201)
+                    self.assertEqual(created.json()["target"]["key"], "fixture")
                     self.assertNotIn(fixture.password, created.text)
                     target_id = created.json()["target"]["id"]
-                    saved = await client.post("/admin/api/v1/ssh/capabilities/save", headers=headers, json={"target_id": target_id, "capability": capability(id="")})
+                    generated = capability(id="", display_name="État général")
+                    generated.pop("key")
+                    saved = await client.post("/admin/api/v1/ssh/capabilities/save", headers=headers, json={"target_id": target_id, "capability": generated})
                     self.assertEqual(saved.status_code, 200)
                     target = (await client.get(f"/admin/api/v1/targets/detail/{target_id}", headers=headers)).json()["target"]
                     capability_id = target["configuration"]["capabilities"][0]["id"]
+                    self.assertEqual(target["configuration"]["capabilities"][0]["key"], "etat_general")
+                    renamed = dict(target["configuration"]["capabilities"][0])
+                    renamed.pop("key")
+                    renamed["display_name"] = "État renommé"
+                    edited = await client.post("/admin/api/v1/ssh/capabilities/save", headers=headers, json={"target_id": target_id, "capability": renamed})
+                    self.assertEqual(edited.status_code, 200)
+                    target = (await client.get(f"/admin/api/v1/targets/detail/{target_id}", headers=headers)).json()["target"]
+                    self.assertEqual(target["configuration"]["capabilities"][0]["key"], "etat_general")
                     namespace, _ = state.store.create_namespace("client", "Client")
                     published = await client.post("/admin/api/v1/publications/publish", headers=headers, json={"namespace_id": namespace["id"], "target_id": target_id, "capability_id": capability_id})
                     self.assertEqual(published.status_code, 200)

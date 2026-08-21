@@ -2,6 +2,18 @@
 
 All notable changes to MCP Capability Bridge will be documented in this file.
 
+## 0.4.5 — 2026-08-21
+
+### Changed
+
+- Generate normalized, collision-safe technical keys in the backend when MCP clients, SSH/Web targets or SSH capabilities are created without an explicit key.
+- Remove technical-key fields from ordinary administration drawers while retaining generated keys as stable read-only operational metadata.
+- Keep explicitly supplied API keys supported, and keep every key immutable when a display name is edited.
+
+### Tests
+
+- Cover accent and punctuation normalization, fallback and length bounds, namespace/target collisions, target rename stability, generated SSH tool names and capability rename stability.
+
 ## 0.4.4 — 2026-08-21
 
 ### Fixed
