@@ -48,6 +48,7 @@ class ExecutionRequest:
     mcp_bearer_token: str | None
     capabilities: tuple[Capability, ...] = ()
     result_schema: dict[str, Any] | None = None
+    dispatch_guard: Callable[[], Awaitable[None]] | None = None
 
 
 @dataclass(frozen=True)
@@ -172,7 +173,7 @@ class ExecutionEngine:
         if not math.isfinite(timeout) or timeout<=0: raise ExecutionFailure("invalid_timeout")
         state=AttemptState(time.monotonic()+timeout); adapter=self.provider_factory(model)
         messages=[{'role':'user','content':canonical({'objective':request.objective,'input':request.input})}]
-        async def dispatch(call: ToolCall) -> Any: return await self._dispatch(call,request.capabilities,session,state)
+        async def dispatch(call: ToolCall) -> Any: return await self._dispatch(call,request.capabilities,session,state,request.dispatch_guard)
         while True:
             try: reply=await asyncio.wait_for(adapter.turn(messages,request.capabilities,request.result_schema,state.remaining(),dispatch),timeout=state.remaining())
             except asyncio.TimeoutError: raise ExecutionFailure("attempt_timeout",mcp_effect_possible=state.mcp_effect_possible) from None
@@ -196,7 +197,7 @@ class ExecutionEngine:
             if size>MAX_DOCUMENT_BYTES: raise ExecutionFailure("result_limit",mcp_effect_possible=state.mcp_effect_possible)
             return ExecutionOutcome(True,result=result,model_id=model['id'],mcp_effect_possible=state.mcp_effect_possible)
 
-    async def _dispatch(self, call: ToolCall, envelope: tuple[Capability,...], session: McpSession, state: AttemptState) -> Any:
+    async def _dispatch(self, call: ToolCall, envelope: tuple[Capability,...], session: McpSession, state: AttemptState, guard: Callable[[], Awaitable[None]] | None = None) -> Any:
         capability=next((c for c in envelope if c.name==call.name),None)
         if capability is None: raise ExecutionFailure("unknown_tool",mcp_effect_possible=state.mcp_effect_possible)
         if not isinstance(call.arguments,dict): raise ExecutionFailure("invalid_tool_arguments",mcp_effect_possible=state.mcp_effect_possible)
@@ -206,6 +207,7 @@ class ExecutionEngine:
         try: Draft202012Validator(capability.input_schema).validate(call.arguments)
         except ValidationError: raise ExecutionFailure("invalid_tool_arguments",mcp_effect_possible=state.mcp_effect_possible) from None
         if state.dispatches>=MAX_DISPATCHES: raise ExecutionFailure("dispatch_limit",mcp_effect_possible=state.mcp_effect_possible)
+        if guard is not None: await guard()
         if await session.changed(): await self._verify_envelope(session,envelope)
         state.dispatches+=1; state.mcp_effect_possible=True
         try: result=await asyncio.wait_for(session.call_tool(call.name,call.arguments),timeout=state.remaining())

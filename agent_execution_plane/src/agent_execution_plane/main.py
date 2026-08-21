@@ -20,6 +20,7 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route
 
 from agent_execution_plane import __version__
+from agent_execution_plane.acp import AcpBoundary, AcpStore
 from agent_execution_plane.admin_ui import ADMIN_CSS, ADMIN_JS
 from agent_execution_plane.codex_runtime import CodexRuntime, CodexRuntimeError
 from agent_execution_plane.database import database_ready, list_activity, record_activity
@@ -42,6 +43,8 @@ model_store = ModelStore(settings.database_path, settings.data_dir / "private", 
 lifecycle_store = LifecycleStore(settings.database_path)
 execution_engine = ExecutionEngine(model_store, lambda model: execution_adapter(model, codex_runtime), session_factory)
 standalone_boundary = StandaloneBoundary(lifecycle_store, execution_engine, settings.database_path)
+acp_store = AcpStore(settings.database_path, model_store.key)
+acp_boundary = AcpBoundary(acp_store, lifecycle_store, execution_engine, model_store, session_factory, settings.database_path)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -177,6 +180,19 @@ async def standalone_admin_state(_: Request) -> JSONResponse:
     return JSONResponse({"credential_configured": lifecycle_store.credential_configured(), "lifecycle": lifecycle_store.overview()})
 
 
+async def acp_admin(request: Request) -> JSONResponse:
+    if request.method == "GET":
+        config=acp_store.configuration();return JSONResponse({**acp_boundary.state(),"url":config["url"] if config else None})
+    if not csrf_valid(request):return JSONResponse({"error":{"code":"csrf_failed"}},status_code=403)
+    try:
+        data=await json_body(request);url=data.get("url");credential=data.get("credential");replace=bool(data.get("replace_credential"))
+        if not isinstance(url,str) or (credential is not None and not isinstance(credential,str)):raise ValueError("invalid_acp_configuration")
+        await acp_boundary.configure(url,credential or None,replace)
+        record_activity(settings.database_path,"acp_connection_configured","configuration","success")
+        return JSONResponse({"status":"configured"})
+    except (ValueError,RuntimeError) as exc:return JSONResponse({"error":{"code":str(exc)}},status_code=422)
+
+
 async def standalone_credential_action(request: Request) -> JSONResponse:
     if not csrf_valid(request): return JSONResponse({"error": {"code": "csrf_failed"}}, status_code=403)
     action=request.path_params["action"]
@@ -198,6 +214,7 @@ async def abandon_pending(request: Request) -> JSONResponse:
     try: data=await json_body(request); execution_id=data.get("execution_id")
     except (ValueError,OverflowError): return JSONResponse({"error":{"code":"invalid_request"}},status_code=422)
     if not isinstance(execution_id,str) or not await asyncio.to_thread(lifecycle_store.abandon,execution_id): return JSONResponse({"error":{"code":"pending_result_changed"}},status_code=409)
+    await asyncio.to_thread(acp_boundary.abandon,execution_id)
     record_activity(settings.database_path,"pending_result_abandoned","execution","success")
     return JSONResponse({"execution_id":execution_id,"status":"abandoned"})
 
@@ -218,16 +235,18 @@ async def lifespan(_: Starlette):
         await asyncio.to_thread(model_store.clear_usage)
         recovered = await asyncio.to_thread(lifecycle_store.recover_interrupted)
         if recovered: record_activity(settings.database_path,"interrupted_execution_recovered","execution","failure")
+        await acp_boundary.start()
     try:
         yield
     finally:
+        if settings.surface == "api": await acp_boundary.stop()
         codex_runtime.close()
         if settings.surface == "admin":
             record_activity(settings.database_path, "app_stopped", "system", "success")
 
 
 common = [Route("/health/live", live), Route("/health/ready", ready)]
-admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/models", models_api, methods=["GET", "POST"]), Route("/admin/api/v1/models/{action}", model_action, methods=["POST"]), Route("/admin/api/v1/oauth/account", oauth_account), Route("/admin/api/v1/oauth/models", oauth_models), Route("/admin/api/v1/oauth/{action}", oauth_action, methods=["POST"]), Route("/admin/api/v1/standalone",standalone_admin_state), Route("/admin/api/v1/standalone/credential/{action}",standalone_credential_action,methods=["POST"]), Route("/admin/api/v1/pending/abandon",abandon_pending,methods=["POST"])]
+admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/models", models_api, methods=["GET", "POST"]), Route("/admin/api/v1/models/{action}", model_action, methods=["POST"]), Route("/admin/api/v1/oauth/account", oauth_account), Route("/admin/api/v1/oauth/models", oauth_models), Route("/admin/api/v1/oauth/{action}", oauth_action, methods=["POST"]), Route("/admin/api/v1/standalone",standalone_admin_state), Route("/admin/api/v1/standalone/credential/{action}",standalone_credential_action,methods=["POST"]), Route("/admin/api/v1/acp",acp_admin,methods=["GET","POST"]), Route("/admin/api/v1/pending/abandon",abandon_pending,methods=["POST"])]
 api = [Route("/api/v1/execute",standalone_boundary.submit,methods=["POST"]),Route("/api/v1/executions/{execution_id}",standalone_boundary.get,methods=["GET"]),Route("/api/v1/executions/{execution_id}/ack",standalone_boundary.ack,methods=["POST"])]
 routes = common + (admin if settings.surface == "admin" else api)
 app = Starlette(routes=routes, middleware=[Middleware(SecurityHeadersMiddleware)], lifespan=lifespan)

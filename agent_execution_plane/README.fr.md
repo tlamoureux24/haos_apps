@@ -1,18 +1,24 @@
 # Agent Execution Plane
 
-Agent Execution Plane `0.5.0` est un moteur de raisonnement et d’exécution utilisable en mode autonome. Il applique la priorité administrateur des modèles et les règles de fallback/non-replay du Lot 2 à l’enveloppe exacte des capacités opérationnelles MCP fournie par la source courante.
+Agent Execution Plane `0.6.0` est un moteur de raisonnement et d’exécution utilisable en mode autonome. Il applique la priorité administrateur des modèles et les règles communes de fallback/non-replay à l’enveloppe exacte des capacités opérationnelles MCP fournie par la source courante.
 
 ## Frontière de responsabilité
 
 AEP ne possède ni tâches, ni configuration de connecteurs, ni sélection/autorisation de capacités, ni planification, ni historique d’exécution. Le caller standalone fournit l’objectif, l’input JSON, un endpoint MCP et son Bearer optionnel limités à l’exécution, les descripteurs exacts des outils MCP et un schéma de résultat optionnel. Le caller ne peut pas choisir le modèle. `tools/list` sert uniquement à vérifier les descripteurs fournis et ne peut jamais les élargir.
 
-Les aides natives provider de planification/information publique restent séparées des outils MCP opérationnels et ne peuvent accéder ni à l’infrastructure utilisateur ni à l’état privé AEP. L’intégration ACP n’est pas implémentée dans ce lot.
+Les aides natives provider de planification/information publique restent séparées des outils MCP opérationnels et ne peuvent accéder ni à l’infrastructure utilisateur ni à l’état privé AEP.
+
+## Frontière Agent Control Plane
+
+La vue facultative **Control Plane** accepte une URL MCP Streamable HTTP et le credential Bearer protégé d’une identité worker. AEP valide les outils de cycle de vie ACP existants avant enregistrement, puis interroge `jobs_claim_v1` chaque seconde uniquement lorsqu’un modèle compatible et le slot partagé sont disponibles. ACP reste seul responsable des jobs, leases, connecteurs, arguments fixes, autorisations de capacités, retries et politique de rapport.
+
+Pour chaque claim, AEP transmet `objective`, `input`, `required_report_schema` et exactement `allowed_capabilities` au même moteur que l’API autonome. Les outils de cycle de vie ACP et les outils étrangers découverts par `tools/list` ne sont jamais exposés au modèle. AEP maintient le heartbeat, bloque tout nouveau dispatch MCP après perte du lease, persiste l’outcome avant `jobs_complete_v1`/`jobs_fail_v1`, retente la livraison sans rejouer le modèle et réconcilie une interruption après restart. L’indisponibilité ACP ne dégrade jamais `/health/ready` et l’absence de configuration Control Plane conserve intégralement le mode autonome.
 
 ## Installation et configuration
 
 Installez l’App, configurez un ou plusieurs modèles dans Ingress, puis mappez le port interne `8098/tcp` vers le port hôte souhaité dans la section **Réseau** de l’App Home Assistant. L’administration reste exclusivement accessible par Ingress sur le port interne `8099`.
 
-Ouvrez la vue **API** puis choisissez **Créer le credential**. Copiez immédiatement le token opaque : seul un verifier PBKDF2 est conservé et le token clair ne peut plus être récupéré. **Renouveler** invalide immédiatement l’ancien token ; **Révoquer** désactive les appels standalone authentifiés. Le journal Activité n’enregistre jamais ces tokens.
+Ouvrez la vue **API** puis choisissez **Créer le credential**. Copiez immédiatement le token opaque : seul un verifier one-way est conservé et le token clair ne peut plus être récupéré. **Renouveler** invalide immédiatement l’ancien token ; **Révoquer** désactive les appels standalone authentifiés. Le journal Activité n’enregistre jamais ces tokens.
 
 ## API autonome
 

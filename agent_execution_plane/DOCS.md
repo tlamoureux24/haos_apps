@@ -1,12 +1,18 @@
-# Agent Execution Plane 0.5.0
+# Agent Execution Plane 0.6.0
 
 ## Français
+
+### Intégration Agent Control Plane
+
+Dans **Control Plane**, configurez l’URL du serveur MCP public ACP et le Bearer d’une identité worker limitée à `jobs.claim`, `jobs.heartbeat`, `jobs.complete` et `jobs.fail`. La modification est validée avant enregistrement et le secret est chiffré au repos. Cette configuration reste facultative : le listener standalone et sa readiness ne dépendent jamais d’ACP.
+
+AEP poll toutes les secondes quand le slot est libre et qu’un modèle compatible existe. Le claim ACP fournit l’enveloppe opérationnelle normative : seuls les noms et schémas effectifs de `allowed_capabilities` deviennent des outils modèle. Les outils lifecycle ne le deviennent jamais. Le résultat est persisté avant livraison ; une panne de livraison entraîne un retry identique sans nouvelle inférence. Un restart ne rejoue pas l’exécution.
 
 ### Démarrage standalone
 
 1. Configurez au moins un modèle dans **Modèles**. Le caller ne choisit jamais le modèle : AEP utilise l’ordre, les timeouts et le fallback administrateur.
 2. Mappez `8098/tcp` dans la section Réseau Home Assistant.
-3. Dans **API**, créez le credential et copiez immédiatement le token affiché une seule fois. Seul un verifier PBKDF2 salé est persisté. Rotation invalide l’ancien token ; révocation désactive l’API authentifiée.
+3. Dans **API**, créez le credential et copiez immédiatement le token affiché une seule fois. Seul un verifier one-way est persisté. Rotation invalide l’ancien token ; révocation désactive l’API authentifiée.
 4. Soumettez, poll, puis ACK :
 
 ```bash
@@ -45,11 +51,17 @@ Après restart, un pending est conservé exactement. Une active standalone devie
 
 ## English
 
+### Agent Control Plane integration
+
+In **Control Plane**, configure ACP's public MCP server URL and the Bearer for a worker identity limited to `jobs.claim`, `jobs.heartbeat`, `jobs.complete`, and `jobs.fail`. Changes are validated before storage and the credential is encrypted at rest. Configuration is optional: standalone operation and App readiness never depend on ACP.
+
+AEP polls every second while the slot is free and a compatible model exists. The ACP claim supplies the normative operational envelope: only effective names and schemas in `allowed_capabilities` become model tools; lifecycle tools never do. The outcome is persisted before delivery, delivery failures retry the identical outcome without another inference, and restart never replays execution.
+
 ### Standalone setup
 
 1. Configure at least one model in **Models**. The caller never selects it; AEP applies administrator order, timeout, and fallback.
 2. Map `8098/tcp` in Home Assistant Network settings.
-3. In **API**, create the credential and immediately copy the one-time token. Only a salted PBKDF2 verifier persists. Rotation invalidates the old token; revocation disables authenticated API calls.
+3. In **API**, create the credential and immediately copy the one-time token. Only a salted one-way verifier persists. Rotation invalidates the old token; revocation disables authenticated API calls.
 4. Submit, poll, then ACK:
 
 ```bash

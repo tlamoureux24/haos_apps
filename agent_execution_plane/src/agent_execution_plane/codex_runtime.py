@@ -311,7 +311,7 @@ class CodexRuntime:
             await write({'id':request_id,'method':method,'params':params}); return await future
         async def run():
             nonlocal final_content,turn_outcome
-            initialize=asyncio.create_task(request('initialize',{'clientInfo':{'name':'agent_execution_plane_execution','title':'Agent Execution Plane','version':'0.5.5'},'capabilities':{'experimentalApi':True}}))
+            initialize=asyncio.create_task(request('initialize',{'clientInfo':{'name':'agent_execution_plane_execution','title':'Agent Execution Plane','version':'0.6.0'},'capabilities':{'experimentalApi':True}}))
             while not initialize.done(): await consume_one(); await asyncio.sleep(0)
             result=await initialize
             if CODEX_VERSION not in str(result.get('userAgent','')): raise CodexRuntimeError('runtime_or_model_incompatible')

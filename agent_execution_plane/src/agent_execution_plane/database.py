@@ -92,6 +92,15 @@ def initialize(path: Path) -> None:
                 outcome_json TEXT NOT NULL,
                 completed_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS acp_execution (
+                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                execution_id TEXT NOT NULL UNIQUE,
+                job_id TEXT NOT NULL,
+                encrypted_lease_token BLOB NOT NULL,
+                lease_expires_at TEXT NOT NULL,
+                completion_key TEXT NOT NULL,
+                phase TEXT NOT NULL CHECK (phase IN ('active','pending'))
+            );
         """)
         models_sql = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='models'").fetchone()[0]
         if "openai_chatgpt_oauth" not in models_sql:

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+- Add the optional generic MCP Agent Control Plane boundary with validate-before-save encrypted worker configuration and ACP-independent readiness/standalone operation.
+- Poll and claim only while the shared slot and a compatible model are available, map exactly `allowed_capabilities` into the common engine, and keep every ACP lifecycle tool outside model visibility.
+- Add durable lease heartbeat/loss guarding, persist-before-delivery completion/failure retries, interruption reconciliation without replay, Ingress status/configuration, bilingual documentation, and contract regression coverage.
+
 ## 0.5.5
 
 - Allow inheritance execution of every executable shipped by the pinned Codex 0.144.4 runtime: Codex, code-mode host, ripgrep, bubblewrap, and zsh.

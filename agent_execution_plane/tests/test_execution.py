@@ -35,7 +35,7 @@ class ReplyProvider:
         if self.error: raise self.error
         return self.replies.pop(0)
 
-def request(caps=(),schema=None):return ExecutionRequest('e','s','objective',{'b':2,'a':1},'http://mcp',None,tuple(caps),schema)
+def request(caps=(),schema=None,guard=None):return ExecutionRequest('e','s','objective',{'b':2,'a':1},'http://mcp',None,tuple(caps),schema,guard)
 
 class ExecutionTests(unittest.IsolatedAsyncioTestCase):
     def engine(self,store,providers,mcp):
@@ -64,6 +64,11 @@ class ExecutionTests(unittest.IsolatedAsyncioTestCase):
     async def test_valid_dispatch_exactly_once(self):
         cap=Capability('allowed','d',SCHEMA);mcp=Mcp([cap],result={'value':7});provider=ReplyProvider([ProviderReply(tool_calls=(ToolCall('c','allowed',{'value':2}),)),ProviderReply('done')])
         out=await self.engine(Store(),[provider],mcp).execute(request([cap]));self.assertTrue(out.success);self.assertTrue(out.mcp_effect_possible);self.assertEqual(mcp.calls,[('allowed',{'value':2})])
+
+    async def test_source_guard_blocks_dispatch_without_mcp_effect(self):
+        async def expired():raise ExecutionFailure('source_lease_lost')
+        cap=Capability('allowed','d',SCHEMA);mcp=Mcp([cap]);provider=ReplyProvider([ProviderReply(tool_calls=(ToolCall('c','allowed',{'value':2}),))])
+        out=await self.engine(Store(),[provider],mcp).execute(request([cap],guard=expired));self.assertEqual(out.error_code,'source_lease_lost');self.assertFalse(out.mcp_effect_possible);self.assertEqual(mcp.calls,[])
 
     async def test_unknown_and_invalid_arguments_never_dispatch(self):
         cap=Capability('allowed','d',SCHEMA)

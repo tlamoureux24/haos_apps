@@ -146,3 +146,9 @@ class LifecycleStore:
             db.execute("BEGIN IMMEDIATE")
             removed = db.execute("DELETE FROM pending_result WHERE singleton=1 AND execution_id=?", (execution_id,)).rowcount
             db.commit(); return bool(removed)
+
+    def clear_active(self, execution_id: str) -> bool:
+        with self._open() as db:
+            db.execute("BEGIN IMMEDIATE")
+            removed=db.execute("DELETE FROM active_execution WHERE singleton=1 AND execution_id=?",(execution_id,)).rowcount
+            db.commit();return bool(removed)

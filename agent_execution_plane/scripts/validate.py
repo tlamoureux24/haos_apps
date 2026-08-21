@@ -37,9 +37,9 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
     acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "0.5.5"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    for text in ('slug: "agent_execution_plane"', 'version: "0.6.0"', "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "0.5.5"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "0.6.0"' not in package: raise RuntimeError("Version sources differ")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 2: raise RuntimeError("Unprivileged two-listener runtime missing")
     if launcher.count("--log-config /app/src/agent_execution_plane/uvicorn_logging.json") != 2: raise RuntimeError("Timestamped listener logging missing")
@@ -48,7 +48,7 @@ def main() -> int:
         if invariant not in main_py + ui: raise RuntimeError(f"UI invariant missing: {invariant}")
     if ".app{max-width:1840px" not in ui or ".app{max-width:1400px" in ui: raise RuntimeError("Administration layout width must match Agent Control Plane")
     if ":root{color-scheme:light;scrollbar-gutter:stable;" not in ui: raise RuntimeError("Stable root scrollbar gutter missing")
-    forbidden = ("jobs_claim_v1", "chatgptauthtokens")
+    forbidden = ("chatgptauthtokens",)
     source = "".join(p.read_text(errors="ignore") for p in (ROOT / "src").rglob("*.py"))
     for item in forbidden:
         if item in source.lower(): raise RuntimeError(f"Later-lot behavior present: {item}")
@@ -85,7 +85,9 @@ def main() -> int:
         if not (ROOT / name).is_file(): raise RuntimeError(f"Missing {name}")
     for invariant in ("class ExecutionRequest", "class ExecutionOutcome", "MAX_CAPABILITIES = 128", "mcp_effect_possible"):
         if invariant not in source: raise RuntimeError(f"Missing Lot 2 engine invariant: {invariant}")
-    print("Agent Execution Plane Lots 0-3 validation passed")
+    for invariant in ("class AcpBoundary", "jobs_claim_v1", "jobs_heartbeat_v1", "jobs_complete_v1", "jobs_fail_v1", "allowed_capabilities", "source_lease_lost"):
+        if invariant not in source: raise RuntimeError(f"Missing Lot 4 ACP boundary invariant: {invariant}")
+    print("Agent Execution Plane Lots 0-4 validation passed")
     return 0
 
 

@@ -1,6 +1,6 @@
 # Agent Execution Plane — Implementation Plan
 
-Status: **authoritative implementation sequence — Lots 0, 1, 2 and 3 accepted; Lot 4 planned**.
+Status: **authoritative implementation sequence — Lots 0, 1, 2 and 3 accepted; Lot 4 implemented pending HAOS acceptance**.
 
 This plan is derived from `PROJECT_BRIEF.md`, `TECHNICAL_DESIGN.md` and the root `ARCHITECTURE_CHARTER.md`.
 
@@ -375,7 +375,7 @@ Real HAOS acceptance completed on **2026-08-21** with AEP **0.5.5**, commit `aba
 
 ## Lot 4 — Agent Control Plane boundary
 
-Status: **planned**.
+Status: **implemented in 0.6.0; HAOS acceptance pending**.
 
 ### Goal
 
