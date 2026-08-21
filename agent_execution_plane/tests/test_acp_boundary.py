@@ -25,7 +25,9 @@ class Engine:
 
 class Session:
     def __init__(self,owner):self.owner=owner
-    async def __aenter__(self):return self
+    async def __aenter__(self):
+        if self.owner.connect_delay:await asyncio.sleep(self.owner.connect_delay)
+        return self
     async def __aexit__(self,*_):pass
     async def list_tools(self,cursor=None):
         tools=[Capability(name,"",{"type":"object","properties":{field:{"type":kind} for field,kind in LIFECYCLE_INPUTS[name].items()},"required":list(LIFECYCLE_INPUTS[name])}) for name in sorted(LIFECYCLE_TOOLS)]
@@ -49,7 +51,7 @@ class Session:
 
 class Factory:
     def __init__(self):
-        self.calls=[];self.claimed=False;self.fail_delivery=False;self.heartbeat_failures=0;self.incompatible=False;self.bad_schema=False
+        self.calls=[];self.claimed=False;self.fail_delivery=False;self.heartbeat_failures=0;self.incompatible=False;self.bad_schema=False;self.connect_delay=0
         self.expiry=(datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat().replace("+00:00","Z")
     def __call__(self,_):return Session(self)
 
@@ -73,6 +75,12 @@ class AcpBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.store.configuration());self.factory.bad_schema=False
         await self.configure();public=self.store.configuration();self.assertEqual(public,{"url":"https://acp.invalid/mcp","credential_configured":True})
         self.assertNotIn("WORKER-SECRET",self.database.read_bytes().decode(errors="ignore"));self.assertEqual(self.boundary.state()["connectivity"],"connected")
+
+    async def test_configuration_timeout_is_bounded_and_does_not_persist(self):
+        self.factory.connect_delay=.1;self.boundary.validation_timeout=.01
+        with self.assertRaisesRegex(RuntimeError,"acp_validation_timeout"):
+            await self.boundary.configure("https://acp.invalid/mcp","WORKER-SECRET",True)
+        self.assertIsNone(self.store.configuration());self.assertFalse(self.boundary.state()["configured"])
 
     async def test_claim_maps_exact_envelope_excludes_lifecycle_and_delivers_once(self):
         await self.configure();await self.boundary.step()

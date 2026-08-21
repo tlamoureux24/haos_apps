@@ -6,6 +6,7 @@ import asyncio
 import html
 import hmac
 import json
+import logging
 import os
 import secrets
 from contextlib import asynccontextmanager
@@ -31,6 +32,8 @@ from agent_execution_plane.models import Candidate, ModelStore
 from agent_execution_plane.providers import execution_adapter
 from agent_execution_plane.settings import load_settings
 from agent_execution_plane.standalone import StandaloneBoundary
+
+logger=logging.getLogger(__name__)
 
 if os.geteuid() != 1000:
     raise RuntimeError("Agent Execution Plane listeners must run with UID 1000")
@@ -189,8 +192,11 @@ async def acp_admin(request: Request) -> JSONResponse:
         if not isinstance(url,str) or (credential is not None and not isinstance(credential,str)):raise ValueError("invalid_acp_configuration")
         await acp_boundary.configure(url,credential or None,replace)
         record_activity(settings.database_path,"acp_connection_configured","configuration","success")
+        logger.info("AEP_ACP_CONFIG configured")
         return JSONResponse({"status":"configured"})
-    except (ValueError,RuntimeError) as exc:return JSONResponse({"error":{"code":str(exc)}},status_code=422)
+    except (ValueError,RuntimeError) as exc:
+        code=str(exc);logger.warning("AEP_ACP_CONFIG rejected code=%s cause=%s",code,type(exc.__cause__ or exc).__name__)
+        return JSONResponse({"error":{"code":code}},status_code=504 if code=="acp_validation_timeout" else 422)
 
 
 async def standalone_credential_action(request: Request) -> JSONResponse:

@@ -25,6 +25,15 @@ class FoundationTests(unittest.TestCase):
         self.assertIn("viewRefreshes=new Map()", ADMIN_JS); self.assertIn("document.visibilityState!=='visible'", ADMIN_JS)
         self.assertIn("`${tr('lifecycleState')}: ${tr(lifecycle)}`", ADMIN_JS)
         self.assertNotIn("`${tr('standaloneState')}: ${tr(configured?'configured':'notConfigured')}`", ADMIN_JS)
+
+    def test_control_plane_configuration_has_page_action_and_explicit_feedback(self):
+        self.assertIn('id="acp-save" class="page-action primary"',ADMIN_JS)
+        self.assertIn('form="acp-form"',ADMIN_JS)
+        self.assertIn("acp_validation_pending",ADMIN_JS)
+        self.assertIn("acp_validation_timeout",ADMIN_JS)
+        self.assertIn("acp_request_failed",ADMIN_JS)
+        self.assertIn("button.disabled=true",ADMIN_JS)
+        self.assertIn("finally{button.disabled=false}",ADMIN_JS)
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.database = Path(self.temp.name) / "agent_execution_plane.db"

@@ -87,9 +87,9 @@ class AcpStore:
 
 
 class AcpBoundary:
-    def __init__(self,store:AcpStore,lifecycle:LifecycleStore,engine,model_store,mcp_factory,database:Path,*,poll_interval=1.0,heartbeat_interval=60.0):
+    def __init__(self,store:AcpStore,lifecycle:LifecycleStore,engine,model_store,mcp_factory,database:Path,*,poll_interval=1.0,heartbeat_interval=60.0,validation_timeout=15.0):
         self.store=store;self.lifecycle=lifecycle;self.engine=engine;self.model_store=model_store;self.mcp_factory=mcp_factory;self.database=database
-        self.poll_interval=poll_interval;self.heartbeat_interval=heartbeat_interval;self._stop=asyncio.Event();self._runner=None;self.connectivity="not_configured"
+        self.poll_interval=poll_interval;self.heartbeat_interval=heartbeat_interval;self.validation_timeout=validation_timeout;self._stop=asyncio.Event();self._runner=None;self.connectivity="not_configured"
     def state(self):
         config=self.store.configuration();meta=self.store.metadata()
         return {"configured":config is not None,"credential_configured":bool(config and config["credential_configured"]),"connectivity":self.store.connectivity(),"delivery":meta["phase"] if meta else None}
@@ -112,7 +112,8 @@ class AcpBoundary:
     async def configure(self,url,credential,replace):
         current=self.store.configuration(include_credential=True);effective=credential if replace or not current else current.get("credential")
         if not effective:raise ValueError("acp_credential_required")
-        try:await self.validate_configuration(url,effective)
+        try:await asyncio.wait_for(self.validate_configuration(url,effective),timeout=self.validation_timeout)
+        except asyncio.TimeoutError as exc:raise RuntimeError("acp_validation_timeout") from exc
         except ValueError:raise
         except Exception as exc:raise RuntimeError("acp_unavailable") from exc
         self.store.save_configuration(url,credential,replace);self.connectivity="connected";self.store.set_connectivity("connected")

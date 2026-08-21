@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2
+
+- Bound ACP connection validation to 15 seconds and emit safe `AEP_ACP_CONFIG` success/refusal diagnostics without logging the endpoint or credential.
+- Give the Control Plane page an API-style top-right primary action with immediate progress, success, timeout, contract, and network feedback in French and English.
+
 ## 0.6.1
 
 - Release the local slot after restart when the persisted ACP lease is already expired, while retaining no-replay reconciliation for leases that remain valid.
