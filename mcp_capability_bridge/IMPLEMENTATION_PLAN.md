@@ -80,7 +80,7 @@ Accepted on real HAOS with version 0.1.0: generation-one initialization, the sha
 
 ## Lot 1 — namespaces, authenticated MCP and adapter core
 
-Status: **implemented — awaiting HAOS acceptance**.
+Status: **accepted on HAOS — 2026-08-21**.
 
 ### Goal
 
@@ -123,6 +123,8 @@ Deliver the secure standalone MCP core, multi-client namespace isolation, protec
 ### HAOS acceptance
 
 Create two namespaces, issue/rotate credentials, connect two generic MCP clients plus ACP, prove isolated inventories, revoke one without affecting the other, archive it through the filter and restart with only configuration preserved.
+
+Accepted on real HAOS with version 0.2.0: Ingress, FR/EN, light/dark, empty target/access states, two isolated MCP clients, ACP empty-inventory discovery, one-time credentials, rotation invalidation, revocation, revoke-before-archive filtering and restart persistence were verified. Shutdown/startup and post-restart `ListToolsRequest` completed without secret disclosure, application error or AppArmor denial.
 
 ## Lot 2 — bounded SSH adapter
 

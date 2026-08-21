@@ -57,9 +57,9 @@ def main() -> int:
     for forbidden in ("paramiko", "asyncssh", "selenium", "playwright", "chromium"):
         if forbidden in requirements.lower() or forbidden in main_source.lower():
             raise RuntimeError(f"Lot 1 must not install an adapter runtime: {forbidden}")
-    if "Status: **accepted on HAOS — 2026-08-21**." not in plan:
+    if "Accepted on real HAOS with version 0.1.0:" not in plan:
         raise RuntimeError("Implementation plan Lot 0 status must match delivery state")
-    if "Status: **implemented — awaiting HAOS acceptance**." not in plan:
+    if "Accepted on real HAOS with version 0.2.0:" not in plan:
         raise RuntimeError("Implementation plan Lot 1 status must match delivery state")
     if "capability sys_admin" in apparmor or "network raw" in apparmor or "complain" in apparmor:
         raise RuntimeError("AppArmor contains an excessive permission")

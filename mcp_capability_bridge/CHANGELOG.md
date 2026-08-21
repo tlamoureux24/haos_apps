@@ -22,6 +22,10 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 - Public administration routes remain absent from port 8098, while `/mcp` rejects missing, unknown, rotated, revoked and archived credentials.
 - AppArmor now permits only the two exact Bridge private-key files and their atomic temporary names in `/data/private`.
 
+### Acceptance
+
+- Lot 1 was accepted on real HAOS: two isolated MCP clients and ACP connected successfully, empty inventories remained isolated, credential rotation/revocation/archive behavior was immediate, configuration survived restart, and logs contained no secret, application error or AppArmor denial.
+
 ## 0.1.0 — 2026-08-21
 
 ### Added
