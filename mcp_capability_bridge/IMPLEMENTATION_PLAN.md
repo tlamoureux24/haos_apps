@@ -128,7 +128,7 @@ Accepted on real HAOS with version 0.2.0: Ingress, FR/EN, light/dark, empty targ
 
 ## Lot 2 — bounded SSH adapter
 
-Status: **implemented in 0.3.0; awaiting real HAOS acceptance**.
+Status: **accepted on HAOS — 2026-08-21**.
 
 ### Goal
 
@@ -167,9 +167,11 @@ Use a deterministic local SSH fixture to prove:
 
 Enroll a restricted test host key, configure a harmless read capability, publish it to one namespace, call twice through a generic client and once through ACP/AEP, prove distinct connections, hidden credentials, bounded output, clean disable and denial-free AppArmor operation.
 
+Accepted on real HAOS with version 0.3.0: a restricted SSH target and capability were created and invoked successfully both directly and through ACP/AEP; a second invocation used the fresh-connection path; two MCP client namespaces remained isolated; disable/re-enable and target `In use` protection behaved correctly; configuration survived restart; and logs remained free of application errors, credential disclosure and AppArmor denials.
+
 ## Lot 3A — browser runtime and confinement gate
 
-Status: **planned**.
+Status: **planned; entry gate open after Lot 2 HAOS acceptance**.
 
 ### Goal
 

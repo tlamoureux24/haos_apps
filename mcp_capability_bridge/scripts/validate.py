@@ -61,6 +61,8 @@ def main() -> int:
         raise RuntimeError("Implementation plan Lot 0 status must match delivery state")
     if "Accepted on real HAOS with version 0.2.0:" not in plan:
         raise RuntimeError("Implementation plan Lot 1 status must match delivery state")
+    if "Accepted on real HAOS with version 0.3.0:" not in plan:
+        raise RuntimeError("Implementation plan Lot 2 status must match delivery state")
     if "capability sys_admin" in apparmor or "network raw" in apparmor or "complain" in apparmor:
         raise RuntimeError("AppArmor contains an excessive permission")
     for rule in (

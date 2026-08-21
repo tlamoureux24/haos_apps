@@ -19,6 +19,10 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 - Clear authentication secrets, arguments and remote output are neither persisted nor logged; known credentials echoed by a remote command are redacted from returned output.
 - The SSH adapter exposes no caller-controlled command head or generic shell-command primitive.
 
+### Acceptance
+
+- Lot 2 was accepted on real HAOS: restricted SSH target/capability creation, direct and ACP/AEP invocation, fresh repeated connections, two-client namespace isolation, disable/re-enable, `In use` protection and restart persistence all passed without application error, credential disclosure or AppArmor denial.
+
 ## 0.2.0 — 2026-08-21
 
 - Validate private-key Unix modes under the unprivileged service identity so the container smoke test preserves its deliberate `DAC_OVERRIDE` removal.
