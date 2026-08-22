@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.6 - 2026-08-22
+
+- Allow S6 to execute all three Rsync Manager longruns from their compiled dynamic service directories.
+- Add both the command alias and resolved S6 2.15 executable for `s6-svwait`, used to await legacy service startup.
+
 ## 1.3.5 - 2026-08-22
 
 - Allow complete generated-crontab access on Alpine's real `/etc/crontabs` target behind `/var/spool/cron/crontabs`.
