@@ -21,6 +21,7 @@ from mcp_capability_bridge.database import initialize
 from mcp_capability_bridge.main import build_runtime_state, create_apps
 from mcp_capability_bridge.settings import Settings
 from mcp_capability_bridge.ssh_adapter import SSHAdapter
+from mcp_capability_bridge.web_adapter import WebAdapter
 from test_ssh_adapter import SSHFixture, capability
 
 
@@ -50,7 +51,7 @@ class AcpContractIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.directory = tempfile.TemporaryDirectory()
         settings = Settings(Path(self.directory.name), "error", "127.0.0.1")
         initialize(settings.database_path)
-        self.state = build_runtime_state(settings, AdapterRegistry((ContractAdapter(), SSHAdapter())))
+        self.state = build_runtime_state(settings, AdapterRegistry((ContractAdapter(), SSHAdapter(), WebAdapter())))
         _, public = create_apps(self.state)
         self.port = available_port()
         self.server = uvicorn.Server(uvicorn.Config(public, host="127.0.0.1", port=self.port, log_level="error", access_log=False))
@@ -107,6 +108,15 @@ class AcpContractIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(fixture.password, str(result))
         finally:
             await fixture.stop()
+
+    async def test_current_acp_accepts_all_interactive_web_tool_schemas(self):
+        namespace, issued = self.state.store.create_namespace("web_acp", "Web ACP")
+        configuration = {"base_url":"https://web.internal/","resolved_addresses":["10.0.0.8"],"navigation_origins":["https://web.internal"],"authentication_origins":[],"resource_origins":["https://web.internal"],"websocket_origins":[],"verify_tls":True,"inactivity_seconds":300,"absolute_seconds":1800,"authentication":{"mode":"none"}}
+        target = self.state.store.create_target("web_fixture", "Web fixture", "web", configuration, None)
+        for capability_id in ("open","snapshot","wait","navigate","click","fill","select","press","close"):
+            self.state.store.publish(namespace["id"], target["id"], capability_id)
+        inventory = await discover_streamable_http(self.url, issued.token)
+        self.assertEqual({tool["name"] for tool in inventory},{f"web_web_fixture_{name}" for name in ("open","snapshot","wait","navigate","click","fill","select","press","close")})
 
 
 if __name__ == "__main__":

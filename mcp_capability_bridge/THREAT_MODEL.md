@@ -1,6 +1,6 @@
 # MCP Capability Bridge — Threat Model
 
-Status: **normative pre-implementation threat model**.
+Status: **normative threat model — implemented through Lot 3C**.
 
 ## 1. Assets
 

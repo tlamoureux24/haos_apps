@@ -1,6 +1,6 @@
 # MCP Capability Bridge — Technical Design
 
-Status: **revised technical design — implementation not started**.
+Status: **authoritative technical design — implemented through Lot 3C**.
 
 This design implements `PROJECT_BRIEF.md` and must be read with `THREAT_MODEL.md` and the root architecture charter.
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0 — 2026-08-22
+
+- Implement Lot 3C with target-scoped relative navigation and opaque-reference
+  click, fill, select and bounded key actions.
+- Bind every element reference to its namespace session, credential generation,
+  page generation, backend node and expected accessible role/name; invalidate
+  the complete reference generation after every attempted action.
+- Mark all interactive operations effect-capable, never retry them, and return
+  an ambiguous effect-possible error when a response is lost after dispatch.
+- Install a disposable per-session Chromium network policy which blocks unknown
+  navigation, iframe, resource and WebSocket destinations by default.
+- Reject password, hidden and file-field filling and expose no caller URL,
+  selector, script, upload, download, credential or browser-preference surface.
+- Add prominent bilingual target-account authority and disabled-TLS warnings.
+
 ## 0.5.4 — 2026-08-22
 
 - Align the Activity journal with the shared ACP/AEP five-column presentation:

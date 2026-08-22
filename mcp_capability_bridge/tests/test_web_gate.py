@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import tempfile
 import unittest
@@ -32,8 +33,14 @@ class WebGateTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("[TRUNCATED]",sanitized)
         self.assertLessEqual(len(sanitized),8205)
 
-    def test_static_adapter_publishes_read_only_tools_and_validates_exact_contract(self):
-        adapter=WebAdapter();adapter.validate_target(configuration(),None);self.assertEqual([item.capability_id for item in adapter.capabilities(configuration())],["open","snapshot","wait","close"])
+    def test_static_adapter_publishes_bounded_interactive_tools_and_validates_exact_contract(self):
+        adapter=WebAdapter();adapter.validate_target(configuration(),None)
+        capabilities=adapter.capabilities(configuration())
+        self.assertEqual([item.capability_id for item in capabilities],["open","snapshot","wait","navigate","click","fill","select","press","close"])
+        self.assertEqual({item.capability_id for item in capabilities if item.effect_capable},{"navigate","click","fill","select","press"})
+        encoded=str([item.input_schema for item in capabilities])
+        for forbidden in ("selector","url","script","password","upload","download"):
+            self.assertNotIn(forbidden,encoded.lower())
         for bad in ("file:///etc/passwd","javascript:alert(1)","data:text/html,x"):
             with self.assertRaises(ValueError):origin(bad)
         invalid=configuration();invalid["navigation_origins"]=["https://elsewhere.internal"]
@@ -44,6 +51,17 @@ class WebGateTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(PermissionError,"web_origin_denied"):policy.authorize("http://app.internal/","navigation_origins")
         with patch("mcp_capability_bridge.web_adapter.resolve_host",new=AsyncMock(return_value=("10.0.0.9",))):
             with self.assertRaisesRegex(PermissionError,"web_resolution_changed"):await policy.verify_resolution()
+
+    def test_browser_extension_blocks_unknown_network_surfaces_and_iframes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            extension=NetworkPolicy(configuration()).install_extension(Path(temporary))
+            rules=json.loads((extension/"rules.json").read_text())
+            blocked={kind for rule in rules if rule["action"]["type"]=="block" for kind in rule["condition"]["resourceTypes"]}
+            self.assertTrue({"main_frame","sub_frame","websocket","xmlhttprequest"}<=blocked)
+            allows=[rule for rule in rules if rule["action"]["type"]=="allow"]
+            self.assertTrue(any(rule["condition"]["resourceTypes"]==["main_frame"] for rule in allows))
+            self.assertFalse(any("sub_frame" in rule["condition"]["resourceTypes"] for rule in allows))
+            self.assertFalse(any(rule["condition"]["resourceTypes"]==["websocket"] for rule in allows))
 
     async def test_startup_cleanup_is_scoped_to_validated_profile_children(self):
         with tempfile.TemporaryDirectory() as temporary:

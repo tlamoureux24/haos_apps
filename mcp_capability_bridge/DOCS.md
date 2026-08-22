@@ -1,8 +1,8 @@
-# MCP Capability Bridge 0.5.4
+# MCP Capability Bridge 0.6.0
 
 ## Français
 
-Cette version ajoute les sessions Web isolées et les outils MCP en lecture seule du Lot 3B.
+Cette version ajoute les actions Web interactives bornées du Lot 3C aux sessions isolées validées au Lot 3B.
 
 Après installation ou mise à jour :
 
@@ -12,17 +12,19 @@ Après installation ou mise à jour :
 4. sous **Capacités SSH**, définissez un exécutable absolu, un template JSON de tokens littéraux/paramètres, un schéma d’entrée scalaire strict, un timeout et les limites stdout/stderr ;
 5. sous **Accès MCP**, publiez explicitement la capacité vers chaque client autorisé.
 
-Pour le Web, créez une cible avec authentification aucune, HTTP Basic ou formulaire configuré, testez la connexion, puis publiez séparément ses outils `open`, `snapshot`, `wait` et `close`. Les identifiants restent administratifs et ne figurent jamais dans les arguments MCP. La page **Sessions** montre uniquement les métadonnées sûres des sessions actives.
+Pour le Web, créez une cible avec authentification aucune, HTTP Basic ou formulaire configuré, testez la connexion, puis publiez séparément les outils nécessaires. Les identifiants restent administratifs et ne figurent jamais dans les arguments MCP. La page **Sessions** montre uniquement les métadonnées sûres des sessions actives.
 
 Le Bridge ne fournit aucune commande SSH libre. Chaque appel ouvre une nouvelle connexion vérifiée par la clé d’hôte épinglée, sans PTY, agent, forwarding, stdin ni environnement fourni par l’appelant. Les droits effectifs restent ceux du compte SSH configuré : utilisez un compte dédié appliquant le moindre privilège.
 
 Pour la recette HAOS, enrôlez une cible de test restreinte et une capacité inoffensive. Appelez-la deux fois avec un client MCP générique puis via ACP/AEP, vérifiez l’isolation entre deux clients, les limites de sortie, le refus après changement de clé, l’absence de secret et de refus AppArmor dans les logs, puis testez désactivation et redémarrage. Le changement de clé hôte doit toujours passer par un nouveau scan et une confirmation explicite.
 
-Pour le Lot 3B, utilisez un compte Web strictement en lecture seule. Vérifiez `open → snapshot → wait → close`, l’impossibilité d’utiliser le handle depuis un second client, la fermeture lors d’une rotation/révocation, l’absence de cookies entre deux sessions et l’absence de mot de passe dans les résultats et journaux.
+Les outils disponibles sont `open`, `snapshot`, `wait`, `navigate`, `click`, `fill`, `select`, `press` et `close`. Les actions utilisent uniquement un chemin relatif ou une référence opaque issue du dernier snapshot. Une référence devient invalide après toute tentative d’action.
+
+Les droits effectifs sont exactement ceux du compte Web configuré. Utilisez un compte dédié appliquant le moindre privilège. Le Bridge n’ajoute pas d’autorisation métier plus fine que celle du site et ne rejoue jamais une action interactive après une erreur ou une réponse perdue.
 
 ## English
 
-This release adds isolated Web sessions and the read-only MCP tools from Lot 3B.
+This release adds the bounded interactive Web actions from Lot 3C to the isolated sessions accepted in Lot 3B.
 
 After installation or update:
 
@@ -32,10 +34,12 @@ After installation or update:
 4. under **SSH capabilities**, define an absolute executable, a JSON literal/parameter token template, a strict scalar input schema, timeout, and stdout/stderr limits;
 5. under **MCP access**, explicitly publish the capability to each authorized client.
 
-For Web access, create a target using none, HTTP Basic, or configured form authentication, test the connection, then separately publish its `open`, `snapshot`, `wait`, and `close` tools. Credentials remain administrative and never appear in MCP arguments. The **Sessions** page exposes safe active-session metadata only.
+For Web access, create a target using none, HTTP Basic, or configured form authentication, test the connection, then separately publish only the required tools. Credentials remain administrative and never appear in MCP arguments. The **Sessions** page exposes safe active-session metadata only.
 
 The Bridge exposes no free-form SSH command. Every call opens a fresh connection verified against the pinned host key, without PTY, agent, forwarding, stdin, or caller-provided environment. Effective authority remains exactly that of the configured SSH account, so use a dedicated least-privilege account.
 
 For HAOS acceptance, enroll a restricted test target and a harmless capability. Call it twice through a generic MCP client and once through ACP/AEP, verify isolation between two clients, output bounds, refusal after a host-key change, absence of secrets and AppArmor denials in logs, then test disable and restart. Host-key rotation must always require a new scan and explicit confirmation.
 
-For Lot 3B, use a strictly read-only Web account. Verify `open → snapshot → wait → close`, cross-client handle rejection, cleanup on credential rotation/revocation, absence of shared cookies between consecutive sessions, and absence of passwords from results and logs.
+The available tools are `open`, `snapshot`, `wait`, `navigate`, `click`, `fill`, `select`, `press` and `close`. Actions accept only a relative path or an opaque reference from the latest snapshot. Every attempted action invalidates that reference generation.
+
+Effective authority is exactly the authority of the configured Web account. Use a dedicated least-privilege account. The Bridge does not claim finer business authorization than the target and never replays an interactive action after an error or lost response.

@@ -51,6 +51,14 @@ jobs:
           docker run --rm --user 1000 --cap-drop ALL --security-opt no-new-privileges --shm-size 64m \
             --env HOME=/tmp --env PYTHONPATH=/app/src --entrypoint python3 "mcp-capability-bridge:${version}" -c \
             'from mcp_capability_bridge.browser_runtime import BrowserRuntime; from mcp_capability_bridge.web_adapter import NetworkPolicy; from pathlib import Path; from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer; import tempfile,threading; H=type("H",(BaseHTTPRequestHandler,),{"do_GET":lambda s:(s.send_response(200),s.end_headers(),s.wfile.write(b"<title>ok</title>")),"log_message":lambda *a:None}); server=ThreadingHTTPServer(("127.0.0.1",0),H); threading.Thread(target=server.serve_forever,daemon=True).start(); url=f"http://127.0.0.1:{server.server_port}"; c={"base_url":url,"resolved_addresses":["127.0.0.1"],"navigation_origins":[url],"authentication_origins":[],"resource_origins":[url],"websocket_origins":[],"verify_tls":True,"inactivity_seconds":300,"absolute_seconds":1800}; r=BrowserRuntime(Path(tempfile.mkdtemp())); assert r._probe_sync(c,NetworkPolicy(c))["status"]=="reachable"; server.shutdown()'
+      - name: Run browser contract tests in the built image
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' mcp_capability_bridge/config.yaml)"
+          docker run --rm --shm-size 256m --entrypoint python3 \
+            --env PYTHONPATH=/app/src \
+            --volume "${PWD}/mcp_capability_bridge/tests:/tests:ro" \
+            "mcp-capability-bridge:${version}" -m unittest discover -s /tests -p test_web_interactive.py -v
       - name: Smoke-test topology, isolation, UI, restart, and shutdown
         run: |
           set -euo pipefail
