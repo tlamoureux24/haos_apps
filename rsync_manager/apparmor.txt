@@ -1,6 +1,6 @@
 #include <tunables/global>
 
-profile rsync_manager flags=(attach_disconnected,mediate_deleted) {
+profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   #include <abstractions/base>
   #include <abstractions/bash>
   #include <abstractions/nameservice>

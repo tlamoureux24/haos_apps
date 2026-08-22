@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.7 - 2026-08-22
+
+- Return the consolidated profile to complain mode for one clean post-reload startup audit.
+- Stop iterative enforced releases and require aggregation of the complete startup trace before the next final enforcement.
+
 ## 1.3.6 - 2026-08-22
 
 - Allow S6 to execute all three Rsync Manager longruns from their compiled dynamic service directories.

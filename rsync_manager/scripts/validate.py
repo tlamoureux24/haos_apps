@@ -112,10 +112,8 @@ def main() -> int:
 
     if re.search(r"^\s*capability,\s*$", apparmor, flags=re.MULTILINE):
         raise RuntimeError("AppArmor must not grant every capability")
-    if "flags=(attach_disconnected,mediate_deleted)" not in apparmor:
-        raise RuntimeError("The audited AppArmor profile must run in enforce mode")
-    if "complain" in apparmor:
-        raise RuntimeError("The final AppArmor profile must not remain in complain mode")
+    if "flags=(attach_disconnected,mediate_deleted,complain)" not in apparmor:
+        raise RuntimeError("The consolidated recovery profile must remain in complain mode for the clean startup audit")
     for forbidden_rule in (
         "  file,",
         "  /bin/** ix,",
