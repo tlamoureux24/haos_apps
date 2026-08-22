@@ -1,6 +1,6 @@
 name: "MCP Capability Bridge"
 slug: "mcp_capability_bridge"
-version: "0.7.0"
+version: "1.0.0"
 description: "Bounded technical capabilities exposed through standard MCP"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/mcp_capability_bridge"
 arch:
@@ -9,7 +9,7 @@ arch:
 startup: services
 boot: auto
 init: false
-stage: experimental
+stage: stable
 apparmor: true
 tmpfs: true
 backup: cold

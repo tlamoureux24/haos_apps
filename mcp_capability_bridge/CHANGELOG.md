@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0 — 2026-08-22
+
+- Promote the Home Assistant App metadata to stable after complete real-HAOS
+  Lot 4 acceptance of startup, UI, persistence, repeated MCP calls, Web-session
+  cleanup, cold backup/restore, runtime resilience and AppArmor confinement.
+- Declare SQLite generation 1 as the production-data compatibility cutoff.
+- Preserve the complete 0.7.0 runtime and protocol behavior unchanged.
+
 ## 0.7.0 — 2026-08-22
 
 - Prepare the Lot 4 production candidate with fail-fast global, namespace,

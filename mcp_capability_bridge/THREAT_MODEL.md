@@ -1,6 +1,6 @@
 # MCP Capability Bridge — Threat Model
 
-Status: **normative threat model — audited against the Lot 4 production candidate**.
+Status: **normative threat model — audited and accepted for the 1.0.0 production cutoff**.
 
 ## 1. Assets
 

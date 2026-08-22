@@ -1,8 +1,8 @@
-# MCP Capability Bridge 0.7.0
+# MCP Capability Bridge 1.0.0
 
-Version 0.7.0 is the hardened Lot 4 production candidate. It is not yet the
-production-data cutoff: that declaration follows final real-HAOS acceptance
-and will promote the App to 1.0.0.
+Version 1.0.0 is the stable Lot 4 release. Its runtime, persistence, backup and
+restore, MCP, Web, SSH, ACP/AEP and AppArmor paths passed final real-HAOS
+acceptance. SQLite generation 1 is the production-data compatibility cutoff.
 
 ## Français
 
@@ -78,15 +78,14 @@ restaurez-la, redémarrez, vérifiez la readiness, les clients/cibles/publicatio
 puis appelez une capacité inoffensive. Une session Web ouverte avant sauvegarde
 doit avoir disparu.
 
-La génération SQLite reste `1` pour la candidate 0.7.0. Jusqu’à son acceptation,
-les installations de recette restent remplaçables. La promotion 1.0.0 figera
-ce schéma comme cutoff : toute modification durable ultérieure exigera une
+La version 1.0.0 fige la génération SQLite `1` comme cutoff de compatibilité :
+toute modification durable ultérieure exigera une
 migration versionnée, transactionnelle et testée depuis chaque version prise en
 charge. Une génération inconnue est toujours refusée au démarrage.
 
-### Recette HAOS finale 0.7.0
+### Acceptation HAOS finale
 
-Validez successivement :
+La recette finale a validé :
 
 - installation propre, démarrage, FR/EN, clair/sombre, desktop/mobile et statut
   réel ;
@@ -103,8 +102,8 @@ Validez successivement :
 - absence d’erreur applicative, fuite de secret et `apparmor="DENIED"` ;
 - consommation stable après les bancs externes Lot 3B/3C répétés.
 
-Après cette recette seulement, le Lot 4 pourra être accepté et la version 1.0.0
-stable publiée comme cutoff de conservation des données.
+Ces preuves acceptent le Lot 4 et autorisent la version 1.0.0 stable comme
+cutoff de conservation des données.
 
 ## English
 
@@ -174,19 +173,18 @@ To test restore, stop the App, create and restore a HAOS backup, restart, verify
 readiness and all clients/targets/publications, then call one harmless
 capability. A Web session open before backup must be gone.
 
-SQLite generation remains `1` for candidate 0.7.0. Test installations remain
-replaceable until acceptance. Promotion to 1.0.0 freezes this schema as the
-production cutoff: every later durable change requires a versioned,
+Version 1.0.0 freezes SQLite generation `1` as the production compatibility
+cutoff: every later durable change requires a versioned,
 transactional migration tested from every supported version. Unknown
 generations always fail startup.
 
-### Final HAOS acceptance for 0.7.0
+### Final HAOS acceptance
 
-Validate clean install; UI; upgrade from 0.6.2; cold backup/restore; two-client
+Final acceptance validated clean install; UI; upgrade from 0.6.2; cold backup/restore; two-client
 isolation; rotation/revocation; repeated fresh SSH calls; Reader/Admin Web
 authority; cleanup; standalone and Bridge → ACP → AEP calls; restart during an
 operation without replay; stable resources; and clean application/AppArmor
 logs. Repeat the external Lot 3B/3C benches where appropriate.
 
-Only after that evidence may Lot 4 be accepted and stable 1.0.0 published as
-the production-data preservation cutoff.
+This evidence accepts Lot 4 and authorizes stable 1.0.0 as the production-data
+preservation cutoff.

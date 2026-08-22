@@ -213,11 +213,10 @@ The first implementation targets the MCP protocol and Python SDK generation actu
 
 Compatibility tests cover discovery, schemas, tool-name limits, tool-list changes, calls, errors, result bounds, redaction and the complete Bridge→ACP→AEP path.
 
-Version 0.7.0 is the final pre-cutoff candidate. Before the declared
-production-data cutoff, explicitly disposable installations may use schema
-replacement. After complete HAOS acceptance, version 1.0.0 declares generation
-1 as the cutoff; every later namespace, credential, target, publication,
-Activity or capability schema change requires a deterministic tested migration.
+Version 1.0.0 declares generation 1 as the production-data compatibility cutoff
+after complete real-HAOS acceptance. Every later namespace, credential, target,
+publication, Activity or capability schema change requires a deterministic
+tested migration or a new explicitly documented generation.
 
 ## 18. Non-goals
 

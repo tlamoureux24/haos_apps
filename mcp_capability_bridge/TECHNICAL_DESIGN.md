@@ -1,6 +1,6 @@
 # MCP Capability Bridge — Technical Design
 
-Status: **authoritative technical design — Lot 4 production candidate implemented**.
+Status: **authoritative technical design — Lots 0 through 4 accepted on real HAOS**.
 
 This design implements `PROJECT_BRIEF.md` and must be read with `THREAT_MODEL.md` and the root architecture charter.
 
@@ -328,9 +328,8 @@ HAOS acceptance remains mandatory for process, browser, networking, AppArmor and
 
 ## 23. Data cutoff
 
-Version 0.7.0 is the final pre-cutoff candidate. Before the declared production
-cutoff, schema replacement is allowed only for explicitly disposable test
-installations. After its complete HAOS install, upgrade and backup/restore
-acceptance, version 1.0.0 will declare generation 1 as the production cutoff.
+Version 1.0.0 declares generation 1 as the production compatibility cutoff
+after complete real-HAOS Lot 4 acceptance. Future incompatible schema changes
+must therefore use an explicit migration or a new documented generation.
 
 After cutoff, every persisted namespace, verifier, target, encrypted secret, publication and capability configuration change requires a deterministic tested migration.

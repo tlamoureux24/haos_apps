@@ -2,7 +2,7 @@
 
 Français | [English](README.md)
 
-Version actuelle : **0.7.0 — candidate de production du Lot 4**.
+Version actuelle : **1.0.0 stable — Lots 0 à 4 acceptés sur HAOS réel**.
 
 MCP Capability Bridge est une App Home Assistant OS autonome transformant des accès techniques non-MCP, délibérément bornés, en outils MCP Streamable HTTP standards.
 
@@ -22,4 +22,4 @@ Documents de conception normatifs :
 - [Modèle de menaces](THREAT_MODEL.md)
 - [Plan d’implémentation](IMPLEMENTATION_PLAN.md)
 
-La version 0.7.0 est la candidate durcie du Lot 4. Elle reste antérieure au cutoff de production tant que la recette HAOS finale — installation, mise à niveau, sauvegarde/restauration, endurance et AppArmor — n’est pas terminée. Consultez les [instructions d’installation, d’intégration et de recette](DOCS.md).
+La version 1.0.0 est la livraison stable du Lot 4 après validation HAOS de l’installation, de la persistance, de la sauvegarde/restauration, de l’endurance et d’AppArmor. La génération SQLite 1 devient le cutoff de compatibilité des données de production. Consultez les [instructions d’installation et d’intégration](DOCS.md).
