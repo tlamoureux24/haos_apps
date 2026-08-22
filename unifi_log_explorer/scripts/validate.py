@@ -14,8 +14,8 @@ if missing:
     errors.append(f"config.yaml missing: {', '.join(missing)}")
 if not re.search(r'^slug: "unifi_log_explorer"$', config_text, re.MULTILINE):
     errors.append("unexpected slug")
-if not re.search(r'^version: "1\.1\.3"$', config_text, re.MULTILINE):
-    errors.append("App version must be 1.1.3")
+if not re.search(r'^version: "1\.1\.4"$', config_text, re.MULTILINE):
+    errors.append("App version must be 1.1.4")
 for expected in ('ingress: true', 'ingress_port: 8090', 'panel_title: "UniFi Log Explorer"',
                  'panel_icon: "mdi:file-search-outline"', 'panel_admin: true'):
     if expected not in config_text:
@@ -84,7 +84,10 @@ for executable_rule in (
     "/init rix,", "/bin/sh ix,", "/usr/bin/python3 ix,",
     "/usr/bin/with-contenv rix,", "/command/execlineb ix,",
     "/command/s6-rc-compile ix,", "/command/s6-supervise ix,",
-    "/command/s6-svscan ix,", "/run.sh rix,",
+    "/command/s6-svscan ix,",
+    "/package/admin/s6-linux-init/command/s6-linux-init-hpr ix,",
+    "/package/admin/s6-linux-init-1.2.0.1/command/s6-linux-init-hpr ix,",
+    "/run.sh rix,",
 ):
     if executable_rule not in apparmor:
         errors.append(f"missing targeted AppArmor executable rule: {executable_rule}")

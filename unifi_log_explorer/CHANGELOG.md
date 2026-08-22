@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.4
+
+- Allow the exact transient `s6-linux-init-hpr` shutdown executable through both its stable package alias and its current versioned target.
+- Add a CI invariant for this enforce-only lifecycle path, which is too short-lived to appear in the running-process inventory.
+
 ## 1.1.3
 
 - Complete the bounded HAOS AppArmor acceptance covering startup, Ingress, healthcheck, synthetic Syslog and CEF ingestion, Traffic Flows probing and collection, restart and shutdown.
