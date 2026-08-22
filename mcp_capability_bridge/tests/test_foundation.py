@@ -88,7 +88,7 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.4.6</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.5.0</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
@@ -117,7 +117,7 @@ class SurfaceTests(unittest.TestCase):
             self.assertNotIn("credential_verifier", listed.text)
         asyncio.run(scenario())
 
-    def test_web_target_requires_confirmed_resolution_and_publishes_no_tool(self) -> None:
+    def test_web_target_requires_confirmed_resolution_and_publishes_read_only_tools(self) -> None:
         async def scenario() -> None:
             ingress = "/api/hassio_ingress/test"
             headers = {
@@ -156,7 +156,7 @@ class SurfaceTests(unittest.TestCase):
             self.assertEqual(target["adapter_type"], "web")
             self.assertEqual(target["key"], "web_test")
             listed = next(item for item in self.state.store.list_targets() if item["id"] == target["id"])
-            self.assertEqual(listed["capabilities"], [])
+            self.assertEqual([item["id"] for item in listed["capabilities"]], ["open", "snapshot", "wait", "close"])
             configuration = self.state.store.get_target_configuration(target["id"])
             self.assertEqual(configuration["navigation_origins"], ["https://app.internal"])
             self.assertEqual(configuration["resource_origins"], ["https://app.internal"])

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-08-22
+
+- Implements Lot 3B with target-scoped `web_<target>_open`, `web_<target>_snapshot`, `web_<target>_wait` and `web_<target>_close` read-only MCP capabilities.
+- Adds process-memory Chromium sessions bound to namespace, credential generation and target, with random opaque handles, per-session locking, bounded accessibility snapshots and known-secret redaction.
+- Adds none, HTTP Basic and administrator-configured bounded form authentication; credentials remain encrypted at rest and never enter MCP schemas or results.
+- Unifies cleanup for close, failure, namespace rotation/revocation and application shutdown, while fresh profiles prevent cookie, storage and history reuse.
+- Activates the bilingual Sessions administration view and reports active sessions without exposing handles or browser content.
+- Adds regression coverage for namespace/generation isolation, concurrent-call rejection, secret redaction, owner-scoped rotation cleanup and disposable profiles.
+
 All notable changes to MCP Capability Bridge will be documented in this file.
 
 ## 0.4.6 — 2026-08-21

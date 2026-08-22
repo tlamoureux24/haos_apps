@@ -27,13 +27,13 @@ def main() -> int:
     security = (ROOT / "src/mcp_capability_bridge/security.py").read_text(encoding="utf-8")
 
     for value in (
-        'slug: "mcp_capability_bridge"', 'version: "0.4.6"',
+        'slug: "mcp_capability_bridge"', 'version: "0.5.0"',
         "  - aarch64", "  - amd64", "init: false", "apparmor: true",
         "tmpfs: true", "backup: cold", "ingress: true", "ingress_port: 8099",
         "  8098/tcp: null",
     ):
         require(config, value, "App metadata invariant")
-    require(package, '__version__ = "0.4.6"', "synchronized package version")
+    require(package, '__version__ = "0.5.0"', "synchronized package version")
     for dependency in ("mcp==1.28.1", "jsonschema[format-nongpl]==4.26.0", "cryptography==50.0.0", "asyncssh==2.24.0", "selenium==4.46.0"):
         require(requirements, dependency, "pinned dependency")
     require(dockerfile, "adduser -S -D -H", "unprivileged user")
@@ -75,6 +75,8 @@ def main() -> int:
         raise RuntimeError("Implementation plan Lot 3A status must match delivery state")
     if "Accepted on real HAOS with version 0.4.5:" not in plan:
         raise RuntimeError("Implementation plan generated-key micro-lot status must match delivery state")
+    for value in ("class WebSessionManager", "Accessibility.getFullAXTree", "hmac.compare_digest", "close_namespace"):
+        require((ROOT/"src/mcp_capability_bridge/web_sessions.py").read_text(),value,"Lot 3B session invariant")
     if "capability sys_admin" in apparmor or "network raw" in apparmor or "complain" in apparmor:
         raise RuntimeError("AppArmor contains an excessive permission")
     for rule in (

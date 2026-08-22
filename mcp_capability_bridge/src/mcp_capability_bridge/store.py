@@ -222,8 +222,21 @@ class NamespaceStore:
             raise KeyError("target_not_found")
         return json.loads(row["configuration_json"])
 
+    def get_target_secret(self, target_id: str) -> bytes | None:
+        with connect(self.database_path) as database:
+            row=database.execute("SELECT encrypted_secret FROM targets WHERE id=?",(target_id,)).fetchone()
+        if row is None:raise KeyError("target_not_found")
+        return self.secret_box.decrypt(row["encrypted_secret"]) if row["encrypted_secret"] is not None else None
+
     def list_target_capabilities(self, target_id: str) -> list[dict[str, object]]:
-        configuration = self.get_target_configuration(target_id)
+        with connect(self.database_path) as database:
+            row=database.execute("SELECT adapter_type,configuration_json FROM targets WHERE id=?",(target_id,)).fetchone()
+        if row is None:raise KeyError("target_not_found")
+        configuration=json.loads(row["configuration_json"])
+        if row["adapter_type"]=="web":
+            target=self.get_target(target_id);adapter=self.registry.get("web")
+            capabilities=adapter.capabilities_for_target(configuration,str(target["key"]))
+            return [{"id":item.capability_id,"capability_id":item.capability_id,"name":item.name,"display_name":item.name,"description":item.description,"enabled":True,"effect_capable":False} for item in capabilities]
         return [{key: value for key, value in item.items() if key not in {"template"}} | {"template_entries": len(item["template"])} for item in configuration.get("capabilities", [])]
 
     def update_target(self, target_id: str, display_name: str, configuration: dict[str, Any], secret: bytes | None = None) -> list[str]:
@@ -368,7 +381,9 @@ class NamespaceStore:
     def _row_capability(self, namespace_id: str, row) -> PublishedCapability:
         configuration = json.loads(row["configuration_json"])
         adapter = self.registry.get(row["adapter_type"])
-        capability = next((item.validated() for item in adapter.capabilities(configuration) if item.capability_id == row["capability_id"]), None)
+        capability_source=getattr(adapter,"capabilities_for_target",adapter.capabilities)
+        capabilities=capability_source(configuration,row["target_key"]) if hasattr(adapter,"capabilities_for_target") else capability_source(configuration)
+        capability = next((item.validated() for item in capabilities if item.capability_id == row["capability_id"]), None)
         if capability is None:
             raise ValueError("capability_not_available")
         return PublishedCapability(namespace_id, row["target_id"], row["target_key"], row["adapter_type"], configuration, row["encrypted_secret"], capability)

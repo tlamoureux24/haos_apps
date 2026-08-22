@@ -241,7 +241,7 @@ Accepted on real HAOS with version 0.4.5: technical-key fields were absent from 
 
 ## Lot 3B — isolated read-only Web sessions
 
-Status: **planned**.
+Status: **implemented; awaiting HAOS acceptance**.
 
 ### Goal
 

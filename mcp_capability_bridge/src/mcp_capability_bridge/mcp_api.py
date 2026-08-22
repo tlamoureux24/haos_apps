@@ -14,7 +14,7 @@ from mcp.types import TextContent, Tool as MCPTool
 from starlette.responses import JSONResponse
 
 from mcp_capability_bridge.runtime_state import RuntimeCounters
-from mcp_capability_bridge.ssh_adapter import SSHCallError
+from mcp_capability_bridge.contracts import AdapterCallError, InvocationContext
 from mcp_capability_bridge.store import NamespaceContext, NamespaceStore
 
 MAX_RESULT_BYTES = 256 * 1024
@@ -102,13 +102,15 @@ class NamespaceMCP(FastMCP):
             adapter = self.store.registry.get(published.adapter_type)
             secret = self.store.secret_box.decrypt(published.encrypted_secret) if published.encrypted_secret is not None else None
             try:
-                result = await adapter.invoke(
-                    published.capability.capability_id,
-                    published.configuration,
-                    secret,
-                    arguments,
-                )
-            except SSHCallError as exc:
+                scoped = getattr(adapter, "invoke_scoped", None)
+                if callable(scoped):
+                    result = await scoped(
+                        InvocationContext(namespace.namespace_id, namespace.credential_generation, published.target_id),
+                        published.capability.capability_id, published.configuration, secret, arguments,
+                    )
+                else:
+                    result = await adapter.invoke(published.capability.capability_id, published.configuration, secret, arguments)
+            except AdapterCallError as exc:
                 error = json.dumps({"error": {"code": exc.code, "effect_possible": exc.effect_possible}}, separators=(",", ":"))
                 raise ToolError(error) from None
             except Exception:

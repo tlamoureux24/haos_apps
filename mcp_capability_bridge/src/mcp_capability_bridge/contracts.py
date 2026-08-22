@@ -89,6 +89,20 @@ class Capability:
         return self
 
 
+@dataclass(frozen=True)
+class InvocationContext:
+    namespace_id: str
+    credential_generation: int
+    target_id: str
+
+
+class AdapterCallError(Exception):
+    def __init__(self, code: str, effect_possible: bool = False):
+        self.code = code
+        self.effect_possible = effect_possible
+        super().__init__(code)
+
+
 class Adapter(Protocol):
     type_key: str
     display_name: str

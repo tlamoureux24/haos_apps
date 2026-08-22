@@ -12,7 +12,7 @@ from typing import Any
 
 import asyncssh
 
-from mcp_capability_bridge.contracts import Capability, validate_schema
+from mcp_capability_bridge.contracts import AdapterCallError, Capability, validate_schema
 
 MAX_TOKEN_BYTES = 4096
 MAX_CAPABILITIES = 64
@@ -24,11 +24,8 @@ MAX_OUTPUT_LIMIT = 256 * 1024
 logging.getLogger("asyncssh").setLevel(logging.WARNING)
 
 
-class SSHCallError(Exception):
-    def __init__(self, code: str, effect_possible: bool = False):
-        self.code = code
-        self.effect_possible = effect_possible
-        super().__init__(code)
+class SSHCallError(AdapterCallError):
+    pass
 
 
 @dataclass(frozen=True)

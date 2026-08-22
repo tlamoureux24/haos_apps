@@ -14,7 +14,7 @@ from mcp_capability_bridge.web_adapter import NetworkPolicy,WebAdapter,origin
 
 
 def configuration():
-    return {"base_url":"https://app.internal/path","resolved_addresses":["10.0.0.8"],"navigation_origins":["https://app.internal"],"authentication_origins":[],"resource_origins":["https://app.internal"],"websocket_origins":[],"verify_tls":True,"inactivity_seconds":300,"absolute_seconds":1800}
+    return {"base_url":"https://app.internal/path","resolved_addresses":["10.0.0.8"],"navigation_origins":["https://app.internal"],"authentication_origins":[],"resource_origins":["https://app.internal"],"websocket_origins":[],"verify_tls":True,"inactivity_seconds":300,"absolute_seconds":1800,"authentication":{"mode":"none"}}
 
 
 class WebGateTests(unittest.IsolatedAsyncioTestCase):
@@ -32,8 +32,8 @@ class WebGateTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("[TRUNCATED]",sanitized)
         self.assertLessEqual(len(sanitized),8205)
 
-    def test_static_adapter_publishes_no_tools_and_validates_exact_contract(self):
-        adapter=WebAdapter();adapter.validate_target(configuration(),None);self.assertEqual(adapter.capabilities(configuration()),())
+    def test_static_adapter_publishes_read_only_tools_and_validates_exact_contract(self):
+        adapter=WebAdapter();adapter.validate_target(configuration(),None);self.assertEqual([item.capability_id for item in adapter.capabilities(configuration())],["open","snapshot","wait","close"])
         for bad in ("file:///etc/passwd","javascript:alert(1)","data:text/html,x"):
             with self.assertRaises(ValueError):origin(bad)
         invalid=configuration();invalid["navigation_origins"]=["https://elsewhere.internal"]

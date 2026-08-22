@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import json
 import socket
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from urllib.parse import urlparse
+from mcp_capability_bridge.contracts import AdapterCallError, Capability, InvocationContext
+
+if TYPE_CHECKING:
+    from mcp_capability_bridge.web_sessions import WebSessionManager
 
 
 def origin(value: str) -> str:
@@ -49,9 +54,10 @@ class NetworkPolicy:
 class WebAdapter:
     type_key="web"
     display_name="Web"
+    def __init__(self, sessions: "WebSessionManager | None" = None): self.sessions=sessions
     def validate_target(self,configuration:dict[str,Any],secret:bytes|None)->None:
-        required={"base_url","resolved_addresses","navigation_origins","authentication_origins","resource_origins","websocket_origins","verify_tls","inactivity_seconds","absolute_seconds"}
-        if set(configuration)!=required or secret is not None:raise ValueError("invalid_web_target")
+        required={"base_url","resolved_addresses","navigation_origins","authentication_origins","resource_origins","websocket_origins","verify_tls","inactivity_seconds","absolute_seconds","authentication"}
+        if set(configuration)!=required:raise ValueError("invalid_web_target")
         base=origin(str(configuration["base_url"]));validate_addresses(configuration["resolved_addresses"])
         for category in ("navigation_origins","authentication_origins","resource_origins","websocket_origins"):
             values=configuration[category]
@@ -59,9 +65,41 @@ class WebAdapter:
             normalized=[origin(str(value)) for value in values]
             if normalized!=values:raise ValueError("invalid_web_origins")
         if base not in configuration["navigation_origins"] or base not in configuration["resource_origins"]:raise ValueError("invalid_web_origins")
-        if configuration["navigation_origins"]!=[base] or configuration["resource_origins"]!=[base] or configuration["authentication_origins"] or configuration["websocket_origins"]:raise ValueError("invalid_web_origins")
+        if configuration["navigation_origins"]!=[base] or configuration["resource_origins"]!=[base] or configuration["websocket_origins"]:raise ValueError("invalid_web_origins")
+        authentication=configuration["authentication"]
+        if not isinstance(authentication,dict) or authentication.get("mode") not in {"none","basic","form"}:raise ValueError("invalid_web_authentication")
+        mode=authentication["mode"]
+        if mode=="none" and (set(authentication)!={"mode"} or secret is not None):raise ValueError("invalid_web_authentication")
+        if mode=="basic" and (set(authentication)!={"mode"} or secret is None):raise ValueError("invalid_web_authentication")
+        if mode=="form":
+            fields={"mode","login_path","username_selector","password_selector","submit_selector"}
+            if set(authentication)!=fields or secret is None or not str(authentication["login_path"]).startswith("/"):raise ValueError("invalid_web_authentication")
+            if any(not 1<=len(str(authentication[key]))<=256 for key in fields-{"mode"}):raise ValueError("invalid_web_authentication")
+            if configuration["authentication_origins"]!=[base]:raise ValueError("invalid_web_origins")
+        elif configuration["authentication_origins"]:raise ValueError("invalid_web_origins")
+        if mode in {"basic","form"}:
+            try:credentials=json.loads((secret or b"").decode())
+            except Exception as exc:raise ValueError("invalid_web_authentication") from exc
+            if set(credentials)!={"mode","username","password"} or credentials.get("mode")!=mode or not 1<=len(credentials.get("username",""))<=256 or not 1<=len(credentials.get("password",""))<=1024:raise ValueError("invalid_web_authentication")
         if not isinstance(configuration["verify_tls"],bool):raise ValueError("invalid_web_tls_policy")
         if not isinstance(configuration["inactivity_seconds"],int) or not 30<=configuration["inactivity_seconds"]<=3600:raise ValueError("invalid_web_session_limits")
         if not isinstance(configuration["absolute_seconds"],int) or not configuration["inactivity_seconds"]<=configuration["absolute_seconds"]<=14400:raise ValueError("invalid_web_session_limits")
-    def capabilities(self,configuration:dict[str,Any]):return ()
-    async def invoke(self,*_):raise RuntimeError("web_tools_not_available")
+    def capabilities(self,configuration:dict[str,Any]):
+        handle={"type":"string","minLength":40,"maxLength":64}
+        return (
+            Capability("open","web_open","Open a fresh isolated read-only Web session.",{"type":"object","properties":{},"additionalProperties":False}),
+            Capability("snapshot","web_snapshot","Read a bounded accessibility snapshot.",{"type":"object","properties":{"session":handle},"required":["session"],"additionalProperties":False}),
+            Capability("wait","web_wait","Wait briefly, then read a fresh bounded snapshot.",{"type":"object","properties":{"session":handle,"seconds":{"type":"integer","minimum":1,"maximum":30}},"required":["session","seconds"],"additionalProperties":False}),
+            Capability("close","web_close","Close an isolated Web session.",{"type":"object","properties":{"session":handle},"required":["session"],"additionalProperties":False}),
+        )
+    def capabilities_for_target(self,configuration:dict[str,Any],target_key:str):
+        return tuple(Capability(item.capability_id,f"web_{target_key}_{item.capability_id}",item.description,item.input_schema,item.effect_capable) for item in self.capabilities(configuration))
+    async def invoke(self,*_):raise AdapterCallError("web_session_context_required")
+    async def invoke_scoped(self,context:InvocationContext,capability_id:str,configuration:dict[str,Any],secret:bytes|None,arguments:dict[str,Any]):
+        if self.sessions is None:raise AdapterCallError("web_runtime_unavailable")
+        if capability_id=="open":return await self.sessions.open(context,configuration,secret)
+        handle=str(arguments.get("session",""))
+        if capability_id=="snapshot":return await self.sessions.snapshot(context,handle)
+        if capability_id=="wait":return await self.sessions.wait(context,handle,int(arguments["seconds"]))
+        if capability_id=="close":return await self.sessions.close(context,handle)
+        raise AdapterCallError("capability_not_available")
