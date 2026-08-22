@@ -1,0 +1,92 @@
+name: Validate UniFi Log Explorer App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "unifi_log_explorer/**"
+      - ".github/workflows/unifi-log-explorer-validate.yml"
+  pull_request:
+    paths:
+      - "unifi_log_explorer/**"
+      - ".github/workflows/unifi-log-explorer-validate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate source and tests
+        run: |
+          set -euo pipefail
+          python3 unifi_log_explorer/scripts/validate.py
+          bash -n unifi_log_explorer/run.sh
+          python3 -m compileall -q unifi_log_explorer
+          python3 -m unittest discover -s unifi_log_explorer/tests -v
+
+      - name: Build amd64 image
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' unifi_log_explorer/config.yaml)"
+          docker build \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg "BUILD_VERSION=${version}" \
+            --tag "unifi-log-explorer:${version}" \
+            unifi_log_explorer
+
+      - name: Exercise runtime and validate AppArmor inventory
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' unifi_log_explorer/config.yaml)"
+          runtime_root="${RUNNER_TEMP}/unifi-log-explorer"
+          mkdir -p "${runtime_root}/data"
+          printf '%s\n' '{"allowed_source_ips":["::1"],"retention_hours":168,"max_records":250000,"unifi_api_key":"","flow_collection_enabled":false,"log_level":"info"}' > "${runtime_root}/data/options.json"
+
+          cleanup() {
+            docker logs unifi-log-explorer-smoke 2>&1 || true
+            docker rm --force unifi-log-explorer-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name unifi-log-explorer-smoke \
+            --publish 127.0.0.1:28090:8090 \
+            --volume "${runtime_root}/data:/data" \
+            "unifi-log-explorer:${version}"
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:28090/health >/dev/null; then
+              break
+            fi
+            test "${attempt}" != 30
+            sleep 1
+          done
+
+          docker exec unifi-log-explorer-smoke python3 -c \
+            'import socket; s=socket.socket(socket.AF_INET6,socket.SOCK_DGRAM); s.sendto(b"<134>host app: synthetic syslog",("::1",5514)); s.sendto(b"CEF:0|UniFi|Network|1|test|Synthetic|3|src=192.0.2.1",("::1",5514))'
+          sleep 1
+          docker exec unifi-log-explorer-smoke python3 -c \
+            'import sqlite3; db=sqlite3.connect("/data/diagnostics.db"); assert db.execute("select count(*) from records").fetchone()[0] == 2'
+          docker exec unifi-log-explorer-smoke /bin/sh -c \
+            'for process in /proc/[0-9]*; do readlink -f "${process}/exe" 2>/dev/null || true; done' \
+            | sort -u > unifi-log-explorer-apparmor-executables.txt
+          python3 unifi_log_explorer/scripts/validate_apparmor_inventory.py \
+            unifi_log_explorer/apparmor.txt \
+            unifi-log-explorer-apparmor-executables.txt
+          docker stop --time 15 unifi-log-explorer-smoke >/dev/null
+
+      - name: Upload AppArmor executable inventory
+        uses: actions/upload-artifact@v6
+        with:
+          name: unifi-log-explorer-apparmor-executables
+          path: unifi-log-explorer-apparmor-executables.txt
+          if-no-files-found: error
+          retention-days: 30

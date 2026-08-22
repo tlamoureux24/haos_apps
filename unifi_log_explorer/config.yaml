@@ -1,6 +1,6 @@
 name: "UniFi Log Explorer"
 slug: "unifi_log_explorer"
-version: "1.1.1"
+version: "1.1.2"
 description: "Explore UniFi Traffic Flows, Syslog and CEF data locally"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/unifi_log_explorer"
 arch:

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.2
+
+- Replace broad AppArmor capabilities, file, network and executable-tree permissions with the targeted application and S6 runtime rules observed from the current Home Assistant base image.
+- Restrict persistent writes to the SQLite database, its journal files, the encrypted UniFi API key and the atomic key temporary files.
+- Add CI guards against broad AppArmor rules plus a runtime executable inventory and synthetic Syslog/CEF smoke test.
+- Temporarily ship the narrowed profile in AppArmor complain mode for one bounded HAOS acceptance pass before restoring enforcement in the next corrective release.
+
 ## 1.1.1
 
 - Move the persistent language and light/dark controls from Settings into compact right-aligned header toggles matching UniFi Autoblock.

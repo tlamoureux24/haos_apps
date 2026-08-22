@@ -14,6 +14,8 @@ if missing:
     errors.append(f"config.yaml missing: {', '.join(missing)}")
 if not re.search(r'^slug: "unifi_log_explorer"$', config_text, re.MULTILINE):
     errors.append("unexpected slug")
+if not re.search(r'^version: "1\.1\.2"$', config_text, re.MULTILINE):
+    errors.append("diagnostic App version must be 1.1.2")
 for expected in ('ingress: true', 'ingress_port: 8090', 'panel_title: "UniFi Log Explorer"',
                  'panel_icon: "mdi:file-search-outline"', 'panel_admin: true'):
     if expected not in config_text:
@@ -36,9 +38,54 @@ for filename in ("Dockerfile", "run.sh", "apparmor.txt", "README.md", "README.fr
         errors.append(f"missing {filename}")
 if not (ROOT / "tests" / "test_unifi_log_explorer.py").is_file():
     errors.append("missing tests/test_unifi_log_explorer.py")
+if not (ROOT / "scripts" / "validate_apparmor_inventory.py").is_file():
+    errors.append("missing scripts/validate_apparmor_inventory.py")
 dockerfile = (ROOT / "Dockerfile").read_text()
+apparmor = (ROOT / "apparmor.txt").read_text()
 if re.search(r"^COPY\s+(?:tests|\.)", dockerfile, re.MULTILINE):
     errors.append("development tests must not be copied into the runtime image")
+
+for broad_rule in (
+    "  capability,", "  file,", "  network,", "/bin/** ix,", "/sbin/** ix,",
+    "/usr/bin/** ix,", "/usr/sbin/** ix,", "/usr/local/bin/** ix,",
+    "/run/{s6,s6-rc*,service}/** ix,", "/package/** ix,", "/command/** ix,",
+    "/etc/services.d/** rwix,", "/etc/cont-init.d/** rwix,",
+    "/etc/cont-finish.d/** rwix,", "/run/{,**} rwk,", "/data/** rwk,",
+):
+    if broad_rule in apparmor:
+        errors.append(f"AppArmor retains broad rule: {broad_rule.strip()}")
+diagnostic_profile = "profile unifi_log_explorer flags=(attach_disconnected,mediate_deleted,complain) {"
+if diagnostic_profile not in apparmor:
+    errors.append("AppArmor diagnostic release 1.1.2 must run in complain mode")
+for network_rule in (
+    "network inet stream,", "network inet6 stream,",
+    "network inet dgram,", "network inet6 dgram,",
+):
+    if network_rule not in apparmor:
+        errors.append(f"missing required AppArmor network rule: {network_rule}")
+for data_rule in (
+    "/data/ rw,", "/data/options.json r,", "/data/diagnostics.db rwlk,",
+    "/data/diagnostics.db-{journal,shm,wal} rwlk,",
+    "/data/unifi_api_key.enc rwlk,", "/data/unifi_api_key.enc.tmp rwlk,",
+    "/data/unifi_api_key.key rwlk,", "/data/unifi_api_key.key.tmp rwlk,",
+):
+    if data_rule not in apparmor:
+        errors.append(f"missing exact AppArmor data rule: {data_rule}")
+for runtime_rule in (
+    "/run/ rw,", "/run/s6/{,**} rwk,", "/run/s6-rc rw,",
+    "/run/s6-rc:s6-rc-init:*/{,**} rwk,", "/run/service/{,**} rwk,",
+    "/run/s6-linux-init-container-results/{,**} rwk,",
+):
+    if runtime_rule not in apparmor:
+        errors.append(f"missing bounded AppArmor runtime rule: {runtime_rule}")
+for executable_rule in (
+    "/init rix,", "/bin/sh ix,", "/usr/bin/python3 ix,",
+    "/usr/bin/with-contenv rix,", "/command/execlineb ix,",
+    "/command/s6-rc-compile ix,", "/command/s6-supervise ix,",
+    "/command/s6-svscan ix,", "/run.sh rix,",
+):
+    if executable_rule not in apparmor:
+        errors.append(f"missing targeted AppArmor executable rule: {executable_rule}")
 
 if errors:
     print("\n".join(f"ERROR: {error}" for error in errors))
