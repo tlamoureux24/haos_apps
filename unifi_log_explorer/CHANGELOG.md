@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.6
+
+- Complete the full HAOS complain-mode audit by analyzing only the events recorded after the final 1.1.5 profile replacement.
+- Allow the two exact legacy S6 source directories, Python's cgroup CPU-limit probe and SQLite's bounded `/var/tmp/etilqs_*` temporary files.
+- Explicitly deny the unnecessary non-interactive Bash `/dev/tty` probe instead of granting terminal access.
+- Restore full AppArmor enforcement with CI invariants for every permission derived from the final HAOS audit segment.
+
 ## 1.1.5
 
 - Return the narrowed profile to temporary AppArmor complain mode for a complete HAOS audit instead of discovering transient permissions through iterative enforced releases.

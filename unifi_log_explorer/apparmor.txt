@@ -1,6 +1,6 @@
 #include <tunables/global>
 
-profile unifi_log_explorer flags=(attach_disconnected,mediate_deleted,complain) {
+profile unifi_log_explorer flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
   #include <abstractions/bash>
   #include <abstractions/nameservice>
@@ -117,6 +117,8 @@ profile unifi_log_explorer flags=(attach_disconnected,mediate_deleted,complain) 
   /etc/s6-overlay/s6-rc.d/user2/ r,
   /etc/s6-overlay/s6-rc.d/user2/type r,
   /etc/s6-overlay/s6-rc.d/user2/contents.d/ r,
+  /etc/fix-attrs.d/ r,
+  /etc/services.d/ r,
   /run/s6/basedir/scripts/rc.init rix,
   /run/s6/basedir/scripts/rc.shutdown rix,
   /run/s6/basedir/bin/init ix,
@@ -147,6 +149,7 @@ profile unifi_log_explorer flags=(attach_disconnected,mediate_deleted,complain) 
   /data/unifi_api_key.key rwlk,
   /data/unifi_api_key.key.tmp rwlk,
   /tmp/{,**} rwk,
+  /var/tmp/etilqs_* rwk,
   /etc/ssl/** r,
   /etc/ca-certificates/** r,
   /usr/share/ca-certificates/** r,
@@ -154,7 +157,9 @@ profile unifi_log_explorer flags=(attach_disconnected,mediate_deleted,complain) 
   /proc/1/fd/1 rw,
   /proc/1/fd/2 rw,
   /proc/[0-9]*/fd/** rw,
+  /sys/fs/cgroup/cpu.max r,
   /dev/null rw,
+  deny /dev/tty rw,
   /dev/urandom r,
   /dev/random r,
 }

@@ -14,8 +14,8 @@ if missing:
     errors.append(f"config.yaml missing: {', '.join(missing)}")
 if not re.search(r'^slug: "unifi_log_explorer"$', config_text, re.MULTILINE):
     errors.append("unexpected slug")
-if not re.search(r'^version: "1\.1\.5"$', config_text, re.MULTILINE):
-    errors.append("diagnostic App version must be 1.1.5")
+if not re.search(r'^version: "1\.1\.6"$', config_text, re.MULTILINE):
+    errors.append("App version must be 1.1.6")
 for expected in ('ingress: true', 'ingress_port: 8090', 'panel_title: "UniFi Log Explorer"',
                  'panel_icon: "mdi:file-search-outline"', 'panel_admin: true'):
     if expected not in config_text:
@@ -54,9 +54,11 @@ for broad_rule in (
 ):
     if broad_rule in apparmor:
         errors.append(f"AppArmor retains broad rule: {broad_rule.strip()}")
-diagnostic_profile = "profile unifi_log_explorer flags=(attach_disconnected,mediate_deleted,complain) {"
-if diagnostic_profile not in apparmor:
-    errors.append("AppArmor diagnostic release 1.1.5 must run in complain mode")
+enforced_profile = "profile unifi_log_explorer flags=(attach_disconnected,mediate_deleted) {"
+if enforced_profile not in apparmor:
+    errors.append("the final AppArmor profile must run in enforce mode")
+if "complain" in apparmor:
+    errors.append("the accepted AppArmor profile must not return to complain mode")
 for network_rule in (
     "network inet stream,", "network inet6 stream,",
     "network inet dgram,", "network inet6 dgram,",
@@ -78,6 +80,13 @@ for runtime_rule in (
 ):
     if runtime_rule not in apparmor:
         errors.append(f"missing bounded AppArmor runtime rule: {runtime_rule}")
+for audited_rule in (
+    "/etc/fix-attrs.d/ r,", "/etc/services.d/ r,",
+    "/sys/fs/cgroup/cpu.max r,", "/var/tmp/etilqs_* rwk,",
+    "deny /dev/tty rw,",
+):
+    if audited_rule not in apparmor:
+        errors.append(f"missing HAOS-audited AppArmor rule: {audited_rule}")
 for executable_rule in (
     "/init rix,", "/bin/bash ix,", "/bin/sh ix,",
     "/usr/bin/bashio rix,", "/usr/lib/bashio/bashio rix,",
