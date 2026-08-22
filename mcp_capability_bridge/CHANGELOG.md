@@ -7,6 +7,9 @@
 - Recheck the same sensitive-element contract immediately before dispatch as a
   second fail-closed layer.
 - Extend real Chromium and external HAOS acceptance coverage for these fields.
+- Record successful real-HAOS Lot 3C acceptance across target authority,
+  interactive actions, stale/concurrent calls, browser confinement and the
+  complete ACP/AEP execution path with clean session shutdown.
 
 ## 0.6.0 — 2026-08-22
 

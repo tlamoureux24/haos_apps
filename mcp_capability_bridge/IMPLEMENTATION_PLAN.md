@@ -1,6 +1,6 @@
 # MCP Capability Bridge — Implementation Plan
 
-Status: **authoritative sequence — Lots 0 through 3B accepted on HAOS; Lot 3C implemented and awaiting acceptance**.
+Status: **authoritative sequence — Lots 0 through 3C accepted on HAOS**.
 
 This plan derives from `PROJECT_BRIEF.md`, `TECHNICAL_DESIGN.md`, `THREAT_MODEL.md` and `ARCHITECTURE_CHARTER.md`.
 
@@ -277,7 +277,7 @@ Accepted on real HAOS with version 0.5.1 using the external black-box runner: tw
 
 ## Lot 3C — interactive Web actions
 
-Status: **implemented — awaiting independent review, CI and HAOS acceptance**.
+Status: **accepted on real HAOS with version 0.6.1**.
 
 ### Goal
 
@@ -309,6 +309,8 @@ Add effect-capable interaction while explicitly preserving the configured Web ac
 ### HAOS acceptance
 
 Test one dedicated read-only account and one deliberately privileged fixture account, demonstrate the difference in actual target authority, verify every confinement rule, then repeat through ACP/AEP with only the chosen Web tools authorized.
+
+Accepted on real HAOS with version 0.6.1. The external black-box runner proved the dedicated Reader account was denied effects while the Admin account performed exactly the exposed operations; bounded fill/select/press/navigation, stale-reference invalidation, serialized concurrent actions, no replay, iframe/popup session invalidation, and off-origin resource, WebSocket and redirect blocking all passed. Password, upload and download elements received no actionable reference. A final real ACP/AEP job then completed `open`, `fill`, `click`, `wait` and `close`, persisted the report `Effect status: applied`, left no active Web session, and produced only safe source/tool/status metadata in Activity. Runtime and host logs contained no error or AppArmor denial.
 
 ## Lot 4 — hardening, documentation and production cutoff
 
