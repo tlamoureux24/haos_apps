@@ -286,7 +286,7 @@ jobs:
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
             http://127.0.0.1:18099/)"
           [[ "${ingress_page}" == *"Agent Control Plane"* ]]
-          [[ "${ingress_page}" == *'href="/api/hassio_ingress/ci/health/ready"'* ]]
+          [[ "${ingress_page}" == *'id="service-health"'* ]]
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/admin.js"'* ]]
           [[ "${ingress_page}" == *'src="/api/hassio_ingress/ci/admin/assets/icon.png"'* ]]
           [[ "${ingress_page}" == *'href="#audit"'* ]]

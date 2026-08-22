@@ -6,6 +6,8 @@
   response instead of rendering an unconditional success label.
 - Show a bilingual red unavailable state when the administration status probe
   fails or does not report `ready`, while retaining `/health/ready` for HAOS.
+- Align the Ingress smoke test with the dynamic badge while preserving the
+  independent technical readiness probe.
 
 ## 0.46.11
 
