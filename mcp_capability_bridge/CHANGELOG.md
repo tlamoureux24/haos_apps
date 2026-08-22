@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — external acceptance tooling
+
+- Adds a Dockerized black-box Lot 3B acceptance runner outside the add-on image, avoiding ACP tasks, reports and audit pollution while testing live HAOS session isolation, rotation, revocation, expiry and fresh browser profiles.
+
 ## 0.5.1 — 2026-08-22
 
 - Keeps generated Web tools available for explicit MCP publication while excluding them from the SSH capability administration view.
