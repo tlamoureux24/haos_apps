@@ -1,0 +1,49 @@
+name: Validate UniFi Autoblock App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "unifi_autoblock/**"
+      - ".github/workflows/unifi-autoblock-validate.yml"
+  pull_request:
+    paths:
+      - "unifi_autoblock/**"
+      - ".github/workflows/unifi-autoblock-validate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate source and tests
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check cryptography
+          python3 unifi_autoblock/scripts/validate.py
+          bash -n unifi_autoblock/run.sh
+          python3 -m compileall -q unifi_autoblock
+          python3 -m unittest discover -s unifi_autoblock/tests -v
+
+      - name: Build and inspect amd64 image
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' unifi_autoblock/config.yaml)"
+          docker build \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg "BUILD_VERSION=${version}" \
+            --tag "unifi-autoblock:${version}" \
+            unifi_autoblock
+          docker run --rm --entrypoint python3 "unifi-autoblock:${version}" -c \
+            'import sys; sys.path.insert(0,"/app"); import unifi_autoblock, ingress_ui; assert unifi_autoblock.WEBHOOK_PORT == 37989'
+          docker run --rm --entrypoint /bin/sh "unifi-autoblock:${version}" -c \
+            'test "$(readlink -f /usr/bin/bashio)" = /usr/lib/bashio/bashio; test "$(readlink -f /package/admin/s6-linux-init/command/s6-linux-init-hpr)" = /package/admin/s6-linux-init-1.2.0.1/command/s6-linux-init-hpr'

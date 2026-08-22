@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2
+
+- Replace broad AppArmor capabilities, file, network and executable-tree permissions with the S6 and Bashio runtime rules validated by UniFi Log Explorer on the current Home Assistant base image.
+- Restrict persistent writes to Autoblock's exact state, history, UniFi list backup and encrypted API-key files plus their atomic temporary files.
+- Add CI guards against broad AppArmor rules and require every targeted persistent and transient runtime permission.
+- Temporarily ship the narrowed profile in AppArmor complain mode for one complete HAOS audit before producing the enforced final profile.
+
 ## 0.5.1
 
 - Add Home Assistant panel icon.
