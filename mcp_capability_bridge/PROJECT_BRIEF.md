@@ -140,11 +140,16 @@ For actions with ambiguous delivery, results and errors expose whether a target 
 
 Configuration is durable; execution state is disposable.
 
-Durable data includes namespaces, credential verifiers, targets, encrypted target secrets, SSH capabilities, Web configuration and publication mappings.
+Durable data includes namespaces, credential verifiers, targets, encrypted target secrets, SSH capabilities, Web configuration, publication mappings and the latest 500 payload-free operational Activity events.
 
-The Bridge does not persist browser profiles, Web sessions, SSH connections, MCP arguments, page snapshots, command output or a permanent invocation history.
+The Bridge does not persist browser profiles, Web sessions, SSH connections,
+MCP arguments, page snapshots, command output or business results. Activity is
+a bounded metadata journal, not a replay queue or result history.
 
-Global, per-adapter, per-target and per-namespace limits protect HAOS. Capacity exhaustion fails immediately with a bounded busy error; there is no durable queue.
+Global, per-adapter, per-target and per-namespace limits protect HAOS. Capacity
+exhaustion fails immediately with a bounded busy error; there is no durable or
+implicit in-memory execution queue. MCP request bodies above 256 KiB are
+refused before protocol parsing.
 
 Administration and MCP execution share one authoritative runtime so active-use locks, credential rotation, session counts and shutdown cannot diverge across process-local memory.
 
@@ -187,7 +192,9 @@ Primary views cover Overview, MCP clients, Targets, SSH capabilities, Web target
 
 Ingress shows only safe operational information needed to configure and diagnose the Bridge: MCP readiness, namespace state, published counts, target validity, last explicit connectivity check, active bounded sessions/operations, and safe last-error codes/durations.
 
-Recent runtime status is memory-only unless it is configuration/check metadata. There is no permanent business invocation log.
+Live sessions and operation counters are memory-only. The Activity page keeps
+at most 500 safe operational metadata events across restarts; there is no
+permanent payload or business-result log.
 
 ## 16. HAOS and AppArmor
 
@@ -206,7 +213,11 @@ The first implementation targets the MCP protocol and Python SDK generation actu
 
 Compatibility tests cover discovery, schemas, tool-name limits, tool-list changes, calls, errors, result bounds, redaction and the complete Bridge→ACP→AEP path.
 
-Before the declared production-data cutoff, explicitly disposable installations may use schema replacement. After cutoff, namespaces, credentials, targets and capability configuration require deterministic tested migrations.
+Version 0.7.0 is the final pre-cutoff candidate. Before the declared
+production-data cutoff, explicitly disposable installations may use schema
+replacement. After complete HAOS acceptance, version 1.0.0 declares generation
+1 as the cutoff; every later namespace, credential, target, publication,
+Activity or capability schema change requires a deterministic tested migration.
 
 ## 18. Non-goals
 

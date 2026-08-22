@@ -55,6 +55,31 @@ class DatabaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             self.assertFalse(database_ready(Path(directory) / "missing.db"))
 
+    def test_unknown_generation_is_refused_without_mutating_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bridge.db"
+            with sqlite3.connect(path) as database:
+                database.execute(
+                    "CREATE TABLE schema_info(singleton INTEGER PRIMARY KEY, generation INTEGER NOT NULL)"
+                )
+                database.execute(
+                    "INSERT INTO schema_info(singleton, generation) VALUES(1, 99)"
+                )
+            with self.assertRaisesRegex(RuntimeError, "Unsupported database generation: 99"):
+                initialize(path)
+            with closing(sqlite3.connect(path)) as database:
+                generation = database.execute(
+                    "SELECT generation FROM schema_info WHERE singleton=1"
+                ).fetchone()[0]
+                tables = {
+                    row[0]
+                    for row in database.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    )
+                }
+            self.assertEqual(generation, 99)
+            self.assertEqual(tables, {"schema_info"})
+
     def test_generation_one_initialization_adds_activity_table_to_existing_database(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "bridge.db"
@@ -175,7 +200,7 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.6.2</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.7.0</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()

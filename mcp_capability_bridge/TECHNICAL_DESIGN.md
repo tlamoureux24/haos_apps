@@ -1,6 +1,6 @@
 # MCP Capability Bridge — Technical Design
 
-Status: **authoritative technical design — implemented through Lot 3C**.
+Status: **authoritative technical design — Lot 4 production candidate implemented**.
 
 This design implements `PROJECT_BRIEF.md` and must be read with `THREAT_MODEL.md` and the root architecture charter.
 
@@ -57,6 +57,7 @@ Logical durable entities:
 - namespace-to-capability publication mappings;
 - adapter-owned configuration, initially SSH capabilities and Web target configuration;
 - safe explicit connectivity-check state.
+- the latest 500 payload-free operational Activity events.
 
 Keys:
 
@@ -64,7 +65,10 @@ Keys:
 - a separate authenticated-encryption key for target secrets, also atomic and `0600`;
 - neither key is stored in SQLite or returned by any API.
 
-No browser session, profile, page state, SSH connection, invocation argument, output or permanent invocation record is stored.
+No browser session, profile, page state, SSH connection, invocation argument,
+snapshot, command output or business result is stored. The bounded Activity
+journal persists only safe event/status/source/client/tool/adapter/duration
+metadata and never a request or result payload.
 
 ## 5. Namespace authentication
 
@@ -317,12 +321,16 @@ It covers:
 - no credential, target secret, argument or result leakage;
 - real installed executable inventory versus AppArmor;
 - browser and SSH cleanup under success, failure, timeout, cancellation and shutdown;
-- restart persistence of configuration only.
+- restart persistence of configuration and bounded safe Activity metadata only;
+- supported-architecture image construction and executable/AppArmor evidence.
 
 HAOS acceptance remains mandatory for process, browser, networking, AppArmor and UI behavior.
 
 ## 23. Data cutoff
 
-Before the declared production cutoff, schema replacement is allowed only for explicitly disposable test installations. The cutoff occurs only after namespace/auth, SSH, Web and upgrade strategy have passed HAOS acceptance.
+Version 0.7.0 is the final pre-cutoff candidate. Before the declared production
+cutoff, schema replacement is allowed only for explicitly disposable test
+installations. After its complete HAOS install, upgrade and backup/restore
+acceptance, version 1.0.0 will declare generation 1 as the production cutoff.
 
 After cutoff, every persisted namespace, verifier, target, encrypted secret, publication and capability configuration change requires a deterministic tested migration.

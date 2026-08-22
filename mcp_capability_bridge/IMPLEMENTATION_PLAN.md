@@ -1,6 +1,6 @@
 # MCP Capability Bridge — Implementation Plan
 
-Status: **authoritative sequence — Lots 0 through 3C accepted on HAOS**.
+Status: **authoritative sequence — Lots 0 through 3C accepted on HAOS; Lot 4 candidate implemented**.
 
 This plan derives from `PROJECT_BRIEF.md`, `TECHNICAL_DESIGN.md`, `THREAT_MODEL.md` and `ARCHITECTURE_CHARTER.md`.
 
@@ -314,7 +314,7 @@ Accepted on real HAOS with version 0.6.1. The external black-box runner proved t
 
 ## Lot 4 — hardening, documentation and production cutoff
 
-Status: **planned**.
+Status: **implemented in 0.7.0 — CI and real HAOS acceptance pending**.
 
 ### Goal
 

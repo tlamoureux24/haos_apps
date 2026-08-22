@@ -1,10 +1,29 @@
 # Changelog
 
+## 0.7.0 — 2026-08-22
+
+- Prepare the Lot 4 production candidate with fail-fast global, namespace,
+  adapter and target capacity limits; the Bridge never builds an implicit
+  in-memory execution queue.
+- Reject MCP request bodies above 256 KiB before the protocol stack buffers
+  them, keep malformed responses bounded and refuse new operations during
+  shutdown.
+- Cancel active operations within a hard shutdown deadline while preserving
+  existing no-replay and `effect_possible` behavior.
+- Add repeated fresh-connection SSH and disposable Chromium-session endurance
+  coverage, malformed/chunked request tests, capacity tests and real container
+  restart evidence.
+- Complete bilingual standalone, ACP/AEP, backup, restore, upgrade and final
+  HAOS acceptance guidance. Version 0.7.0 remains a candidate until that
+  acceptance permits the 1.0.0 production-data cutoff.
+
 ## 0.6.2 — 2026-08-22
 
-- Persiste le journal `Activité` dans SQLite afin de conserver ses événements après un redémarrage de l'application.
-- Maintient une rétention bornée aux 500 événements les plus récents et exclusivement aux métadonnées opérationnelles non sensibles déjà affichées.
-- Ajoute directement la table au schéma frais de génération 1, sans migration ni changement de génération.
+- Persist the Activity journal in SQLite so operational events survive an App
+  restart.
+- Retain only the latest 500 payload-free, non-sensitive metadata events.
+- Add the table directly to the disposable generation-one development schema,
+  without a migration or generation change.
 
 ## 0.6.1 — 2026-08-22
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate MCP Capability Bridge Lot 0-2 repository invariants."""
+"""Validate MCP Capability Bridge Lot 0-4 candidate invariants."""
 
 from __future__ import annotations
 
@@ -27,13 +27,13 @@ def main() -> int:
     security = (ROOT / "src/mcp_capability_bridge/security.py").read_text(encoding="utf-8")
 
     for value in (
-        'slug: "mcp_capability_bridge"', 'version: "0.6.2"',
-        "  - aarch64", "  - amd64", "init: false", "apparmor: true",
+        'slug: "mcp_capability_bridge"', 'version: "0.7.0"',
+        "  - aarch64", "  - amd64", "init: false", "stage: experimental", "apparmor: true",
         "tmpfs: true", "backup: cold", "ingress: true", "ingress_port: 8099",
         "  8098/tcp: null",
     ):
         require(config, value, "App metadata invariant")
-    require(package, '__version__ = "0.6.2"', "synchronized package version")
+    require(package, '__version__ = "0.7.0"', "synchronized package version")
     for dependency in ("mcp==1.28.1", "jsonschema[format-nongpl]==4.26.0", "cryptography==50.0.0", "asyncssh==2.24.0", "selenium==4.46.0"):
         require(requirements, dependency, "pinned dependency")
     require(dockerfile, "adduser -S -D -H", "unprivileged user")
@@ -52,6 +52,11 @@ def main() -> int:
         require(main_source, value, "health route")
     for value in ("NamespaceMCP", "OpaqueBearerMiddleware", "streamable_http_app", "session_manager.run"):
         require(main_source + mcp_source, value, "authenticated MCP invariant")
+    for value in ("RequestBodyLimitMiddleware", "request_too_large", "state.counters.shutdown"):
+        require(main_source, value, "Lot 4 request/shutdown invariant")
+    counters = (ROOT / "src/mcp_capability_bridge/runtime_state.py").read_text()
+    for value in ("bridge_busy", "namespace_busy", "adapter_busy", "target_busy", "runtime_stopping"):
+        require(counters, value, "Lot 4 fail-fast capacity invariant")
     for value in ("secrets.token_urlsafe(32)", "hmac.compare_digest", "TOKEN_PATTERN", "SecretBox"):
         require(security, value, "credential/secret security invariant")
     for forbidden in ("paramiko", "playwright"):

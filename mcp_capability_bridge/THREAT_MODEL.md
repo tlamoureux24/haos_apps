@@ -1,6 +1,6 @@
 # MCP Capability Bridge — Threat Model
 
-Status: **normative threat model — implemented through Lot 3C**.
+Status: **normative threat model — audited against the Lot 4 production candidate**.
 
 ## 1. Assets
 
@@ -47,6 +47,7 @@ The Ingress administrator is trusted to deliberately grant target and account au
 | Old token remains usable | transactional rotation and immediate invalidation | API/MCP test |
 | Rotated/revoked client keeps browser authority | cancel all owned sessions/operations | concurrency test |
 | Archived namespace reactivates | archive only after revoke; no restore access | lifecycle test |
+| Excess calls create an implicit queue | fail-fast global, namespace, adapter and target limits | concurrency tests |
 
 Namespace publication is technical isolation, not ACP-style business authorization.
 
@@ -112,7 +113,11 @@ Controls:
 
 ## 9. Persistence and logging threats
 
-SQLite and logs must never contain clear namespace tokens, target secrets, browser storage, MCP arguments, snapshots, SSH output or upstream exception payloads.
+SQLite and logs must never contain clear namespace tokens, target secrets,
+browser storage, MCP arguments, snapshots, SSH output or upstream exception
+payloads. The persistent Activity journal is capped at 500 rows and admits only
+timestamp, event/status, safe source/client/tool/adapter identifiers and
+duration; it contains no request or result payload.
 
 Private keys use separate atomic `0600` files. Encrypted target payloads use authenticated encryption. Normal logs use IDs, counters, durations and safe enumerated codes only.
 
@@ -138,3 +143,8 @@ Browser dependencies do not justify privileged mode, host networking, broad `/de
 ## 12. Acceptance rule
 
 A lot is not accepted when only unit tests pass. Browser, SSH, process topology, listener isolation, cleanup, credential rotation and AppArmor require real HAOS evidence. Any new adapter requires its own threat-model section before implementation.
+
+The Lot 4 audit also requires malformed and oversized MCP requests, fail-fast
+capacity, cancellation/shutdown, mutation races, repeated SSH/Web cleanup,
+supported image architectures, cold backup/restore and no-replay restart
+evidence before the production cutoff.

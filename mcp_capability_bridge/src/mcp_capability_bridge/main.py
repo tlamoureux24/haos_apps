@@ -28,7 +28,7 @@ from mcp_capability_bridge.browser_runtime import BrowserRuntime
 from mcp_capability_bridge.contracts import AdapterRegistry, InvocationContext
 from mcp_capability_bridge.database import database_ready
 from mcp_capability_bridge.mcp_api import NamespaceMCP, OpaqueBearerMiddleware
-from mcp_capability_bridge.runtime_state import RuntimeCounters
+from mcp_capability_bridge.runtime_state import RuntimeCapacityError, RuntimeCounters
 from mcp_capability_bridge.security import SecretBox, load_or_create_key
 from mcp_capability_bridge.settings import Settings
 from mcp_capability_bridge.ssh_adapter import SSHAdapter, scan_host_key
@@ -98,6 +98,52 @@ async def json_body(request: Request) -> dict[str, object]:
     if not isinstance(value, dict):
         raise ValueError
     return value
+
+
+class RequestBodyLimitMiddleware:
+    """Reject oversized MCP bodies before the protocol stack buffers them."""
+
+    def __init__(self, app, *, limit: int = 256 * 1024):
+        self.app = app
+        self.limit = limit
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope.get("method") != "POST" or scope.get("path") not in {"/mcp", "/mcp/"}:
+            return await self.app(scope, receive, send)
+        headers = {key.lower(): value for key, value in scope.get("headers", [])}
+        try:
+            declared = int(headers.get(b"content-length", b"0"))
+        except ValueError:
+            declared = 0
+        if declared > self.limit:
+            return await self._refuse(scope, receive, send)
+        messages = []
+        total = 0
+        while True:
+            message = await receive()
+            messages.append(message)
+            if message["type"] == "http.request":
+                total += len(message.get("body", b""))
+                if total > self.limit:
+                    return await self._refuse(scope, receive, send)
+                if not message.get("more_body", False):
+                    break
+            elif message["type"] == "http.disconnect":
+                break
+        iterator = iter(messages)
+
+        async def replay():
+            try:
+                return next(iterator)
+            except StopIteration:
+                return await receive()
+
+        return await self.app(scope, replay, send)
+
+    @staticmethod
+    async def _refuse(scope, receive, send):
+        response = JSONResponse({"error": {"code": "request_too_large"}}, status_code=413)
+        return await response(scope, receive, send)
 
 
 def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
@@ -255,6 +301,7 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
                 opened=await state.web_sessions.open(context,state.store.get_target_configuration(target_id),state.store.get_target_secret(target_id))
                 await state.web_sessions.close(context,str(opened["session"]))
             return JSONResponse({"status":"reachable","origin":opened["origin"]})
+        except RuntimeCapacityError as exc:return JSONResponse({"error":{"code":str(exc)}},status_code=409)
         except KeyError:return JSONResponse({"error":{"code":"target_not_found"}},status_code=404)
         except (ValueError,RuntimeError,PermissionError) as exc:return JSONResponse({"error":{"code":str(exc) or "web_probe_failed"}},status_code=422)
 
@@ -401,11 +448,12 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
             try:
                 yield
             finally:
+                await state.counters.shutdown()
                 await state.web_sessions.close_all()
                 await state.browser.close()
                 state.activity.record(event="app_stopped", status="success", source="system")
 
-    public = Starlette(routes=[*health, Mount("/", app=OpaqueBearerMiddleware(mcp_application, state.store, state.activity))], middleware=[Middleware(SecurityHeadersMiddleware, admin=False, ingress_proxy_ip=state.settings.ingress_proxy_ip)], lifespan=public_lifespan)
+    public = Starlette(routes=[*health, Mount("/", app=RequestBodyLimitMiddleware(OpaqueBearerMiddleware(mcp_application, state.store, state.activity)))], middleware=[Middleware(SecurityHeadersMiddleware, admin=False, ingress_proxy_ip=state.settings.ingress_proxy_ip)], lifespan=public_lifespan)
     admin.state.runtime = state
     public.state.runtime = state
     public.state.mcp_server = mcp_server

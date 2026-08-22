@@ -17,6 +17,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
       - name: Validate metadata, source, and tests
         run: |
           set -euo pipefail
@@ -51,6 +55,21 @@ jobs:
           docker run --rm --user 1000 --cap-drop ALL --security-opt no-new-privileges --shm-size 64m \
             --env HOME=/tmp --env PYTHONPATH=/app/src --entrypoint python3 "mcp-capability-bridge:${version}" -c \
             'from mcp_capability_bridge.browser_runtime import BrowserRuntime; from mcp_capability_bridge.web_adapter import NetworkPolicy; from pathlib import Path; from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer; import tempfile,threading; H=type("H",(BaseHTTPRequestHandler,),{"do_GET":lambda s:(s.send_response(200),s.end_headers(),s.wfile.write(b"<title>ok</title>")),"log_message":lambda *a:None}); server=ThreadingHTTPServer(("127.0.0.1",0),H); threading.Thread(target=server.serve_forever,daemon=True).start(); url=f"http://127.0.0.1:{server.server_port}"; c={"base_url":url,"resolved_addresses":["127.0.0.1"],"navigation_origins":[url],"authentication_origins":[],"resource_origins":[url],"websocket_origins":[],"verify_tls":True,"inactivity_seconds":300,"absolute_seconds":1800}; r=BrowserRuntime(Path(tempfile.mkdtemp())); assert r._probe_sync(c,NetworkPolicy(c))["status"]=="reachable"; server.shutdown()'
+      - name: Build and inspect the supported aarch64 image
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' mcp_capability_bridge/config.yaml)"
+          base_reference="$(docker image inspect ghcr.io/home-assistant/base:latest --format '{{index .RepoDigests 0}}')"
+          base_digest="${base_reference##*@}"
+          docker buildx build --platform linux/arm64 --load \
+            --build-arg BUILD_ARCH=aarch64 \
+            --build-arg "BUILD_VERSION=${version}" \
+            --build-arg "BASE_IMAGE_DIGEST=${base_digest}" \
+            --tag "mcp-capability-bridge:${version}-aarch64" \
+            mcp_capability_bridge
+          docker run --rm --platform linux/arm64 --entrypoint /bin/sh \
+            "mcp-capability-bridge:${version}-aarch64" -c \
+            'test -x /usr/bin/python3 && test -x /usr/bin/chromium && test -x /usr/bin/chromedriver && test -x /run.sh'
       - name: Run browser contract tests in the built image
         run: |
           set -euo pipefail
@@ -118,10 +137,14 @@ jobs:
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/activity | jq -e 'any(.events[]; .event=="app_started")' >/dev/null
           docker stop -t 15 mcb-smoke >/dev/null
           docker rm mcb-smoke >/dev/null
+          cp -a "${root}/data" "${root}/backup"
+          rm -rf "${root}/data"
+          cp -a "${root}/backup" "${root}/data"
           start
           wait_ready
           PYTHONPATH=agent_control_plane/src python3 -c 'import asyncio,sys; from agent_control_plane.connectors import discover_streamable_http; assert asyncio.run(discover_streamable_http("http://127.0.0.1:18098/mcp",sys.argv[1])) == []' "${second_token}"
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/activity | jq -e '[.events[] | select(.event=="app_started")] | length >= 2' >/dev/null
+          curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/status | jq -e '.runtime.active_sessions==0 and .runtime.active_operations==0' >/dev/null
           docker stop -t 15 mcb-smoke >/dev/null
       - name: Record image executable inventory
         run: |

@@ -1,45 +1,192 @@
-# MCP Capability Bridge 0.6.2
+# MCP Capability Bridge 0.7.0
+
+Version 0.7.0 is the hardened Lot 4 production candidate. It is not yet the
+production-data cutoff: that declaration follows final real-HAOS acceptance
+and will promote the App to 1.0.0.
 
 ## Français
 
-Cette version ajoute les actions Web interactives bornées du Lot 3C aux sessions isolées validées au Lot 3B.
+### Installation et surfaces
 
-Après installation ou mise à jour :
+L’administration est disponible uniquement par Ingress sur le port interne
+8099. Le port 8098 expose seulement `/health/live`, `/health/ready` et le
+serveur MCP authentifié `/mcp`. Publiez 8098 sur l’hôte uniquement lorsqu’un
+client externe doit joindre le Bridge.
 
-1. créez ou conservez un client sous **Clients MCP** ;
-2. sous **Cibles**, ajoutez une cible SSH, scannez sa clé d’hôte, vérifiez son adresse et son empreinte, puis confirmez explicitement l’enrôlement ;
-3. choisissez une authentification par mot de passe ou clé privée dédiée à un compte distant restreint ;
-4. sous **Capacités SSH**, définissez un exécutable absolu, un template JSON de tokens littéraux/paramètres, un schéma d’entrée scalaire strict, un timeout et les limites stdout/stderr ;
-5. sous **Accès MCP**, publiez explicitement la capacité vers chaque client autorisé.
+Chaque client MCP possède un namespace et un credential Bearer distinct. Le
+secret est affiché uniquement à sa création ou à son renouvellement. Il n’est
+jamais récupérable ensuite. Une rotation invalide immédiatement l’ancien secret
+et ferme uniquement les sessions Web de ce client ; une révocation bloque tout
+son accès et doit précéder son archivage.
 
-Pour le Web, créez une cible avec authentification aucune, HTTP Basic ou formulaire configuré, testez la connexion, puis publiez séparément les outils nécessaires. Les identifiants restent administratifs et ne figurent jamais dans les arguments MCP. La page **Sessions** montre uniquement les métadonnées sûres des sessions actives.
+### Utilisation autonome
 
-Le Bridge ne fournit aucune commande SSH libre. Chaque appel ouvre une nouvelle connexion vérifiée par la clé d’hôte épinglée, sans PTY, agent, forwarding, stdin ni environnement fourni par l’appelant. Les droits effectifs restent ceux du compte SSH configuré : utilisez un compte dédié appliquant le moindre privilège.
+1. Créez un client dans **Clients MCP** et copiez son credential.
+2. Créez une cible SSH ou Web avec un compte dédié appliquant le moindre
+   privilège.
+3. Pour SSH, confirmez explicitement la clé d’hôte puis définissez une capacité
+   avec exécutable absolu, arguments typés et limites de temps/sortie.
+4. Pour Web, confirmez l’origine et les adresses résolues, configurez le compte,
+   les durées de session et testez le navigateur.
+5. Dans **Accès MCP**, publiez uniquement les capacités nécessaires au client.
+6. Configurez le client MCP avec l’URL
+   `http://<hôte>:<port-publié>/mcp` et `Authorization: Bearer <credential>`.
 
-Pour la recette HAOS, enrôlez une cible de test restreinte et une capacité inoffensive. Appelez-la deux fois avec un client MCP générique puis via ACP/AEP, vérifiez l’isolation entre deux clients, les limites de sortie, le refus après changement de clé, l’absence de secret et de refus AppArmor dans les logs, puis testez désactivation et redémarrage. Le changement de clé hôte doit toujours passer par un nouveau scan et une confirmation explicite.
+Le Bridge n’expose ni commande SSH libre, ni URL/sélecteur/JavaScript arbitraire
+pour le Web. Les sessions Web sont temporaires. Les droits réels correspondent
+strictement au compte configuré sur la cible.
 
-Les outils disponibles sont `open`, `snapshot`, `wait`, `navigate`, `click`, `fill`, `select`, `press` et `close`. Les actions utilisent uniquement un chemin relatif ou une référence opaque issue du dernier snapshot. Une référence devient invalide après toute tentative d’action.
+### Intégration ACP/AEP
 
-Les droits effectifs sont exactement ceux du compte Web configuré. Utilisez un compte dédié appliquant le moindre privilège. Le Bridge n’ajoute pas d’autorisation métier plus fine que celle du site et ne rejoue jamais une action interactive après une erreur ou une réponse perdue.
+ACP se connecte comme n’importe quel autre client MCP : créez-lui un namespace
+dédié dans le Bridge, publiez les outils autorisés, puis créez dans ACP un
+connecteur Streamable HTTP vers `/mcp` avec ce credential. ACP ne découvre que
+ce namespace et restreint ensuite les outils par tâche. AEP ne reçoit que cette
+enveloppe via la frontière MCP générique d’ACP. Aucun endpoint ou secret
+spécifique à ACP/AEP n’existe dans le Bridge.
+
+Un AEP autonome ou un autre client MCP peut également utiliser son propre
+namespace directement, sans ACP.
+
+### Résultats ambigus et capacité
+
+Le Bridge ne rejoue jamais automatiquement une commande SSH ou une action Web.
+Après une perte de réponse, `effect_possible: true` signifie que la cible a pu
+appliquer l’effet : le client ne doit pas relancer automatiquement l’appel.
+
+Les limites globales, par client, adaptateur et cible refusent immédiatement la
+charge excédentaire avec un code `*_busy`; il n’existe aucune file d’exécution
+cachée. Les requêtes MCP supérieures à 256 Kio sont refusées avant leur mise en
+mémoire par la pile protocolaire.
+
+### Sauvegarde, restauration et mise à niveau
+
+L’App utilise une sauvegarde HAOS à froid (`backup: cold`). Une sauvegarde
+cohérente doit contenir ensemble tout `/data`, notamment :
+
+- `mcp_capability_bridge.db` ;
+- `private/credential-pepper` ;
+- `private/target-secret-key`.
+
+Ne restaurez jamais la base sans les deux clés privées : les credentials et les
+secrets de cible deviendraient inutilisables. Les profils Chromium et sessions
+Web résident sous `/tmp`, ne font pas partie d’une sauvegarde et ne sont jamais
+restaurés.
+
+Pour tester une restauration : arrêtez l’App, créez une sauvegarde HAOS,
+restaurez-la, redémarrez, vérifiez la readiness, les clients/cibles/publications,
+puis appelez une capacité inoffensive. Une session Web ouverte avant sauvegarde
+doit avoir disparu.
+
+La génération SQLite reste `1` pour la candidate 0.7.0. Jusqu’à son acceptation,
+les installations de recette restent remplaçables. La promotion 1.0.0 figera
+ce schéma comme cutoff : toute modification durable ultérieure exigera une
+migration versionnée, transactionnelle et testée depuis chaque version prise en
+charge. Une génération inconnue est toujours refusée au démarrage.
+
+### Recette HAOS finale 0.7.0
+
+Validez successivement :
+
+- installation propre, démarrage, FR/EN, clair/sombre, desktop/mobile et statut
+  réel ;
+- mise à niveau depuis 0.6.2 avec conservation de la configuration et du
+  journal Activité ;
+- sauvegarde/restauration à froid avec configuration conservée et aucune
+  session restaurée ;
+- deux clients isolés, rotation/révocation et publication différente ;
+- appels SSH répétés avec connexions fraîches et limites de sortie ;
+- comptes Web Reader/Admin, actions bornées, nettoyage et aucune reprise de
+  session après redémarrage ;
+- appel autonome puis appel Bridge → ACP → AEP sans adaptation spécifique ;
+- redémarrage pendant une opération : aucune reprise/relecture automatique ;
+- absence d’erreur applicative, fuite de secret et `apparmor="DENIED"` ;
+- consommation stable après les bancs externes Lot 3B/3C répétés.
+
+Après cette recette seulement, le Lot 4 pourra être accepté et la version 1.0.0
+stable publiée comme cutoff de conservation des données.
 
 ## English
 
-This release adds the bounded interactive Web actions from Lot 3C to the isolated sessions accepted in Lot 3B.
+### Installation and surfaces
 
-After installation or update:
+Administration is Ingress-only on internal port 8099. Port 8098 exposes only
+`/health/live`, `/health/ready`, and authenticated MCP `/mcp`. Publish 8098 to
+the host only when an external client needs to reach the Bridge.
 
-1. create or retain a client under **MCP clients**;
-2. under **Targets**, add an SSH target, scan its host key, verify the address and fingerprint, and explicitly confirm enrollment;
-3. select password or private-key authentication for a dedicated restricted remote account;
-4. under **SSH capabilities**, define an absolute executable, a JSON literal/parameter token template, a strict scalar input schema, timeout, and stdout/stderr limits;
-5. under **MCP access**, explicitly publish the capability to each authorized client.
+Each MCP client owns a separate namespace and Bearer credential. The clear
+secret is displayed only at creation or rotation and cannot be recovered.
+Rotation immediately invalidates the previous secret and closes only that
+client's Web sessions; revocation blocks all access and must precede archive.
 
-For Web access, create a target using none, HTTP Basic, or configured form authentication, test the connection, then separately publish only the required tools. Credentials remain administrative and never appear in MCP arguments. The **Sessions** page exposes safe active-session metadata only.
+### Standalone use
 
-The Bridge exposes no free-form SSH command. Every call opens a fresh connection verified against the pinned host key, without PTY, agent, forwarding, stdin, or caller-provided environment. Effective authority remains exactly that of the configured SSH account, so use a dedicated least-privilege account.
+1. Create a client under **MCP clients** and copy its credential.
+2. Create an SSH or Web target using a dedicated least-privilege account.
+3. For SSH, explicitly confirm the host key and define a capability with an
+   absolute executable, typed arguments, and time/output limits.
+4. For Web, confirm the origin and resolved addresses, configure the account
+   and session limits, then test the browser.
+5. Under **MCP access**, publish only the capabilities required by the client.
+6. Configure the MCP client with
+   `http://<host>:<published-port>/mcp` and
+   `Authorization: Bearer <credential>`.
 
-For HAOS acceptance, enroll a restricted test target and a harmless capability. Call it twice through a generic MCP client and once through ACP/AEP, verify isolation between two clients, output bounds, refusal after a host-key change, absence of secrets and AppArmor denials in logs, then test disable and restart. Host-key rotation must always require a new scan and explicit confirmation.
+The Bridge exposes neither a free-form SSH command nor arbitrary Web URLs,
+selectors, JavaScript, uploads, or downloads. Web sessions are disposable, and
+their actual authority is exactly that of the configured target account.
 
-The available tools are `open`, `snapshot`, `wait`, `navigate`, `click`, `fill`, `select`, `press` and `close`. Actions accept only a relative path or an opaque reference from the latest snapshot. Every attempted action invalidates that reference generation.
+### ACP/AEP integration
 
-Effective authority is exactly the authority of the configured Web account. Use a dedicated least-privilege account. The Bridge does not claim finer business authorization than the target and never replays an interactive action after an error or lost response.
+ACP connects as an ordinary MCP client: create a dedicated Bridge namespace,
+publish its tools, then create an ACP Streamable HTTP connector for `/mcp` with
+that credential. ACP discovers only that namespace and narrows tools per task.
+AEP receives that envelope through ACP's existing generic MCP boundary. The
+Bridge has no ACP/AEP-specific endpoint, secret, or back channel.
+
+Standalone AEP and other MCP clients may instead use their own namespace
+directly without ACP.
+
+### Ambiguous outcomes and capacity
+
+The Bridge never automatically replays an SSH command or Web action. After a
+lost response, `effect_possible: true` means the target may have applied the
+effect and the client must not retry automatically.
+
+Global, client, adapter, and target limits reject excess load immediately with
+a `*_busy` code; there is no hidden execution queue. MCP bodies above 256 KiB
+are rejected before the protocol stack buffers them.
+
+### Backup, restore, and upgrades
+
+The App uses HAOS cold backup (`backup: cold`). A consistent backup must retain
+all of `/data` together, especially:
+
+- `mcp_capability_bridge.db`;
+- `private/credential-pepper`;
+- `private/target-secret-key`.
+
+Never restore the database without both private keys. Chromium profiles and
+Web sessions live under `/tmp`, are excluded from backup, and are never
+restored.
+
+To test restore, stop the App, create and restore a HAOS backup, restart, verify
+readiness and all clients/targets/publications, then call one harmless
+capability. A Web session open before backup must be gone.
+
+SQLite generation remains `1` for candidate 0.7.0. Test installations remain
+replaceable until acceptance. Promotion to 1.0.0 freezes this schema as the
+production cutoff: every later durable change requires a versioned,
+transactional migration tested from every supported version. Unknown
+generations always fail startup.
+
+### Final HAOS acceptance for 0.7.0
+
+Validate clean install; UI; upgrade from 0.6.2; cold backup/restore; two-client
+isolation; rotation/revocation; repeated fresh SSH calls; Reader/Admin Web
+authority; cleanup; standalone and Bridge → ACP → AEP calls; restart during an
+operation without replay; stable resources; and clean application/AppArmor
+logs. Repeat the external Lot 3B/3C benches where appropriate.
+
+Only after that evidence may Lot 4 be accepted and stable 1.0.0 published as
+the production-data preservation cutoff.

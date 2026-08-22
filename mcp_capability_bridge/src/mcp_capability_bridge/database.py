@@ -33,6 +33,13 @@ def initialize(path: Path) -> None:
                 generation INTEGER NOT NULL
             );
             INSERT OR IGNORE INTO schema_info(singleton, generation) VALUES (1, 1);
+        """)
+        generation = database.execute(
+            "SELECT generation FROM schema_info WHERE singleton = 1"
+        ).fetchone()[0]
+        if generation != SCHEMA_VERSION:
+            raise RuntimeError(f"Unsupported database generation: {generation}")
+        database.executescript("""
             CREATE TABLE IF NOT EXISTS namespaces (
                 id TEXT PRIMARY KEY,
                 key TEXT NOT NULL UNIQUE,
@@ -82,11 +89,6 @@ def initialize(path: Path) -> None:
             );
             CREATE INDEX IF NOT EXISTS activity_events_recent ON activity_events(id DESC);
         """)
-        generation = database.execute(
-            "SELECT generation FROM schema_info WHERE singleton = 1"
-        ).fetchone()[0]
-        if generation != SCHEMA_VERSION:
-            raise RuntimeError(f"Unsupported database generation: {generation}")
 
 
 def database_ready(path: Path) -> bool:

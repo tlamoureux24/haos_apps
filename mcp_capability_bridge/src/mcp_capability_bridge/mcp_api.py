@@ -14,7 +14,7 @@ from mcp.server.fastmcp.server import Settings as FastMCPSettings
 from mcp.types import TextContent, Tool as MCPTool
 from starlette.responses import JSONResponse
 
-from mcp_capability_bridge.runtime_state import RuntimeCounters
+from mcp_capability_bridge.runtime_state import RuntimeCapacityError, RuntimeCounters
 from mcp_capability_bridge.activity import ActivityJournal
 from mcp_capability_bridge.contracts import AdapterCallError, InvocationContext
 from mcp_capability_bridge.store import NamespaceContext, NamespaceStore
@@ -103,32 +103,37 @@ class NamespaceMCP(FastMCP):
         except Exception:
             self.activity.record(event="tool_call", status="refused", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
             raise ValueError("invalid_arguments") from None
-        async with self.counters.operation(namespace.namespace_id, published.target_id, published.adapter_type):
-            # Resolve again under the target lease. An admin mutation may have
-            # happened while this call was waiting for a concurrency slot.
-            try:
-                published = await anyio.to_thread.run_sync(self.store.resolve, namespace.namespace_id, name)
-            except KeyError:
-                self.activity.record(event="tool_call", status="refused", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
-                raise ValueError("capability_not_available") from None
-            adapter = self.store.registry.get(published.adapter_type)
-            secret = self.store.secret_box.decrypt(published.encrypted_secret) if published.encrypted_secret is not None else None
-            try:
+        try:
+            async with self.counters.operation(namespace.namespace_id, published.target_id, published.adapter_type):
+                # Resolve again under the target lease. An admin mutation may
+                # have happened before this fail-fast lease was acquired.
+                try:
+                    published = await anyio.to_thread.run_sync(self.store.resolve, namespace.namespace_id, name)
+                except KeyError:
+                    self.activity.record(event="tool_call", status="refused", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
+                    raise ValueError("capability_not_available") from None
+                adapter = self.store.registry.get(published.adapter_type)
+                secret = self.store.secret_box.decrypt(published.encrypted_secret) if published.encrypted_secret is not None else None
                 scoped = getattr(adapter, "invoke_scoped", None)
-                if callable(scoped):
-                    result = await scoped(
-                        InvocationContext(namespace.namespace_id, namespace.credential_generation, published.target_id),
-                        published.capability.capability_id, published.configuration, secret, arguments,
-                    )
-                else:
-                    result = await adapter.invoke(published.capability.capability_id, published.configuration, secret, arguments)
-            except AdapterCallError as exc:
-                self.activity.record(event="tool_call", status="failure", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
-                error = json.dumps({"error": {"code": exc.code, "effect_possible": exc.effect_possible}}, separators=(",", ":"))
-                raise ToolError(error) from None
-            except Exception:
-                self.activity.record(event="tool_call", status="failure", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
-                raise ToolError('{"error":{"code":"adapter_call_failed","effect_possible":false}}') from None
+                try:
+                    if callable(scoped):
+                        result = await scoped(
+                            InvocationContext(namespace.namespace_id, namespace.credential_generation, published.target_id),
+                            published.capability.capability_id, published.configuration, secret, arguments,
+                        )
+                    else:
+                        result = await adapter.invoke(published.capability.capability_id, published.configuration, secret, arguments)
+                except AdapterCallError as exc:
+                    self.activity.record(event="tool_call", status="failure", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
+                    error = json.dumps({"error": {"code": exc.code, "effect_possible": exc.effect_possible}}, separators=(",", ":"))
+                    raise ToolError(error) from None
+                except Exception:
+                    self.activity.record(event="tool_call", status="failure", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
+                    raise ToolError('{"error":{"code":"adapter_call_failed","effect_possible":false}}') from None
+        except RuntimeCapacityError as exc:
+            self.activity.record(event="tool_call", status="refused", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
+            error = json.dumps({"error": {"code": str(exc), "effect_possible": False}}, separators=(",", ":"))
+            raise ToolError(error) from None
         payload = {"result": result, "effect_possible": bool(published.capability.effect_capable)}
         try:
             encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)

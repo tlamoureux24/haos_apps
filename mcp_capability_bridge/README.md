@@ -2,18 +2,18 @@
 
 [Français](README.fr.md) | English
 
-Current release: **0.6.2 — persistent bounded Activity journal**.
+Current release: **0.7.0 — Lot 4 production candidate**.
 
-MCP Capability Bridge will be an independent Home Assistant OS App that exposes deliberately bounded access to non-MCP technical systems through standard MCP Streamable HTTP tools.
+MCP Capability Bridge is an independent Home Assistant OS App that exposes deliberately bounded access to non-MCP technical systems through standard MCP Streamable HTTP tools.
 
-The initial built-in adapters will be:
+The built-in adapters are:
 
 - bounded administrator-defined SSH capabilities, with a fresh verified connection for every call;
 - short-lived interactive Web sessions whose real authority is exactly the authority of the configured target account.
 
-Multiple MCP clients will be supported through isolated namespaces. Each namespace has its own one-time Bearer credential, published tool inventory, quotas and Web sessions. Agent Control Plane may connect as an ordinary namespace client and further restrict those tools per task; Agent Execution Plane receives them through ACP's existing generic MCP boundary. Neither component is required for standalone use.
+Multiple MCP clients are supported through isolated namespaces. Each namespace has its own one-time Bearer credential, published tool inventory, quotas and Web sessions. Agent Control Plane may connect as an ordinary namespace client and further restrict those tools per task; Agent Execution Plane receives them through ACP's existing generic MCP boundary. Neither component is required for standalone use.
 
-The administration surface will be Home Assistant Ingress-only and reuse the established ACP/AEP visual and interaction conventions, including bilingual FR/EN content, light/dark mode, top-right page actions, accessible right drawers, stable scrollbar geometry and responsive layouts.
+The administration surface is Home Assistant Ingress-only and reuses the established ACP/AEP visual and interaction conventions, including bilingual FR/EN content, light/dark mode, top-right page actions, accessible right drawers, stable scrollbar geometry and responsive layouts.
 
 Authoritative design documents:
 
@@ -22,4 +22,4 @@ Authoritative design documents:
 - [Threat model](THREAT_MODEL.md)
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
 
-Version 0.6.2 persists the payload-free Activity journal across application restarts while retaining only the latest 500 events. See [installation and acceptance notes](DOCS.md).
+Version 0.7.0 is the hardened Lot 4 candidate. It remains pre-cutoff until the final HAOS install, upgrade, backup/restore, endurance and AppArmor acceptance is complete. See [installation, integration and acceptance notes](DOCS.md).

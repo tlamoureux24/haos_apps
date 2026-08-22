@@ -95,6 +95,14 @@ class InteractiveChromiumTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(.05)
         self.assertEqual(Fixture.effects, 1)
 
+    async def test_repeated_sessions_leave_no_profiles_or_runtime_state(self):
+        for _ in range(8):
+            opened = await self.manager.open(self.context, self.configuration, None)
+            await self.manager.snapshot(self.context, opened["session"])
+            await self.manager.close(self.context, opened["session"])
+        self.assertEqual(self.manager.count(), 0)
+        self.assertEqual(list(Path(self.temporary.name).glob("profile-*")), [])
+
     async def test_target_account_is_the_real_authority_boundary(self):
         configuration = dict(self.configuration);configuration["authentication"]={"mode":"basic"}
         reader = b'{"mode":"basic","username":"reader","password":"reader-secret"}'

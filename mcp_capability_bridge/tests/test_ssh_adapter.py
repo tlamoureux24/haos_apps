@@ -145,6 +145,32 @@ class SSHContractTests(unittest.TestCase):
 
 
 class SSHRuntimeTests(unittest.TestCase):
+    def test_repeated_calls_use_fresh_connections_and_leave_no_tasks(self):
+        async def scenario():
+            fixture = await SSHFixture().start()
+            try:
+                adapter = SSHAdapter()
+                secret = json.dumps(
+                    {"mode": "password", "password": fixture.password}
+                ).encode()
+                before = fixture.connections
+                for index in range(20):
+                    result = await adapter.invoke(
+                        "overview",
+                        fixture.configuration(),
+                        secret,
+                        {"value": str(index)},
+                    )
+                    self.assertEqual(result["exit_status"], 0)
+                self.assertEqual(fixture.connections, before + 20)
+                self.assertFalse(
+                    any("_drain" in repr(task.get_coro()) for task in asyncio.all_tasks())
+                )
+            finally:
+                await fixture.stop()
+
+        asyncio.run(scenario())
+
     def test_admin_enrollment_capability_publication_and_in_use_guard(self):
         async def scenario():
             fixture = await SSHFixture().start()
