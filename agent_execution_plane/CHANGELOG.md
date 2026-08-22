@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0
+
+- Promote the already stable Home Assistant App to the 1.0 production version
+  after complete real-HAOS acceptance of standalone, OAuth, dynamic-tool, API
+  and ACP-boundary operation.
+- Preserve every execution, provider, MCP, standalone API, storage and ACP
+  integration contract unchanged.
+
 ## 0.6.6
 
 - Promote the Home Assistant App metadata from experimental to stable after the

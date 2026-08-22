@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane `0.6.6` est un moteur de raisonnement et d’exécution utilisable en mode autonome. Il applique la priorité administrateur des modèles et les règles communes de fallback/non-replay à l’enveloppe exacte des capacités opérationnelles MCP fournie par la source courante.
+Agent Execution Plane `1.0.0` est un moteur de raisonnement et d’exécution utilisable en mode autonome. Il applique la priorité administrateur des modèles et les règles communes de fallback/non-replay à l’enveloppe exacte des capacités opérationnelles MCP fournie par la source courante.
 
 ## Frontière de responsabilité
 

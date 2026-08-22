@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0
+
+- Promote the already stable Home Assistant App to the 1.0 production version
+  after its governance, orchestration, audit and ACP↔AEP boundary paths passed
+  real-HAOS acceptance.
+- Preserve every API, MCP, storage, policy and execution contract unchanged.
+
 ## 0.46.13
 
 - Add a persistent, payload-free Activity view backed by the existing audit

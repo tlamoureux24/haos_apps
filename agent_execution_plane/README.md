@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane `0.6.6` is a standalone-capable model reasoning and execution engine. It applies administrator model priority and the common fallback/no-replay rules to exactly the MCP operational capability envelope supplied by the current source.
+Agent Execution Plane `1.0.0` is a standalone-capable model reasoning and execution engine. It applies administrator model priority and the common fallback/no-replay rules to exactly the MCP operational capability envelope supplied by the current source.
 
 ## Responsibility boundary
 
