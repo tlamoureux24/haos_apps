@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.46.12
+
+- Drive the Overview service badge from the real `/admin/api/v1/status`
+  response instead of rendering an unconditional success label.
+- Show a bilingual red unavailable state when the administration status probe
+  fails or does not report `ready`, while retaining `/health/ready` for HAOS.
+
 ## 0.46.11
 
 - Allow revoked identities to be archived without deleting credentials, policy

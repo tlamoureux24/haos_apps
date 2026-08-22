@@ -26,6 +26,17 @@ class FoundationTests(unittest.TestCase):
         self.assertIn("`${tr('lifecycleState')}: ${tr(lifecycle)}`", ADMIN_JS)
         self.assertNotIn("`${tr('standaloneState')}: ${tr(configured?'configured':'notConfigured')}`", ADMIN_JS)
 
+    def test_service_badge_uses_real_admin_status_and_has_failure_state(self):
+        main_source = Path(__file__).parents[1].joinpath("src/agent_execution_plane/main.py").read_text(encoding="utf-8")
+        self.assertIn('Route("/admin/api/v1/status", admin_status)', main_source)
+        self.assertIn("available = database_ready(settings.database_path)", main_source)
+        self.assertIn("loadServiceStatus", ADMIN_JS)
+        self.assertIn("/admin/api/v1/status", ADMIN_JS)
+        self.assertIn("response.ok&&data.status==='ready'", ADMIN_JS)
+        self.assertIn("serviceUnavailable:'Service indisponible'", ADMIN_JS)
+        self.assertIn("serviceUnavailable:'Service unavailable'", ADMIN_JS)
+        self.assertIn(".health.unavailable", ADMIN_CSS)
+
     def test_control_plane_configuration_has_page_action_and_explicit_feedback(self):
         main_source=Path(__file__).parents[1].joinpath("src/agent_execution_plane/main.py").read_text(encoding="utf-8")
         self.assertIn('id="acp-edit" class="page-action"',ADMIN_JS)

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.5
+
+- Add a minimal administration status endpoint backed by the real database
+  readiness check.
+- Drive the Overview service badge from that endpoint and show a bilingual red
+  unavailable state on a failed or non-ready response.
+- Preserve the existing `/health/live` and `/health/ready` contracts and all
+  execution, standalone, provider and ACP-boundary behavior.
+
 ## 0.6.4
 
 - Bound every ACP lifecycle exchange so a stalled MCP session cannot freeze job polling indefinitely.

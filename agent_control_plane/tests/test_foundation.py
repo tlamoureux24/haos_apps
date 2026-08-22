@@ -162,6 +162,21 @@ class AdministrationInterfaceTests(unittest.TestCase):
             self.assertIn(f"'{form}'", ADMIN_JS)
         self.assertIn("drawer.classList.toggle('wide'", ADMIN_JS)
 
+    def test_service_badge_uses_real_admin_status_and_has_failure_state(self) -> None:
+        main_source = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "agent_control_plane"
+            / "main.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('id="service-health"', main_source)
+        self.assertNotIn('class="health"><i></i><a href=', main_source)
+        self.assertIn("status=await api('/admin/api/v1/status')", ADMIN_JS)
+        self.assertIn("status.status==='ready'", ADMIN_JS)
+        self.assertIn("Service indisponible", ADMIN_JS)
+        self.assertIn("Service unavailable", ADMIN_JS)
+        self.assertIn(".health.unavailable", ADMIN_CSS)
+
     def test_task_drawer_contains_the_optional_fixed_argument_editor(self) -> None:
         for contract in (
             "fixed_arguments_v1",

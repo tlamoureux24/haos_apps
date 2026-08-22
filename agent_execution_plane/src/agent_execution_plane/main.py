@@ -77,6 +77,14 @@ async def ready(_: Request) -> JSONResponse:
     return JSONResponse({"status": "ready", "version": __version__})
 
 
+async def admin_status(_: Request) -> JSONResponse:
+    available = database_ready(settings.database_path)
+    return JSONResponse(
+        {"status": "ready" if available else "not_ready", "version": __version__, "surface": "admin"},
+        status_code=200 if available else 503,
+    )
+
+
 async def admin_index(request: Request) -> HTMLResponse:
     prefix = request.headers.get("x-ingress-path", request.scope.get("root_path", "")).rstrip("/")
     safe = html.escape(prefix, quote=True)
@@ -252,7 +260,7 @@ async def lifespan(_: Starlette):
 
 
 common = [Route("/health/live", live), Route("/health/ready", ready)]
-admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/models", models_api, methods=["GET", "POST"]), Route("/admin/api/v1/models/{action}", model_action, methods=["POST"]), Route("/admin/api/v1/oauth/account", oauth_account), Route("/admin/api/v1/oauth/models", oauth_models), Route("/admin/api/v1/oauth/{action}", oauth_action, methods=["POST"]), Route("/admin/api/v1/standalone",standalone_admin_state), Route("/admin/api/v1/standalone/credential/{action}",standalone_credential_action,methods=["POST"]), Route("/admin/api/v1/acp",acp_admin,methods=["GET","POST"]), Route("/admin/api/v1/pending/abandon",abandon_pending,methods=["POST"])]
+admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/status", admin_status), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/models", models_api, methods=["GET", "POST"]), Route("/admin/api/v1/models/{action}", model_action, methods=["POST"]), Route("/admin/api/v1/oauth/account", oauth_account), Route("/admin/api/v1/oauth/models", oauth_models), Route("/admin/api/v1/oauth/{action}", oauth_action, methods=["POST"]), Route("/admin/api/v1/standalone",standalone_admin_state), Route("/admin/api/v1/standalone/credential/{action}",standalone_credential_action,methods=["POST"]), Route("/admin/api/v1/acp",acp_admin,methods=["GET","POST"]), Route("/admin/api/v1/pending/abandon",abandon_pending,methods=["POST"])]
 api = [Route("/api/v1/execute",standalone_boundary.submit,methods=["POST"]),Route("/api/v1/executions/{execution_id}",standalone_boundary.get,methods=["GET"]),Route("/api/v1/executions/{execution_id}/ack",standalone_boundary.ack,methods=["POST"])]
 routes = common + (admin if settings.surface == "admin" else api)
 app = Starlette(routes=routes, middleware=[Middleware(SecurityHeadersMiddleware)], lifespan=lifespan)
