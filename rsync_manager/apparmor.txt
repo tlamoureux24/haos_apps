@@ -1,6 +1,6 @@
 #include <tunables/global>
 
-profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
+profile rsync_manager flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
   #include <abstractions/bash>
   #include <abstractions/nameservice>
@@ -103,7 +103,7 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   /backup/ rw,
   /backup/** rwlk,
   /mnt/ rw,
-  /mnt/** rwk,
+  /mnt/** rwlk,
 
   # Temporary queues, credentials, rsync output and mount diagnostics.
   /tmp/ rw,

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.2 - 2026-08-22
+
+- Enforce the bounded AppArmor profile after the complete HAOS functional audit.
+- Allow audited read access on transient `/mnt` CIFS trees used by rsync.
+- Preserve the explicit capability set and user-configurable network, signal and mount operations required by SMB/CIFS and SMTP jobs.
+
 ## 1.3.1 - 2026-08-22
 
 - Replace broad AppArmor file and executable-tree permissions with a bounded diagnostic baseline for S6, Lighttpd, CGI, cron, rsync, msmtp and CIFS helpers.

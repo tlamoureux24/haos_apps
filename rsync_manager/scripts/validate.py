@@ -112,8 +112,10 @@ def main() -> int:
 
     if re.search(r"^\s*capability,\s*$", apparmor, flags=re.MULTILINE):
         raise RuntimeError("AppArmor must not grant every capability")
-    if "flags=(attach_disconnected,mediate_deleted,complain)" not in apparmor:
-        raise RuntimeError("The bounded HAOS audit release must remain in complain mode")
+    if "flags=(attach_disconnected,mediate_deleted)" not in apparmor:
+        raise RuntimeError("The audited AppArmor profile must run in enforce mode")
+    if "complain" in apparmor:
+        raise RuntimeError("The final AppArmor profile must not remain in complain mode")
     for forbidden_rule in (
         "  file,",
         "  /bin/** ix,",
@@ -137,7 +139,7 @@ def main() -> int:
             "/share/** rwlk,",
             "/media/** rwlk,",
             "/backup/** rwlk,",
-            "/mnt/** rwk,",
+            "/mnt/** rwlk,",
             "/usr/bin/rsync ix,",
             "/usr/bin/msmtp ix,",
             "/sbin/mount.cifs ix,",
