@@ -3,6 +3,7 @@
 ## Unreleased — external acceptance tooling
 
 - Adds a Dockerized black-box Lot 3B acceptance runner outside the add-on image, avoiding ACP tasks, reports and audit pollution while testing live HAOS session isolation, rotation, revocation, expiry and fresh browser profiles.
+- Keeps control sessions alive during human rotation/revocation pauses so the 30-second inactivity test limit cannot create a false isolation failure.
 
 ## 0.5.1 — 2026-08-22
 

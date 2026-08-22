@@ -17,6 +17,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 FIXTURE_PORT = 18080
+KEEPALIVE_SECONDS = 8
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
@@ -122,6 +123,23 @@ async def close(url: str, token: str, prefix: str, handle: str):
     return await call(url, token, f"{prefix}_close", {"session": handle})
 
 
+async def interactive_pause(message:str, keepalive:list[tuple[str,str,str,str]], secret_prompt:str|None=None)->str|None:
+    stop=asyncio.Event()
+    async def pulse(url:str,token:str,prefix:str,handle:str):
+        while not stop.is_set():
+            try:await asyncio.wait_for(stop.wait(),timeout=KEEPALIVE_SECONDS)
+            except asyncio.TimeoutError:
+                try:await snapshot(url,token,prefix,handle)
+                except Exception:pass
+    tasks=[asyncio.create_task(pulse(*item)) for item in keepalive]
+    try:
+        await asyncio.to_thread(input,message)
+        return await asyncio.to_thread(getpass.getpass,secret_prompt) if secret_prompt else None
+    finally:
+        stop.set()
+        await asyncio.gather(*tasks,return_exceptions=True)
+
+
 async def run(url: str, prefix: str, token_a: str, token_b: str):
     required = {f"{prefix}_{name}" for name in ("open", "snapshot", "wait", "close")}
     check(required <= await inventory(url, token_a), "outils publiés pour le client A")
@@ -154,8 +172,7 @@ async def run(url: str, prefix: str, token_a: str, token_b: str):
 
     session_a = await open_session(url, token_a, prefix)
     session_b = await open_session(url, token_b, prefix)
-    input("\nRenouvelle maintenant le credential du client A dans le Bridge, puis appuie sur Entrée… ")
-    rotated_a = getpass.getpass("Nouveau credential A (saisie masquée) : ").strip()
+    rotated_a = str(await interactive_pause("\nRenouvelle maintenant le credential du client A dans le Bridge, puis appuie sur Entrée… ",[(url,token_a,prefix,str(session_a["session"])),(url,token_b,prefix,str(session_b["session"]))],"Nouveau credential A (saisie masquée) : ")).strip()
     check(await credential_rejected(url,token_a),"ancien credential A refusé après rotation")
     old_handle = await snapshot(url, rotated_a, prefix, str(session_a["session"]))
     check(old_handle.isError and error_code(old_handle) == "invalid_web_session", "rotation ferme la session A")
@@ -165,7 +182,7 @@ async def run(url: str, prefix: str, token_a: str, token_b: str):
 
     revoked_a_session = await open_session(url, rotated_a, prefix)
     surviving_b = await open_session(url, token_b, prefix)
-    input("\nRévoque maintenant le client A dans le Bridge, puis appuie sur Entrée… ")
+    await interactive_pause("\nRévoque maintenant le client A dans le Bridge, puis appuie sur Entrée… ",[(url,rotated_a,prefix,str(revoked_a_session["session"])),(url,token_b,prefix,str(surviving_b["session"]))])
     check(await credential_rejected(url,rotated_a),"credential A refusé après révocation")
     decoded_result(await snapshot(url, token_b, prefix, str(surviving_b["session"])))
     print("OK  révocation A ne ferme pas la session B")
