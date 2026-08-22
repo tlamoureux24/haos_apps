@@ -137,9 +137,9 @@ jobs:
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/activity | jq -e 'any(.events[]; .event=="app_started")' >/dev/null
           docker stop -t 15 mcb-smoke >/dev/null
           docker rm mcb-smoke >/dev/null
-          cp -a "${root}/data" "${root}/backup"
-          rm -rf "${root}/data"
-          cp -a "${root}/backup" "${root}/data"
+          sudo cp -a "${root}/data" "${root}/backup"
+          sudo rm -rf "${root}/data"
+          sudo cp -a "${root}/backup" "${root}/data"
           start
           wait_ready
           PYTHONPATH=agent_control_plane/src python3 -c 'import asyncio,sys; from agent_control_plane.connectors import discover_streamable_http; assert asyncio.run(discover_streamable_http("http://127.0.0.1:18098/mcp",sys.argv[1])) == []' "${second_token}"
