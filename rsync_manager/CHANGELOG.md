@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1 - 2026-08-22
+
+- Replace broad AppArmor file and executable-tree permissions with a bounded diagnostic baseline for S6, Lighttpd, CGI, cron, rsync, msmtp and CIFS helpers.
+- Keep user-configurable network, signal and mount operations intentionally broad during this audit.
+- Temporarily run the narrowed profile in complain mode for one complete HAOS functional campaign before the final enforced profile.
+
 ## 1.3.0 - 2026-08-22
 
 - Redesign the complete Ingress interface with the shared Agent and UniFi visual language.

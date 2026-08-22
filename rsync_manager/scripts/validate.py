@@ -112,6 +112,20 @@ def main() -> int:
 
     if re.search(r"^\s*capability,\s*$", apparmor, flags=re.MULTILINE):
         raise RuntimeError("AppArmor must not grant every capability")
+    if "flags=(attach_disconnected,mediate_deleted,complain)" not in apparmor:
+        raise RuntimeError("The bounded HAOS audit release must remain in complain mode")
+    for forbidden_rule in (
+        "  file,",
+        "  /bin/** ix,",
+        "  /sbin/** ix,",
+        "  /usr/bin/** ix,",
+        "  /usr/sbin/** ix,",
+        "  /usr/local/bin/** ix,",
+        "  /package/** ix,",
+        "  /command/** ix,",
+    ):
+        if forbidden_rule in apparmor:
+            raise RuntimeError(f"Broad AppArmor audit rule: {forbidden_rule.strip()}")
     require(
         apparmor,
         (
@@ -119,16 +133,22 @@ def main() -> int:
             "capability dac_override,",
             "capability dac_read_search,",
             "capability setpcap,",
-            "/data/** rw,",
-            "/share/** rw,",
-            "/media/** rw,",
-            "/backup/** rw,",
+            "/data/** rwlk,",
+            "/share/** rwlk,",
+            "/media/** rwlk,",
+            "/backup/** rwlk,",
             "/mnt/** rwk,",
+            "/usr/bin/rsync ix,",
+            "/usr/bin/msmtp ix,",
+            "/sbin/mount.cifs ix,",
+            "/usr/sbin/lighttpd ix,",
+            "/usr/sbin/crond ix,",
+            "/www/cgi-bin/api.sh rix,",
         ),
         "AppArmor invariant",
     )
     for forbidden in ("/config/**", "/addons/**", "/ssl/**"):
-        if forbidden in apparmor:
+        if re.search(rf"^\s*{re.escape(forbidden)}", apparmor, flags=re.MULTILINE):
             raise RuntimeError(f"Overbroad AppArmor rule: {forbidden}")
 
     if "--tls-certcheck=on" not in manager or "--tls-certcheck=off" in manager:
