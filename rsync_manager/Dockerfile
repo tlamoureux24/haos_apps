@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base:latest
 
-ARG BUILD_VERSION="1.2.0"
+ARG BUILD_VERSION="1.3.0"
 ARG BUILD_ARCH
 
 LABEL \
@@ -23,6 +23,7 @@ RUN apk add --no-cache \
     rsync
 
 COPY rootfs /
+COPY icon.png /www/assets/icon.png
 
 RUN chmod 755 \
     /usr/local/bin/rsync_manager.sh \

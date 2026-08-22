@@ -15,12 +15,6 @@ RSYNC_PACKAGE = re.compile(r"\d+\.\d+\.\d+-r\d+")
 EXPECTED_ASSETS = {
     "icon.png": "80fb69a44befb214c60d3bbde7618fbb087e3e82906a7e59d5a380379145a20d",
     "logo.png": "b8950cdeb846867d4e6040ca58f265712fa0f5e28cad9289d68d46f32436a83d",
-    "rootfs/www/vendor/bootstrap/bootstrap.bundle.min.js": (
-        "e4fd49181388c48ec5040bd3fe66f57c29c8e67fcd8502b3354b96ec7ab47cc7"
-    ),
-    "rootfs/www/vendor/bootstrap/bootstrap.min.css": (
-        "d85327d99c7a3ee1f9b5d0500d1370acea3ad2db39c163c2f51f232baedbdede"
-    ),
 }
 
 
@@ -42,6 +36,8 @@ def main() -> int:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     apparmor = (ROOT / "apparmor.txt").read_text(encoding="utf-8")
     index = (ROOT / "rootfs/www/index.html").read_text(encoding="utf-8")
+    frontend_css = (ROOT / "rootfs/www/assets/app.css").read_text(encoding="utf-8")
+    frontend_js = (ROOT / "rootfs/www/assets/app.js").read_text(encoding="utf-8")
     manager = (ROOT / "rootfs/usr/local/bin/rsync_manager.sh").read_text(
         encoding="utf-8"
     )
@@ -57,6 +53,8 @@ def main() -> int:
         raise RuntimeError(
             f"Docker App version {docker_version} != config version {config_version}"
         )
+    if f"v{config_version}" not in index:
+        raise RuntimeError("The branded interface version must match the App version")
     if not RSYNC_PACKAGE.fullmatch(package):
         raise RuntimeError(f"Invalid rsync package version: {package}")
 
@@ -105,6 +103,7 @@ def main() -> int:
             "lighttpd",
             "msmtp",
             "rsync",
+            "COPY icon.png /www/assets/icon.png",
         ),
         "Docker invariant",
     )
@@ -147,18 +146,48 @@ def main() -> int:
     require(
         index,
         (
-            'href="vendor/bootstrap/bootstrap.min.css"',
-            'src="vendor/bootstrap/bootstrap.bundle.min.js"',
+            'href="assets/app.css"',
+            'src="assets/app.js"',
+            'src="assets/icon.png"',
+            'class="site-header"',
+            'class="metrics"',
+            'id="job-drawer-shell"',
+            'id="log-drawer-shell"',
+            'id="language-toggle"',
+            'id="theme-toggle"',
+        ),
+        "frontend shell invariant",
+    )
+    require(
+        frontend_css,
+        (
+            "--cyan:#058caf",
+            "html[data-theme=dark]",
+            ".drawer-shell",
+            ".endpoint-grid",
+            "@media(max-width:620px)",
+        ),
+        "frontend style invariant",
+    )
+    require(
+        frontend_js,
+        (
             "rsync-manager-language",
             "navigator.language",
-            'id="language-fr-btn"',
-            'id="language-en-btn"',
             "function applyLanguage()",
-            "toLocaleString(language === 'en' ? 'en-GB' : 'fr-FR')",
+            "toLocaleString(language==='en'?'en-GB':'fr-FR')",
+            "save_jobs",
+            "test_email",
+            "mount_test",
+            "get_log",
+            "importConfig",
+            "exportConfig",
         ),
-        "local frontend and localization invariant",
+        "frontend behavior invariant",
     )
-    if "cdn.jsdelivr.net" in index:
+    if "bootstrap" in index.lower():
+        raise RuntimeError("The redesigned Ingress UI must not depend on Bootstrap")
+    if any("cdn.jsdelivr.net" in asset for asset in (index, frontend_css, frontend_js)):
         raise RuntimeError("The Ingress UI must not depend on jsDelivr")
     if (ROOT / "rootfs/www/style.css").exists():
         raise RuntimeError("The unused legacy stylesheet must remain removed")

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0 - 2026-08-22
+
+- Redesign the complete Ingress interface with the shared Agent and UniFi visual language.
+- Add the branded header, compact navigation, responsive metric cards and consistent light and dark themes.
+- Replace Bootstrap tabs and modals with accessible native views and side drawers.
+- Present rsync jobs with source-to-target summaries, schedules, latest states and transfer statistics.
+- Reorganize SMTP settings and configuration transfers into focused responsive cards.
+- Split the monolithic page into `index.html`, `assets/app.css` and `assets/app.js` without changing API or data contracts.
+- Preserve French and English localization and every existing job, SMTP, import, export and log action.
+
 ## 1.2.0 - 2026-08-10
 
 - Add complete French and English localization to the Ingress interface.
