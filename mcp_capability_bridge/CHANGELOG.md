@@ -14,6 +14,8 @@
 - Reject password, hidden and file-field filling and expose no caller URL,
   selector, script, upload, download, credential or browser-preference surface.
 - Add prominent bilingual target-account authority and disabled-TLS warnings.
+- Add a disposable external Docker acceptance bench for real HAOS Lot 3C
+  testing without involving or polluting ACP/AEP.
 
 ## 0.5.4 — 2026-08-22
 
