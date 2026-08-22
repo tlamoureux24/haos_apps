@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.5
+
+- Return the narrowed profile to temporary AppArmor complain mode for a complete HAOS audit instead of discovering transient permissions through iterative enforced releases.
+- Allow the exact `bashio` launcher alias, canonical script and Bash interpreter required by this App's `with-contenv` shebang.
+- Retain the exact `s6-linux-init-hpr` shutdown paths discovered by the first enforced attempt.
+
 ## 1.1.4
 
 - Allow the exact transient `s6-linux-init-hpr` shutdown executable through both its stable package alias and its current versioned target.
