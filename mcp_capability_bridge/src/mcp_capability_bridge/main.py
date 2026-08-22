@@ -57,7 +57,7 @@ def build_runtime_state(settings: Settings, registry: AdapterRegistry | None = N
     browser=BrowserRuntime();browser.prepare()
     web_sessions=WebSessionManager(browser.root)
     store = NamespaceStore(settings.database_path, pepper, SecretBox(target_key), registry or AdapterRegistry((SSHAdapter(),WebAdapter(web_sessions))))
-    return RuntimeState(settings, store, RuntimeCounters(), secrets.token_urlsafe(32), {}, {}, browser, web_sessions, ActivityJournal())
+    return RuntimeState(settings, store, RuntimeCounters(), secrets.token_urlsafe(32), {}, {}, browser, web_sessions, ActivityJournal(settings.database_path))
 
 
 class SecurityHeadersMiddleware:

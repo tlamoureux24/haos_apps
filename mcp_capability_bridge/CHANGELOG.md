@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2 — 2026-08-22
+
+- Persiste le journal `Activité` dans SQLite afin de conserver ses événements après un redémarrage de l'application.
+- Maintient une rétention bornée aux 500 événements les plus récents et exclusivement aux métadonnées opérationnelles non sensibles déjà affichées.
+- Ajoute directement la table au schéma frais de génération 1, sans migration ni changement de génération.
+
 ## 0.6.1 — 2026-08-22
 
 - Prevent password, hidden, file-upload and download elements from receiving

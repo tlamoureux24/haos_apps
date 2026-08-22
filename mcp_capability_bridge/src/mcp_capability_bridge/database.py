@@ -69,6 +69,18 @@ def initialize(path: Path) -> None:
                 PRIMARY KEY(namespace_id, published_name),
                 UNIQUE(namespace_id, target_id, capability_id)
             );
+            CREATE TABLE IF NOT EXISTS activity_events (
+                id INTEGER PRIMARY KEY,
+                occurred_at TEXT NOT NULL,
+                event TEXT NOT NULL,
+                status TEXT NOT NULL,
+                source TEXT NOT NULL,
+                client TEXT NOT NULL,
+                tool TEXT NOT NULL,
+                adapter TEXT NOT NULL,
+                duration_ms INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS activity_events_recent ON activity_events(id DESC);
         """)
         generation = database.execute(
             "SELECT generation FROM schema_info WHERE singleton = 1"

@@ -49,11 +49,28 @@ class DatabaseTests(unittest.TestCase):
                         "SELECT name FROM sqlite_master WHERE type='table'"
                     )
                 }
-            self.assertEqual(tables, {"schema_info", "namespaces", "targets", "publications"})
+            self.assertEqual(tables, {"schema_info", "namespaces", "targets", "publications", "activity_events"})
 
     def test_ready_is_false_before_initialization(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.assertFalse(database_ready(Path(directory) / "missing.db"))
+
+    def test_generation_one_initialization_adds_activity_table_to_existing_database(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bridge.db"
+            with closing(sqlite3.connect(path)) as database:
+                database.execute(
+                    "CREATE TABLE schema_info(singleton INTEGER PRIMARY KEY, generation INTEGER NOT NULL)"
+                )
+                database.execute(
+                    "INSERT INTO schema_info(singleton, generation) VALUES(1, 1)"
+                )
+            initialize(path)
+            with closing(sqlite3.connect(path)) as database:
+                table = database.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='activity_events'"
+                ).fetchone()
+            self.assertEqual(table, ("activity_events",))
 
 
 class ActivityJournalTests(unittest.TestCase):
@@ -68,6 +85,32 @@ class ActivityJournalTests(unittest.TestCase):
         serialized = str(rows).lower()
         for forbidden in ("credential", "authorization", "arguments", "result", "payload"):
             self.assertNotIn(forbidden, serialized)
+
+    def test_journal_is_persistent_across_instances_and_remains_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bridge.db"
+            initialize(path)
+            journal = ActivityJournal(path, limit=2)
+            journal.record(event="first", status="success", source="system")
+            journal.record(
+                event="second",
+                status="failure",
+                source="192.0.2.1",
+                tool="web_open",
+                adapter="web",
+            )
+            journal.record(event="third", status="success", source="system")
+
+            restarted = ActivityJournal(path, limit=2)
+            self.assertEqual(
+                [row["event"] for row in restarted.list()],
+                ["third", "second"],
+            )
+            with closing(sqlite3.connect(path)) as database:
+                count = database.execute(
+                    "SELECT COUNT(*) FROM activity_events"
+                ).fetchone()[0]
+            self.assertEqual(count, 2)
 
     def test_runtime_lifecycle_records_started_ready_and_stopped(self) -> None:
         async def scenario() -> None:
@@ -132,7 +175,7 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.6.1</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.6.2</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
