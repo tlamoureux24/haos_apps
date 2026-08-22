@@ -2,7 +2,7 @@
 
 [Français](README.fr.md) | English
 
-Current release: **0.6.0 — bounded interactive Web actions (Lot 3C)**.
+Current release: **0.6.1 — hardened sensitive Web references (Lot 3C corrective patch)**.
 
 MCP Capability Bridge will be an independent Home Assistant OS App that exposes deliberately bounded access to non-MCP technical systems through standard MCP Streamable HTTP tools.
 
@@ -22,4 +22,4 @@ Authoritative design documents:
 - [Threat model](THREAT_MODEL.md)
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
 
-Version 0.6.0 adds generation-bound interactive Web actions without exposing arbitrary URLs, selectors, scripts, uploads or downloads. See [installation and acceptance notes](DOCS.md).
+Version 0.6.1 prevents password, file-upload and download elements from receiving actionable references. See [installation and acceptance notes](DOCS.md).

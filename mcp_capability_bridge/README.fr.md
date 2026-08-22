@@ -2,7 +2,7 @@
 
 Français | [English](README.md)
 
-Version actuelle : **0.6.0 — actions Web interactives bornées (Lot 3C)**.
+Version actuelle : **0.6.1 — références Web sensibles renforcées (correctif Lot 3C)**.
 
 MCP Capability Bridge sera une App Home Assistant OS autonome transformant des accès techniques non-MCP, délibérément bornés, en outils MCP Streamable HTTP standards.
 

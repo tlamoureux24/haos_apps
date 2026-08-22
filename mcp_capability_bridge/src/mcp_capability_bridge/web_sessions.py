@@ -211,7 +211,13 @@ class WebSessionManager:
                 continue
             item = {"role": role, "name": name, "value": value, "state": state}
             backend_id = node.get("backendDOMNodeId")
+            reference_allowed = False
             if role.lower() in ACTIONABLE_ROLES and isinstance(backend_id, int):
+                try:
+                    reference_allowed = await asyncio.wait_for(asyncio.to_thread(self._reference_allowed, session.driver, backend_id), 5)
+                except Exception:
+                    reference_allowed = False
+            if reference_allowed:
                 reference = secrets.token_urlsafe(24)
                 session.references[reference] = (session.generation + 1, backend_id, role, name, json.dumps(state,sort_keys=True,separators=(",",":")))
                 item["reference"] = reference
@@ -320,12 +326,22 @@ class WebSessionManager:
         return object_id
 
     @staticmethod
+    def _reference_allowed(driver: Any, backend_id: int) -> bool:
+        resolved = driver.execute_cdp_cmd("DOM.resolveNode", {"backendNodeId": backend_id})
+        object_id = resolved.get("object", {}).get("objectId")
+        if not isinstance(object_id, str) or not object_id:
+            return False
+        inspected = driver.execute_cdp_cmd("Runtime.callFunctionOn", {"objectId": object_id, "functionDeclaration": "function(){return {type:(this.type||'').toLowerCase(),download:Boolean(this.hasAttribute&&this.hasAttribute('download'))}}", "arguments": [], "returnByValue": True})
+        contract = inspected.get("result", {}).get("result", {}).get("value", inspected.get("result", {}).get("value", {}))
+        return not inspected.get("exceptionDetails") and isinstance(contract, dict) and str(contract.get("type", "")).lower() not in {"file", "hidden", "password"} and not contract.get("download")
+
+    @staticmethod
     def _perform_action(session: WebSession, object_id: str, action: str, value: str | None) -> None:
-        inspected = session.driver.execute_cdp_cmd("Runtime.callFunctionOn", {"objectId": object_id, "functionDeclaration": "function(){return {tag:this.tagName||'',type:(this.type||'').toLowerCase(),disabled:Boolean(this.disabled),readOnly:Boolean(this.readOnly)}}", "arguments": [], "returnByValue": True})
+        inspected = session.driver.execute_cdp_cmd("Runtime.callFunctionOn", {"objectId": object_id, "functionDeclaration": "function(){return {tag:this.tagName||'',type:(this.type||'').toLowerCase(),disabled:Boolean(this.disabled),readOnly:Boolean(this.readOnly),download:Boolean(this.hasAttribute&&this.hasAttribute('download'))}}", "arguments": [], "returnByValue": True})
         contract = inspected.get("result", {}).get("result", {}).get("value", inspected.get("result", {}).get("value", {}))
         if inspected.get("exceptionDetails") or not isinstance(contract, dict) or contract.get("disabled"):
             raise AdapterCallError("invalid_web_element")
-        if str(contract.get("type", "")).lower() in {"file", "hidden", "password"}:
+        if str(contract.get("type", "")).lower() in {"file", "hidden", "password"} or contract.get("download"):
             raise AdapterCallError("sensitive_web_field")
         if action == "click":
             model = session.driver.execute_cdp_cmd("DOM.getBoxModel", {"objectId": object_id}).get("model", {})

@@ -36,6 +36,8 @@ class Fixture(BaseHTTPRequestHandler):
         <label>Name <input aria-label='Name' value='before'></label>
         <select aria-label='Mode'><option value='read'>Read</option><option value='admin'>Admin</option></select>
         <button aria-label='Apply' onclick="fetch('/effect',{method:'POST'})">Apply</button>
+        <input type='password' aria-label='Forbidden password'><input type='file' aria-label='Forbidden upload'>
+        <a aria-label='Forbidden download' download href='/download.bin'>Download</a>
         </body></html>"""
         self.send_response(200);self.send_header("Content-Type", "text/html");self.send_header("Content-Length", str(len(body)));self.end_headers();self.wfile.write(body)
 
@@ -77,6 +79,8 @@ class InteractiveChromiumTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_real_chromium_fill_select_click_and_stale_reference(self):
         opened = await self.manager.open(self.context, self.configuration, None)
+        sensitive = [node for node in opened["nodes"] if node.get("reference") and str(node.get("name", "")).startswith("Forbidden")]
+        self.assertEqual(sensitive, [])
         by_role = {node["role"]: node for node in opened["nodes"] if "reference" in node}
         filled = await self.manager.action(self.context, opened["session"], by_role["textbox"]["reference"], "fill", "after")
         self.assertTrue(any(node["role"] == "textbox" and node["value"] == "after" for node in filled["nodes"]))

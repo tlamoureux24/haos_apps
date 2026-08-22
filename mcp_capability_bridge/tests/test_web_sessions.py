@@ -17,7 +17,7 @@ def config(mode="none"):
 class FakeDriver:
     current_url="https://app.internal/home"
     window_handles=["one"]
-    def __init__(self,*_,**__): self.quit_called=False;self.actions=[];self.node_name="Apply";self.element_type=""
+    def __init__(self,*_,**__): self.quit_called=False;self.actions=[];self.node_name="Apply";self.element_type="";self.download=False
     def set_page_load_timeout(self,_): pass
     def get(self,_): pass
     def execute_script(self,_): return 0
@@ -26,7 +26,8 @@ class FakeDriver:
             return {"nodes":[{"role":{"value":"heading"},"name":{"value":"Welcome opaque-password"}},{"backendDOMNodeId":7,"role":{"value":"button"},"name":{"value":self.node_name}},{"backendDOMNodeId":8,"role":{"value":"textbox"},"name":{"value":"Name"}},{"role":{"value":"password"},"value":{"value":"opaque-password"}}]}
         if method=="DOM.resolveNode": return {"object":{"objectId":f'node-{args["backendNodeId"]}'}}
         if method=="Runtime.callFunctionOn":
-            if "tag:this.tagName" in args.get("functionDeclaration",""): return {"result":{"value":{"tag":"BUTTON","type":self.element_type,"disabled":False,"readOnly":False}}}
+            if "return {type:" in args.get("functionDeclaration",""): return {"result":{"value":{"type":self.element_type,"download":self.download}}}
+            if "tag:this.tagName" in args.get("functionDeclaration",""): return {"result":{"value":{"tag":"BUTTON","type":self.element_type,"disabled":False,"readOnly":False,"download":self.download}}}
             self.actions.append(args);return {"result":{"value":True}}
         if method=="DOM.getBoxModel": return {"model":{"content":[0,0,10,0,10,10,0,10]}}
         if method=="Input.dispatchMouseEvent":
@@ -100,6 +101,14 @@ class WebSessionTests(unittest.IsolatedAsyncioTestCase):
         opened=await self.manager.open(self.a,config(),None)
         reference=next(node["reference"] for node in opened["nodes"] if node.get("role")=="button")
         session=await self.manager._lookup(self.a,opened["session"]);session.driver.element_type="file"
+        with self.assertRaisesRegex(AdapterCallError,"sensitive_web_field"):
+            await self.manager.action(self.a,opened["session"],reference,"click")
+        self.assertEqual(session.driver.actions,[])
+
+    async def test_download_elements_are_never_acted_on(self):
+        opened=await self.manager.open(self.a,config(),None)
+        reference=next(node["reference"] for node in opened["nodes"] if node.get("role")=="button")
+        session=await self.manager._lookup(self.a,opened["session"]);session.driver.download=True
         with self.assertRaisesRegex(AdapterCallError,"sensitive_web_field"):
             await self.manager.action(self.a,opened["session"],reference,"click")
         self.assertEqual(session.driver.actions,[])

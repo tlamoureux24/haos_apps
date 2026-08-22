@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.1 — 2026-08-22
+
+- Prevent password, hidden, file-upload and download elements from receiving
+  opaque actionable references in accessibility snapshots.
+- Recheck the same sensitive-element contract immediately before dispatch as a
+  second fail-closed layer.
+- Extend real Chromium and external HAOS acceptance coverage for these fields.
+
 ## 0.6.0 — 2026-08-22
 
 - Implement Lot 3C with target-scoped relative navigation and opaque-reference
