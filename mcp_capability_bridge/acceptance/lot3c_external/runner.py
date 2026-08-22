@@ -194,7 +194,9 @@ async def run(url: str, address: str, reader_prefix: str, admin_prefix: str, tok
     clicked = await invoke(url, token, reader_prefix, "click", {"session": reader_handle, "reference": reader_button})
     await invoke(url, token, reader_prefix, "close", {"session": reader_handle})
     check((await state(address))["reader_denials"] == 1, "compte Reader réellement privé d'effet")
-    check("password" not in json.dumps(clicked).lower(), "aucun champ password exposé")
+    sensitive = [node for node in clicked.get("nodes", []) if str(node.get("role", "")).lower() == "password" or ("forbidden password" in str(node.get("name", "")).lower() and node.get("reference"))]
+    rendered = json.dumps(clicked, ensure_ascii=False)
+    check(not sensitive and "reader-secret" not in rendered and "admin-secret" not in rendered, "aucun champ sensible actionnable ni credential exposé")
 
     opened = await invoke(url, token, admin_prefix, "open", {})
     handle = str(opened["session"])
