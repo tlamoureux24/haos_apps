@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.3 - 2026-08-22
+
+- Allow S6 to enumerate its configuration roots while compiling the service database under the enforced AppArmor profile.
+- Cover the exact S6, initialization, service and shutdown directories in addition to their existing contents.
+
 ## 1.3.2 - 2026-08-22
 
 - Enforce the bounded AppArmor profile after the complete HAOS functional audit.
