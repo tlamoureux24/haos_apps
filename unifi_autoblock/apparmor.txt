@@ -1,6 +1,6 @@
 #include <tunables/global>
 
-profile unifi_autoblock flags=(attach_disconnected,mediate_deleted,complain) {
+profile unifi_autoblock flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
   #include <abstractions/bash>
   #include <abstractions/nameservice>
@@ -18,6 +18,8 @@ profile unifi_autoblock flags=(attach_disconnected,mediate_deleted,complain) {
   /bin/sh ix,
   /usr/bin/env ix,
   /usr/bin/bashio rix,
+  /usr/bin/curl ix,
+  /usr/bin/jq ix,
   /usr/bin/python3 ix,
   /usr/bin/python3.* ix,
   /usr/bin/with-contenv rix,

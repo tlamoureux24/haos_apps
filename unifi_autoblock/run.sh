@@ -1,6 +1,7 @@
 #!/usr/bin/with-contenv bashio
 set -euo pipefail
 
+export PYTHONDONTWRITEBYTECODE="1"
 export WEBHOOK_DISPLAY_PORT="37989"
 if bashio::addon.port "37989/tcp" >/tmp/unifi_autoblock_port 2>/dev/null; then
   WEBHOOK_DISPLAY_PORT="$(cat /tmp/unifi_autoblock_port)"

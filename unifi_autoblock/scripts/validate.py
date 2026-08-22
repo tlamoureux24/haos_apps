@@ -16,7 +16,7 @@ launcher = (ROOT / "run.sh").read_text(encoding="utf-8")
 apparmor = (ROOT / "apparmor.txt").read_text(encoding="utf-8")
 
 for invariant in (
-    'slug: "unifi_autoblock"', 'version: "0.5.2"', "apparmor: true",
+    'slug: "unifi_autoblock"', 'version: "0.5.3"', "apparmor: true",
     "tmpfs: true", "hassio_api: true", "homeassistant_api: true",
     "ingress: true", "ingress_port: 8099",
 ):
@@ -43,9 +43,11 @@ for broad_rule in (
 ):
     if broad_rule in apparmor:
         errors.append(f"AppArmor retains broad rule: {broad_rule.strip()}")
-diagnostic_profile = "profile unifi_autoblock flags=(attach_disconnected,mediate_deleted,complain) {"
-if diagnostic_profile not in apparmor:
-    errors.append("AppArmor diagnostic release 0.5.2 must run in complain mode")
+enforced_profile = "profile unifi_autoblock flags=(attach_disconnected,mediate_deleted) {"
+if enforced_profile not in apparmor:
+    errors.append("the final AppArmor profile must run in enforce mode")
+if "complain" in apparmor:
+    errors.append("the accepted AppArmor profile must not return to complain mode")
 for network_rule in (
     "network inet stream,", "network inet6 stream,",
     "network inet dgram,", "network inet6 dgram,",
@@ -73,6 +75,7 @@ for runtime_rule in (
 for executable_rule in (
     "/init rix,", "/bin/bash ix,", "/bin/sh ix,",
     "/usr/bin/bashio rix,", "/usr/lib/bashio/bashio rix,",
+    "/usr/bin/curl ix,", "/usr/bin/jq ix,",
     "/usr/bin/python3 ix,", "/usr/bin/with-contenv rix,",
     "/command/execlineb ix,", "/command/s6-rc-compile ix,",
     "/command/s6-supervise ix,", "/command/s6-svscan ix,",
@@ -88,6 +91,10 @@ for audited_common_rule in (
 ):
     if audited_common_rule not in apparmor:
         errors.append(f"missing common HAOS-audited rule: {audited_common_rule}")
+if 'export PYTHONDONTWRITEBYTECODE="1"' not in launcher:
+    errors.append("runtime must not write Python bytecode inside /app")
+if "/app/** w" in apparmor or "/app/** rw" in apparmor or "/app/__pycache__" in apparmor:
+    errors.append("AppArmor must keep the application tree read-only")
 
 if errors:
     print("\n".join(f"ERROR: {error}" for error in errors))

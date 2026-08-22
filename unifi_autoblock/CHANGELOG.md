@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.3
+
+- Complete the HAOS complain-mode audit by analyzing only the events recorded after the 0.5.2 `unifi_autoblock` profile replacement.
+- Allow the exact `curl` and `jq` executables used internally by `bashio::addon.port`, inheriting the bounded AppArmor profile instead of entering null learning profiles.
+- Disable Python bytecode generation at runtime instead of granting write access to `/app/__pycache__`.
+- Restore full AppArmor enforcement with CI invariants for both audit-derived executable paths and the read-only application tree.
+
 ## 0.5.2
 
 - Replace broad AppArmor capabilities, file, network and executable-tree permissions with the S6 and Bashio runtime rules validated by UniFi Log Explorer on the current Home Assistant base image.
