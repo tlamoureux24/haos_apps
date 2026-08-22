@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.6
+
+- Promote the Home Assistant App metadata from experimental to stable after the
+  standalone, OAuth, dynamic-tool, API and ACP-boundary paths passed real HAOS
+  acceptance.
+- Preserve every execution, provider, MCP, standalone API and ACP integration
+  contract unchanged.
+
 ## 0.6.5
 
 - Add a minimal administration status endpoint backed by the real database
