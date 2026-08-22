@@ -56,7 +56,7 @@ jobs:
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' mcp_capability_bridge/config.yaml)"
           docker run --rm --shm-size 256m --entrypoint python3 \
-            --env PYTHONPATH=/app/src \
+            --env PYTHONPATH=/app/src --env MCB_RUN_BROWSER_TESTS=1 \
             --volume "${PWD}/mcp_capability_bridge/tests:/tests:ro" \
             "mcp-capability-bridge:${version}" -m unittest discover -s /tests -p test_web_interactive.py -v
       - name: Smoke-test topology, isolation, UI, restart, and shutdown

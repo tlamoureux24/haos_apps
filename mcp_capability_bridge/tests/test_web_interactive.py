@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import os
 import tempfile
 import threading
 import time
@@ -53,7 +54,7 @@ class ExternalFixture(BaseHTTPRequestHandler):
         type(self).requests += 1;self.send_response(204);self.end_headers()
 
 
-@unittest.skipUnless(Path("/usr/bin/chromium").is_file() and Path("/usr/bin/chromedriver").is_file(), "image Chromium runtime required")
+@unittest.skipUnless(os.environ.get("MCB_RUN_BROWSER_TESTS") == "1" and Path("/usr/bin/chromium").is_file() and Path("/usr/bin/chromedriver").is_file(), "exact image Chromium runtime required")
 class InteractiveChromiumTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         Fixture.effects = 0
