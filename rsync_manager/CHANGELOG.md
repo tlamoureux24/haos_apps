@@ -3,7 +3,7 @@
 ## 1.3.8 - 2026-08-22
 
 - Restore the complete AppArmor profile from version 1.3.0, immediately after the UI redesign.
-- Abandon the current AppArmor hardening attempt and return to the previously working enforcement baseline.
+- Restore the previously working enforcement baseline while a different, non-complain audit method is prepared for a future consolidated hardening pass.
 
 ## 1.3.7 - 2026-08-22
 
