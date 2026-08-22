@@ -2,7 +2,7 @@
 
 [Français](README.fr.md) | English
 
-Current release: **0.5.0 — Lot 3B isolated read-only Web sessions**.
+Current release: **0.5.1 — SSH/Web capability view separation fix**.
 
 MCP Capability Bridge will be an independent Home Assistant OS App that exposes deliberately bounded access to non-MCP technical systems through standard MCP Streamable HTTP tools.
 

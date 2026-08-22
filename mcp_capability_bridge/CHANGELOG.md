@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 — 2026-08-22
+
+- Keeps generated Web tools available for explicit MCP publication while excluding them from the SSH capability administration view.
+- Removes the inapplicable SSH edit/delete controls and undefined SSH metadata previously rendered for Web tools.
+
 ## 0.5.0 — 2026-08-22
 
 - Implements Lot 3B with target-scoped `web_<target>_open`, `web_<target>_snapshot`, `web_<target>_wait` and `web_<target>_close` read-only MCP capabilities.

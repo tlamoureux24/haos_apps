@@ -88,7 +88,7 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.5.0</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.5.1</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
@@ -196,6 +196,10 @@ class AdministrationUiTests(unittest.TestCase):
             self.assertIn(contract, ADMIN_JS)
         self.assertNotIn('name="key"', ADMIN_JS)
         self.assertNotIn("key:f.key.value", ADMIN_JS)
+
+    def test_ssh_capability_view_excludes_generated_web_capabilities(self) -> None:
+        self.assertIn("targets.filter(t=>t.adapter_type==='ssh').flatMap", ADMIN_JS)
+        self.assertIn("f.target_id.innerHTML=targets.filter(t=>t.enabled)", ADMIN_JS)
 
 
 class RuntimeTopologyTests(unittest.TestCase):
