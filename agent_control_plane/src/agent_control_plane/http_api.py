@@ -808,6 +808,27 @@ async def admin_list_audit(request: Request) -> JSONResponse:
     return JSONResponse({"audit_entries": entries, "limit": 200})
 
 
+async def admin_list_activity(request: Request) -> JSONResponse:
+    entries = await run_in_threadpool(
+        request.app.state.control_plane.list_audit_entries, 100
+    )
+    activity = [
+        {
+            "occurred_at": entry["occurred_at"],
+            "event_code": entry["action"],
+            "category": "system"
+            if str(entry["action"]).startswith("app_")
+            else (entry["target_type"] or "security"),
+            "status": "success"
+            if str(entry["action"]).startswith("app_")
+            else entry["decision"],
+            "source": entry["actor_name"] or "system",
+        }
+        for entry in entries
+    ]
+    return JSONResponse({"entries": activity, "limit": 100})
+
+
 async def admin_export_audit(request: Request) -> Response:
     entries = await run_in_threadpool(
         request.app.state.control_plane.list_audit_entries, 10_000

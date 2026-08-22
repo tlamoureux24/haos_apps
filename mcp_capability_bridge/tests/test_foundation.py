@@ -69,6 +69,22 @@ class ActivityJournalTests(unittest.TestCase):
         for forbidden in ("credential", "authorization", "arguments", "result", "payload"):
             self.assertNotIn(forbidden, serialized)
 
+    def test_runtime_lifecycle_records_started_ready_and_stopped(self) -> None:
+        async def scenario() -> None:
+            with tempfile.TemporaryDirectory() as directory:
+                settings = Settings(Path(directory), "info", "127.0.0.1")
+                initialize(settings.database_path)
+                state = build_runtime_state(settings)
+                _, public = create_apps(state)
+                async with public.router.lifespan_context(public):
+                    self.assertEqual(
+                        [row["event"] for row in reversed(state.activity.list())],
+                        ["app_started", "app_ready"],
+                    )
+                self.assertEqual(state.activity.list()[0]["event"], "app_stopped")
+
+        asyncio.run(scenario())
+
 
 class SurfaceTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -116,7 +132,7 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.5.2</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.5.3</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()

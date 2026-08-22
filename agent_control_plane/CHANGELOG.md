@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.46.13
+
+- Add a persistent, payload-free Activity view backed by the existing audit
+  chain, including normal administration, orchestration and security actions.
+- Record and translate `app_started`, `app_ready` and `app_stopped` lifecycle
+  markers without introducing a second operational data store.
+- Reorder navigation to Overview, Activity, Connectors, then Identities so MCP
+  configuration is grouped before governance and execution views.
+
 ## 0.46.12
 
 - Drive the Overview service badge from the real `/admin/api/v1/status`

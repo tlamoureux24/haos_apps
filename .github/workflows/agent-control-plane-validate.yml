@@ -306,12 +306,21 @@ jobs:
               .failed_jobs_24h == 0 and
               .audit.valid == true and
               .audit.state == "valid" and
-              .audit.entries == 0 and
-              .audit.verified_entries == 0 and
+              .audit.entries == 2 and
+              .audit.verified_entries == 2 and
               .audit.pending_entries == 0 and
               .audit.failed_sequence == null and
               (.audit.verified_at | type) == "string" and
               (.audit.full_verified_at | type) == "string"
+            '
+          curl --fail --silent \
+            --header "X-Ingress-Path: /api/hassio_ingress/ci" \
+            http://127.0.0.1:18099/admin/api/v1/activity | \
+            jq -e '
+              .limit == 100 and
+              (.entries | length == 2) and
+              ([.entries[].event_code] | sort == ["app_ready","app_started"]) and
+              all(.entries[]; .category == "system" and .status == "success")
             '
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --header "X-Ingress-Path: /api/hassio_ingress/ci" \
@@ -658,6 +667,10 @@ jobs:
           test "${restarted_pid}" != "${initial_pid}"
           wait_ready
           echo "SMOKE_STAGE=restart-ready"
+          curl --fail --silent \
+            --header "X-Ingress-Path: ${ingress_path}" \
+            http://127.0.0.1:18099/admin/api/v1/activity | \
+            jq -e 'any(.entries[]; .event_code == "app_stopped")'
           curl --fail --silent \
             --header "Authorization: Bearer ${credential}" \
             http://127.0.0.1:18098/api/v1/permissions/effective | \

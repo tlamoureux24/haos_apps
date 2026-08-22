@@ -23,6 +23,7 @@ from agent_control_plane.connectors import (
     validate_streamable_http_url,
 )
 from agent_control_plane.http_api import (
+    admin_list_activity,
     admin_check_connector,
     admin_create_connector,
     admin_rotate_connector_secret,
@@ -74,14 +75,14 @@ class AdministrationInterfaceTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn(
-            "const viewLoaders={overview:refresh,'identities-view':loadIdentities,"
+            "const viewLoaders={overview:refresh,activity:loadActivity,connectors:loadConnectors,'identities-view':loadIdentities,"
             "events:loadEvents,tasks:loadTaskComposer,triggers:loadMappings,"
             "schedules:loadSchedules,jobs:loadJobs,reports:loadReports,"
-            "connectors:loadConnectors,audit:loadAuditPage}",
+            "audit:loadAuditPage}",
             ADMIN_JS,
         )
         self.assertIn(
-            "const autoRefreshIntervals={overview:10000,events:10000,jobs:5000,"
+            "const autoRefreshIntervals={overview:10000,activity:5000,events:10000,jobs:5000,"
             "reports:10000,audit:10000}",
             ADMIN_JS,
         )
@@ -91,12 +92,56 @@ class AdministrationInterfaceTests(unittest.TestCase):
         self.assertIn("#${view} details[open]", ADMIN_JS)
         self.assertIn("viewRefreshes.has(view)", ADMIN_JS)
         self.assertIn("if(document.visibilityState==='visible')refreshActiveView()", ADMIN_JS)
-        for view in ("overview", "events", "jobs", "reports", "audit"):
+        for view in ("overview", "activity", "events", "jobs", "reports", "audit"):
             self.assertIn(f'data-freshness="{view}"', main_source)
         self.assertIn("Actualisé à l’instant", ADMIN_JS)
         self.assertIn("Actualisé il y a ${seconds} s", ADMIN_JS)
         self.assertIn("Updated just now", ADMIN_JS)
         self.assertIn("Updated ${seconds}s ago", ADMIN_JS)
+
+    def test_activity_projects_persistent_audit_and_navigation_order(self) -> None:
+        main_source = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "agent_control_plane"
+            / "main.py"
+        ).read_text(encoding="utf-8")
+        self.assertLess(main_source.index('data-view="activity"'), main_source.index('data-view="connectors"'))
+        self.assertLess(main_source.index('data-view="connectors"'), main_source.index('data-view="identities-view"'))
+        self.assertIn('id="activity-list"', main_source)
+        self.assertIn("/admin/api/v1/activity", ADMIN_JS)
+        for event in ("app_started", "app_ready", "app_stopped"):
+            self.assertIn(event, main_source + ADMIN_JS)
+        self.assertIn("/admin/api/v1/activity", exposed_paths("admin"))
+
+    def test_activity_endpoint_exposes_safe_lifecycle_and_normal_actions(self) -> None:
+        async def scenario() -> None:
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                database = root / "control-plane.db"
+                initialize_database(database)
+                control_plane = ControlPlane(database, root / "private")
+                for action in ("app_started", "app_ready", "jobs.claim"):
+                    control_plane.record_audit(
+                        actor_identity_id=None,
+                        credential_id=None,
+                        action=action,
+                        decision="recorded",
+                        reason_code="success",
+                        correlation_id=f"test-{action}",
+                    )
+                request = SimpleNamespace(
+                    app=SimpleNamespace(state=SimpleNamespace(control_plane=control_plane))
+                )
+                response = await admin_list_activity(request)
+                payload = json.loads(response.body)
+                self.assertEqual(payload["entries"][1]["event_code"], "app_ready")
+                self.assertEqual(payload["entries"][1]["category"], "system")
+                self.assertEqual(payload["entries"][1]["status"], "success")
+                self.assertEqual(payload["entries"][0]["event_code"], "jobs.claim")
+                self.assertNotIn("metadata", response.body.decode())
+
+        asyncio.run(scenario())
 
     def test_identity_administration_uses_a_dedicated_accessible_drawer(self) -> None:
         main_source = (

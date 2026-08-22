@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.3 — 2026-08-22
+
+- Add bilingual `app_started`, `app_ready` and `app_stopped` markers to the
+  bounded, payload-free Activity journal.
+- Keep the existing runtime journal, polling behavior and MCP boundaries
+  unchanged while aligning lifecycle visibility with ACP and AEP.
+
 ## 0.5.2 — 2026-08-22
 
 - Adds a Dockerized black-box Lot 3B acceptance runner outside the add-on image, avoiding ACP tasks, reports and audit pollution while testing live HAOS session isolation, rotation, revocation, expiry and fresh browser profiles.

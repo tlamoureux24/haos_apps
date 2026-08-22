@@ -55,6 +55,7 @@ from agent_control_plane.http_api import (
     admin_requeue_job,
     admin_list_reports,
     admin_list_audit,
+    admin_list_activity,
     admin_export_audit,
     admin_verify_audit,
     admin_retention_status,
@@ -132,10 +133,11 @@ async def admin_index(request: Request) -> HTMLResponse:
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Agent Control Plane</title><link rel="stylesheet" href="{safe_prefix}/admin/assets/admin.css"></head>
 <body><main class="app" data-base="{safe_prefix}" data-csrf="{csrf_token}">
-<header class="site-header"><div class="header-main"><a class="brand" href="#overview"><img src="{safe_prefix}/admin/assets/icon.png" alt=""><span>Agent Control Plane <b>v{__version__}</b></span></a><div class="header-actions"><button id="language" class="theme" type="button" aria-label="Changer de langue">EN</button><button id="theme" class="theme" type="button" aria-label="Changer de thème">☾</button></div></div><div class="nav-scroll"><nav class="nav" aria-label="Navigation"><a class="active" data-view="overview" href="#overview">Vue d’ensemble</a><a data-view="identities-view" href="#identities-view">Identités</a><a data-view="events" href="#events">Événements</a><a data-view="tasks" href="#tasks">Tâches</a><a data-view="triggers" href="#triggers">Déclencheurs</a><a data-view="schedules" href="#schedules">Planifications</a><a data-view="jobs" href="#jobs">Exécutions</a><a data-view="reports" href="#reports">Rapports</a><a data-view="connectors" href="#connectors">Connecteurs</a><a data-view="audit" href="#audit">Audit</a></nav></div></header>
+<header class="site-header"><div class="header-main"><a class="brand" href="#overview"><img src="{safe_prefix}/admin/assets/icon.png" alt=""><span>Agent Control Plane <b>v{__version__}</b></span></a><div class="header-actions"><button id="language" class="theme" type="button" aria-label="Changer de langue">EN</button><button id="theme" class="theme" type="button" aria-label="Changer de thème">☾</button></div></div><div class="nav-scroll"><nav class="nav" aria-label="Navigation"><a class="active" data-view="overview" href="#overview">Vue d’ensemble</a><a data-view="activity" href="#activity">Activité</a><a data-view="connectors" href="#connectors">Connecteurs</a><a data-view="identities-view" href="#identities-view">Identités</a><a data-view="events" href="#events">Événements</a><a data-view="tasks" href="#tasks">Tâches</a><a data-view="triggers" href="#triggers">Déclencheurs</a><a data-view="schedules" href="#schedules">Planifications</a><a data-view="jobs" href="#jobs">Exécutions</a><a data-view="reports" href="#reports">Rapports</a><a data-view="audit" href="#audit">Audit</a></nav></div></header>
 <section id="overview" class="view active"><section class="hero"><div><h1>Vue d’ensemble</h1><p>Consultez l’état opérationnel du plan de contrôle.</p><span class="freshness" data-freshness="overview"></span></div><div id="service-health" class="health"><i></i><span>Service opérationnel</span></div></section>
 <section class="cockpit-section"><div class="section-title"><h2>Configuration</h2><p>Disponibilité des ressources qui composent les automatisations.</p></div><div class="cockpit-grid"><a class="cockpit-card" href="#connectors"><span class="cockpit-label">Connecteurs</span><strong id="metric-connectors">–</strong><small id="metric-connectors-detail">Chargement…</small></a><a class="cockpit-card" href="#tasks"><span class="cockpit-label">Tâches</span><strong id="metric-tasks">–</strong><small id="metric-tasks-detail">Chargement…</small></a><a class="cockpit-card" href="#identities-view"><span class="cockpit-label">Identités actives</span><strong id="active">–</strong><small id="metric-identities-detail">Chargement…</small></a><a class="cockpit-card" href="#triggers"><span class="cockpit-label">Déclencheurs actifs</span><strong id="metric-triggers">–</strong><small id="metric-triggers-detail">Chargement…</small></a><a class="cockpit-card" href="#schedules"><span class="cockpit-label">Planifications actives</span><strong id="metric-schedules">–</strong><small id="metric-schedules-detail">Chargement…</small></a></div></section>
 <section class="cockpit-section"><div class="section-title"><h2>Activité et sécurité</h2><p>État récent de la file, des incidents et de la chaîne d’audit.</p></div><div class="cockpit-grid"><a class="cockpit-card" href="#events"><span class="cockpit-label">Événements sur 24 h</span><strong id="metric-events">–</strong><small>Reçus par le plan de contrôle</small></a><a class="cockpit-card" href="#reports"><span class="cockpit-label">Rapports sur 24 h</span><strong id="metric-reports">–</strong><small>Produits par les agents</small></a><a class="cockpit-card" href="#jobs"><span class="cockpit-label">Exécutions actives</span><strong id="metric-active-jobs">–</strong><small id="metric-jobs-detail">Chargement…</small></a><a class="cockpit-card" href="#triggers"><span class="cockpit-label">Incidents de grâce</span><strong id="metric-incidents">–</strong><small id="metric-incidents-detail">Chargement…</small></a><a class="cockpit-card" href="#audit"><span class="cockpit-label">Chaîne d’audit</span><strong id="metric-audit">–</strong><small id="metric-audit-detail">Chargement…</small></a><a class="cockpit-card attention" href="#jobs"><span class="cockpit-label">À traiter</span><strong id="metric-attention">–</strong><small id="metric-attention-detail">Échecs récents et dead letters</small></a></div></section></section>
+<section id="activity" class="view"><div class="pagehead"><h1>Activité</h1><p>Journal opérationnel persistant, limité aux métadonnées non sensibles.</p><span class="freshness" data-freshness="activity"></span></div><section class="card"><div class="tablewrap"><table><thead><tr><th>Date</th><th>Événement</th><th>Catégorie</th><th>État</th><th>Source</th></tr></thead><tbody id="activity-list"><tr><td colspan="5" class="empty">Chargement…</td></tr></tbody></table></div></section></section>
 <section id="identities-view" class="view"><div class="pagehead split"><div><h1>Identités</h1><p>Gérez les clients, sources et planificateurs autorisés.</p></div><button id="identity-create-open" class="page-action" type="button">Nouvelle identité</button></div><section class="card identities"><div class="cardhead"><div><h2>Identités configurées</h2><p>Chaque identité possède ses propres permissions et identifiants révocables.</p></div><span id="identity-count" class="count">–</span></div><label class="archive-filter"><input id="identity-show-archived" type="checkbox"> Afficher les identités archivées</label><div id="identities"><p class="loading">Chargement…</p></div></section></section>
 <section id="events" class="view"><div class="pagehead"><h1>Événements</h1><p>Derniers événements authentifiés reçus par le plan de contrôle.</p><span class="freshness" data-freshness="events"></span></div><section class="card"><div id="events-list" class="tablewrap loading">Chargement…</div></section></section>
 <section id="tasks" class="view"><div class="pagehead"><h1>Tâches</h1><p>Composez des tâches à partir d’outils précis provenant d’un ou plusieurs connecteurs.</p></div><div class="workspace task-workspace"><section class="card"><div class="cardhead"><div><h2>Nouvelle tâche</h2><p>Au moins un outil d’un connecteur opérationnel est obligatoire.</p></div></div><form id="task-create"><label>Nom<input name="display_name" maxlength="120" placeholder="Ex. Diagnostic d’incident" required></label><label>Instructions transmises à l’agent<textarea name="objective" maxlength="4000" rows="5" placeholder="Décrivez précisément le résultat attendu…" required></textarea></label><label>Tentatives maximales<select name="max_attempts"><option>1</option><option selected>3</option><option>5</option></select></label><fieldset><legend>Outils autorisés</legend><div id="task-tool-picker"><p class="loading">Chargement…</p></div></fieldset><button class="primary" type="submit">Créer la tâche</button><p id="task-message" class="error"></p></form></section><section class="card identities"><div class="cardhead"><div><h2>Tâches configurées</h2><p>Une dépendance modifiée rend la tâche indisponible.</p></div><span id="task-count" class="count">–</span></div><label class="archive-filter"><input id="task-show-archived" type="checkbox"> Afficher les tâches archivées</label><div id="task-list"><p class="loading">Chargement…</p></div></section></div></section>
@@ -203,6 +205,7 @@ route_handlers = {
     "/admin/api/v1/jobs/requeue": admin_requeue_job,
     "/admin/api/v1/reports": admin_list_reports,
     "/admin/api/v1/audit": admin_list_audit,
+    "/admin/api/v1/activity": admin_list_activity,
     "/admin/api/v1/audit/export": admin_export_audit,
     "/admin/api/v1/audit/verify": admin_verify_audit,
     "/admin/api/v1/retention": admin_retention_status,
@@ -245,6 +248,15 @@ if settings.surface == "public":
 @asynccontextmanager
 async def lifespan(_: Starlette):
     if mcp_server is None:
+        await asyncio.to_thread(
+            control_plane.record_audit,
+            actor_identity_id=None,
+            credential_id=None,
+            action="app_started",
+            decision="recorded",
+            reason_code="success",
+            correlation_id=f"lifecycle-{uuid4()}",
+        )
         async def schedule_loop():
             loop = asyncio.get_running_loop()
             next_retention_check = 0.0
@@ -263,6 +275,16 @@ async def lifespan(_: Starlette):
                     first_audit_check = False
                     next_audit_check = loop.time() + 60
                 await asyncio.sleep(15)
+        await asyncio.to_thread(
+            control_plane.record_audit,
+            actor_identity_id=None,
+            credential_id=None,
+            action="app_ready",
+            decision="recorded",
+            reason_code="success",
+            correlation_id=f"lifecycle-{uuid4()}",
+        )
+        await asyncio.to_thread(control_plane.maintain_audit_verification, True)
         task = asyncio.create_task(schedule_loop())
         try:
             yield
@@ -272,6 +294,15 @@ async def lifespan(_: Starlette):
                 await task
             except asyncio.CancelledError:
                 pass
+            await asyncio.to_thread(
+                control_plane.record_audit,
+                actor_identity_id=None,
+                credential_id=None,
+                action="app_stopped",
+                decision="recorded",
+                reason_code="success",
+                correlation_id=f"lifecycle-{uuid4()}",
+            )
     else:
         async with mcp_server.session_manager.run():
             yield

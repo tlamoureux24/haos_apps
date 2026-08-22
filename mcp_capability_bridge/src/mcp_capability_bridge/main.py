@@ -395,11 +395,15 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
 
     @asynccontextmanager
     async def public_lifespan(_: Starlette):
+        state.activity.record(event="app_started", status="success", source="system")
         async with mcp_server.session_manager.run():
-            try:yield
+            state.activity.record(event="app_ready", status="success", source="system")
+            try:
+                yield
             finally:
                 await state.web_sessions.close_all()
                 await state.browser.close()
+                state.activity.record(event="app_stopped", status="success", source="system")
 
     public = Starlette(routes=[*health, Mount("/", app=OpaqueBearerMiddleware(mcp_application, state.store, state.activity))], middleware=[Middleware(SecurityHeadersMiddleware, admin=False, ingress_proxy_ip=state.settings.ingress_proxy_ip)], lifespan=public_lifespan)
     admin.state.runtime = state
