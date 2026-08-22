@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 
 from mcp_capability_bridge import __version__
+from mcp_capability_bridge.activity import ActivityJournal
 from mcp_capability_bridge.admin_ui import ADMIN_CSS, ADMIN_JS
 from mcp_capability_bridge.database import database_ready, initialize
 from mcp_capability_bridge.main import build_runtime_state, create_apps
@@ -55,6 +56,20 @@ class DatabaseTests(unittest.TestCase):
             self.assertFalse(database_ready(Path(directory) / "missing.db"))
 
 
+class ActivityJournalTests(unittest.TestCase):
+    def test_journal_is_bounded_and_contains_only_explicit_safe_metadata(self) -> None:
+        journal = ActivityJournal(limit=2)
+        journal.record(event="tool_call", status="success", source="192.0.2.10", client="client_a", tool="ssh_uptime", adapter="ssh", duration_ms=12)
+        journal.record(event="authentication", status="refused", source="192.0.2.11")
+        journal.record(event="tool_call", status="failure", source="192.0.2.12", client="client_b", tool="web_open", adapter="web")
+        rows = journal.list()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["source"], "192.0.2.12")
+        serialized = str(rows).lower()
+        for forbidden in ("credential", "authorization", "arguments", "result", "payload"):
+            self.assertNotIn(forbidden, serialized)
+
+
 class SurfaceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
@@ -82,13 +97,26 @@ class SurfaceTests(unittest.TestCase):
             self.assertEqual((await self.request(self.public, "GET", "/mcp")).status_code, 401)
         asyncio.run(scenario())
 
+    def test_refused_authentication_is_visible_as_safe_activity(self) -> None:
+        async def scenario() -> None:
+            secret = "Bearer must-never-appear"
+            refused = await self.request(self.public, "POST", "/mcp", headers={"Authorization": secret})
+            self.assertEqual(refused.status_code, 401)
+            activity = await self.request(self.admin, "GET", "/admin/api/v1/activity", headers={"X-Ingress-Path": "/api/hassio_ingress/test"})
+            self.assertEqual(activity.status_code, 200)
+            row = activity.json()["events"][0]
+            self.assertEqual((row["event"], row["status"]), ("authentication", "refused"))
+            self.assertNotIn("must-never-appear", activity.text)
+
+        asyncio.run(scenario())
+
     def test_admin_requires_ingress_context_and_exposes_no_mcp(self) -> None:
         async def scenario() -> None:
             self.assertEqual((await self.request(self.admin, "GET", "/")).status_code, 403)
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.5.1</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.5.2</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
@@ -183,9 +211,20 @@ class AdministrationUiTests(unittest.TestCase):
             "function clearSecrets()", "clearSecrets();scanId='';shell.hidden=true",
         ):
             self.assertIn(contract, ADMIN_JS)
-        self.assertIn("scopeAdapters:'SSH borné · Web confiné'", ADMIN_JS)
-        self.assertIn("scopeAdapters:'Bounded SSH · Confined Web'", ADMIN_JS)
-        self.assertNotIn("scopeValue2", ADMIN_JS)
+        self.assertIn("serviceOperational:'Service opérationnel'", ADMIN_JS)
+        self.assertIn("serviceOperational:'Service operational'", ADMIN_JS)
+        self.assertNotIn("scopeAdapters", ADMIN_JS)
+
+    def test_operational_ui_status_activity_and_drawer_reset(self) -> None:
+        for contract in (
+            "serviceOperational", "serviceUnavailable", "loadActivity",
+            "stopDynamicTimers", "activityTimer=setInterval(loadActivity,5000)",
+            "f.reset();f.querySelector('.message').textContent=''",
+        ):
+            self.assertIn(contract, ADMIN_JS)
+        self.assertNotIn("status-open", ADMIN_JS)
+        self.assertIn(".service-state", ADMIN_CSS)
+        self.assertIn("table{width:100%", ADMIN_CSS)
 
     def test_lot_two_ui_preserves_namespaces_and_adds_bounded_ssh_forms(self) -> None:
         for contract in ("createClient", "credentialOnce", "data-rotate", "data-revoke", "data-archive", "show-archived"):

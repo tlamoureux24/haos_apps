@@ -241,7 +241,7 @@ Accepted on real HAOS with version 0.4.5: technical-key fields were absent from 
 
 ## Lot 3B — isolated read-only Web sessions
 
-Status: **implemented; awaiting HAOS acceptance**.
+Status: **accepted on HAOS — 2026-08-22**.
 
 ### Goal
 
@@ -272,6 +272,8 @@ Expose the non-vision read path and prove namespace/session/reference isolation 
 ### HAOS acceptance
 
 Use read-only credentials against a fixture, open/snapshot/close directly and through ACP/AEP, verify clean second session, namespace isolation, expiry, rotation cleanup and no persistent browser state.
+
+Accepted on real HAOS with version 0.5.1 using the external black-box runner: two-client publication and namespace isolation, idempotent close, distinct handles, profile/cookie/storage isolation, inactivity expiry, credential rotation, revocation and owner-scoped session cleanup all passed without ACP production-data pollution.
 
 ## Lot 3C — interactive Web actions
 

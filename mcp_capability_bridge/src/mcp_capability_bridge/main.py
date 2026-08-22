@@ -22,6 +22,7 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Mount, Route
 
 from mcp_capability_bridge import __version__
+from mcp_capability_bridge.activity import ActivityJournal
 from mcp_capability_bridge.admin_ui import ADMIN_CSS, ADMIN_JS
 from mcp_capability_bridge.browser_runtime import BrowserRuntime
 from mcp_capability_bridge.contracts import AdapterRegistry, InvocationContext
@@ -46,6 +47,7 @@ class RuntimeState:
     web_resolutions: dict[str, tuple[float, str, tuple[str, ...]]]
     browser: BrowserRuntime
     web_sessions: WebSessionManager
+    activity: ActivityJournal
 
 
 def build_runtime_state(settings: Settings, registry: AdapterRegistry | None = None) -> RuntimeState:
@@ -55,7 +57,7 @@ def build_runtime_state(settings: Settings, registry: AdapterRegistry | None = N
     browser=BrowserRuntime();browser.prepare()
     web_sessions=WebSessionManager(browser.root)
     store = NamespaceStore(settings.database_path, pepper, SecretBox(target_key), registry or AdapterRegistry((SSHAdapter(),WebAdapter(web_sessions))))
-    return RuntimeState(settings, store, RuntimeCounters(), secrets.token_urlsafe(32), {}, {}, browser, web_sessions)
+    return RuntimeState(settings, store, RuntimeCounters(), secrets.token_urlsafe(32), {}, {}, browser, web_sessions, ActivityJournal())
 
 
 class SecurityHeadersMiddleware:
@@ -99,7 +101,7 @@ async def json_body(request: Request) -> dict[str, object]:
 
 
 def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
-    mcp_server = NamespaceMCP(state.store, state.counters)
+    mcp_server = NamespaceMCP(state.store, state.counters, state.activity)
     mcp_application = mcp_server.streamable_http_app()
 
     async def live(_: Request) -> JSONResponse:
@@ -114,6 +116,9 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
         namespaces = state.store.list_namespaces(include_archived=True)
         runtime=state.counters.snapshot();runtime["active_sessions"]=state.web_sessions.count()
         return JSONResponse({"status": "ready" if database_ready(state.settings.database_path) else "not_ready", "version": __version__, "database_generation": 1, "public_surface": "authenticated_mcp", "adapters": state.store.registry.describe(), "namespaces": {"active": sum(item["status"] == "active" for item in namespaces), "revoked": sum(item["status"] == "revoked" for item in namespaces), "archived": sum(item["status"] == "archived" for item in namespaces)}, "targets": len(state.store.list_targets()), "publications": len(state.store.list_publications()), "runtime": runtime})
+
+    async def activity(_: Request) -> JSONResponse:
+        return JSONResponse({"events": state.activity.list()})
 
     def csrf_valid(request: Request) -> bool:
         cookie = request.cookies.get("mcb_csrf", "")
@@ -386,7 +391,7 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
         return JSONResponse({"sessions":rows})
 
     health = [Route("/health/live", live), Route("/health/ready", ready)]
-    admin = Starlette(routes=[Route("/", index), Route("/admin/assets/admin.css", css), Route("/admin/assets/admin.js", js), Route("/admin/assets/icon.png", icon), Route("/admin/api/v1/status", status), Route("/admin/api/v1/namespaces", namespaces, methods=["GET", "POST"]), Route("/admin/api/v1/namespaces/{action}", namespace_action, methods=["POST"]), Route("/admin/api/v1/targets", targets, methods=["GET", "POST"]), Route("/admin/api/v1/targets/detail/{target_id}", target_detail, methods=["GET"]), Route("/admin/api/v1/targets/{action}", target_action, methods=["POST"]), Route("/admin/api/v1/ssh/scan", ssh_scan, methods=["POST"]), Route("/admin/api/v1/ssh/capabilities/{action}", capabilities, methods=["POST"]), Route("/admin/api/v1/web/resolve",web_resolve,methods=["POST"]),Route("/admin/api/v1/web/targets",web_targets,methods=["GET","POST"]),Route("/admin/api/v1/web/test",web_test,methods=["POST"]),Route("/admin/api/v1/web/sessions",web_sessions,methods=["GET"]), Route("/admin/api/v1/publications", publications, methods=["GET"]), Route("/admin/api/v1/publications/{action}", publications, methods=["POST"]), *health], middleware=[Middleware(SecurityHeadersMiddleware, admin=True, ingress_proxy_ip=state.settings.ingress_proxy_ip)])
+    admin = Starlette(routes=[Route("/", index), Route("/admin/assets/admin.css", css), Route("/admin/assets/admin.js", js), Route("/admin/assets/icon.png", icon), Route("/admin/api/v1/status", status), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/namespaces", namespaces, methods=["GET", "POST"]), Route("/admin/api/v1/namespaces/{action}", namespace_action, methods=["POST"]), Route("/admin/api/v1/targets", targets, methods=["GET", "POST"]), Route("/admin/api/v1/targets/detail/{target_id}", target_detail, methods=["GET"]), Route("/admin/api/v1/targets/{action}", target_action, methods=["POST"]), Route("/admin/api/v1/ssh/scan", ssh_scan, methods=["POST"]), Route("/admin/api/v1/ssh/capabilities/{action}", capabilities, methods=["POST"]), Route("/admin/api/v1/web/resolve",web_resolve,methods=["POST"]),Route("/admin/api/v1/web/targets",web_targets,methods=["GET","POST"]),Route("/admin/api/v1/web/test",web_test,methods=["POST"]),Route("/admin/api/v1/web/sessions",web_sessions,methods=["GET"]), Route("/admin/api/v1/publications", publications, methods=["GET"]), Route("/admin/api/v1/publications/{action}", publications, methods=["POST"]), *health], middleware=[Middleware(SecurityHeadersMiddleware, admin=True, ingress_proxy_ip=state.settings.ingress_proxy_ip)])
 
     @asynccontextmanager
     async def public_lifespan(_: Starlette):
@@ -396,7 +401,7 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
                 await state.web_sessions.close_all()
                 await state.browser.close()
 
-    public = Starlette(routes=[*health, Mount("/", app=OpaqueBearerMiddleware(mcp_application, state.store))], middleware=[Middleware(SecurityHeadersMiddleware, admin=False, ingress_proxy_ip=state.settings.ingress_proxy_ip)], lifespan=public_lifespan)
+    public = Starlette(routes=[*health, Mount("/", app=OpaqueBearerMiddleware(mcp_application, state.store, state.activity))], middleware=[Middleware(SecurityHeadersMiddleware, admin=False, ingress_proxy_ip=state.settings.ingress_proxy_ip)], lifespan=public_lifespan)
     admin.state.runtime = state
     public.state.runtime = state
     public.state.mcp_server = mcp_server
@@ -404,17 +409,17 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
 
 
 def admin_page(prefix: str) -> str:
-    navigation = "".join(f'<a data-view="{key}" href="#{key}" data-i18n="{key}">{label}</a>' for key, label in (("overview", "Vue d’ensemble"), ("clients", "Clients MCP"), ("targets", "Cibles"), ("access", "Accès MCP"), ("ssh", "Capacités SSH"), ("web", "Cibles Web"), ("sessions", "Sessions")))
+    navigation = "".join(f'<a data-view="{key}" href="#{key}" data-i18n="{key}">{label}</a>' for key, label in (("overview", "Vue d’ensemble"), ("activity", "Activité"), ("clients", "Clients MCP"), ("access", "Accès MCP"), ("targets", "Cibles"), ("ssh", "Capacités SSH"), ("web", "Cibles Web"), ("sessions", "Sessions")))
     planned = '<section id="sessions" class="view"><div class="pagehead"><div><h1 data-i18n="sessions"></h1><p data-i18n="sessionsIntro"></p></div></div><div id="session-list" class="card-list"></div></section>'
     return f'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MCP Capability Bridge</title><link rel="stylesheet" href="{prefix}/admin/assets/admin.css"></head><body><main class="app" data-base="{prefix}"><header class="site-header"><div class="header-main"><a class="brand" href="#overview"><img src="{prefix}/admin/assets/icon.png" alt=""><span>MCP Capability Bridge <b>v{__version__}</b></span></a><div class="header-actions"><button id="language" class="switch" type="button">EN</button><button id="theme" class="switch" type="button">☾</button></div></div><div class="nav-scroll"><nav class="nav" aria-label="Navigation">{navigation}</nav></div></header>
-<section id="overview" class="view active"><div class="pagehead"><div><h1 data-i18n="overviewTitle"></h1><p data-i18n="overviewIntro"></p></div><button id="status-open" class="primary" type="button" data-i18n="statusAction"></button></div><section class="metrics"><article class="metric"><strong class="state" data-i18n="ready"></strong><span data-i18n="appState"></span></article><article class="metric"><strong data-i18n="authenticatedMcp"></strong><span data-i18n="publicSurface"></span></article><article class="metric"><strong id="namespace-count">0</strong><span data-i18n="clients"></span></article></section><article class="card notice"><h2 data-i18n="coreTitle"></h2><p data-i18n="coreText"></p></article></section>
+<section id="overview" class="view active"><div class="pagehead"><div><h1 data-i18n="overviewTitle"></h1><p data-i18n="overviewIntro"></p></div><span id="service-state" class="service-state state" data-i18n="serviceOperational"></span></div><section class="metrics"><article class="metric"><strong data-i18n="authenticatedMcp"></strong><span data-i18n="publicSurface"></span></article><article class="metric"><strong id="namespace-count">0</strong><span data-i18n="clients"></span></article></section><article class="card notice"><h2 data-i18n="coreTitle"></h2><p data-i18n="coreText"></p></article></section>
+<section id="activity" class="view"><div class="pagehead"><div><h1 data-i18n="activity"></h1><p data-i18n="activityIntro"></p><small id="activity-freshness" class="freshness"></small></div></div><div class="table-wrap card"><table><thead><tr><th data-i18n="date"></th><th data-i18n="event"></th><th data-i18n="client"></th><th data-i18n="tool"></th><th data-i18n="adapter"></th><th data-i18n="status"></th><th data-i18n="source"></th></tr></thead><tbody id="activity-list"></tbody></table></div></section>
 <section id="clients" class="view"><div class="pagehead"><div><h1 data-i18n="clients"></h1><p data-i18n="clientsIntro"></p></div><button id="namespace-create-open" class="primary" type="button" data-i18n="createClient"></button></div><label class="filter"><input id="show-archived" type="checkbox"> <span data-i18n="showArchived"></span></label><div id="namespace-list" class="card-list"></div></section>
 <section id="targets" class="view"><div class="pagehead"><div><h1 data-i18n="targets"></h1><p data-i18n="targetsIntro"></p></div><button id="target-create-open" class="primary" type="button" data-i18n="createTarget"></button></div><div id="target-list" class="card-list"></div></section>
 <section id="access" class="view"><div class="pagehead"><div><h1 data-i18n="access"></h1><p data-i18n="accessIntro"></p></div><button id="publication-open" class="primary" type="button" data-i18n="publishCapability"></button></div><div id="publication-list" class="card-list"></div></section>
 <section id="ssh" class="view"><div class="pagehead"><div><h1 data-i18n="ssh"></h1><p data-i18n="sshIntro"></p></div><button id="capability-open" class="primary" type="button" data-i18n="createCapability"></button></div><div id="capability-list" class="card-list"></div></section>
 <section id="web" class="view"><div class="pagehead"><div><h1 data-i18n="web"></h1><p data-i18n="webIntro"></p></div><button id="web-target-open" class="primary" type="button" data-i18n="createWebTarget"></button></div><div id="web-target-list" class="card-list"></div></section>{planned}</main>
 <div id="drawer-shell" class="drawer-shell" hidden><div class="drawer-overlay"></div><aside id="admin-drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" tabindex="-1"><header class="drawer-head"><h2 id="drawer-title"></h2><button id="drawer-close" class="secondary drawer-close" type="button" data-i18n-aria="close">×</button></header><div class="drawer-body">
-<section id="status-panel" class="drawer-panel"><dl><dt data-i18n="runtime"></dt><dd data-i18n="singleRuntime"></dd><dt data-i18n="listeners"></dt><dd data-i18n="listenerValuesMcp"></dd><dt data-i18n="scope"></dt><dd data-i18n="scopeAdapters"></dd></dl></section>
 <section id="namespace-form-panel" class="drawer-panel" hidden><form id="namespace-form" class="form-grid"><label><span data-i18n="displayName"></span><input name="display_name" required maxlength="100"></label><p class="warning" data-i18n="credentialWarning"></p><p id="namespace-message" class="message"></p><div class="actions"><button class="primary" type="submit" data-i18n="create"></button><button class="secondary cancel" type="button" data-i18n="cancel"></button></div></form></section>
 <section id="credential-panel" class="drawer-panel" hidden><p class="warning" data-i18n="credentialOnce"></p><pre id="credential-token" class="credential"></pre><button id="credential-dismiss" class="primary" type="button" data-i18n="copied"></button></section>
 <section id="target-form-panel" class="drawer-panel" hidden><form id="target-form" class="form-grid"><input name="id" type="hidden"><label><span data-i18n="displayName"></span><input name="display_name" required maxlength="100"></label><label><span data-i18n="host"></span><input name="host" required maxlength="253"></label><label><span data-i18n="port"></span><input name="port" type="number" value="22" min="1" max="65535" required></label><label><span data-i18n="username"></span><input name="username" required maxlength="128"></label><label><span data-i18n="authMode"></span><select name="auth_mode"><option value="password" data-i18n="password"></option><option value="private_key" data-i18n="privateKey"></option></select></label><label class="password-field"><span data-i18n="password"></span><input name="password" type="password"></label><label class="key-field" hidden><span data-i18n="privateKey"></span><textarea name="private_key" rows="7"></textarea></label><label class="key-field" hidden><span data-i18n="passphrase"></span><input name="passphrase" type="password"></label><div id="scan-result" class="warning" hidden></div><p id="target-message" class="message"></p><div class="actions"><button id="target-scan" class="primary" type="button" data-i18n="scanHostKey"></button><button id="target-confirm" class="primary" type="submit" data-i18n="confirmAndCreate" hidden></button><button class="secondary cancel" type="button" data-i18n="cancel"></button></div></form></section>

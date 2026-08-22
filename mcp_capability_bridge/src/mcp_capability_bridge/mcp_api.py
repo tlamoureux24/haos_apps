@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 import anyio
@@ -14,6 +15,7 @@ from mcp.types import TextContent, Tool as MCPTool
 from starlette.responses import JSONResponse
 
 from mcp_capability_bridge.runtime_state import RuntimeCounters
+from mcp_capability_bridge.activity import ActivityJournal
 from mcp_capability_bridge.contracts import AdapterCallError, InvocationContext
 from mcp_capability_bridge.store import NamespaceContext, NamespaceStore
 
@@ -51,7 +53,7 @@ class SessionHub:
 
 
 class NamespaceMCP(FastMCP):
-    def __init__(self, store: NamespaceStore, counters: RuntimeCounters):
+    def __init__(self, store: NamespaceStore, counters: RuntimeCounters, activity: ActivityJournal | None = None):
         super().__init__(
             "MCP Capability Bridge",
             instructions="Namespace-isolated access to explicitly published technical capabilities.",
@@ -63,6 +65,11 @@ class NamespaceMCP(FastMCP):
         self.store = store
         self.counters = counters
         self.hub = SessionHub()
+        self.activity = activity or ActivityJournal()
+
+    def source(self) -> str:
+        request = self.get_context().request_context.request
+        return request.client.host if request.client else "—"
 
     def namespace(self) -> NamespaceContext:
         return self.store.authenticate(bearer_from_context(self.get_context()))
@@ -83,14 +90,18 @@ class NamespaceMCP(FastMCP):
 
     async def call_tool(self, name: str, arguments: dict[str, Any]):
         namespace = await anyio.to_thread.run_sync(self.namespace)
+        source = self.source()
+        started = time.monotonic()
         self.hub.observe(namespace.namespace_id, self.get_context().session)
         try:
             published = await anyio.to_thread.run_sync(self.store.resolve, namespace.namespace_id, name)
         except KeyError:
+            self.activity.record(event="tool_call", status="refused", source=source, client=namespace.key, tool=name, duration_ms=ActivityJournal.elapsed_ms(started))
             raise ValueError("capability_not_available") from None
         try:
             Draft202012Validator(published.capability.input_schema).validate(arguments)
         except Exception:
+            self.activity.record(event="tool_call", status="refused", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
             raise ValueError("invalid_arguments") from None
         async with self.counters.operation(namespace.namespace_id, published.target_id, published.adapter_type):
             # Resolve again under the target lease. An admin mutation may have
@@ -98,6 +109,7 @@ class NamespaceMCP(FastMCP):
             try:
                 published = await anyio.to_thread.run_sync(self.store.resolve, namespace.namespace_id, name)
             except KeyError:
+                self.activity.record(event="tool_call", status="refused", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
                 raise ValueError("capability_not_available") from None
             adapter = self.store.registry.get(published.adapter_type)
             secret = self.store.secret_box.decrypt(published.encrypted_secret) if published.encrypted_secret is not None else None
@@ -111,24 +123,30 @@ class NamespaceMCP(FastMCP):
                 else:
                     result = await adapter.invoke(published.capability.capability_id, published.configuration, secret, arguments)
             except AdapterCallError as exc:
+                self.activity.record(event="tool_call", status="failure", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
                 error = json.dumps({"error": {"code": exc.code, "effect_possible": exc.effect_possible}}, separators=(",", ":"))
                 raise ToolError(error) from None
             except Exception:
+                self.activity.record(event="tool_call", status="failure", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
                 raise ToolError('{"error":{"code":"adapter_call_failed","effect_possible":false}}') from None
         payload = {"result": result, "effect_possible": bool(published.capability.effect_capable)}
         try:
             encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
         except (TypeError, ValueError):
+            self.activity.record(event="tool_call", status="failure", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
             raise ValueError("invalid_adapter_result") from None
         if len(encoded.encode()) > MAX_RESULT_BYTES:
+            self.activity.record(event="tool_call", status="failure", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
             raise ValueError("result_too_large")
+        self.activity.record(event="tool_call", status="success", source=source, client=namespace.key, tool=name, adapter=published.adapter_type, duration_ms=ActivityJournal.elapsed_ms(started))
         return [TextContent(type="text", text=encoded)]
 
 
 class OpaqueBearerMiddleware:
-    def __init__(self, app, store: NamespaceStore):
+    def __init__(self, app, store: NamespaceStore, activity: ActivityJournal | None = None):
         self.app = app
         self.store = store
+        self.activity = activity or ActivityJournal()
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or scope.get("path") not in {"/mcp", "/mcp/"}:
@@ -141,6 +159,8 @@ class OpaqueBearerMiddleware:
                 raise PermissionError("invalid_credential")
             await anyio.to_thread.run_sync(self.store.authenticate, token)
         except PermissionError:
+            source = scope.get("client", ("—", 0))[0]
+            self.activity.record(event="authentication", status="refused", source=source)
             response = JSONResponse({"error": {"code": "invalid_credential"}}, status_code=401)
             return await response(scope, receive, send)
         return await self.app(scope, receive, send)

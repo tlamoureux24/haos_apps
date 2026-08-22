@@ -1,9 +1,14 @@
 # Changelog
 
-## Unreleased — external acceptance tooling
+## 0.5.2 — 2026-08-22
 
 - Adds a Dockerized black-box Lot 3B acceptance runner outside the add-on image, avoiding ACP tasks, reports and audit pollution while testing live HAOS session isolation, rotation, revocation, expiry and fresh browser profiles.
 - Keeps control sessions alive during human rotation/revocation pauses so the 30-second inactivity test limit cannot create a false isolation failure.
+- Records Lot 3B acceptance on real HAOS.
+- Clears stale publication errors whenever the publication drawer is reopened.
+- Reorders navigation so MCP access precedes SSH targets and capabilities.
+- Replaces the decorative status drawer and duplicate application tile with a live service-status badge backed by the administration status endpoint.
+- Adds a bilingual, polling Activity view containing only bounded runtime metadata: source address, client key, tool name, adapter, outcome and duration. Payloads, results and credentials are never retained or displayed.
 
 ## 0.5.1 — 2026-08-22
 
