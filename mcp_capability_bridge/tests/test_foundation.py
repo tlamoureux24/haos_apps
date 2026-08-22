@@ -15,7 +15,7 @@ from mcp_capability_bridge import __version__
 from mcp_capability_bridge.activity import ActivityJournal
 from mcp_capability_bridge.admin_ui import ADMIN_CSS, ADMIN_JS
 from mcp_capability_bridge.database import database_ready, initialize
-from mcp_capability_bridge.main import build_runtime_state, create_apps
+from mcp_capability_bridge.main import admin_page, build_runtime_state, create_apps
 from mcp_capability_bridge.runtime import load_log_configuration
 from mcp_capability_bridge.settings import Settings, load_settings
 
@@ -132,7 +132,7 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v0.5.3</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v0.5.4</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
@@ -236,11 +236,17 @@ class AdministrationUiTests(unittest.TestCase):
             "serviceOperational", "serviceUnavailable", "loadActivity",
             "stopDynamicTimers", "activityTimer=setInterval(loadActivity,5000)",
             "f.reset();f.querySelector('.message').textContent=''",
+            "activityCategory", "activityDetail", 'class="activity-state',
         ):
             self.assertIn(contract, ADMIN_JS)
         self.assertNotIn("status-open", ADMIN_JS)
         self.assertIn(".service-state", ADMIN_CSS)
+        self.assertIn(".activity-code", ADMIN_CSS)
+        self.assertIn(".activity-state", ADMIN_CSS)
         self.assertIn("table{width:100%", ADMIN_CSS)
+        page = admin_page("")
+        self.assertIn('data-i18n="category"', page)
+        self.assertNotIn('data-i18n="adapter"></th>', page)
 
     def test_lot_two_ui_preserves_namespaces_and_adds_bounded_ssh_forms(self) -> None:
         for contract in ("createClient", "credentialOnce", "data-rotate", "data-revoke", "data-archive", "show-archived"):

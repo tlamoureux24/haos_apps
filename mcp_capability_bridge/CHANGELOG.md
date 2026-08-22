@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.4 — 2026-08-22
+
+- Align the Activity journal with the shared ACP/AEP five-column presentation:
+  Date, Event, Category, Status and Source.
+- Render the event code and safe MCP client/tool context as secondary technical
+  metadata, and use the suite's common translated status badges.
+
 ## 0.5.3 — 2026-08-22
 
 - Add bilingual `app_started`, `app_ready` and `app_stopped` markers to the

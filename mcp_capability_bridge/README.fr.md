@@ -2,7 +2,7 @@
 
 Français | [English](README.md)
 
-Version actuelle : **0.5.3 — harmonisation de l’activité du cycle de vie**.
+Version actuelle : **0.5.4 — présentation harmonisée du journal Activité**.
 
 MCP Capability Bridge sera une App Home Assistant OS autonome transformant des accès techniques non-MCP, délibérément bornés, en outils MCP Streamable HTTP standards.
 
