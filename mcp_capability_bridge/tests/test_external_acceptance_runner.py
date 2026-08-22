@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib.util
 import asyncio
 import threading
-import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,8 +34,10 @@ class ExternalAcceptanceRunnerTests(unittest.TestCase):
 
 class ExternalAcceptanceKeepaliveTests(unittest.IsolatedAsyncioTestCase):
     async def test_human_pause_keeps_the_control_session_active(self):
-        def delayed_input(_):time.sleep(0.04);return ""
-        with patch.object(runner,"KEEPALIVE_SECONDS",0.01),patch.object(runner,"snapshot",new=AsyncMock()) as snapshot_call,patch("builtins.input",side_effect=delayed_input):
+        called=threading.Event()
+        async def mark_snapshot(*_):called.set()
+        def delayed_input(_):called.wait(1);return ""
+        with patch.object(runner,"KEEPALIVE_SECONDS",0.01),patch.object(runner,"snapshot",new=AsyncMock(side_effect=mark_snapshot)) as snapshot_call,patch("builtins.input",side_effect=delayed_input):
             await runner.interactive_pause("pause",[("url","token","prefix","handle")])
         self.assertGreaterEqual(snapshot_call.await_count,1)
 
