@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.3
+
+- Complete the bounded HAOS AppArmor acceptance covering startup, Ingress, healthcheck, synthetic Syslog and CEF ingestion, Traffic Flows probing and collection, restart and shutdown.
+- Restore full AppArmor enforcement after the diagnostic run produced no missing-permission audit events or functional regressions.
+- Make CI reject complain mode so the accepted least-privilege profile cannot silently return to diagnostic operation.
+
 ## 1.1.2
 
 - Replace broad AppArmor capabilities, file, network and executable-tree permissions with the targeted application and S6 runtime rules observed from the current Home Assistant base image.
