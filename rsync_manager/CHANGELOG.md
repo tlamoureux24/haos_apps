@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.4 - 2026-08-22
+
+- Replace the shortened S6 rules with the complete HAOS S6 runtime baseline already audited by the UniFi and Agent suites.
+- Cover startup, service compilation, supervision and shutdown as one coherent block instead of adding permissions incrementally.
+
 ## 1.3.3 - 2026-08-22
 
 - Allow S6 to enumerate its configuration roots while compiling the service database under the enforced AppArmor profile.
