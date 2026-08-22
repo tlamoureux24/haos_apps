@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.5 - 2026-08-22
+
+- Allow complete generated-crontab access on Alpine's real `/etc/crontabs` target behind `/var/spool/cron/crontabs`.
+- Cover cron file reading, creation, replacement, linking and locking as one rule set.
+
 ## 1.3.4 - 2026-08-22
 
 - Replace the shortened S6 rules with the complete HAOS S6 runtime baseline already audited by the UniFi and Agent suites.

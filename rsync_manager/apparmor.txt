@@ -175,7 +175,9 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted) {
   /data/** rwlk,
   /var/spool/cron/ r,
   /var/spool/cron/crontabs/ rw,
-  /var/spool/cron/crontabs/** rwk,
+  /var/spool/cron/crontabs/** rwlk,
+  /etc/crontabs/ rw,
+  /etc/crontabs/** rwlk,
 
   # Optional Home Assistant mappings and transient CIFS mounts.
   /share/ rw,
