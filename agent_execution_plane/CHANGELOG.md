@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.6
+
+- Reject a mismatched pinned ACP certificate with one safe diagnostic and a
+  precise bilingual UI message, without leaking MCP SDK cleanup tracebacks.
+
 ## 1.1.5
 
 - Keep CSRF protection functional when Home Assistant Ingress is opened over

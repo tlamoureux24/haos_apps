@@ -154,6 +154,9 @@ class AcpBoundary:
         try:await asyncio.wait_for(self.validate_configuration(url,effective,certificate_sha256),timeout=self.validation_timeout)
         except asyncio.TimeoutError as exc:raise RuntimeError("acp_validation_timeout") from exc
         except ValueError:raise
+        except RuntimeError as exc:
+            if str(exc)=="certificate_sha256_mismatch":raise
+            raise RuntimeError("acp_unavailable") from exc
         except Exception as exc:raise RuntimeError("acp_unavailable") from exc
         self.store.save_configuration(url,credential,replace,certificate_sha256);self.store.reset_telemetry();self.connectivity="connected";self.store.set_connectivity("connected")
     async def start(self):

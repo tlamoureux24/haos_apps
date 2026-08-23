@@ -120,5 +120,12 @@ class AcpTlsSocketIntegrationTests(unittest.IsolatedAsyncioTestCase):
             report = database.execute("SELECT report_json FROM reports WHERE job_id='tls-job'").fetchone()[0]
         self.assertIn("TLS lifecycle complete", report)
 
+    async def test_wrong_pin_is_rejected_cleanly(self):
+        boundary = self.boundary(Engine())
+        with self.assertRaisesRegex(RuntimeError, "certificate_sha256_mismatch"):
+            await boundary.configure(
+                f"https://127.0.0.1:{self.port}/mcp", self.credential, True, "0" * 64,
+            )
+
 if __name__ == "__main__":
     unittest.main()
