@@ -149,6 +149,8 @@ class WebSessionManager:
         driver = self.driver_factory(service=Service("/usr/bin/chromedriver", service_args=["--log-level=WARNING"]), options=options)
         try:
             driver.set_page_load_timeout(20)
+            if configuration.get("certificate_sha256"):
+                driver.execute_cdp_cmd("Network.enable", {})
             target = configuration["base_url"]
             if auth["mode"] == "form":
                 target = policy.base_origin + configuration["authentication"]["login_path"]

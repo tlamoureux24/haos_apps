@@ -30,6 +30,7 @@ def verify_driver_certificate(driver, origin: str, expected: object) -> None:
     try:
         actual = hashlib.sha256(base64.b64decode(certificates[0], validate=True)).hexdigest().upper()
     except (IndexError, TypeError, ValueError) as exc:
+        logger.warning("MCB_WEB_TLS_PIN rejected origin=%s code=web_certificate_unavailable", origin)
         raise RuntimeError("web_certificate_unavailable") from exc
     if not hmac.compare_digest(actual, fingerprint.replace(":", "")):
         logger.warning("MCB_WEB_TLS_PIN rejected origin=%s code=web_certificate_sha256_mismatch", origin)

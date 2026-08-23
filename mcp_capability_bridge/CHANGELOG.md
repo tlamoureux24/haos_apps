@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.8
+
+- Enable Chromium's Network domain before reading a pinned Web target
+  certificate and log certificate-unavailable refusals safely.
+
 ## 1.1.7
 
 - Add optional SHA-256 certificate pinning for outbound HTTPS Web targets.

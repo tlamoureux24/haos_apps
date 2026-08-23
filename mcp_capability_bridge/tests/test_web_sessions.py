@@ -74,6 +74,7 @@ class WebSessionTests(unittest.IsolatedAsyncioTestCase):
         configuration["certificate_sha256"]=hashlib.sha256(b"fixture-certificate").hexdigest()
         opened=await self.manager.open(self.a,configuration,secret)
         session=await self.manager._lookup(self.a,opened["session"])
+        self.assertLess(session.driver.cdp_methods.index("Network.enable"),session.driver.cdp_methods.index("Network.getCertificate"))
         self.assertLess(session.driver.cdp_methods.index("Network.getCertificate"),session.driver.cdp_methods.index("Network.setExtraHTTPHeaders"))
 
     async def test_close_is_idempotent_and_profiles_are_disposable(self):
