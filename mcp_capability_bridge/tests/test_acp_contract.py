@@ -15,7 +15,7 @@ import uvicorn
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "agent_control_plane" / "src"))
 
-from agent_control_plane.connectors import discover_streamable_http, invoke_streamable_http
+from agent_control_plane.connectors import ConnectorCertificateMismatch, discover_streamable_http, invoke_streamable_http
 from mcp_capability_bridge.contracts import AdapterRegistry, Capability
 from mcp_capability_bridge.database import initialize
 from mcp_capability_bridge.main import build_runtime_state, create_apps
@@ -119,45 +119,39 @@ class AcpContractIntegrationTests(unittest.IsolatedAsyncioTestCase):
         inventory = await discover_streamable_http(self.url, issued.token)
         self.assertEqual({tool["name"] for tool in inventory},{f"web_web_fixture_{name}" for name in ("open","snapshot","wait","navigate","click","fill","select","press","close")})
 
-
-class PinnedAcpContractIntegrationTests(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.directory = tempfile.TemporaryDirectory()
-        settings = Settings(Path(self.directory.name), "error", "127.0.0.1")
-        initialize(settings.database_path)
-        self.state = build_runtime_state(settings, AdapterRegistry((ContractAdapter(), SSHAdapter(), WebAdapter())))
+    async def test_z_current_acp_rejects_wrong_pin_and_recovers(self):
         _, public = create_apps(self.state)
         certificate = prepare_certificate(Path(self.directory.name), "self_generated")
-        self.fingerprint = certificate.fingerprint_sha256
-        self.port = available_port()
-        self.server = uvicorn.Server(uvicorn.Config(
-            public, host="127.0.0.1", port=self.port, log_level="error", access_log=False,
+        tls_port = available_port()
+        tls_server = uvicorn.Server(uvicorn.Config(
+            public, host="127.0.0.1", port=tls_port, log_level="error", access_log=False,
             ssl_certfile=str(certificate.certfile), ssl_keyfile=str(certificate.keyfile),
         ))
-        self.task = asyncio.create_task(self.server.serve())
+        tls_task = asyncio.create_task(tls_server.serve())
         for _ in range(100):
-            if self.server.started:
+            if tls_server.started:
                 break
-            if self.task.done():
-                self.task.result()
+            if tls_task.done():
+                tls_task.result()
             await asyncio.sleep(0.02)
-        self.assertTrue(self.server.started)
-
-    async def asyncTearDown(self):
-        self.server.should_exit = True
-        await self.task
-        self.directory.cleanup()
-
-    async def test_current_acp_discovers_and_invokes_over_pinned_https(self):
-        url = f"https://127.0.0.1:{self.port}/mcp"
-        namespace, issued = self.state.store.create_namespace("tls_acp", "TLS ACP")
-        target = self.state.store.create_target("tls_fixture", "TLS fixture", "contract_test", {"key": "fixture"}, b"secret")
-        self.state.store.publish(namespace["id"], target["id"], "overview")
-        inventory = await discover_streamable_http(url, issued.token, self.fingerprint)
-        self.assertEqual([tool["name"] for tool in inventory], ["test_fixture_overview"])
-        result = await invoke_streamable_http(url, issued.token, "test_fixture_overview", {"value": "pinned"}, self.fingerprint)
-        self.assertFalse(result["isError"])
-        self.assertIn('"received":"pinned"', result["content"][0]["text"])
+        self.assertTrue(tls_server.started)
+        try:
+            url = f"https://127.0.0.1:{tls_port}/mcp"
+            namespace, issued = self.state.store.create_namespace("tls_acp", "TLS ACP")
+            target = self.state.store.create_target("tls_fixture", "TLS fixture", "contract_test", {"key": "fixture"}, b"secret")
+            self.state.store.publish(namespace["id"], target["id"], "overview")
+            inventory = await discover_streamable_http(url, issued.token, certificate.fingerprint_sha256)
+            self.assertEqual([tool["name"] for tool in inventory], ["test_fixture_overview"])
+            result = await invoke_streamable_http(url, issued.token, "test_fixture_overview", {"value": "pinned"}, certificate.fingerprint_sha256)
+            self.assertFalse(result["isError"])
+            self.assertIn('"received":"pinned"', result["content"][0]["text"])
+            with self.assertRaisesRegex(ConnectorCertificateMismatch, "certificate_sha256_mismatch"):
+                await discover_streamable_http(url, issued.token, "0" * 64)
+            recovered = await discover_streamable_http(url, issued.token, certificate.fingerprint_sha256)
+            self.assertEqual([tool["name"] for tool in recovered], ["test_fixture_overview"])
+        finally:
+            tls_server.should_exit = True
+            await tls_task
 
 
 if __name__ == "__main__":

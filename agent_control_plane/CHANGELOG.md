@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.7
+
+- Reject mismatched pinned MCP certificates with one safe English diagnostic
+  and a precise bilingual UI error, without leaking SDK exception groups.
+
 ## 1.1.6
 
 - Keep CSRF protection functional when Home Assistant Ingress is opened over
