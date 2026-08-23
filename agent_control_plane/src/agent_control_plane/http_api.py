@@ -42,6 +42,7 @@ from agent_control_plane.contracts import (
 )
 from agent_control_plane.connectors import (
     SCHEMA_REJECTION_CODES,
+    ConnectorCertificateMismatch,
     ConnectorSchemaRejected,
     discover_streamable_http,
     validate_streamable_http_url,
@@ -431,6 +432,8 @@ async def admin_create_connector(request: Request) -> JSONResponse:
             correlation_id,
             contract.certificate_sha256,
         )
+    except ConnectorCertificateMismatch as error:
+        return error_response(422, error.code, correlation_id)
     except ConnectorSchemaRejected as error:
         log_schema_rejection(contract.display_name, error, correlation_id)
         return error_response(422, error.code, correlation_id)

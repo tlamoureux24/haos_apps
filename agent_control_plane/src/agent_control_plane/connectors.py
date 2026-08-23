@@ -43,6 +43,22 @@ class ConnectorSchemaRejected(ValueError):
         super().__init__(self.code)
 
 
+class ConnectorCertificateMismatch(ConnectionError):
+    code = "certificate_sha256_mismatch"
+
+
+def _contains_error_message(error: BaseException | None, message: str) -> bool:
+    if error is None:
+        return False
+    if message in str(error):
+        return True
+    return (
+        any(_contains_error_message(item, message) for item in getattr(error, "exceptions", ()))
+        or _contains_error_message(error.__cause__, message)
+        or _contains_error_message(error.__context__, message)
+    )
+
+
 def validate_discovered_tool_schema(tool_name: str, schema: dict[str, object]) -> str:
     """Return the canonical schema encoding or preserve a safe rejection cause."""
     try:
@@ -133,12 +149,18 @@ async def discover_streamable_http(url: str, bearer_token: str, certificate_sha2
     if bearer_token:
         headers["Authorization"] = f"Bearer {bearer_token}"
     timeout = httpx.Timeout(8.0, read=8.0)
-    async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=False, **async_client_kwargs(certificate_sha256)) as client:
-        with anyio.fail_after(10):
-            async with streamable_http_client(url, http_client=client) as (read, write, _):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.list_tools()
+    try:
+        async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=False, **async_client_kwargs(certificate_sha256)) as client:
+            with anyio.fail_after(10):
+                async with streamable_http_client(url, http_client=client) as (read, write, _):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        result = await session.list_tools()
+    except BaseException as error:
+        if _contains_error_message(error, "certificate_sha256_mismatch"):
+            logging.getLogger(__name__).warning("ACP_MCP_PIN rejected endpoint=%s code=certificate_sha256_mismatch", connector_display_endpoint(url))
+            raise ConnectorCertificateMismatch("certificate_sha256_mismatch") from None
+        raise
     inventory: list[dict[str, object]] = []
     for tool in result.tools[:MAX_TOOLS]:
         schema = tool.inputSchema if isinstance(tool.inputSchema, dict) else {}
@@ -172,12 +194,18 @@ async def invoke_streamable_http(
     if bearer_token:
         headers["Authorization"] = f"Bearer {bearer_token}"
     timeout = httpx.Timeout(20.0, read=20.0)
-    async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=False, **async_client_kwargs(certificate_sha256)) as client:
-        with anyio.fail_after(25):
-            async with streamable_http_client(url, http_client=client) as (read, write, _):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.call_tool(tool_name, arguments=arguments)
+    try:
+        async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=False, **async_client_kwargs(certificate_sha256)) as client:
+            with anyio.fail_after(25):
+                async with streamable_http_client(url, http_client=client) as (read, write, _):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        result = await session.call_tool(tool_name, arguments=arguments)
+    except BaseException as error:
+        if _contains_error_message(error, "certificate_sha256_mismatch"):
+            logging.getLogger(__name__).warning("ACP_MCP_PIN rejected endpoint=%s code=certificate_sha256_mismatch", connector_display_endpoint(url))
+            raise ConnectorCertificateMismatch("certificate_sha256_mismatch") from None
+        raise
     payload = result.model_dump(mode="json", by_alias=True, exclude_none=True)
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
     if len(encoded) > MAX_RESULT_BYTES:
