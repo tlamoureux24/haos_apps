@@ -133,12 +133,11 @@ def main() -> int:
             "capability dac_override,",
             "capability dac_read_search,",
             "capability setpcap,",
-            "audit capability sys_admin,",
+            "capability sys_admin,",
             "/data/** rwlk,",
             "/share/** rwlk,",
             "/media/** rwlk,",
             "/backup/** rwlk,",
-            "/mnt/** rwlk,",
             "/etc/crontabs/** rwlk,",
             "/command/s6-svwait ix,",
             "/package/admin/s6-2.15.0.0/command/s6-svwait ix,",
@@ -151,8 +150,8 @@ def main() -> int:
         ),
         "AppArmor invariant",
     )
-    if re.search(r"^\s*capability sys_admin,\s*$", apparmor, flags=re.MULTILINE):
-        raise RuntimeError("SYS_ADMIN must retain its explicit audit qualifier")
+    if "/mnt/** rwlk," in apparmor:
+        raise RuntimeError("The bounded complain audit must not mask recursive /mnt accesses")
     for forbidden in ("/config/**", "/addons/**", "/ssl/**"):
         if re.search(rf"^\s*{re.escape(forbidden)}", apparmor, flags=re.MULTILINE):
             raise RuntimeError(f"Overbroad AppArmor rule: {forbidden}")

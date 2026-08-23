@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.14 - 2026-08-23
+
+- Use the file-access audit path already proven by Rsync Manager's earlier HAOS complain trace.
+- Keep the complete corrected S6/runtime baseline and normal `SYS_ADMIN` permission while deliberately omitting only recursive `/mnt/**` access.
+- Bound the resulting AppArmor evidence with the small CIFS fixture instead of capability or SMTP witnesses.
+
 ## 1.3.13 - 2026-08-23
 
 - End the diagnostic campaign with one explicit AppArmor audit witness for the required `SYS_ADMIN` capability.

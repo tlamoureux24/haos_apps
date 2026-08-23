@@ -10,8 +10,7 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   capability dac_override,
   capability dac_read_search,
   capability setpcap,
-  # Final diagnostic witness: allow SYS_ADMIN and explicitly audit its use.
-  audit capability sys_admin,
+  capability sys_admin,
   capability setgid,
   capability setuid,
 
@@ -193,7 +192,8 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   /backup/ rw,
   /backup/** rwlk,
   /mnt/ rw,
-  /mnt/** rwlk,
+  # Deliberately omit recursive /mnt access while in complain mode. The
+  # bounded CIFS fixture remains functional and records its file accesses.
 
   # Temporary queues, credentials, rsync output and mount diagnostics.
   /tmp/ rw,
