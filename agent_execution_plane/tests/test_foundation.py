@@ -6,13 +6,21 @@ import unittest
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from agent_execution_plane.admin_ui import ADMIN_CSS, ADMIN_JS
 
 from agent_execution_plane.database import MAX_ACTIVITY_ENTRIES, database_ready, initialize, list_activity, prune, record_activity
+from agent_execution_plane.ingress import cookie_secure
 
 
 class FoundationTests(unittest.TestCase):
+    def test_csrf_cookie_matches_browser_facing_ingress_scheme(self):
+        http = SimpleNamespace(headers={}, url=SimpleNamespace(scheme="http"))
+        forwarded_https = SimpleNamespace(headers={"x-forwarded-proto": "https, http"}, url=SimpleNamespace(scheme="http"))
+        self.assertFalse(cookie_secure(http))
+        self.assertTrue(cookie_secure(forwarded_https))
+
     def test_root_reserves_stable_scrollbar_gutter_without_changing_app_width(self):
         self.assertIn(':root{color-scheme:light;scrollbar-gutter:stable;',ADMIN_CSS)
         self.assertIn('.app{max-width:1840px',ADMIN_CSS)

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.6
+
+- Keep CSRF protection functional when Home Assistant Ingress is opened over
+  HTTP, while retaining Secure cookies for browser-facing HTTPS Ingress.
+
 ## 1.1.5
 
 - Restrict the Home Assistant App and CI image builds to AMD64 only.

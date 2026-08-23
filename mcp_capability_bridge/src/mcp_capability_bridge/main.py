@@ -27,6 +27,7 @@ from mcp_capability_bridge.admin_ui import ADMIN_CSS, ADMIN_JS
 from mcp_capability_bridge.browser_runtime import BrowserRuntime
 from mcp_capability_bridge.contracts import AdapterRegistry, InvocationContext
 from mcp_capability_bridge.database import database_ready
+from mcp_capability_bridge.ingress import cookie_secure
 from mcp_capability_bridge.mcp_api import NamespaceMCP, OpaqueBearerMiddleware
 from mcp_capability_bridge.runtime_state import RuntimeCapacityError, RuntimeCounters
 from mcp_capability_bridge.security import SecretBox, load_or_create_key
@@ -439,7 +440,7 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
     async def index(request: Request) -> HTMLResponse:
         prefix = request.headers.get("x-ingress-path", "").rstrip("/")
         response = HTMLResponse(admin_page(html.escape(prefix, quote=True)))
-        response.set_cookie("mcb_csrf", state.csrf_token, httponly=False, secure=True, samesite="strict", path=prefix or "/")
+        response.set_cookie("mcb_csrf", state.csrf_token, httponly=False, secure=cookie_secure(request), samesite="strict", path=prefix or "/")
         return response
 
     async def css(_: Request) -> Response:
