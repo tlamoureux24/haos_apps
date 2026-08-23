@@ -61,7 +61,7 @@ normalize_jobs_file() {
                 .target.options
             ) + {
                 id: $id,
-                enabled: (if has("enabled") then .enabled else true end),
+                enabled: (if (.enabled | type) == "boolean" then .enabled else true end),
                 excludes: (if (.excludes | type) == "array" then .excludes else [] end)
             }')" '. + [$job]' "$NORMALIZED_TMP" > "$UPDATED_TMP"
             mv "$UPDATED_TMP" "$NORMALIZED_TMP"
@@ -366,6 +366,11 @@ run_job() {
     if [ -z "$JOB" ]; then
         echo "[RUN] Job introuvable: id=$JOB_ID" > /proc/1/fd/1
         return 1
+    fi
+
+    if [ "$TRIGGER" = "cron" ] && [ "$(echo "$JOB" | jq -r 'if (.enabled | type) == "boolean" then .enabled else true end')" != "true" ]; then
+        echo "[RUN] Exécution cron ignorée pour le job désactivé: id=$JOB_ID" > /proc/1/fd/1
+        return 0
     fi
 
     NAME=$(echo "$JOB" | jq -r '.name')

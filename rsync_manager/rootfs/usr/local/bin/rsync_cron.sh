@@ -48,7 +48,7 @@ for i in $(seq 0 $((COUNT - 1))); do
     JOB_ID=$(jq -r ".[$i].id // \"\"" "$JOBS_FILE")
     CRON=$(jq -r ".[$i].cron // \"\"" "$JOBS_FILE")
     NAME=$(jq -r ".[$i].name // \"Job $i\"" "$JOBS_FILE")
-    ENABLED=$(jq -r ".[$i].enabled // true" "$JOBS_FILE")
+    ENABLED=$(jq -r ".[$i] | if (.enabled | type) == \"boolean\" then .enabled else true end" "$JOBS_FILE")
 
     if ! printf '%s' "$JOB_ID" | grep -Eq '^job_[A-Za-z0-9_-]+$'; then
         log_cron "Job $i ($NAME) ignoré: id invalide."

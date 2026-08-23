@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.9 - 2026-08-23
+
+- Fix disabled jobs being included in the generated crontab because jq's `//` operator treats `false` as a fallback value.
+- Normalize `enabled` as a strict boolean while preserving the historical enabled-by-default behavior for missing or invalid values.
+- Refuse stale cron invocations for disabled jobs as a server-side safety check while keeping manual actions available.
+
 ## 1.3.8 - 2026-08-22
 
 - Restore the complete AppArmor profile from version 1.3.0, immediately after the UI redesign.

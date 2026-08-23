@@ -41,6 +41,7 @@ def main() -> int:
     manager = (ROOT / "rootfs/usr/local/bin/rsync_manager.sh").read_text(
         encoding="utf-8"
     )
+    cron = (ROOT / "rootfs/usr/local/bin/rsync_cron.sh").read_text(encoding="utf-8")
     package = (ROOT / "rsync_package_version").read_text(encoding="utf-8").strip()
 
     config_version = match_one(r'^version: "([^"]+)"$', config, "config App version")
@@ -133,6 +134,22 @@ def main() -> int:
 
     if "--tls-certcheck=on" not in manager or "--tls-certcheck=off" in manager:
         raise RuntimeError("SMTP certificate verification must remain enabled")
+    require(
+        cron,
+        (
+            'if (.enabled | type) == \\"boolean\\" then .enabled else true end',
+            'Job $JOB_ID ($NAME) ignoré: désactivé.',
+        ),
+        "disabled cron job invariant",
+    )
+    require(
+        manager,
+        (
+            'if [ "$TRIGGER" = "cron" ]',
+            "Exécution cron ignorée pour le job désactivé",
+        ),
+        "disabled cron execution invariant",
+    )
 
     scripts = list((ROOT / "rootfs").rglob("*.sh")) + [
         ROOT / "rootfs/etc/services.d/cron/run",
