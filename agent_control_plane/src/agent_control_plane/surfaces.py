@@ -14,6 +14,7 @@ def exposed_paths(surface: str) -> tuple[str, ...]:
             "/admin/assets/admin.js",
             "/admin/assets/icon.png",
             "/admin/api/v1/status",
+            "/admin/api/v1/transport",
             "/admin/api/v1/activity",
             "/admin/api/v1/connectors",
             "/admin/api/v1/connectors/check",
@@ -53,9 +54,10 @@ def exposed_paths(surface: str) -> tuple[str, ...]:
             "/admin/api/v1/retention/run",
             *HEALTH_PATHS,
         )
-    if surface == "public":
+    if surface == "events":
+        return ("/api/v1/events", *HEALTH_PATHS)
+    if surface == "mcp":
         return (
-            "/api/v1/events",
             "/api/v1/jobs",
             "/api/v1/reports",
             "/api/v1/permissions/effective",

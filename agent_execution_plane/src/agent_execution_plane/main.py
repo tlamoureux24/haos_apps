@@ -32,6 +32,7 @@ from agent_execution_plane.models import Candidate, ModelStore
 from agent_execution_plane.providers import execution_adapter
 from agent_execution_plane.settings import load_settings
 from agent_execution_plane.standalone import StandaloneBoundary
+from agent_execution_plane.tls import generate_certificate, prepare_certificate
 
 logger=logging.getLogger(__name__)
 
@@ -54,9 +55,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if settings.surface == "admin":
             client_ip = request.client.host if request.client else ""
-            if client_ip != settings.ingress_proxy_ip:
+            health_request=request.url.path in {"/health/live","/health/ready"}
+            if not health_request and client_ip != settings.ingress_proxy_ip:
                 return JSONResponse({"error": {"code": "ingress_only"}}, status_code=403)
-            if request.url.path not in {"/health/live", "/health/ready"} and not request.headers.get("x-ingress-path"):
+            if not health_request and not request.headers.get("x-ingress-path"):
                 return JSONResponse({"error": {"code": "ingress_context_required"}}, status_code=403)
         response = await call_next(request)
         response.headers.update({"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "Cache-Control": "no-store"})
@@ -191,14 +193,34 @@ async def standalone_admin_state(_: Request) -> JSONResponse:
     return JSONResponse({"credential_configured": lifecycle_store.credential_configured(), "lifecycle": lifecycle_store.overview()})
 
 
+def certificate_payload() -> dict[str, object]:
+    result: dict[str, object] = {"configured": settings.public_transport == "https", "source": settings.certificate_source}
+    if settings.public_transport != "https": return result
+    try:
+        info=prepare_certificate(settings.data_dir,settings.certificate_source,settings.certfile,settings.keyfile)
+        result.update({"valid":True,"fingerprint_sha256":info.fingerprint_sha256,"subject":info.subject,"issuer":info.issuer,"not_before":info.not_before,"not_after":info.not_after})
+    except Exception as exc: result.update({"valid":False,"error":str(exc)})
+    return result
+
+
+async def transport_admin(request: Request) -> JSONResponse:
+    if request.method == "GET":
+        return JSONResponse({"api":{"transport":settings.public_transport,"internal_port":8098,"paths":["/api/v1/execute","/api/v1/executions/{execution_id}"]},"certificate":certificate_payload()})
+    if not csrf_valid(request): return JSONResponse({"error":{"code":"csrf_failed"}},status_code=403)
+    if settings.certificate_source != "self_generated": return JSONResponse({"error":{"code":"external_certificate_cannot_be_regenerated"}},status_code=409)
+    generate_certificate(settings.data_dir/"private"/"tls",replace=True)
+    logger.warning("AEP_TLS_CERTIFICATE regenerated restart_required=true fingerprint_sha256=%s",certificate_payload().get("fingerprint_sha256","unavailable"))
+    return JSONResponse({"certificate":certificate_payload(),"restart_required":True})
+
+
 async def acp_admin(request: Request) -> JSONResponse:
     if request.method == "GET":
-        config=acp_store.configuration();return JSONResponse({**acp_boundary.state(),"url":config["url"] if config else None})
+        config=acp_store.configuration();return JSONResponse({**acp_boundary.state(),"url":config["url"] if config else None,"certificate_sha256":config.get("certificate_sha256","") if config else ""})
     if not csrf_valid(request):return JSONResponse({"error":{"code":"csrf_failed"}},status_code=403)
     try:
-        data=await json_body(request);url=data.get("url");credential=data.get("credential");replace=bool(data.get("replace_credential"))
+        data=await json_body(request);url=data.get("url");credential=data.get("credential");replace=bool(data.get("replace_credential"));certificate_sha256=data.get("certificate_sha256","")
         if not isinstance(url,str) or (credential is not None and not isinstance(credential,str)):raise ValueError("invalid_acp_configuration")
-        await acp_boundary.configure(url,credential or None,replace)
+        await acp_boundary.configure(url,credential or None,replace,certificate_sha256)
         record_activity(settings.database_path,"acp_connection_configured","configuration","success")
         logger.info("AEP_ACP_CONFIG configured")
         return JSONResponse({"status":"configured"})
@@ -260,7 +282,7 @@ async def lifespan(_: Starlette):
 
 
 common = [Route("/health/live", live), Route("/health/ready", ready)]
-admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/status", admin_status), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/models", models_api, methods=["GET", "POST"]), Route("/admin/api/v1/models/{action}", model_action, methods=["POST"]), Route("/admin/api/v1/oauth/account", oauth_account), Route("/admin/api/v1/oauth/models", oauth_models), Route("/admin/api/v1/oauth/{action}", oauth_action, methods=["POST"]), Route("/admin/api/v1/standalone",standalone_admin_state), Route("/admin/api/v1/standalone/credential/{action}",standalone_credential_action,methods=["POST"]), Route("/admin/api/v1/acp",acp_admin,methods=["GET","POST"]), Route("/admin/api/v1/pending/abandon",abandon_pending,methods=["POST"])]
+admin = [Route("/", admin_index), Route("/admin/assets/admin.css", asset_css), Route("/admin/assets/admin.js", asset_js), Route("/admin/assets/icon.png", asset_icon), Route("/admin/api/v1/status", admin_status), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/transport",transport_admin,methods=["GET","POST"]), Route("/admin/api/v1/models", models_api, methods=["GET", "POST"]), Route("/admin/api/v1/models/{action}", model_action, methods=["POST"]), Route("/admin/api/v1/oauth/account", oauth_account), Route("/admin/api/v1/oauth/models", oauth_models), Route("/admin/api/v1/oauth/{action}", oauth_action, methods=["POST"]), Route("/admin/api/v1/standalone",standalone_admin_state), Route("/admin/api/v1/standalone/credential/{action}",standalone_credential_action,methods=["POST"]), Route("/admin/api/v1/acp",acp_admin,methods=["GET","POST"]), Route("/admin/api/v1/pending/abandon",abandon_pending,methods=["POST"])]
 api = [Route("/api/v1/execute",standalone_boundary.submit,methods=["POST"]),Route("/api/v1/executions/{execution_id}",standalone_boundary.get,methods=["GET"]),Route("/api/v1/executions/{execution_id}/ack",standalone_boundary.ack,methods=["POST"])]
 routes = common + (admin if settings.surface == "admin" else api)
 app = Starlette(routes=routes, middleware=[Middleware(SecurityHeadersMiddleware)], lifespan=lifespan)

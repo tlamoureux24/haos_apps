@@ -88,10 +88,11 @@ jobs:
           trap cleanup EXIT
           docker network create mcb-smoke >/dev/null
           gateway="$(docker network inspect mcb-smoke --format '{{(index .IPAM.Config 0).Gateway}}')"
-          start(){ docker run -d --name mcb-smoke --network mcb-smoke --cap-drop DAC_OVERRIDE --env "MCP_CAPABILITY_BRIDGE_INGRESS_PROXY_IP=${gateway}" -p 127.0.0.1:18098:8098 -p 127.0.0.1:18099:8099 -v "${root}/data:/data" "mcp-capability-bridge:${version}" >/dev/null; }
+          start(){ docker run -d --name mcb-smoke --network mcb-smoke --cap-drop DAC_OVERRIDE --env "MCP_CAPABILITY_BRIDGE_INGRESS_PROXY_IP=${gateway}" --env MCP_CAPABILITY_BRIDGE_PUBLIC_TRANSPORT=http -p 127.0.0.1:18098:8098 -p 127.0.0.1:18099:8099 -v "${root}/data:/data" "mcp-capability-bridge:${version}" >/dev/null; }
           wait_ready(){ for attempt in {1..60}; do if curl -fsS http://127.0.0.1:18098/health/ready | jq -e '.status=="ready"' >/dev/null && curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/health/ready | jq -e '.status=="ready"' >/dev/null; then return; fi; sleep 1; done; return 1; }
           start
           wait_ready
+          docker logs mcb-smoke 2>&1 | grep -F 'WARNING' | grep -F 'unencrypted HTTP'
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/)" = 404
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/mcp)" = 401
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/admin/api/v1/status)" = 404

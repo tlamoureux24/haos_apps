@@ -420,7 +420,7 @@ async def admin_create_connector(request: Request) -> JSONResponse:
     try:
         contract = await json_contract(request, ConnectorCreateRequest)
         url = validate_streamable_http_url(contract.url)
-        tools = await discover_streamable_http(url, contract.bearer_token)
+        tools = await discover_streamable_http(url, contract.bearer_token, contract.certificate_sha256)
         connector_id = await run_in_threadpool(
             request.app.state.control_plane.create_connector,
             contract.display_name,
@@ -428,6 +428,7 @@ async def admin_create_connector(request: Request) -> JSONResponse:
             contract.bearer_token,
             tools,
             correlation_id,
+            contract.certificate_sha256,
         )
     except ConnectorSchemaRejected as error:
         log_schema_rejection(contract.display_name, error, correlation_id)
@@ -456,7 +457,7 @@ async def admin_check_connector(request: Request) -> JSONResponse:
         return error_response(403, "csrf_failed", correlation_id)
     try:
         contract = await json_contract(request, ConnectorIdRequest)
-        config = await run_in_threadpool(request.app.state.control_plane.connector_connection_config, contract.connector_id)
+        config = await run_in_threadpool(request.app.state.control_plane.connector_transport_config, contract.connector_id)
         if config is None:
             return error_response(404, "connector_not_found", correlation_id)
         try:
@@ -487,14 +488,15 @@ async def admin_update_connector(request: Request) -> JSONResponse:
     try:
         contract = await json_contract(request, ConnectorUpdateRequest)
         config = await run_in_threadpool(
-            request.app.state.control_plane.connector_change_config,
+            request.app.state.control_plane.connector_change_transport_config,
             contract.connector_id,
         )
         if config is None:
             return error_response(404, "connector_not_found", correlation_id)
-        current_url, bearer_token, expected_protected_config = config
+        current_url, bearer_token, current_fingerprint, expected_protected_config = config
         target_url = validate_streamable_http_url(contract.url) if contract.url else current_url
-        endpoint_changed = target_url != current_url
+        target_fingerprint = current_fingerprint if contract.certificate_sha256 is None else contract.certificate_sha256
+        endpoint_changed = target_url != current_url or target_fingerprint != current_fingerprint
         tools = None
         discovery_error = None
         if endpoint_changed:
@@ -510,7 +512,7 @@ async def admin_update_connector(request: Request) -> JSONResponse:
                 )
                 return error_response(409, "connector_execution_active", correlation_id)
             try:
-                tools = await discover_streamable_http(target_url, bearer_token)
+                tools = await discover_streamable_http(target_url, bearer_token, target_fingerprint)
             except ConnectorSchemaRejected as error:
                 discovery_error = error.code
                 log_schema_rejection(contract.connector_id, error, correlation_id)
@@ -527,6 +529,7 @@ async def admin_update_connector(request: Request) -> JSONResponse:
             tools,
             discovery_error,
             correlation_id,
+            target_fingerprint,
         )
     except OverflowError:
         return error_response(413, "body_too_large", correlation_id)
@@ -573,12 +576,12 @@ async def admin_rotate_connector_secret(request: Request) -> JSONResponse:
     try:
         contract = await json_contract(request, ConnectorSecretRotationRequest)
         config = await run_in_threadpool(
-            request.app.state.control_plane.connector_change_config,
+            request.app.state.control_plane.connector_change_transport_config,
             contract.connector_id,
         )
         if config is None:
             return error_response(404, "connector_not_found", correlation_id)
-        url, _, expected_protected_config = config
+        url, _, certificate_sha256, expected_protected_config = config
         if await run_in_threadpool(
             request.app.state.control_plane.connector_has_active_jobs,
             contract.connector_id,
@@ -593,7 +596,7 @@ async def admin_rotate_connector_secret(request: Request) -> JSONResponse:
         tools = None
         discovery_error = None
         try:
-            tools = await discover_streamable_http(url, contract.bearer_token)
+            tools = await discover_streamable_http(url, contract.bearer_token, certificate_sha256)
         except ConnectorSchemaRejected as error:
             discovery_error = error.code
             log_schema_rejection(contract.connector_id, error, correlation_id)
@@ -608,6 +611,7 @@ async def admin_rotate_connector_secret(request: Request) -> JSONResponse:
             tools,
             discovery_error,
             correlation_id,
+            certificate_sha256,
         )
     except OverflowError:
         return error_response(413, "body_too_large", correlation_id)
@@ -654,7 +658,7 @@ async def admin_set_connector_enabled(request: Request) -> JSONResponse:
         contract = await json_contract(request, ConnectorEnabledRequest)
         tools = None
         if contract.enabled:
-            config = await run_in_threadpool(request.app.state.control_plane.connector_connection_config, contract.connector_id)
+            config = await run_in_threadpool(request.app.state.control_plane.connector_transport_config, contract.connector_id)
             if config is None:
                 return error_response(404, "connector_not_found", correlation_id)
             try:

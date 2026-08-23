@@ -14,6 +14,7 @@ import uvicorn
 
 from mcp_capability_bridge.main import build_runtime_state, create_apps
 from mcp_capability_bridge.settings import load_settings
+from mcp_capability_bridge.tls import prepare_certificate
 
 logger = logging.getLogger("mcp_capability_bridge")
 
@@ -39,16 +40,28 @@ async def serve() -> None:
     if os.geteuid() != 1000:
         raise RuntimeError("MCP Capability Bridge must run with UID 1000")
     settings = load_settings()
-    admin_app, public_app = create_apps(build_runtime_state(settings))
+    state=build_runtime_state(settings)
+    admin_app, public_app = create_apps(state)
     log_config = load_log_configuration(settings.log_level)
-    servers = (
+    servers = [
         ManagedServer(uvicorn.Config(admin_app, host=settings.admin_host,
                                      port=settings.admin_port, log_level=settings.log_level,
                                      access_log=False, log_config=log_config)),
-        ManagedServer(uvicorn.Config(public_app, host=settings.public_host,
-                                     port=settings.public_port, log_level=settings.log_level,
-                                     access_log=False, log_config=log_config)),
-    )
+    ]
+    public_enabled=True;public_options={}
+    if settings.public_transport=="http":
+        logger.warning("MCP endpoint uses unencrypted HTTP; namespace credentials, tool arguments, and tool results are not encrypted by this application")
+    else:
+        try:
+            certificate=prepare_certificate(settings.data_dir,settings.certificate_source,settings.certfile,settings.keyfile)
+            public_options={"ssl_certfile":str(certificate.certfile),"ssl_keyfile":str(certificate.keyfile)}
+            logger.info("Public TLS certificate source: %s",certificate.source)
+            logger.info("Public TLS certificate SHA-256: %s",certificate.fingerprint_sha256)
+            logger.info("Public TLS certificate expires at: %s",certificate.not_after)
+        except Exception as exc:
+            public_enabled=False;logger.error("Public TLS certificate is invalid; MCP HTTPS listener was not started and Ingress administration remains available error=%s",str(exc))
+    if public_enabled:
+        servers.append(ManagedServer(uvicorn.Config(public_app,host=settings.public_host,port=settings.public_port,log_level=settings.log_level,access_log=False,log_config=log_config,**public_options)))
     loop = asyncio.get_running_loop()
 
     def request_shutdown() -> None:
@@ -68,6 +81,8 @@ async def serve() -> None:
     finally:
         request_shutdown()
         await asyncio.gather(*tasks, return_exceptions=True)
+        if not public_enabled:
+            await state.counters.shutdown();await state.web_sessions.close_all();await state.browser.close()
         logger.info("MCP Capability Bridge stopped")
 
 

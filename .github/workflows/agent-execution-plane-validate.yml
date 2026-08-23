@@ -57,7 +57,7 @@ jobs:
           trap cleanup EXIT
           docker network create aep-smoke >/dev/null
           gateway="$(docker network inspect aep-smoke --format '{{(index .IPAM.Config 0).Gateway}}')"
-          start(){ docker run -d --name aep-smoke --network aep-smoke --cap-drop DAC_OVERRIDE --env "AGENT_EXECUTION_PLANE_INGRESS_PROXY_IP=${gateway}" -p 127.0.0.1:18098:8098 -p 127.0.0.1:18099:8099 -v "${root}/data:/data" "agent-execution-plane:${version}" >/dev/null; }
+          start(){ docker run -d --name aep-smoke --network aep-smoke --cap-drop DAC_OVERRIDE --env "AGENT_EXECUTION_PLANE_INGRESS_PROXY_IP=${gateway}" --env AGENT_EXECUTION_PLANE_PUBLIC_TRANSPORT=http -p 127.0.0.1:18098:8098 -p 127.0.0.1:18099:8099 -v "${root}/data:/data" "agent-execution-plane:${version}" >/dev/null; }
           wait_ready(){ for attempt in {1..60}; do if curl -fsS http://127.0.0.1:18098/health/ready | jq -e '.status=="ready"' >/dev/null && curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/health/ready | jq -e '.status=="ready"' >/dev/null; then return; fi; sleep 1; done; return 1; }
           start; wait_ready
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18098/)" = 404
@@ -89,6 +89,7 @@ jobs:
           cmp agent_execution_plane/icon.png /tmp/aep-icon.png
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' 'http://127.0.0.1:18099/admin/api/v1/activity?limit=50' | jq -e '.total >= 2 and all(.entries[]; has("event_code") and (has("objective")|not) and (has("result")|not))'
           docker logs aep-smoke > /tmp/aep-container.log 2>&1
+          grep -F 'WARNING: Standalone Execution API uses unencrypted HTTP' /tmp/aep-container.log
           grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([+-][0-9]{2}:?[0-9]{2}|Z) \[Agent Execution Plane\] (INFO|ERROR):' /tmp/aep-container.log
           docker exec aep-smoke /bin/sh -c 'for process in /proc/[0-9]*; do readlink -f "${process}/exe" 2>/dev/null || true; done' > agent_execution_plane-apparmor-executables.txt
           docker stop -t 15 aep-smoke >/dev/null; docker rm aep-smoke >/dev/null

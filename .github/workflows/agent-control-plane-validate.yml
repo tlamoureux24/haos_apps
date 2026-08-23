@@ -249,6 +249,7 @@ jobs:
           wait_ready() {
             for attempt in {1..60}; do
               if curl --fail --silent http://127.0.0.1:18098/health/ready | jq -e '.status == "ready"' >/dev/null && \
+                 curl --fail --silent http://127.0.0.1:18100/health/ready | jq -e '.status == "ready"' >/dev/null && \
                  curl --fail --silent --header "X-Ingress-Path: /api/hassio_ingress/ci" \
                    http://127.0.0.1:18099/health/ready | jq -e '.status == "ready"' >/dev/null; then
                 return 0
@@ -271,13 +272,17 @@ jobs:
           --cap-drop DAC_OVERRIDE \
           --env "AGENT_CONTROL_PLANE_INGRESS_PROXY_IP=${ingress_proxy_ip}" \
           --env "AGENT_CONTROL_PLANE_INTAKE_RATE_LIMIT=1" \
+          --env "AGENT_CONTROL_PLANE_MCP_TRANSPORT=http" \
             --publish 127.0.0.1:18098:8098 \
+            --publish 127.0.0.1:18100:8100 \
             --publish 127.0.0.1:18099:8099 \
             --volume "${root}/data:/data" \
             "agent-control-plane:${version}"
 
           wait_ready
           echo "SMOKE_STAGE=initial-ready"
+          docker logs agent-control-plane-smoke 2>&1 | grep -F 'WARNING: Event Intake API uses unencrypted HTTP'
+          docker logs agent-control-plane-smoke 2>&1 | grep -F 'WARNING: MCP Worker Endpoint uses unencrypted HTTP'
           if docker logs agent-control-plane-smoke 2>&1 | grep -q 'IncompleteFieldDefinitionWarning'; then
             echo 'Unexpected MCP/Pydantic settings warning' >&2
             exit 1
@@ -527,33 +532,33 @@ jobs:
             jq -e 'all(.tasks[]; .name != "ci_status_task")'
           echo "SMOKE_STAGE=generic-connector-ready"
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
-            http://127.0.0.1:18098/api/v1/events | jq -e '.events | length == 8'
+            http://127.0.0.1:18100/api/v1/events | jq -e '.events | length == 8'
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
-            http://127.0.0.1:18098/api/v1/jobs | jq -e '.jobs | length == 5'
+            http://127.0.0.1:18100/api/v1/jobs | jq -e '.jobs | length == 5'
           curl --fail --silent --header "Authorization: Bearer ${observer_credential}" \
-            http://127.0.0.1:18098/api/v1/reports | jq -e '.reports | length == 1'
+            http://127.0.0.1:18100/api/v1/reports | jq -e '.reports | length == 1'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --request POST --header 'Content-Type: application/json' \
             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
-            http://127.0.0.1:18098/mcp)" = "401"
+            http://127.0.0.1:18100/mcp)" = "401"
           curl --fail --silent --request POST \
             --header "Authorization: Bearer ${observer_credential}" \
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
-            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.serverInfo.name == "Agent Control Plane"'
+            http://127.0.0.1:18100/mcp | mcp_result | jq -e '.result.serverInfo.name == "Agent Control Plane"'
           curl --fail --silent --request POST \
             --header "Authorization: Bearer ${observer_credential}" \
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.tools | map(.name) == ["control_plane_status_v1","permissions_get_effective_v1","events_list_v1","events_get_v1","jobs_list_v1","jobs_get_v1","reports_list_v1","reports_get_v1"]'
+            http://127.0.0.1:18100/mcp | mcp_result | jq -e '.result.tools | map(.name) == ["control_plane_status_v1","permissions_get_effective_v1","events_list_v1","events_get_v1","jobs_list_v1","jobs_get_v1","reports_list_v1","reports_get_v1"]'
           curl --fail --silent --request POST \
             --header "Authorization: Bearer ${observer_credential}" \
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"control_plane_status_v1","arguments":{}}}' \
-            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.structuredContent.status == "ready"'
+            http://127.0.0.1:18100/mcp | mcp_result | jq -e '.result.structuredContent.status == "ready"'
           event_id="$(jq -er '.event_id' /tmp/event-first.json)"
           job_id="$(jq -er '.job_id' /tmp/event-first.json)"
           curl --fail --silent --request POST \
@@ -561,19 +566,19 @@ jobs:
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data "$(jq --null-input --compact-output --arg event_id "${event_id}" '{jsonrpc:"2.0",id:4,method:"tools/call",params:{name:"events_get_v1",arguments:{event_id:$event_id}}}')" \
-            http://127.0.0.1:18098/mcp | mcp_result | jq -e --arg event_id "${event_id}" '.result.structuredContent.event.id == $event_id'
+            http://127.0.0.1:18100/mcp | mcp_result | jq -e --arg event_id "${event_id}" '.result.structuredContent.event.id == $event_id'
           curl --fail --silent --request POST \
             --header "Authorization: Bearer ${observer_credential}" \
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data "$(jq --null-input --compact-output --arg job_id "${job_id}" '{jsonrpc:"2.0",id:5,method:"tools/call",params:{name:"jobs_get_v1",arguments:{job_id:$job_id}}}')" \
-            http://127.0.0.1:18098/mcp | mcp_result | jq -e --arg job_id "${job_id}" '.result.structuredContent.job.id == $job_id'
+            http://127.0.0.1:18100/mcp | mcp_result | jq -e --arg job_id "${job_id}" '.result.structuredContent.job.id == $job_id'
           curl --fail --silent --request POST \
             --header "Authorization: Bearer ${credential}" \
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":6,"method":"tools/list","params":{}}' \
-            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.tools | map(.name) == ["permissions_get_effective_v1"]'
+            http://127.0.0.1:18100/mcp | mcp_result | jq -e '.result.tools | map(.name) == ["permissions_get_effective_v1"]'
           worker_response="$(curl --fail --silent \
             --request POST \
             --header "X-Ingress-Path: ${ingress_path}" \
@@ -588,7 +593,7 @@ jobs:
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data '{"jsonrpc":"2.0","id":7,"method":"tools/list","params":{}}' \
-            http://127.0.0.1:18098/mcp | mcp_result)"
+            http://127.0.0.1:18100/mcp | mcp_result)"
           printf '%s' "${worker_tools}" | jq -e '
             (.result.tools | length) == 5 and
             ([.result.tools[].name] - ["jobs_claim_v1","jobs_heartbeat_v1","jobs_complete_v1","jobs_fail_v1"] | length) == 1'
@@ -599,7 +604,7 @@ jobs:
             --header 'Content-Type: application/json' \
             --header 'Accept: application/json, text/event-stream' \
             --data "$(jq --null-input --compact-output --arg capability "${queued_capability}" '{jsonrpc:"2.0",id:8,method:"tools/call",params:{name:$capability,arguments:{}}}')" \
-            http://127.0.0.1:18098/mcp | mcp_result | jq -e '.result.isError == true'
+            http://127.0.0.1:18100/mcp | mcp_result | jq -e '.result.isError == true'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --request POST \
             --header "X-Ingress-Path: ${ingress_path}" \

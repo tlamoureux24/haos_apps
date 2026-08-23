@@ -92,8 +92,13 @@ La priorité `1` est essayée en premier. L’appelant ne choisit jamais le mod�
 1. Créez une identité ACP de type **Client MCP** dédiée au rôle de worker.
 2. Accordez-lui uniquement `jobs.claim`, `jobs.heartbeat`, `jobs.complete` et `jobs.fail` ; ce sont ces permissions qui définissent le rôle de worker.
 3. Copiez son credential Bearer affiché une seule fois.
-4. Dans **Control Plane** d’AEP, saisissez l’endpoint complet, par exemple `http://IP_HOME_ASSISTANT:8098/mcp`.
+4. Dans **Control Plane** d’AEP, saisissez l’endpoint complet, par exemple `https://IP_HOME_ASSISTANT:8100/mcp`.
 5. Collez le credential worker et enregistrez.
+
+Si ACP utilise son certificat autogénéré, saisissez aussi son empreinte SHA-256
+vérifiée indépendamment. Laissez le champ vide pour un certificat validé par les
+CA du système. L’API autonome AEP utilise HTTPS par défaut ; son empreinte et la
+régénération sont disponibles dans l’administration Ingress.
 
 AEP valide les noms et les schémas d’entrée des outils de cycle de vie. Lors d’une modification, laissez le credential vide pour conserver le secret chiffré existant. AEP ne poll que si le slot et un modèle compatible sont disponibles. `allowed_capabilities` fourni par ACP est normatif ; les outils de cycle de vie et l’inventaire étranger ne deviennent jamais visibles par le modèle.
 

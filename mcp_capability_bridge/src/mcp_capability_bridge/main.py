@@ -33,6 +33,7 @@ from mcp_capability_bridge.security import SecretBox, load_or_create_key
 from mcp_capability_bridge.settings import Settings
 from mcp_capability_bridge.ssh_adapter import SSHAdapter, scan_host_key
 from mcp_capability_bridge.store import NamespaceStore
+from mcp_capability_bridge.tls import generate_certificate, prepare_certificate
 from mcp_capability_bridge.web_adapter import WebAdapter, origin, resolve_host
 from mcp_capability_bridge.web_sessions import WebSessionManager
 
@@ -71,11 +72,12 @@ class SecurityHeadersMiddleware:
             return await self.app(scope, receive, send)
         headers = {key.lower(): value for key, value in scope.get("headers", [])}
         if self.admin:
+            health_request=scope.get("path") in {"/health/live","/health/ready"}
             client_ip = scope.get("client", ("", 0))[0]
-            if client_ip != self.ingress_proxy_ip:
+            if not health_request and client_ip != self.ingress_proxy_ip:
                 response = JSONResponse({"error": {"code": "ingress_only"}}, status_code=403)
                 return await response(scope, receive, send)
-            if b"x-ingress-path" not in headers:
+            if not health_request and b"x-ingress-path" not in headers:
                 response = JSONResponse({"error": {"code": "ingress_context_required"}}, status_code=403)
                 return await response(scope, receive, send)
 
@@ -162,6 +164,22 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
         namespaces = state.store.list_namespaces(include_archived=True)
         runtime=state.counters.snapshot();runtime["active_sessions"]=state.web_sessions.count()
         return JSONResponse({"status": "ready" if database_ready(state.settings.database_path) else "not_ready", "version": __version__, "database_generation": 1, "public_surface": "authenticated_mcp", "adapters": state.store.registry.describe(), "namespaces": {"active": sum(item["status"] == "active" for item in namespaces), "revoked": sum(item["status"] == "revoked" for item in namespaces), "archived": sum(item["status"] == "archived" for item in namespaces)}, "targets": len(state.store.list_targets()), "publications": len(state.store.list_publications()), "runtime": runtime})
+
+    def certificate_payload() -> dict[str, object]:
+        result:dict[str,object]={"configured":state.settings.public_transport=="https","source":state.settings.certificate_source}
+        if state.settings.public_transport!="https":return result
+        try:
+            info=prepare_certificate(state.settings.data_dir,state.settings.certificate_source,state.settings.certfile,state.settings.keyfile)
+            result.update({"valid":True,"fingerprint_sha256":info.fingerprint_sha256,"subject":info.subject,"issuer":info.issuer,"not_before":info.not_before,"not_after":info.not_after})
+        except Exception as exc:result.update({"valid":False,"error":str(exc)})
+        return result
+
+    async def transport(request:Request)->JSONResponse:
+        if request.method=="GET":return JSONResponse({"mcp":{"transport":state.settings.public_transport,"internal_port":8098,"path":"/mcp"},"certificate":certificate_payload()})
+        if not csrf_valid(request):return JSONResponse({"error":{"code":"csrf_failed"}},status_code=403)
+        if state.settings.certificate_source!="self_generated":return JSONResponse({"error":{"code":"external_certificate_cannot_be_regenerated"}},status_code=409)
+        generate_certificate(state.settings.data_dir/"private"/"tls",replace=True)
+        return JSONResponse({"certificate":certificate_payload(),"restart_required":True})
 
     async def activity(_: Request) -> JSONResponse:
         return JSONResponse({"events": state.activity.list()})
@@ -438,7 +456,7 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
         return JSONResponse({"sessions":rows})
 
     health = [Route("/health/live", live), Route("/health/ready", ready)]
-    admin = Starlette(routes=[Route("/", index), Route("/admin/assets/admin.css", css), Route("/admin/assets/admin.js", js), Route("/admin/assets/icon.png", icon), Route("/admin/api/v1/status", status), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/namespaces", namespaces, methods=["GET", "POST"]), Route("/admin/api/v1/namespaces/{action}", namespace_action, methods=["POST"]), Route("/admin/api/v1/targets", targets, methods=["GET", "POST"]), Route("/admin/api/v1/targets/detail/{target_id}", target_detail, methods=["GET"]), Route("/admin/api/v1/targets/{action}", target_action, methods=["POST"]), Route("/admin/api/v1/ssh/scan", ssh_scan, methods=["POST"]), Route("/admin/api/v1/ssh/capabilities/{action}", capabilities, methods=["POST"]), Route("/admin/api/v1/web/resolve",web_resolve,methods=["POST"]),Route("/admin/api/v1/web/targets",web_targets,methods=["GET","POST"]),Route("/admin/api/v1/web/test",web_test,methods=["POST"]),Route("/admin/api/v1/web/sessions",web_sessions,methods=["GET"]), Route("/admin/api/v1/publications", publications, methods=["GET"]), Route("/admin/api/v1/publications/{action}", publications, methods=["POST"]), *health], middleware=[Middleware(SecurityHeadersMiddleware, admin=True, ingress_proxy_ip=state.settings.ingress_proxy_ip)])
+    admin = Starlette(routes=[Route("/", index), Route("/admin/assets/admin.css", css), Route("/admin/assets/admin.js", js), Route("/admin/assets/icon.png", icon), Route("/admin/api/v1/status", status), Route("/admin/api/v1/activity", activity), Route("/admin/api/v1/transport",transport,methods=["GET","POST"]), Route("/admin/api/v1/namespaces", namespaces, methods=["GET", "POST"]), Route("/admin/api/v1/namespaces/{action}", namespace_action, methods=["POST"]), Route("/admin/api/v1/targets", targets, methods=["GET", "POST"]), Route("/admin/api/v1/targets/detail/{target_id}", target_detail, methods=["GET"]), Route("/admin/api/v1/targets/{action}", target_action, methods=["POST"]), Route("/admin/api/v1/ssh/scan", ssh_scan, methods=["POST"]), Route("/admin/api/v1/ssh/capabilities/{action}", capabilities, methods=["POST"]), Route("/admin/api/v1/web/resolve",web_resolve,methods=["POST"]),Route("/admin/api/v1/web/targets",web_targets,methods=["GET","POST"]),Route("/admin/api/v1/web/test",web_test,methods=["POST"]),Route("/admin/api/v1/web/sessions",web_sessions,methods=["GET"]), Route("/admin/api/v1/publications", publications, methods=["GET"]), Route("/admin/api/v1/publications/{action}", publications, methods=["POST"]), *health], middleware=[Middleware(SecurityHeadersMiddleware, admin=True, ingress_proxy_ip=state.settings.ingress_proxy_ip)])
 
     @asynccontextmanager
     async def public_lifespan(_: Starlette):

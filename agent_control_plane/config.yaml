@@ -1,6 +1,6 @@
 name: "Agent Control Plane"
 slug: "agent_control_plane"
-version: "1.0.2"
+version: "1.1.0"
 description: "Governed control plane for MCP-compatible agents"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/agent_control_plane"
 arch:
@@ -19,18 +19,32 @@ panel_icon: "mdi:shield-link-variant"
 panel_title: "Agent Control Plane"
 panel_admin: true
 homeassistant_api: true
-watchdog: "http://[HOST]:[PORT:8098]/health/ready"
+map:
+  - type: ssl
+watchdog: "http://[HOST]:[PORT:8099]/health/ready"
 
 ports:
   8098/tcp: null
+  8100/tcp: null
 
 ports_description:
-  8098/tcp: "Authenticated MCP and event intake API"
+  8098/tcp: "Authenticated event intake API"
+  8100/tcp: "Authenticated MCP worker endpoint"
 
 options:
   log_level: "info"
   intake_rate_limit_per_minute: 30
+  events_transport: "http"
+  mcp_transport: "https"
+  certificate_source: "self_generated"
+  certfile: ""
+  keyfile: ""
 
 schema:
   log_level: "list(debug|info|warning|error)"
   intake_rate_limit_per_minute: "int(1,600)"
+  events_transport: "list(http|https)"
+  mcp_transport: "list(http|https)"
+  certificate_source: "list(self_generated|external)"
+  certfile: "str?"
+  keyfile: "str?"

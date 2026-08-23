@@ -20,6 +20,7 @@ from agent_execution_plane.security import decrypt, encrypt
 
 ACP_URL_KEY="acp_mcp_url"
 ACP_CREDENTIAL_KEY="acp_mcp_credential"
+ACP_CERTIFICATE_KEY="acp_certificate_sha256"
 ACP_STATUS_KEY="acp_connectivity"
 ACP_TELEMETRY_KEY="acp_telemetry"
 LIFECYCLE_TOOLS={"jobs_claim_v1","jobs_heartbeat_v1","jobs_complete_v1","jobs_fail_v1"}
@@ -51,21 +52,22 @@ class AcpStore:
         try:yield db
         finally:db.close()
     def configuration(self,*,include_credential=False):
-        with self._open() as db:rows={r["key"]:r["value"] for r in db.execute("SELECT key,value FROM settings WHERE key IN (?,?)",(ACP_URL_KEY,ACP_CREDENTIAL_KEY))}
+        with self._open() as db:rows={r["key"]:r["value"] for r in db.execute("SELECT key,value FROM settings WHERE key IN (?,?,?)",(ACP_URL_KEY,ACP_CREDENTIAL_KEY,ACP_CERTIFICATE_KEY))}
         if ACP_URL_KEY not in rows:return None
-        result={"url":rows[ACP_URL_KEY],"credential_configured":ACP_CREDENTIAL_KEY in rows}
+        result={"url":rows[ACP_URL_KEY],"credential_configured":ACP_CREDENTIAL_KEY in rows,"certificate_sha256":rows.get(ACP_CERTIFICATE_KEY,"")}
         if include_credential:result["credential"]=decrypt(self.key,rows.get(ACP_CREDENTIAL_KEY).encode() if rows.get(ACP_CREDENTIAL_KEY) else None)
         return result
-    def save_configuration(self,url:str,credential:str|None,replace:bool):
+    def save_configuration(self,url:str,credential:str|None,replace:bool,certificate_sha256:str=""):
         current=self.configuration(include_credential=True);token=credential if replace or not current else current.get("credential")
         with self._open() as db:
             db.execute("BEGIN IMMEDIATE");stamp=now_iso()
             db.execute("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",(ACP_URL_KEY,url,stamp))
             if token is not None:db.execute("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",(ACP_CREDENTIAL_KEY,encrypt(self.key,token).decode(),stamp))
             elif replace:db.execute("DELETE FROM settings WHERE key=?",(ACP_CREDENTIAL_KEY,))
+            db.execute("INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",(ACP_CERTIFICATE_KEY,certificate_sha256,stamp))
             db.commit()
     def delete_configuration(self):
-        with self._open() as db:db.execute("DELETE FROM settings WHERE key IN (?,?)",(ACP_URL_KEY,ACP_CREDENTIAL_KEY));db.commit()
+        with self._open() as db:db.execute("DELETE FROM settings WHERE key IN (?,?,?)",(ACP_URL_KEY,ACP_CREDENTIAL_KEY,ACP_CERTIFICATE_KEY));db.commit()
     def connectivity(self):
         with self._open() as db:row=db.execute("SELECT value FROM settings WHERE key=?",(ACP_STATUS_KEY,)).fetchone()
         return row["value"] if row else "not_configured"
@@ -123,7 +125,7 @@ class AcpBoundary:
         config=self.store.configuration();meta=self.store.metadata()
         return {"configured":config is not None,"credential_configured":bool(config and config["credential_configured"]),"connectivity":self.store.connectivity(),"delivery":meta["phase"] if meta else None,"telemetry":self.store.telemetry()}
     def _request(self,config,capabilities=(),guard=None,job=None):
-        return ExecutionRequest("boundary","boundary",str((job or {}).get("objective","boundary")),(job or {}).get("input",{}),config["url"],config.get("credential"),tuple(capabilities),(job or {}).get("required_report_schema"),guard)
+        return ExecutionRequest("boundary","boundary",str((job or {}).get("objective","boundary")),(job or {}).get("input",{}),config["url"],config.get("credential"),tuple(capabilities),(job or {}).get("required_report_schema"),guard,config.get("certificate_sha256",""))
     async def _call(self,name,args,config=None,*,record_response=True):
         config=config or self.store.configuration(include_credential=True)
         if not config:raise RuntimeError("acp_not_configured")
@@ -133,24 +135,27 @@ class AcpBoundary:
         except asyncio.TimeoutError as exc:raise RuntimeError("acp_request_timeout") from exc
         if record_response:self.store.record_response()
         return result
-    async def validate_configuration(self,url,credential):
+    async def validate_configuration(self,url,credential,certificate_sha256=""):
         parsed=urlparse(url)
         if parsed.scheme not in {"http","https"} or not parsed.netloc or parsed.username or parsed.password:raise ValueError("invalid_acp_url")
-        config={"url":url,"credential":credential}
+        config={"url":url,"credential":credential,"certificate_sha256":certificate_sha256}
         async with self.mcp_factory(self._request(config)) as session:
             inventory={};cursor=None
             while True:
                 page,cursor=await session.list_tools(cursor);inventory.update((tool.name,tool.input_schema) for tool in page)
                 if cursor is None:break
         if not all(name in inventory and _valid_lifecycle_schema(name,inventory[name]) for name in LIFECYCLE_TOOLS):raise ValueError("incompatible_acp_contract")
-    async def configure(self,url,credential,replace):
+    async def configure(self,url,credential,replace,certificate_sha256=""):
+        from agent_execution_plane.pinned_http import normalize_certificate_sha256
+        certificate_sha256=normalize_certificate_sha256(certificate_sha256)
+        if certificate_sha256 and urlparse(url).scheme != "https":raise ValueError("invalid_acp_url")
         current=self.store.configuration(include_credential=True);effective=credential if replace or not current else current.get("credential")
         if not effective:raise ValueError("acp_credential_required")
-        try:await asyncio.wait_for(self.validate_configuration(url,effective),timeout=self.validation_timeout)
+        try:await asyncio.wait_for(self.validate_configuration(url,effective,certificate_sha256),timeout=self.validation_timeout)
         except asyncio.TimeoutError as exc:raise RuntimeError("acp_validation_timeout") from exc
         except ValueError:raise
         except Exception as exc:raise RuntimeError("acp_unavailable") from exc
-        self.store.save_configuration(url,credential,replace);self.store.reset_telemetry();self.connectivity="connected";self.store.set_connectivity("connected")
+        self.store.save_configuration(url,credential,replace,certificate_sha256);self.store.reset_telemetry();self.connectivity="connected";self.store.set_connectivity("connected")
     async def start(self):
         if self._runner and not self._runner.done():return
         self._stop.clear();self._runner=asyncio.create_task(self._supervise(),name="aep-acp-boundary-supervisor")
@@ -212,7 +217,7 @@ class AcpBoundary:
         lease={"expires":expires,"lost":False}
         async def guard():
             if lease["lost"] or datetime.now(timezone.utc).timestamp()>=_timestamp(lease["expires"]):raise ExecutionFailure("source_lease_lost")
-        request=ExecutionRequest(execution_id,job["id"],job["objective"],job["input"],config["url"],config.get("credential"),capabilities,schema,guard)
+        request=ExecutionRequest(execution_id,job["id"],job["objective"],job["input"],config["url"],config.get("credential"),capabilities,schema,guard,config.get("certificate_sha256",""))
         execute=asyncio.create_task(self.engine.execute(request));heartbeat=asyncio.create_task(self._heartbeat(job["id"],token,lease,config))
         done,_=await asyncio.wait({execute,heartbeat},return_when=asyncio.FIRST_COMPLETED)
         if heartbeat in done and heartbeat.exception():lease["lost"]=True;execute.cancel();await asyncio.gather(execute,return_exceptions=True);outcome=ExecutionOutcome(False,error_code="source_lease_lost",mcp_effect_possible=True)

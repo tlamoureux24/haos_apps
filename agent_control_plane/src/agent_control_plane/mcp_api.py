@@ -109,6 +109,7 @@ class GovernedMCP(FastMCP):
                     resolved["bearer_token"],
                     resolved["tool_name"],
                     resolved["arguments"],
+                    resolved["certificate_sha256"],
                 )
             except Exception:
                 await anyio.to_thread.run_sync(

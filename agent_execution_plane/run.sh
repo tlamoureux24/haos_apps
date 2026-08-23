@@ -15,11 +15,23 @@ su-exec agent-execution-plane:agent-execution-plane env PYTHONPATH=/app/src \
 
 if [ -f /data/options.json ]; then
   log_level="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("log_level", "info"))')"
+  public_transport="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("public_transport", "https"))')"
+  certificate_source="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("certificate_source", "self_generated"))')"
+  certfile="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("certfile", ""))')"
+  keyfile="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("keyfile", ""))')"
 else
   log_level="${AGENT_EXECUTION_PLANE_LOG_LEVEL:-info}"
+  public_transport="${AGENT_EXECUTION_PLANE_PUBLIC_TRANSPORT:-https}"
+  certificate_source="${AGENT_EXECUTION_PLANE_CERTIFICATE_SOURCE:-self_generated}"
+  certfile="${AGENT_EXECUTION_PLANE_CERTFILE:-}"
+  keyfile="${AGENT_EXECUTION_PLANE_KEYFILE:-}"
 fi
 export AGENT_EXECUTION_PLANE_DATA_DIR="${AGENT_EXECUTION_PLANE_DATA_DIR:-/data}"
 export AGENT_EXECUTION_PLANE_LOG_LEVEL="${log_level}"
+export AGENT_EXECUTION_PLANE_PUBLIC_TRANSPORT="${public_transport}"
+export AGENT_EXECUTION_PLANE_CERTIFICATE_SOURCE="${certificate_source}"
+export AGENT_EXECUTION_PLANE_CERTFILE="${certfile}"
+export AGENT_EXECUTION_PLANE_KEYFILE="${keyfile}"
 
 log() {
   timestamp="$(python3 -c 'from datetime import datetime; print(datetime.now().astimezone().isoformat(timespec="seconds"))')"
@@ -46,14 +58,31 @@ su-exec agent-execution-plane:agent-execution-plane env AGENT_EXECUTION_PLANE_SU
   --no-access-log --log-level "${log_level}" --log-config /app/src/agent_execution_plane/uvicorn_logging.json &
 admin_pid=$!
 
-log INFO "Starting authenticated standalone API listener on 8098"
-su-exec agent-execution-plane:agent-execution-plane env AGENT_EXECUTION_PLANE_SURFACE=api \
-  python3 -m uvicorn agent_execution_plane.main:app --host 0.0.0.0 --port 8098 \
-  --no-access-log --log-level "${log_level}" --log-config /app/src/agent_execution_plane/uvicorn_logging.json &
-api_pid=$!
+if [ "${public_transport}" = "http" ]; then
+  log WARNING "Standalone Execution API uses unencrypted HTTP; credentials, job inputs, and reports are not encrypted by this application"
+  su-exec agent-execution-plane:agent-execution-plane env AGENT_EXECUTION_PLANE_SURFACE=api \
+    python3 -m uvicorn agent_execution_plane.main:app --host 0.0.0.0 --port 8098 \
+    --no-access-log --log-level "${log_level}" --log-config /app/src/agent_execution_plane/uvicorn_logging.json &
+  api_pid=$!
+else
+  if tls_values="$(su-exec agent-execution-plane:agent-execution-plane python3 -c 'from agent_execution_plane.settings import load_settings; from agent_execution_plane.tls import prepare_certificate; s=load_settings();i=prepare_certificate(s.data_dir,s.certificate_source,s.certfile,s.keyfile);print(i.certfile);print(i.keyfile);print(i.fingerprint_sha256);print(i.not_after)')"; then
+    tls_cert_path="$(printf '%s\n' "${tls_values}"|sed -n '1p')";tls_key_path="$(printf '%s\n' "${tls_values}"|sed -n '2p')";tls_fingerprint="$(printf '%s\n' "${tls_values}"|sed -n '3p')";tls_expiry="$(printf '%s\n' "${tls_values}"|sed -n '4p')"
+    log INFO "Standalone Execution API listening on HTTPS port 8098"
+    log INFO "Public TLS certificate source: ${certificate_source}"
+    log INFO "Public TLS certificate SHA-256: ${tls_fingerprint}"
+    log INFO "Public TLS certificate expires at: ${tls_expiry}"
+    su-exec agent-execution-plane:agent-execution-plane env AGENT_EXECUTION_PLANE_SURFACE=api \
+      python3 -m uvicorn agent_execution_plane.main:app --host 0.0.0.0 --port 8098 --ssl-certfile "${tls_cert_path}" --ssl-keyfile "${tls_key_path}" \
+      --no-access-log --log-level "${log_level}" --log-config /app/src/agent_execution_plane/uvicorn_logging.json &
+    api_pid=$!
+  else
+    log ERROR "Public TLS certificate is invalid; Standalone Execution API was not started and Ingress administration remains available"
+  fi
+fi
 
 while true; do
   for pid in "${admin_pid}" "${api_pid}"; do
+    [ -z "${pid}" ] && continue
     if ! kill -0 "${pid}" 2>/dev/null; then
       wait "${pid}" || status=$?
       log ERROR "An application listener stopped unexpectedly"

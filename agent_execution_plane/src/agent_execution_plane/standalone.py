@@ -33,11 +33,14 @@ async def bounded_json(request: Request, limit: int = MAX_BODY_BYTES) -> Any:
 def execution_request(data: dict[str, Any], execution_id: str) -> ExecutionRequest:
     if set(data) - {"objective", "input", "mcp", "result_schema"} or "input" not in data: raise ValueError("invalid_execution_contract")
     objective = data.get("objective"); mcp = data.get("mcp")
-    if not isinstance(objective, str) or not objective.strip() or not isinstance(mcp, dict) or set(mcp) - {"url", "bearer_token", "tools"}: raise ValueError("invalid_execution_contract")
+    if not isinstance(objective, str) or not objective.strip() or not isinstance(mcp, dict) or set(mcp) - {"url", "bearer_token", "certificate_sha256", "tools"}: raise ValueError("invalid_execution_contract")
     url = mcp.get("url"); parsed = urlparse(url) if isinstance(url, str) else None
     if not parsed or parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password: raise ValueError("invalid_execution_contract")
     bearer = mcp.get("bearer_token")
     if bearer is not None and not isinstance(bearer, str): raise ValueError("invalid_execution_contract")
+    from agent_execution_plane.pinned_http import normalize_certificate_sha256
+    fingerprint=normalize_certificate_sha256(mcp.get("certificate_sha256"))
+    if fingerprint and parsed.scheme != "https": raise ValueError("invalid_execution_contract")
     tools = mcp.get("tools")
     if not isinstance(tools, list): raise ValueError("invalid_execution_contract")
     capabilities=[]
@@ -47,7 +50,7 @@ def execution_request(data: dict[str, Any], execution_id: str) -> ExecutionReque
         capabilities.append(Capability(item["name"], item["description"], item["input_schema"]))
     result_schema = data.get("result_schema")
     if result_schema is not None and not isinstance(result_schema, dict): raise ValueError("invalid_execution_contract")
-    request = ExecutionRequest(execution_id, execution_id, objective, data["input"], url, bearer, tuple(capabilities), result_schema)
+    request = ExecutionRequest(execution_id, execution_id, objective, data["input"], url, bearer, tuple(capabilities), result_schema, None, fingerprint)
     try: ExecutionEngine.validate_request(request)
     except ExecutionFailure as exc: raise ValueError(exc.code) from None
     return request

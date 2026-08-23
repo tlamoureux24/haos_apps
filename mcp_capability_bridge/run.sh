@@ -13,12 +13,24 @@ su-exec mcp-capability-bridge:mcp-capability-bridge env PYTHONPATH=/app/src \
 
 if [ -f /data/options.json ]; then
   log_level="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("log_level", "info"))')"
+  public_transport="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("public_transport", "https"))')"
+  certificate_source="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("certificate_source", "self_generated"))')"
+  certfile="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("certfile", ""))')"
+  keyfile="$(python3 -c 'import json; print(json.load(open("/data/options.json", encoding="utf-8")).get("keyfile", ""))')"
 else
   log_level="${MCP_CAPABILITY_BRIDGE_LOG_LEVEL:-info}"
+  public_transport="${MCP_CAPABILITY_BRIDGE_PUBLIC_TRANSPORT:-https}"
+  certificate_source="${MCP_CAPABILITY_BRIDGE_CERTIFICATE_SOURCE:-self_generated}"
+  certfile="${MCP_CAPABILITY_BRIDGE_CERTFILE:-}"
+  keyfile="${MCP_CAPABILITY_BRIDGE_KEYFILE:-}"
 fi
 
 export MCP_CAPABILITY_BRIDGE_DATA_DIR="${MCP_CAPABILITY_BRIDGE_DATA_DIR:-/data}"
 export MCP_CAPABILITY_BRIDGE_LOG_LEVEL="${log_level}"
+export MCP_CAPABILITY_BRIDGE_PUBLIC_TRANSPORT="${public_transport}"
+export MCP_CAPABILITY_BRIDGE_CERTIFICATE_SOURCE="${certificate_source}"
+export MCP_CAPABILITY_BRIDGE_CERTFILE="${certfile}"
+export MCP_CAPABILITY_BRIDGE_KEYFILE="${keyfile}"
 
 timestamp="$(python3 -c 'from datetime import datetime; print(datetime.now().astimezone().isoformat(timespec="seconds"))')"
 printf '%s [MCP Capability Bridge] INFO: Initializing generation-1 database schema\n' "${timestamp}"

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 — 2026-08-23
+
+- Default the MCP listener to HTTPS with persistent self-generated or external
+  certificates, fingerprint visibility and explicit regeneration.
+- Preserve optional HTTP interoperability with an unencrypted-transport warning
+  while keeping Ingress administration independent of public TLS validity.
+
 ## 1.0.1 — 2026-08-23
 
 - Expand the French and English guides with detailed namespace, SSH target,

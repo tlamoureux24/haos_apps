@@ -81,20 +81,19 @@ Exécuter maintenant / Planification → Exécution → Agent → outils MCP →
 L'administration est volontairement accessible uniquement via l'Ingress
 authentifié de Home Assistant.
 
-### Port public 8098
+### Ports publics 8098 et 8100
 
-Le listener public MCP/événements utilise le port TCP interne `8098`. Ce port
-n'est **pas publié par défaut**. Il n'est nécessaire de le publier que si un client
-MCP ou une source d'événements doit joindre ACP directement.
+La réception d'événements utilise `8098` ; MCP et l'API REST worker utilisent
+`8100`. Ce découpage préserve les producteurs limités à HTTP sans affaiblir MCP.
 
-Dans la configuration réseau de l'App Home Assistant, associer `8098/tcp` à un
-port de l'hôte, par exemple `8098`. Si vous choisissez un autre port hôte, utilisez
-ce port dans les URL des clients.
+Dans la configuration réseau, associez `8098/tcp` pour les événements et
+`8100/tcp` pour MCP aux ports hôte souhaités, puis utilisez ces ports dans les
+URL clientes.
 
 Exemples :
 
 ```text
-MCP :       http://IP_HOME_ASSISTANT:8098/mcp
+MCP :       https://IP_HOME_ASSISTANT:8100/mcp
 Événements: http://IP_HOME_ASSISTANT:8098/api/v1/events
 ```
 
@@ -107,6 +106,13 @@ confiance.
 | --- | --- | --- | --- |
 | `log_level` | `debug`, `info`, `warning`, `error` | `info` | Niveau des logs runtime de l'App |
 | `intake_rate_limit_per_minute` | 1 à 600 | 30 | Nombre maximal d'événements acceptés par minute et par identité source |
+| `events_transport` | `http`, `https` | `http` | Transport des événements |
+| `mcp_transport` | `http`, `https` | `https` | Transport MCP/worker |
+| `certificate_source` | `self_generated`, `external` | `self_generated` | Source du certificat HTTPS partagé |
+
+L’administration affiche l’empreinte SHA-256. Pour un certificat autogénéré,
+les clients épinglent cette valeur après vérification indépendante. Toute
+surface HTTP est non chiffrée et produit un avertissement anglais dans les logs.
 
 La limite d'ingestion protège l'API événementielle. Une source qui dépasse la
 limite reçoit HTTP `429` avec `Retry-After: 60`.

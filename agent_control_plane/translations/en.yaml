@@ -5,7 +5,25 @@ configuration:
   intake_rate_limit_per_minute:
     name: Events per minute limit
     description: Maximum new events accepted per minute for each identity. Idempotent replays are not counted.
+  events_transport:
+    name: Event API transport
+    description: HTTP is unencrypted; HTTPS uses the shared ACP certificate.
+  mcp_transport:
+    name: MCP transport
+    description: HTTPS is enabled by default for workers.
+  certificate_source:
+    name: Certificate source
+    description: Use a persistent generated certificate or an external certificate from /ssl.
+  certfile:
+    name: Certificate file
+    description: Relative filename below /ssl for an external certificate.
+  keyfile:
+    name: Private key file
+    description: Relative filename below /ssl for an external certificate.
 network:
   8098/tcp:
-    name: MCP and event port
-    description: Optional port for authenticated MCP clients and event sources. Expose it only on a trusted local network or VPN.
+    name: Event Intake API port
+    description: Host port used only by authenticated event producers.
+  8100/tcp:
+    name: MCP Worker Endpoint port
+    description: Host port used by AEP and other authenticated MCP workers.

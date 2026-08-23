@@ -1,6 +1,6 @@
 name: "MCP Capability Bridge"
 slug: "mcp_capability_bridge"
-version: "1.0.1"
+version: "1.1.0"
 description: "Bounded technical capabilities exposed through standard MCP"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/mcp_capability_bridge"
 arch:
@@ -18,7 +18,9 @@ ingress_port: 8099
 panel_icon: "mdi:bridge"
 panel_title: "MCP Capability Bridge"
 panel_admin: true
-watchdog: "http://[HOST]:[PORT:8098]/health/ready"
+map:
+  - type: ssl
+watchdog: "http://[HOST]:[PORT:8099]/health/ready"
 
 ports:
   8098/tcp: null
@@ -28,6 +30,14 @@ ports_description:
 
 options:
   log_level: "info"
+  public_transport: "https"
+  certificate_source: "self_generated"
+  certfile: ""
+  keyfile: ""
 
 schema:
   log_level: "list(debug|info|warning|error)"
+  public_transport: "list(http|https)"
+  certificate_source: "list(self_generated|external)"
+  certfile: "str?"
+  keyfile: "str?"

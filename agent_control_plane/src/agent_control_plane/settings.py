@@ -14,6 +14,11 @@ class Settings:
     log_level: str
     ingress_proxy_ip: str
     intake_rate_limit_per_minute: int
+    events_transport: str
+    mcp_transport: str
+    certificate_source: str
+    certfile: str
+    keyfile: str
 
     @property
     def database_path(self) -> Path:
@@ -21,9 +26,9 @@ class Settings:
 
 
 def load_settings() -> Settings:
-    surface = os.environ.get("AGENT_CONTROL_PLANE_SURFACE", "public")
-    if surface not in {"admin", "public"}:
-        raise RuntimeError("AGENT_CONTROL_PLANE_SURFACE must be admin or public")
+    surface = os.environ.get("AGENT_CONTROL_PLANE_SURFACE", "events")
+    if surface not in {"admin", "events", "mcp"}:
+        raise RuntimeError("AGENT_CONTROL_PLANE_SURFACE must be admin, events or mcp")
     log_level = os.environ.get("AGENT_CONTROL_PLANE_LOG_LEVEL", "info").lower()
     if log_level not in {"debug", "info", "warning", "error"}:
         raise RuntimeError("Invalid AGENT_CONTROL_PLANE_LOG_LEVEL")
@@ -44,4 +49,16 @@ def load_settings() -> Settings:
         log_level=log_level,
         ingress_proxy_ip=ingress_proxy_ip,
         intake_rate_limit_per_minute=intake_rate_limit,
+        events_transport=_choice("AGENT_CONTROL_PLANE_EVENTS_TRANSPORT", "http", {"http", "https"}),
+        mcp_transport=_choice("AGENT_CONTROL_PLANE_MCP_TRANSPORT", "https", {"http", "https"}),
+        certificate_source=_choice("AGENT_CONTROL_PLANE_CERTIFICATE_SOURCE", "self_generated", {"self_generated", "external"}),
+        certfile=os.environ.get("AGENT_CONTROL_PLANE_CERTFILE", ""),
+        keyfile=os.environ.get("AGENT_CONTROL_PLANE_KEYFILE", ""),
     )
+
+
+def _choice(name: str, default: str, allowed: set[str]) -> str:
+    value = os.environ.get(name, default).lower()
+    if value not in allowed:
+        raise RuntimeError(f"{name} must be one of {', '.join(sorted(allowed))}")
+    return value

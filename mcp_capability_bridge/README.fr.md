@@ -33,7 +33,11 @@ Ingress 8099 : administration uniquement
 Public  8098 : /health/live, /health/ready, /mcp
 ```
 
-Ne publiez pas `8098` si aucun client MCP ne doit joindre le Bridge. L’endpoint actuel est HTTP : hors réseau isolé de confiance, le Bearer n’est pas chiffré pendant le transport sans reverse proxy TLS fiable.
+Ne publiez pas `8098` si aucun client MCP ne doit joindre le Bridge. HTTPS avec
+un certificat autogénéré persistant est le mode par défaut. L’administration et
+les logs affichent son empreinte SHA-256 pour vérification indépendante et
+épinglage. Un certificat externe peut être chargé depuis `/ssl`. HTTP reste
+disponible, mais il est non chiffré et produit un avertissement anglais.
 
 ## Clients MCP et isolation des namespaces
 

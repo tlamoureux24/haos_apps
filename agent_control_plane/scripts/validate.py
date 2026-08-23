@@ -41,7 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_control_plane"',
-        'version: "1.0.2"',
+        'version: "1.1.0"',
         "  - aarch64",
         "  - amd64",
         "init: false",
@@ -54,19 +54,20 @@ def main() -> int:
         "panel_admin: true",
         "homeassistant_api: true",
         "  8098/tcp: null",
+        "  8100/tcp: null",
     )
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "1.0.2"' not in package:
+    if '__version__ = "1.1.0"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
     if "jsonschema[format-nongpl]==4.26.0" not in requirements:
         raise RuntimeError("MCP input schemas must retain the pinned reference validator")
     logging_config = ROOT / "src/agent_control_plane/uvicorn_logging.json"
     if not logging_config.is_file() or "%(asctime)s" not in logging_config.read_text(encoding="utf-8"):
         raise RuntimeError("Uvicorn logs must retain an explicit timestamp")
-    if launcher.count("--log-config /app/src/agent_control_plane/uvicorn_logging.json") != 2:
-        raise RuntimeError("Both Agent Control Plane listeners must use the timestamped logging configuration")
+    if launcher.count("--log-config /app/src/agent_control_plane/uvicorn_logging.json") != 5:
+        raise RuntimeError("All Agent Control Plane listener variants must use timestamped logging")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile:
         raise RuntimeError("Home Assistant base image must continue to follow latest")
     if "FROM ghcr.io/home-assistant/base:latest@" in dockerfile:
@@ -107,9 +108,9 @@ def main() -> int:
         raise RuntimeError("Container must create an unprivileged runtime user")
     if "py3-cryptography" not in dockerfile:
         raise RuntimeError("Connector secrets require authenticated encryption support")
-    if launcher.count("su-exec agent-control-plane:agent-control-plane") != 5:
+    if launcher.count("su-exec agent-control-plane:agent-control-plane") != 9:
         raise RuntimeError("Private bootstrap, schema initialization, and listeners must run unprivileged")
-    if "python3 -m agent_control_plane.database initialize" not in launcher or launcher.count("python3 -m uvicorn") != 2:
+    if "python3 -m agent_control_plane.database initialize" not in launcher or launcher.count("python3 -m uvicorn") != 5:
         raise RuntimeError("Schema initialization and listeners must run as Python modules")
     if re.search(r"agent-control-plane:agent-control-plane uvicorn\b", launcher):
         raise RuntimeError("Launcher must not invoke Python console-script wrappers")
@@ -133,8 +134,9 @@ def main() -> int:
         raise RuntimeError("Application must refuse to run under an unexpected UID")
     if "AGENT_CONTROL_PLANE_SURFACE=admin" not in launcher:
         raise RuntimeError("Missing isolated admin listener")
-    if "AGENT_CONTROL_PLANE_SURFACE=public" not in launcher:
-        raise RuntimeError("Missing isolated public listener")
+    for surface in ("events", "mcp"):
+        if f"AGENT_CONTROL_PLANE_SURFACE={surface}" not in launcher:
+            raise RuntimeError(f"Missing isolated {surface} listener")
     if "export PYTHONDONTWRITEBYTECODE=1" not in launcher:
         raise RuntimeError("Runtime must not attempt bytecode writes inside /app")
     if "capability sys_admin" in apparmor or "network raw" in apparmor:

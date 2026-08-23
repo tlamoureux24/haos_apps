@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0
+
+- Split event intake (`8098`) from MCP/worker traffic (`8100`), add independent
+  HTTP/HTTPS choices, persistent self-generated or external certificates, and
+  SHA-256 certificate pinning for outbound MCP connectors.
+- Keep Ingress administration available when a public certificate is invalid,
+  expose certificate status/regeneration, and warn whenever HTTP is selected.
+
 ## 1.0.2
 
 - Correct the worker setup guide: ACP workers use an identity of type MCP

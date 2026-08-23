@@ -2,6 +2,18 @@ configuration:
   log_level:
     name: Log level
     description: Controls Bridge log verbosity.
+  public_transport:
+    name: MCP transport
+    description: HTTP is unencrypted; HTTPS is enabled by default.
+  certificate_source:
+    name: Certificate source
+    description: Use a persistent generated certificate or an external certificate from /ssl.
+  certfile:
+    name: Certificate file
+    description: Relative filename below /ssl for an external certificate.
+  keyfile:
+    name: Private key file
+    description: Relative filename below /ssl for an external certificate.
 network:
   8098/tcp:
     name: Public MCP port

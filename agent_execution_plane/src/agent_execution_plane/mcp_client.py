@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from contextlib import AsyncExitStack
 from typing import Any
 
@@ -11,13 +12,16 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from agent_execution_plane.execution import Capability, ExecutionRequest
+from agent_execution_plane.pinned_http import async_client_kwargs
 
 
 class StreamableMcpSession:
     def __init__(self, request: ExecutionRequest): self.request=request; self.stack=AsyncExitStack(); self.session=None; self._changed=False
     async def __aenter__(self):
+        if self.request.mcp_url.startswith("http://"):
+            logging.getLogger(__name__).warning("AEP_MCP_OUTBOUND unencrypted_http")
         headers={'Authorization':f'Bearer {self.request.mcp_bearer_token}'} if self.request.mcp_bearer_token else {}
-        client=await self.stack.enter_async_context(httpx.AsyncClient(headers=headers,follow_redirects=False))
+        client=await self.stack.enter_async_context(httpx.AsyncClient(headers=headers,follow_redirects=False,**async_client_kwargs(self.request.mcp_certificate_sha256)))
         read,write,_=await self.stack.enter_async_context(streamable_http_client(self.request.mcp_url,http_client=client))
         async def observe(message):
             root=getattr(getattr(message,'message',None),'root',None)

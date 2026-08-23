@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+
+- Default the standalone API to HTTPS with a persistent self-generated or
+  external certificate and keep Ingress administration independent.
+- Add strict same-connection SHA-256 pinning for ACP and standalone MCP calls,
+  certificate status/regeneration, HTTP warnings, and bilingual configuration.
+
 ## 1.0.2
 
 - Correct the ACP worker setup guide: create an MCP client identity and grant

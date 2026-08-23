@@ -2,6 +2,18 @@ configuration:
   log_level:
     name: Niveau de journalisation
     description: Contrôle la verbosité des journaux du Bridge.
+  public_transport:
+    name: Transport MCP
+    description: HTTP n’est pas chiffré ; HTTPS est activé par défaut.
+  certificate_source:
+    name: Source du certificat
+    description: Utilise un certificat généré persistant ou un certificat externe depuis /ssl.
+  certfile:
+    name: Fichier du certificat
+    description: Nom relatif sous /ssl pour un certificat externe.
+  keyfile:
+    name: Fichier de clé privée
+    description: Nom relatif sous /ssl pour un certificat externe.
 network:
   8098/tcp:
     name: Port MCP public

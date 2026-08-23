@@ -82,7 +82,7 @@ class AcpBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.store.configuration());self.factory.incompatible=False;self.factory.bad_schema=True
         with self.assertRaisesRegex(ValueError,"incompatible_acp_contract"):await self.boundary.configure("https://acp.invalid/mcp","WORKER-SECRET",True)
         self.assertIsNone(self.store.configuration());self.factory.bad_schema=False
-        await self.configure();public=self.store.configuration();self.assertEqual(public,{"url":"https://acp.invalid/mcp","credential_configured":True})
+        await self.configure();public=self.store.configuration();self.assertEqual(public,{"url":"https://acp.invalid/mcp","credential_configured":True,"certificate_sha256":""})
         self.assertNotIn("WORKER-SECRET",self.database.read_bytes().decode(errors="ignore"));self.assertEqual(self.boundary.state()["connectivity"],"connected")
 
     async def test_configuration_timeout_is_bounded_and_does_not_persist(self):

@@ -34,6 +34,7 @@ class ConnectorCreateRequest(StrictContract):
     display_name: str = Field(min_length=1, max_length=120)
     url: str = Field(min_length=1, max_length=2048)
     bearer_token: str = Field(default="", max_length=4096)
+    certificate_sha256: str = Field(default="", max_length=128)
 
 
 class ConnectorIdRequest(StrictContract):
@@ -43,6 +44,7 @@ class ConnectorIdRequest(StrictContract):
 class ConnectorUpdateRequest(ConnectorIdRequest):
     display_name: str = Field(min_length=1, max_length=120)
     url: str | None = Field(default=None, max_length=2048)
+    certificate_sha256: str | None = Field(default=None, max_length=128)
 
 
 class ConnectorSecretRotationRequest(ConnectorIdRequest):

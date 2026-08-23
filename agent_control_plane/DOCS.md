@@ -39,7 +39,7 @@ les exemples d'événements, la corrélation, le dépannage et la sécurité, es
 4. Si `8098` est publié tel quel :
 
 ```text
-MCP :       http://IP_HOME_ASSISTANT:8098/mcp
+MCP :       https://IP_HOME_ASSISTANT:8100/mcp
 Événements: http://IP_HOME_ASSISTANT:8098/api/v1/events
 ```
 
@@ -414,7 +414,7 @@ troubleshooting, and security detail, is in [README.md](README.md).
 4. When mapped as host port `8098`:
 
 ```text
-MCP:    http://HOME_ASSISTANT_IP:8098/mcp
+MCP:    https://HOME_ASSISTANT_IP:8100/mcp
 Events: http://HOME_ASSISTANT_IP:8098/api/v1/events
 ```
 

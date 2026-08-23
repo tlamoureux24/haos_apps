@@ -49,6 +49,7 @@ class ExecutionRequest:
     capabilities: tuple[Capability, ...] = ()
     result_schema: dict[str, Any] | None = None
     dispatch_guard: Callable[[], Awaitable[None]] | None = None
+    mcp_certificate_sha256: str = ""
 
 
 @dataclass(frozen=True)

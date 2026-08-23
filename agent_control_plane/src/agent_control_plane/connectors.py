@@ -10,6 +10,7 @@ import logging
 from urllib.parse import urlsplit, urlunsplit
 
 from agent_control_plane.json_contracts import validate_json_schema
+from agent_control_plane.pinned_http import async_client_kwargs, normalize_certificate_sha256
 
 
 MAX_TOOLS = 200
@@ -89,9 +90,13 @@ def connector_fernet(pepper: bytes):
     return Fernet(base64.urlsafe_b64encode(key))
 
 
-def protect_connector_config(pepper: bytes, url: str, bearer_token: str) -> str:
+def protect_connector_config(pepper: bytes, url: str, bearer_token: str, certificate_sha256: str = "") -> str:
+    normalized_url = validate_streamable_http_url(url)
+    normalized_fingerprint = normalize_certificate_sha256(certificate_sha256)
+    if normalized_fingerprint and urlsplit(normalized_url).scheme != "https":
+        raise ValueError("certificate_sha256_requires_https")
     payload = json.dumps(
-        {"url": validate_streamable_http_url(url), "bearer_token": bearer_token},
+        {"url": normalized_url, "bearer_token": bearer_token, "certificate_sha256": normalized_fingerprint},
         separators=(",", ":"),
     ).encode()
     return connector_fernet(pepper).encrypt(payload).decode("ascii")
@@ -105,18 +110,30 @@ def reveal_connector_config(pepper: bytes, protected: str) -> tuple[str, str]:
         raise ValueError("invalid_connector_secret") from exc
 
 
-async def discover_streamable_http(url: str, bearer_token: str) -> list[dict[str, object]]:
+def reveal_connector_transport_config(pepper: bytes, protected: str) -> tuple[str, str, str]:
+    try:
+        payload = json.loads(connector_fernet(pepper).decrypt(protected.encode("ascii")))
+        return validate_streamable_http_url(payload["url"]), str(payload.get("bearer_token", "")), normalize_certificate_sha256(payload.get("certificate_sha256", ""))
+    except Exception as exc:
+        raise ValueError("invalid_connector_secret") from exc
+
+
+async def discover_streamable_http(url: str, bearer_token: str, certificate_sha256: str = "") -> list[dict[str, object]]:
     """Initialize one upstream MCP session and return bounded tool metadata."""
     import anyio
     import httpx
     from mcp import ClientSession
     from mcp.client.streamable_http import streamable_http_client
 
+    if normalize_certificate_sha256(certificate_sha256) and urlsplit(url).scheme != "https":
+        raise ValueError("certificate_sha256_requires_https")
+    if urlsplit(url).scheme == "http":
+        logging.getLogger(__name__).warning("ACP_MCP_OUTBOUND unencrypted_http endpoint=%s", connector_display_endpoint(url))
     headers = {"Origin": connector_display_endpoint(url)}
     if bearer_token:
         headers["Authorization"] = f"Bearer {bearer_token}"
     timeout = httpx.Timeout(8.0, read=8.0)
-    async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=False) as client:
+    async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=False, **async_client_kwargs(certificate_sha256)) as client:
         with anyio.fail_after(10):
             async with streamable_http_client(url, http_client=client) as (read, write, _):
                 async with ClientSession(read, write) as session:
@@ -139,7 +156,7 @@ async def discover_streamable_http(url: str, bearer_token: str) -> list[dict[str
 
 
 async def invoke_streamable_http(
-    url: str, bearer_token: str, tool_name: str, arguments: dict[str, object]
+    url: str, bearer_token: str, tool_name: str, arguments: dict[str, object], certificate_sha256: str = ""
 ) -> dict[str, object]:
     """Invoke one exact upstream tool and return a bounded protocol-neutral result."""
     import anyio
@@ -147,11 +164,15 @@ async def invoke_streamable_http(
     from mcp import ClientSession
     from mcp.client.streamable_http import streamable_http_client
 
+    if normalize_certificate_sha256(certificate_sha256) and urlsplit(url).scheme != "https":
+        raise ValueError("certificate_sha256_requires_https")
+    if urlsplit(url).scheme == "http":
+        logging.getLogger(__name__).warning("ACP_MCP_OUTBOUND unencrypted_http endpoint=%s", connector_display_endpoint(url))
     headers = {"Origin": connector_display_endpoint(url)}
     if bearer_token:
         headers["Authorization"] = f"Bearer {bearer_token}"
     timeout = httpx.Timeout(20.0, read=20.0)
-    async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=False) as client:
+    async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=False, **async_client_kwargs(certificate_sha256)) as client:
         with anyio.fail_after(25):
             async with streamable_http_client(url, http_client=client) as (read, write, _):
                 async with ClientSession(read, write) as session:

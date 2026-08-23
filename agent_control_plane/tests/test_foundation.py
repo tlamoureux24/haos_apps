@@ -40,10 +40,13 @@ from agent_control_plane.surfaces import exposed_paths
 
 
 class SettingsTests(unittest.TestCase):
-    def test_defaults_to_public_surface(self) -> None:
+    def test_defaults_to_event_surface_and_secure_mcp(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             settings = load_settings()
-        self.assertEqual(settings.surface, "public")
+        self.assertEqual(settings.surface, "events")
+        self.assertEqual(settings.events_transport, "http")
+        self.assertEqual(settings.mcp_transport, "https")
+        self.assertEqual(settings.certificate_source, "self_generated")
 
     def test_rejects_unknown_surface(self) -> None:
         with patch.dict(os.environ, {"AGENT_CONTROL_PLANE_SURFACE": "both"}, clear=True):
@@ -75,7 +78,7 @@ class AdministrationInterfaceTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn(
-            "const viewLoaders={overview:refresh,activity:loadActivity,connectors:loadConnectors,'identities-view':loadIdentities,"
+            "const viewLoaders={overview:async()=>Promise.all([refresh(),loadTransport()]),activity:loadActivity,connectors:loadConnectors,'identities-view':loadIdentities,"
             "events:loadEvents,tasks:loadTaskComposer,triggers:loadMappings,"
             "schedules:loadSchedules,jobs:loadJobs,reports:loadReports,"
             "audit:loadAuditPage}",
@@ -537,7 +540,7 @@ class ConnectorDiscoveryVisibilityTests(unittest.TestCase):
             ) as discover:
                 response = self._run(admin_rotate_connector_secret, request)
             self.assertEqual(response.status_code, 200)
-            discover.assert_awaited_once_with("https://mcp.example.test/mcp", new_secret)
+            discover.assert_awaited_once_with("https://mcp.example.test/mcp", new_secret, "")
             self.assertEqual(
                 control_plane.connector_connection_config(connector_id),
                 ("https://mcp.example.test/mcp", new_secret),
@@ -550,7 +553,7 @@ class ConnectorDiscoveryVisibilityTests(unittest.TestCase):
                 check_response = self._run(admin_check_connector, check)
             self.assertEqual(check_response.status_code, 200)
             rediscover.assert_awaited_once_with(
-                "https://mcp.example.test/mcp", new_secret
+                "https://mcp.example.test/mcp", new_secret, ""
             )
             public_objects = json.dumps(
                 {
@@ -815,20 +818,12 @@ class DatabaseReadinessTests(unittest.TestCase):
 
 
 class PublicSurfaceTests(unittest.TestCase):
-    def test_public_root_is_not_exposed(self) -> None:
-        paths = set(exposed_paths("public"))
-        self.assertNotIn("/", paths)
-        self.assertEqual(
-            paths,
-            {
-                "/api/v1/events",
-                "/api/v1/jobs",
-                "/api/v1/reports",
-                "/api/v1/permissions/effective",
-                "/health/live",
-                "/health/ready",
-            },
-        )
+    def test_event_intake_and_mcp_inventory_routes_are_separated(self) -> None:
+        events = set(exposed_paths("events"))
+        mcp = set(exposed_paths("mcp"))
+        self.assertEqual(events, {"/api/v1/events", "/health/live", "/health/ready"})
+        self.assertEqual(mcp, {"/api/v1/jobs", "/api/v1/reports", "/api/v1/permissions/effective", "/health/live", "/health/ready"})
+        self.assertNotIn("/api/v1/events", mcp)
 
     def test_admin_root_is_exposed(self) -> None:
         self.assertIn("/", exposed_paths("admin"))
@@ -1191,14 +1186,14 @@ class TaskCompositionTests(unittest.TestCase):
                 (restricted["namespaced_name"], {"action": "inspect", "label": "unsafe"}),
             ):
                 with self.subTest(capability=capability, arguments=arguments), patch(
-                    "agent_control_plane.control_plane.reveal_connector_config"
+                    "agent_control_plane.control_plane.reveal_connector_transport_config"
                 ) as reveal:
                     with self.assertRaisesRegex(ValueError, "invalid_capability_arguments"):
                         control_plane.resolve_active_capability(worker, capability, arguments, "invalid")
                     reveal.assert_not_called()
             with patch("agent_control_plane.fixed_arguments.connector_fernet", return_value=FakeFernet()), patch(
-                "agent_control_plane.control_plane.reveal_connector_config",
-                return_value=("https://restricted.example.test/mcp", ""),
+                "agent_control_plane.control_plane.reveal_connector_transport_config",
+                return_value=("https://restricted.example.test/mcp", "", ""),
             ):
                 resolved = control_plane.resolve_active_capability(
                     worker,
@@ -1228,7 +1223,7 @@ class TaskCompositionTests(unittest.TestCase):
                     )
                 with self.subTest(merged=fixed_name), patch(
                     "agent_control_plane.fixed_arguments.connector_fernet", return_value=FakeFernet()
-                ), patch("agent_control_plane.control_plane.reveal_connector_config") as reveal:
+                ), patch("agent_control_plane.control_plane.reveal_connector_transport_config") as reveal:
                     with self.assertRaisesRegex(ValueError, "invalid_capability_arguments"):
                         control_plane.resolve_active_capability(
                             worker,

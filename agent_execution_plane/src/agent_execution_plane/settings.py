@@ -14,6 +14,10 @@ class Settings:
     surface: str
     log_level: str
     ingress_proxy_ip: str
+    public_transport: str
+    certificate_source: str
+    certfile: str
+    keyfile: str
 
     @property
     def database_path(self) -> Path:
@@ -32,4 +36,7 @@ def load_settings() -> Settings:
         ipaddress.ip_address(ingress_proxy_ip)
     except ValueError as exc:
         raise RuntimeError("Invalid AGENT_EXECUTION_PLANE_INGRESS_PROXY_IP") from exc
-    return Settings(Path(os.environ.get("AGENT_EXECUTION_PLANE_DATA_DIR", "/data")), surface, log_level, ingress_proxy_ip)
+    transport=os.environ.get("AGENT_EXECUTION_PLANE_PUBLIC_TRANSPORT","https").lower();source=os.environ.get("AGENT_EXECUTION_PLANE_CERTIFICATE_SOURCE","self_generated").lower()
+    if transport not in {"http","https"}:raise RuntimeError("Invalid AGENT_EXECUTION_PLANE_PUBLIC_TRANSPORT")
+    if source not in {"self_generated","external"}:raise RuntimeError("Invalid AGENT_EXECUTION_PLANE_CERTIFICATE_SOURCE")
+    return Settings(Path(os.environ.get("AGENT_EXECUTION_PLANE_DATA_DIR", "/data")), surface, log_level, ingress_proxy_ip, transport, source, os.environ.get("AGENT_EXECUTION_PLANE_CERTFILE",""), os.environ.get("AGENT_EXECUTION_PLANE_KEYFILE",""))

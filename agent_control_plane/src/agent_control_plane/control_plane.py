@@ -18,6 +18,7 @@ from agent_control_plane.connectors import (
     connector_display_endpoint,
     protect_connector_config,
     reveal_connector_config,
+    reveal_connector_transport_config,
     validate_streamable_http_url,
 )
 from agent_control_plane.database import connect
@@ -146,14 +147,17 @@ class ControlPlane:
             item = dict(row)
             protected = item.pop("protected_config")
             try:
-                _, bearer_token = reveal_connector_config(self.pepper, protected)
+                _, bearer_token, certificate_sha256 = reveal_connector_transport_config(self.pepper, protected)
                 has_secret = bool(bearer_token)
+                has_certificate_pin = bool(certificate_sha256)
             except ValueError:
                 # A corrupt protected payload is never exposed. Treat its secret
                 # state as opaque while the existing connection path fails closed.
                 has_secret = True
+                has_certificate_pin = True
             item["enabled"] = bool(row["enabled"])
             item["has_secret"] = has_secret
+            item["has_certificate_pin"] = has_certificate_pin
             connectors.append(item)
         return connectors
 
@@ -783,6 +787,7 @@ class ControlPlane:
         bearer_token: str,
         inventory: list[dict[str, object]],
         correlation_id: str,
+        certificate_sha256: str = "",
     ) -> str:
         name = display_name.strip()
         if not name:
@@ -790,7 +795,7 @@ class ControlPlane:
         normalized_url = validate_streamable_http_url(url)
         connector_id = str(uuid4())
         now = utc_now()
-        protected = protect_connector_config(self.pepper, normalized_url, bearer_token)
+        protected = protect_connector_config(self.pepper, normalized_url, bearer_token, certificate_sha256)
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(
@@ -806,6 +811,11 @@ class ControlPlane:
             row = connection.execute("SELECT protected_config FROM connectors WHERE id=?", (connector_id,)).fetchone()
         return None if row is None else reveal_connector_config(self.pepper, row["protected_config"])
 
+    def connector_transport_config(self, connector_id: str) -> tuple[str, str, str] | None:
+        with connect(self.database_path) as connection:
+            row = connection.execute("SELECT protected_config FROM connectors WHERE id=?", (connector_id,)).fetchone()
+        return None if row is None else reveal_connector_transport_config(self.pepper, row["protected_config"])
+
     def connector_change_config(self, connector_id: str) -> tuple[str, str, str] | None:
         with connect(self.database_path) as connection:
             row = connection.execute(
@@ -818,6 +828,14 @@ class ControlPlane:
                 raise ValueError("connector_archived")
         url, bearer_token = reveal_connector_config(self.pepper, row["protected_config"])
         return url, bearer_token, row["protected_config"]
+
+    def connector_change_transport_config(self, connector_id: str) -> tuple[str, str, str, str] | None:
+        basic = self.connector_change_config(connector_id)
+        if basic is None:
+            return None
+        url, bearer_token, protected = basic
+        _, _, fingerprint = reveal_connector_transport_config(self.pepper, protected)
+        return url, bearer_token, fingerprint, protected
 
     def connector_has_active_jobs(self, connector_id: str) -> bool:
         with connect(self.database_path) as connection:
@@ -834,6 +852,7 @@ class ControlPlane:
         inventory: list[dict[str, object]] | None,
         error_code: str | None,
         correlation_id: str,
+        certificate_sha256: str = "",
     ) -> bool:
         name = display_name.strip()
         if not name:
@@ -858,7 +877,7 @@ class ControlPlane:
             fields = ["display_name"] if name != row["display_name"] else []
             if endpoint_changed:
                 fields.append("endpoint")
-                protected = protect_connector_config(self.pepper, normalized_url, bearer_token)
+                protected = protect_connector_config(self.pepper, normalized_url, bearer_token, certificate_sha256)
                 if inventory is None:
                     persisted_error = error_code or "connection_failed"
                     status = "invalid" if persisted_error in SCHEMA_REJECTION_CODES else "unreachable"
@@ -911,11 +930,12 @@ class ControlPlane:
         inventory: list[dict[str, object]] | None,
         error_code: str | None,
         correlation_id: str,
+        certificate_sha256: str = "",
     ) -> bool:
         if not bearer_token:
             raise ValueError("invalid_connector_secret")
         normalized_url = validate_streamable_http_url(url)
-        protected = protect_connector_config(self.pepper, normalized_url, bearer_token)
+        protected = protect_connector_config(self.pepper, normalized_url, bearer_token, certificate_sha256)
         now = utc_now()
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -1617,13 +1637,14 @@ class ControlPlane:
                     self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="capabilities.invoke", target_type="capability", target_id=virtual_name, decision="allowed", reason_code="upstream_call_authorized", correlation_id=correlation_id, metadata={"job_id": row["job_id"], "connector_id": row["connector_id"], "argument_exposure": summary})
         if denied_error is not None:
             raise denied_error from None
-        url, bearer_token = reveal_connector_config(self.pepper, row["protected_config"])
+        url, bearer_token, certificate_sha256 = reveal_connector_transport_config(self.pepper, row["protected_config"])
         return {
             "job_id": row["job_id"],
             "connector_id": row["connector_id"],
             "tool_name": row["tool_name"],
             "url": url,
             "bearer_token": bearer_token,
+            "certificate_sha256": certificate_sha256,
             "arguments": merged_arguments,
             "sensitive_values": sensitive_values,
         }
