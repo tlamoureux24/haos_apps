@@ -26,6 +26,7 @@ jobs:
           bash -n mcp_capability_bridge/run.sh
           python3 -m compileall -q mcp_capability_bridge/src mcp_capability_bridge/tests
           PYTHONPATH=mcp_capability_bridge/src python3 -m unittest discover -s mcp_capability_bridge/tests -v
+          PYTHONPATH=agent_control_plane/src:mcp_capability_bridge/src:mcp_capability_bridge/tests python3 mcp_capability_bridge/tests/acp_pin_integration.py PinnedAcpContractIntegrationTests.test_current_acp_rejects_wrong_pin_and_recovers -v
       - name: Build amd64 image with base provenance
         run: |
           set -euo pipefail
