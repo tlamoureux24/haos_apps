@@ -8,6 +8,7 @@ on:
       - "agent_execution_plane/**"
       - "mcp_capability_bridge/**"
       - "scripts/agent_suite_tls_smoke.sh"
+      - "scripts/seed_acp_tls_event.py"
       - ".github/workflows/agent-suite-tls-validate.yml"
   pull_request:
     paths:
@@ -15,6 +16,7 @@ on:
       - "agent_execution_plane/**"
       - "mcp_capability_bridge/**"
       - "scripts/agent_suite_tls_smoke.sh"
+      - "scripts/seed_acp_tls_event.py"
       - ".github/workflows/agent-suite-tls-validate.yml"
   workflow_dispatch:
 
