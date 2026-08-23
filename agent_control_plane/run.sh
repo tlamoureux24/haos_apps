@@ -95,32 +95,32 @@ if [ "${events_transport}" = "https" ] || [ "${mcp_transport}" = "https" ]; then
 fi
 
 if [ "${events_transport}" = "http" ]; then
-  log_info "Event Intake API listening on HTTP port 8098, path /api/v1/events"
+  log_info "Event Intake API listening on HTTP port 8100, path /api/v1/events"
   log_warning "Event Intake API uses unencrypted HTTP; credentials and event payloads are not encrypted by this application"
   su-exec agent-control-plane:agent-control-plane env AGENT_CONTROL_PLANE_SURFACE=events \
-    python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8098 \
+    python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8100 \
     --no-access-log --log-level "${log_level}" --log-config /app/src/agent_control_plane/uvicorn_logging.json &
   events_pid=$!
 elif [ "${tls_ready}" = true ]; then
-  log_info "Event Intake API listening on HTTPS port 8098, path /api/v1/events"
+  log_info "Event Intake API listening on HTTPS port 8100, path /api/v1/events"
   su-exec agent-control-plane:agent-control-plane env AGENT_CONTROL_PLANE_SURFACE=events \
-    python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8098 \
+    python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8100 \
     --ssl-certfile "${tls_cert_path}" --ssl-keyfile "${tls_key_path}" \
     --no-access-log --log-level "${log_level}" --log-config /app/src/agent_control_plane/uvicorn_logging.json &
   events_pid=$!
 fi
 
 if [ "${mcp_transport}" = "http" ]; then
-  log_info "MCP Worker Endpoint listening on HTTP port 8100, path /mcp"
+  log_info "MCP Worker Endpoint listening on HTTP port 8098, path /mcp"
   log_warning "MCP Worker Endpoint uses unencrypted HTTP; worker credentials, jobs, leases, and reports are not encrypted by this application"
   su-exec agent-control-plane:agent-control-plane env AGENT_CONTROL_PLANE_SURFACE=mcp \
-    python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8100 \
+    python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8098 \
     --no-access-log --log-level "${log_level}" --log-config /app/src/agent_control_plane/uvicorn_logging.json &
   mcp_pid=$!
 elif [ "${tls_ready}" = true ]; then
-  log_info "MCP Worker Endpoint listening on HTTPS port 8100, path /mcp"
+  log_info "MCP Worker Endpoint listening on HTTPS port 8098, path /mcp"
   su-exec agent-control-plane:agent-control-plane env AGENT_CONTROL_PLANE_SURFACE=mcp \
-    python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8100 \
+    python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8098 \
     --ssl-certfile "${tls_cert_path}" --ssl-keyfile "${tls_key_path}" \
     --no-access-log --log-level "${log_level}" --log-config /app/src/agent_control_plane/uvicorn_logging.json &
   mcp_pid=$!

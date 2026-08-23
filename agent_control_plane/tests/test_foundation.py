@@ -78,7 +78,7 @@ class AdministrationInterfaceTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn(
-            "const viewLoaders={overview:async()=>Promise.all([refresh(),loadTransport()]),activity:loadActivity,connectors:loadConnectors,'identities-view':loadIdentities,"
+            "const viewLoaders={overview:refresh,transport:loadTransport,activity:loadActivity,connectors:loadConnectors,'identities-view':loadIdentities,"
             "events:loadEvents,tasks:loadTaskComposer,triggers:loadMappings,"
             "schedules:loadSchedules,jobs:loadJobs,reports:loadReports,"
             "audit:loadAuditPage}",

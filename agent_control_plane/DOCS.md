@@ -34,13 +34,13 @@ les exemples d'événements, la corrélation, le dépannage et la sécurité, es
 
 1. Installer **Agent Control Plane** depuis ce dépôt.
 2. Démarrer l'App et ouvrir son Ingress.
-3. Le port public `8098/tcp` n'est pas publié par défaut. Ne le publier que si un
+3. Le port public `8100/tcp` n'est pas publié par défaut. Ne le publier que si un
    client MCP ou une source d'événements doit joindre ACP directement.
-4. Si `8098` est publié tel quel :
+4. Si `8100` est publié tel quel :
 
 ```text
-MCP :       https://IP_HOME_ASSISTANT:8100/mcp
-Événements: http://IP_HOME_ASSISTANT:8098/api/v1/events
+MCP :       https://IP_HOME_ASSISTANT:8098/mcp
+Événements: http://IP_HOME_ASSISTANT:8100/api/v1/events
 ```
 
 Ne pas exposer ce listener directement sur Internet ; utiliser un LAN ou VPN de
@@ -125,7 +125,7 @@ Dans `configuration.yaml` :
 ```yaml
 rest_command:
   acp_event:
-    url: "http://192.168.1.10:8098/api/v1/events"
+    url: "http://192.168.1.10:8100/api/v1/events"
     method: post
     content_type: "application/json"
     headers:
@@ -409,13 +409,13 @@ troubleshooting, and security detail, is in [README.md](README.md).
 
 1. Install **Agent Control Plane** from this repository.
 2. Start the App and open Ingress.
-3. Public `8098/tcp` is unpublished by default. Publish it only when an MCP client
+3. Public `8100/tcp` is unpublished by default. Publish it only when an MCP client
    or event source needs direct access.
-4. When mapped as host port `8098`:
+4. When mapped as host port `8100`:
 
 ```text
-MCP:    https://HOME_ASSISTANT_IP:8100/mcp
-Events: http://HOME_ASSISTANT_IP:8098/api/v1/events
+MCP:    https://HOME_ASSISTANT_IP:8098/mcp
+Events: http://HOME_ASSISTANT_IP:8100/api/v1/events
 ```
 
 Use only a trusted LAN or VPN; do not expose the listener directly to the
@@ -494,7 +494,7 @@ In `configuration.yaml`:
 ```yaml
 rest_command:
   acp_event:
-    url: "http://192.168.1.10:8098/api/v1/events"
+    url: "http://192.168.1.10:8100/api/v1/events"
     method: post
     content_type: "application/json"
     headers:

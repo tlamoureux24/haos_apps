@@ -21,9 +21,5 @@ configuration:
     name: Fichier de clé privée
     description: Nom relatif sous /ssl pour un certificat externe.
 network:
-  8098/tcp:
-    name: Port de l’API événements
-    description: Port hôte réservé aux producteurs d’événements authentifiés.
-  8100/tcp:
-    name: Port de l’endpoint MCP des workers
-    description: Port hôte utilisé par AEP et les autres workers MCP authentifiés.
+  8098/tcp: "Endpoint MCP authentifié utilisé par AEP et les autres workers."
+  8100/tcp: "API de réception des événements authentifiés."

@@ -15,6 +15,4 @@ configuration:
     name: Fichier de clé privée
     description: Nom relatif sous /ssl pour un certificat externe.
 network:
-  8098/tcp:
-    name: Port MCP public
-    description: Port hôte du serveur MCP Streamable HTTP authentifié ; les endpoints de santé restent publics.
+  8098/tcp: "Serveur MCP Streamable HTTP authentifié ; les endpoints de santé restent non sensibles."

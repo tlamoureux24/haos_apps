@@ -21,9 +21,5 @@ configuration:
     name: Private key file
     description: Relative filename below /ssl for an external certificate.
 network:
-  8098/tcp:
-    name: Event Intake API port
-    description: Host port used only by authenticated event producers.
-  8100/tcp:
-    name: MCP Worker Endpoint port
-    description: Host port used by AEP and other authenticated MCP workers.
+  8098/tcp: "Authenticated MCP endpoint used by AEP and other workers."
+  8100/tcp: "Authenticated event intake API."

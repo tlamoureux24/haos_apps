@@ -15,6 +15,4 @@ configuration:
     name: Private key file
     description: Relative filename below /ssl for an external certificate.
 network:
-  8098/tcp:
-    name: Public MCP port
-    description: Host port for the authenticated MCP Streamable HTTP server; health endpoints remain public.
+  8098/tcp: "Authenticated Streamable HTTP MCP server; health endpoints remain non-sensitive."

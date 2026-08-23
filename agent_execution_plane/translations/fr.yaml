@@ -15,6 +15,4 @@ configuration:
     name: Fichier de clé privée
     description: Nom relatif sous /ssl pour un certificat externe.
 network:
-  8098/tcp:
-    name: Port de l’API autonome
-    description: Port hôte de l’API d’exécution autonome protégée par Bearer ; les endpoints de santé restent publics et non sensibles.
+  8098/tcp: "API d’exécution autonome authentifiée ; les endpoints de santé restent non sensibles."

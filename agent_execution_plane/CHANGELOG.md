@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+
+- Move standalone server-certificate controls to a dedicated Transport & TLS
+  page and clarify the separate outbound ACP trust setting.
+- Correct translated Home Assistant network descriptions.
+
 ## 1.1.0
 
 - Default the standalone API to HTTPS with a persistent self-generated or

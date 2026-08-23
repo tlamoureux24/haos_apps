@@ -1,6 +1,6 @@
 name: "Agent Control Plane"
 slug: "agent_control_plane"
-version: "1.1.0"
+version: "1.1.1"
 description: "Governed control plane for MCP-compatible agents"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/agent_control_plane"
 arch:
@@ -28,8 +28,8 @@ ports:
   8100/tcp: null
 
 ports_description:
-  8098/tcp: "Authenticated event intake API"
-  8100/tcp: "Authenticated MCP worker endpoint"
+  8098/tcp: "Authenticated MCP worker endpoint"
+  8100/tcp: "Authenticated event intake API"
 
 options:
   log_level: "info"

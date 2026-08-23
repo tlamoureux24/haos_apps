@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 — 2026-08-23
+
+- Move MCP server-certificate controls to a dedicated Transport & TLS page.
+- Correct translated Home Assistant network descriptions.
+
 ## 1.1.0 — 2026-08-23
 
 - Default the MCP listener to HTTPS with persistent self-generated or external

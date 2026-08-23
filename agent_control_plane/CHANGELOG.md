@@ -1,8 +1,14 @@
 # Changelog
 
+## 1.1.1
+
+- Standardize MCP on port `8098` and move event intake to `8100`.
+- Move certificate controls to a dedicated Transport & TLS page and correct
+  translated Home Assistant network descriptions.
+
 ## 1.1.0
 
-- Split event intake (`8098`) from MCP/worker traffic (`8100`), add independent
+- Split event intake (`8100`) from MCP/worker traffic (`8098`), add independent
   HTTP/HTTPS choices, persistent self-generated or external certificates, and
   SHA-256 certificate pinning for outbound MCP connectors.
 - Keep Ingress administration available when a public certificate is invalid,

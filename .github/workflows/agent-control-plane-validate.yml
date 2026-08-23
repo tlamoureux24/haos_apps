@@ -108,14 +108,14 @@ jobs:
 
           docker run --detach \
             --name agent-control-plane-apparmor-audit \
-            --publish 127.0.0.1:28098:8098 \
+            --publish 127.0.0.1:28100:8100 \
             --publish 127.0.0.1:28099:8099 \
             --volume "${trace_root}/data:/data" \
             --volume "${trace_root}/trace:/tmp/apparmor-audit" \
             "agent-control-plane-apparmor-audit:${version}"
 
           for attempt in {1..60}; do
-            if curl --fail --silent http://127.0.0.1:28098/health/ready >/dev/null; then
+            if curl --fail --silent http://127.0.0.1:28100/health/ready >/dev/null; then
               break
             fi
             if [ "${attempt}" = 60 ]; then
@@ -123,7 +123,7 @@ jobs:
             fi
             sleep 1
           done
-          curl --fail --silent http://127.0.0.1:28098/health/live >/dev/null
+          curl --fail --silent http://127.0.0.1:28100/health/live >/dev/null
           docker stop --time 15 agent-control-plane-apparmor-audit >/dev/null
           python3 agent_control_plane/scripts/summarize_apparmor_trace.py \
             "${trace_root}/trace" \
@@ -133,11 +133,11 @@ jobs:
 
           docker run --detach \
             --name agent-control-plane-s6-inventory \
-            --publish 127.0.0.1:28098:8098 \
+            --publish 127.0.0.1:28100:8100 \
             --volume "${trace_root}/data:/data" \
             "agent-control-plane:${version}"
           for attempt in {1..60}; do
-            if curl --fail --silent http://127.0.0.1:28098/health/ready >/dev/null; then
+            if curl --fail --silent http://127.0.0.1:28100/health/ready >/dev/null; then
               break
             fi
             if [ "${attempt}" = 60 ]; then
@@ -273,8 +273,8 @@ jobs:
           --env "AGENT_CONTROL_PLANE_INGRESS_PROXY_IP=${ingress_proxy_ip}" \
           --env "AGENT_CONTROL_PLANE_INTAKE_RATE_LIMIT=1" \
           --env "AGENT_CONTROL_PLANE_MCP_TRANSPORT=http" \
-            --publish 127.0.0.1:18098:8098 \
-            --publish 127.0.0.1:18100:8100 \
+            --publish 127.0.0.1:18098:8100 \
+            --publish 127.0.0.1:18100:8098 \
             --publish 127.0.0.1:18099:8099 \
             --volume "${root}/data:/data" \
             "agent-control-plane:${version}"
@@ -637,10 +637,10 @@ jobs:
             http://127.0.0.1:18098/admin/api/v1/jobs/cancel)" = "404"
           curl --fail --silent \
             --header "Authorization: Bearer ${credential}" \
-            http://127.0.0.1:18098/api/v1/permissions/effective | \
+            http://127.0.0.1:18100/api/v1/permissions/effective | \
             jq -e '.control_plane_actions | index("events.create")'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
-            http://127.0.0.1:18098/api/v1/permissions/effective)" = "401"
+            http://127.0.0.1:18100/api/v1/permissions/effective)" = "401"
           docker exec --env PYTHONPATH=/app/src agent-control-plane-smoke \
             su-exec agent-control-plane:agent-control-plane \
             python3 -c 'import sqlite3; connection=sqlite3.connect("/data/agent_control_plane.db"); assert connection.execute("SELECT count(*) FROM audit_entries WHERE decision=\"denied\"").fetchone()[0] >= 1'
@@ -678,7 +678,7 @@ jobs:
             jq -e 'any(.entries[]; .event_code == "app_stopped")'
           curl --fail --silent \
             --header "Authorization: Bearer ${credential}" \
-            http://127.0.0.1:18098/api/v1/permissions/effective | \
+            http://127.0.0.1:18100/api/v1/permissions/effective | \
             jq -e '.control_plane_actions | index("events.create")'
           identity_id="$(printf '%s' "${identity_response}" | jq -er '.identity_id')"
           admin_page="$(curl --fail --silent \
@@ -696,4 +696,4 @@ jobs:
             jq -e '.status == "revoked"'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --header "Authorization: Bearer ${credential}" \
-            http://127.0.0.1:18098/api/v1/permissions/effective)" = "401"
+            http://127.0.0.1:18100/api/v1/permissions/effective)" = "401"

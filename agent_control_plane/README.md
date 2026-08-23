@@ -81,21 +81,21 @@ Run now / Schedule → Execution → Agent → MCP tools → Report
 Administration is intentionally available only through authenticated Home
 Assistant Ingress.
 
-### Public ports 8098 and 8100
+### Public ports 8100 and 8098
 
-Event intake uses `8098`; MCP and its worker REST API use `8100`. Map only the
+Event intake uses `8100`; MCP and its worker REST API use `8098`. Map only the
 surface that external clients need. The split lets HTTP-only event producers
 remain compatible without weakening the MCP worker transport.
 
-In the Home Assistant App network configuration, map `8098/tcp` for events and
-`8100/tcp` for MCP to suitable host ports. Use the selected host ports in client
+In the Home Assistant App network configuration, map `8100/tcp` for events and
+`8098/tcp` for MCP to suitable host ports. Use the selected host ports in client
 URLs.
 
 Examples:
 
 ```text
-MCP:    https://HOME_ASSISTANT_IP:8100/mcp
-Events: http://HOME_ASSISTANT_IP:8098/api/v1/events
+MCP:    https://HOME_ASSISTANT_IP:8098/mcp
+Events: http://HOME_ASSISTANT_IP:8100/api/v1/events
 ```
 
 Do not expose this listener directly to the Internet. Use a trusted LAN or VPN.
@@ -405,7 +405,7 @@ an event source, pending grace incidents linked to that source are also removed.
 Endpoint:
 
 ```text
-POST http://HOME_ASSISTANT_IP:8098/api/v1/events
+POST http://HOME_ASSISTANT_IP:8100/api/v1/events
 ```
 
 Required headers:
@@ -819,7 +819,7 @@ rest_command.acp_event
         │ Authorization: Bearer ...
         │ Idempotency-Key: ...
         ▼
-http://HA_IP:8098/api/v1/events
+http://HA_IP:8100/api/v1/events
         │
         ▼
 ACP event source
@@ -836,7 +836,7 @@ Task / grace / recovery / agent
 Before starting:
 
 1. ACP is installed and running;
-2. ACP's public port is published to the LAN, for example `8098`;
+2. ACP's public port is published to the LAN, for example `8100`;
 3. at least one MCP connector is ready;
 4. at least one ACP task is ready;
 5. you can edit Home Assistant `configuration.yaml` and `secrets.yaml`.
@@ -877,7 +877,7 @@ Add to `configuration.yaml`:
 ```yaml
 rest_command:
   acp_event:
-    url: "http://192.168.1.10:8098/api/v1/events"
+    url: "http://192.168.1.10:8100/api/v1/events"
     method: post
     content_type: "application/json"
     headers:
@@ -895,7 +895,7 @@ rest_command:
       }}
 ```
 
-Replace `192.168.1.10` with your Home Assistant IP and `8098` with the host port
+Replace `192.168.1.10` with your Home Assistant IP and `8100` with the host port
 actually mapped to ACP.
 
 Why use `to_json`? It safely serializes strings, quotes, numbers, booleans,
@@ -1354,7 +1354,7 @@ Verify that:
 
 ## 16. Security and operational good practices
 
-- publish `8098` only on a trusted LAN/VPN;
+- publish `8100` only on a trusted LAN/VPN;
 - create a separate identity for every client or source;
 - grant only required permissions;
 - use a dedicated Home Assistant identity with only `events.create`;
@@ -1477,4 +1477,4 @@ ACP removes fixed properties from the model-visible schema, injects them server-
 
 ACP remains authoritative for task revision, connector/schema fingerprints, fixed arguments, capability authorization, retries, lease, and report contract. AEP receives only the effective `allowed_capabilities` and never selects extra tools from inventory.
 
-The public MCP/event listener currently uses HTTP. Bearers authenticate but do not encrypt transport. Keep port `8098` on a trusted HAOS/LAN path or place a trusted TLS reverse proxy in front of it; never expose it directly to an untrusted network.
+The public MCP/event listener currently uses HTTP. Bearers authenticate but do not encrypt transport. Keep port `8100` on a trusted HAOS/LAN path or place a trusted TLS reverse proxy in front of it; never expose it directly to an untrusted network.

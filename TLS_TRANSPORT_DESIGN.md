@@ -58,8 +58,8 @@ surfaces and distinct publishable container ports:
 
 | Internal port | Surface | Purpose |
 | --- | --- | --- |
-| `8098/tcp` | Event Intake API | Authenticated event creation and any strictly event-intake public routes |
-| `8100/tcp` | MCP Worker Endpoint | MCP job claim, lease, completion, failure, report delivery, and other worker MCP operations |
+| `8100/tcp` | Event Intake API | Authenticated event creation and any strictly event-intake public routes |
+| `8098/tcp` | MCP Worker Endpoint | MCP job claim, lease, completion, failure, report delivery, and other worker MCP operations |
 | `8099/tcp` | Ingress administration | Mandatory HAOS Ingress; unchanged and outside this TLS design |
 
 The Event Intake port must not expose `/mcp`. The MCP port must not expose
@@ -75,12 +75,12 @@ for example:
 
 ```yaml
 ports:
-  8098/tcp: null
   8100/tcp: null
+  8098/tcp: null
 
 ports_description:
-  8098/tcp: "Authenticated event intake API"
-  8100/tcp: "Authenticated MCP worker endpoint"
+  8100/tcp: "Authenticated event intake API"
+  8098/tcp: "Authenticated MCP worker endpoint"
 ```
 
 ### 2.2 AEP keeps one public surface
@@ -307,9 +307,9 @@ Each App displays, per public surface:
 ACP specifically displays two clearly differentiated endpoints:
 
 - `Event Intake API` / `API de réception des événements`, path
-  `/api/v1/events`, internal port `8098`;
+  `/api/v1/events`, internal port `8100`;
 - `MCP Worker Endpoint` / `Endpoint MCP des workers`, path `/mcp`, internal port
-  `8100`.
+  `8098`.
 
 The App cannot safely infer an exact HAOS host-side mapped port in every
 deployment. It must not present a guessed URL as authoritative. It may show URL
@@ -337,10 +337,10 @@ An HTTP listener additionally emits a warning that names the categories of data
 left unencrypted. Examples:
 
 ```text
-INFO: Event Intake API listening on HTTP port 8098, path /api/v1/events
+INFO: Event Intake API listening on HTTP port 8100, path /api/v1/events
 WARNING: Event Intake API uses unencrypted HTTP; credentials and event payloads are not encrypted by this application
 
-INFO: MCP Worker Endpoint listening on HTTPS port 8100, path /mcp
+INFO: MCP Worker Endpoint listening on HTTPS port 8098, path /mcp
 INFO: Public TLS certificate source: self-generated
 INFO: Public TLS certificate SHA-256: AA:BB:CC:DD:...
 INFO: Public TLS certificate expires at: 2031-08-23T12:00:00Z
@@ -412,8 +412,8 @@ behavior, not only configuration parsing.
 
 ### ACP isolation tests
 
-- Event Intake routes work only on `8098`;
-- MCP routes work only on `8100`;
+- Event Intake routes work only on `8100`;
+- MCP routes work only on `8098`;
 - admin routes work only through the Ingress application on `8099`;
 - Event and MCP transports can be selected independently;
 - both HTTPS ACP surfaces present the same certificate and fingerprint;
