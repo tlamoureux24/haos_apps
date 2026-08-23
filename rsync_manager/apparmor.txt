@@ -150,7 +150,8 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   /sbin/mount.cifs ix,
   /usr/bin/env ix,
   /usr/bin/jq ix,
-  /usr/bin/msmtp ix,
+  # Diagnostic witness: deliberately omit msmtp execution in complain mode.
+  # One SMTP test must still succeed and emit a bounded AppArmor ALLOWED event.
   /usr/bin/rsync ix,
   /usr/bin/with-contenv rix,
   /usr/lib/bashio/bashio rix,

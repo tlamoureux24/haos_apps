@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.11 - 2026-08-23
+
+- Add one bounded AppArmor complain-mode witness by deliberately omitting only the explicit `msmtp` execution permission.
+- Keep the complete validated S6, cron, Ingress, CIFS and rsync baseline unchanged.
+- Require one SMTP test to succeed while producing an AppArmor `ALLOWED` event, proving that HAOS loaded the diagnostic profile in complain mode before continuing the audit.
+
 ## 1.3.10 - 2026-08-23
 
 - Start a consolidated AppArmor complain-mode audit using the complete audited HAOS S6 baseline and all Rsync Manager-specific startup fixes.

@@ -146,11 +146,12 @@ def main() -> int:
             "/run/s6-rc:s6-rc-init:*/servicedirs/runner/run rix,",
             "/run/s6-rc:s6-rc-init:*/servicedirs/web/run rix,",
             "/usr/bin/rsync ix,",
-            "/usr/bin/msmtp ix,",
             "/sbin/mount.cifs ix,",
         ),
         "AppArmor invariant",
     )
+    if "/usr/bin/msmtp ix," in apparmor:
+        raise RuntimeError("The complain-mode SMTP witness must remain deliberately unallowed")
     for forbidden in ("/config/**", "/addons/**", "/ssl/**"):
         if re.search(rf"^\s*{re.escape(forbidden)}", apparmor, flags=re.MULTILINE):
             raise RuntimeError(f"Overbroad AppArmor rule: {forbidden}")
