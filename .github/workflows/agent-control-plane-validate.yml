@@ -429,7 +429,7 @@ jobs:
           echo "SMOKE_STAGE=event-api-ready"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --header "Authorization: Bearer ${credential}" \
-            http://127.0.0.1:18098/api/v1/events)" = "403"
+            http://127.0.0.1:18098/api/v1/events)" = "405"
           echo "SMOKE_STAGE=event-api-method-isolation-ready"
           observer_response="$(curl --fail --silent \
             --request POST \
