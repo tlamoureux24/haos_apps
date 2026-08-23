@@ -192,8 +192,8 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   /backup/ rw,
   /backup/** rwlk,
   /mnt/ rw,
-  # Deliberately omit recursive /mnt access while in complain mode. The
-  # bounded CIFS fixture remains functional and records its file accesses.
+  # Explicitly audit the bounded CIFS fixture even though access is allowed.
+  audit /mnt/** rwlk,
 
   # Temporary queues, credentials, rsync output and mount diagnostics.
   /tmp/ rw,

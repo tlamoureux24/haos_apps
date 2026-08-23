@@ -138,6 +138,7 @@ def main() -> int:
             "/share/** rwlk,",
             "/media/** rwlk,",
             "/backup/** rwlk,",
+            "audit /mnt/** rwlk,",
             "/etc/crontabs/** rwlk,",
             "/command/s6-svwait ix,",
             "/package/admin/s6-2.15.0.0/command/s6-svwait ix,",
@@ -150,8 +151,8 @@ def main() -> int:
         ),
         "AppArmor invariant",
     )
-    if "/mnt/** rwlk," in apparmor:
-        raise RuntimeError("The bounded complain audit must not mask recursive /mnt accesses")
+    if re.search(r"^\s*/mnt/\*\* rwlk,\s*$", apparmor, flags=re.MULTILINE):
+        raise RuntimeError("Recursive /mnt access must retain its explicit audit qualifier")
     for forbidden in ("/config/**", "/addons/**", "/ssl/**"):
         if re.search(rf"^\s*{re.escape(forbidden)}", apparmor, flags=re.MULTILINE):
             raise RuntimeError(f"Overbroad AppArmor rule: {forbidden}")

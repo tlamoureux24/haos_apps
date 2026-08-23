@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.15 - 2026-08-23
+
+- Replace implicit complain-violation collection with AppArmor's explicit rule-level audit mechanism for the bounded CIFS fixture.
+- Restore recursive `/mnt/**` access as `audit /mnt/** rwlk,` so the small job remains fully authorized while every matching file access requests an audit record.
+- Preserve the complete S6/runtime baseline and all application behavior unchanged.
+
 ## 1.3.14 - 2026-08-23
 
 - Use the file-access audit path already proven by Rsync Manager's earlier HAOS complain trace.
