@@ -113,8 +113,10 @@ def main() -> int:
 
     if re.search(r"^\s*capability,\s*$", apparmor, flags=re.MULTILINE):
         raise RuntimeError("AppArmor must not grant every capability")
-    if "flags=(attach_disconnected,mediate_deleted,complain)" not in apparmor:
-        raise RuntimeError("The bounded diagnostic AppArmor profile must remain in complain mode")
+    if "flags=(attach_disconnected,mediate_deleted)" not in apparmor:
+        raise RuntimeError("The audited AppArmor profile must remain in enforcement mode")
+    if "complain" in apparmor:
+        raise RuntimeError("The final AppArmor profile must not remain in complain mode")
     for forbidden_rule in (
         "  file,",
         "  /bin/** ix,",
@@ -138,21 +140,25 @@ def main() -> int:
             "/share/** rwlk,",
             "/media/** rwlk,",
             "/backup/** rwlk,",
-            "audit /mnt/** rwlk,",
+            "/mnt/** rwlk,",
             "/etc/crontabs/** rwlk,",
             "/command/s6-svwait ix,",
             "/package/admin/s6-2.15.0.0/command/s6-svwait ix,",
             "/run/s6-rc:s6-rc-init:*/servicedirs/cron/run rix,",
             "/run/s6-rc:s6-rc-init:*/servicedirs/runner/run rix,",
             "/run/s6-rc:s6-rc-init:*/servicedirs/web/run rix,",
+            "/run/s6/legacy-services/cron/run rix,",
+            "/run/s6/legacy-services/runner/run rix,",
+            "/run/s6/legacy-services/web/run rix,",
             "/usr/bin/rsync ix,",
             "/usr/bin/msmtp ix,",
             "/sbin/mount.cifs ix,",
+            "/usr/sbin/mount.cifs ix,",
         ),
         "AppArmor invariant",
     )
-    if re.search(r"^\s*/mnt/\*\* rwlk,\s*$", apparmor, flags=re.MULTILINE):
-        raise RuntimeError("Recursive /mnt access must retain its explicit audit qualifier")
+    if re.search(r"^\s*audit\s+", apparmor, flags=re.MULTILINE):
+        raise RuntimeError("The final AppArmor profile must not retain diagnostic audit rules")
     for forbidden in ("/config/**", "/addons/**", "/ssl/**"):
         if re.search(rf"^\s*{re.escape(forbidden)}", apparmor, flags=re.MULTILINE):
             raise RuntimeError(f"Overbroad AppArmor rule: {forbidden}")
