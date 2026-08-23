@@ -21,6 +21,7 @@ from mcp_capability_bridge.database import initialize
 from mcp_capability_bridge.main import build_runtime_state, create_apps
 from mcp_capability_bridge.settings import Settings
 from mcp_capability_bridge.ssh_adapter import SSHAdapter
+from mcp_capability_bridge.tls import prepare_certificate
 from mcp_capability_bridge.web_adapter import WebAdapter
 from test_ssh_adapter import SSHFixture, capability
 
@@ -117,6 +118,46 @@ class AcpContractIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.state.store.publish(namespace["id"], target["id"], capability_id)
         inventory = await discover_streamable_http(self.url, issued.token)
         self.assertEqual({tool["name"] for tool in inventory},{f"web_web_fixture_{name}" for name in ("open","snapshot","wait","navigate","click","fill","select","press","close")})
+
+
+class PinnedAcpContractIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        settings = Settings(Path(self.directory.name), "error", "127.0.0.1")
+        initialize(settings.database_path)
+        self.state = build_runtime_state(settings, AdapterRegistry((ContractAdapter(), SSHAdapter(), WebAdapter())))
+        _, public = create_apps(self.state)
+        certificate = prepare_certificate(Path(self.directory.name), "self_generated")
+        self.fingerprint = certificate.fingerprint_sha256
+        self.port = available_port()
+        self.server = uvicorn.Server(uvicorn.Config(
+            public, host="127.0.0.1", port=self.port, log_level="error", access_log=False,
+            ssl_certfile=str(certificate.certfile), ssl_keyfile=str(certificate.keyfile),
+        ))
+        self.task = asyncio.create_task(self.server.serve())
+        for _ in range(100):
+            if self.server.started:
+                break
+            if self.task.done():
+                self.task.result()
+            await asyncio.sleep(0.02)
+        self.assertTrue(self.server.started)
+
+    async def asyncTearDown(self):
+        self.server.should_exit = True
+        await self.task
+        self.directory.cleanup()
+
+    async def test_current_acp_discovers_and_invokes_over_pinned_https(self):
+        url = f"https://127.0.0.1:{self.port}/mcp"
+        namespace, issued = self.state.store.create_namespace("tls_acp", "TLS ACP")
+        target = self.state.store.create_target("tls_fixture", "TLS fixture", "contract_test", {"key": "fixture"}, b"secret")
+        self.state.store.publish(namespace["id"], target["id"], "overview")
+        inventory = await discover_streamable_http(url, issued.token, self.fingerprint)
+        self.assertEqual([tool["name"] for tool in inventory], ["test_fixture_overview"])
+        result = await invoke_streamable_http(url, issued.token, "test_fixture_overview", {"value": "pinned"}, self.fingerprint)
+        self.assertFalse(result["isError"])
+        self.assertIn('"received":"pinned"', result["content"][0]["text"])
 
 
 if __name__ == "__main__":

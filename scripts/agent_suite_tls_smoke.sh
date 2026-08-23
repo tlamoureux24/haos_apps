@@ -126,7 +126,27 @@ docker run --detach --name "${acp_name}" --network "${network}" \
 wait_url https://127.0.0.1:19298/health/ready || fail 'ACP MCP all-HTTPS listener did not start'
 wait_url https://127.0.0.1:19300/health/ready || fail 'ACP Event all-HTTPS listener did not start'
 [ "$(fingerprint 19298)" = "$(fingerprint 19300)" ] || fail 'ACP HTTPS surfaces do not share one certificate'
-pass 'ACP: independent HTTPS listeners share one certificate'
+ingress_path=/api/hassio_ingress/tls
+admin_page="$(curl -fsS -H "X-Ingress-Path: ${ingress_path}" http://127.0.0.1:19299/)"
+csrf_token="$(sed -n 's/.*data-csrf="\([^"]*\)".*/\1/p' <<<"${admin_page}")"
+[ -n "${csrf_token}" ] || fail 'ACP admin CSRF token was not issued'
+identity="$(curl -fsS -X POST -H "X-Ingress-Path: ${ingress_path}" -H "X-CSRF-Token: ${csrf_token}" \
+  -H "Cookie: acp_csrf=${csrf_token}" -H 'Content-Type: application/json' \
+  --data '{"display_name":"TLS event producer","identity_type":"event_source","actions":["events.create"]}' \
+  http://127.0.0.1:19299/admin/api/v1/identities)"
+event_credential="$(jq -er '.credential' <<<"${identity}")"
+source_identity_id="$(jq -er '.identity_id' <<<"${identity}")"
+docker cp "${root}/scripts/seed_acp_tls_event.py" "${acp_name}:/tmp/seed_acp_tls_event.py"
+docker exec --env PYTHONPATH=/app/src "${acp_name}" su-exec agent-control-plane:agent-control-plane \
+  python3 /tmp/seed_acp_tls_event.py "${source_identity_id}"
+occurred_at="$(date --utc +'%Y-%m-%dT%H:%M:%SZ')"
+event_payload="$(jq -nc --arg occurred_at "${occurred_at}" '{schema_version:1,event_type:"service.alert",occurred_at:$occurred_at,subject:{service_id:"tls-docker-service"},attributes:{status:"unavailable"}}')"
+event_status="$(curl -ksS -o "${work}/event-response.json" -w '%{http_code}' -X POST \
+  -H "Authorization: Bearer ${event_credential}" -H 'Idempotency-Key: tls-integration-event' \
+  -H 'Content-Type: application/json' --data "${event_payload}" https://127.0.0.1:19300/api/v1/events)"
+[ "${event_status}" = 202 ] || fail "ACP authenticated HTTPS event intake returned ${event_status}: $(tr -d '\n' < "${work}/event-response.json")"
+jq -e '.event_id and .job_id and (.status | type == "string")' "${work}/event-response.json" >/dev/null || fail "ACP HTTPS event was not queued: $(tr -d '\n' < "${work}/event-response.json")"
+pass 'ACP: shared certificate and authenticated HTTPS Event Intake flow'
 
 # HTTP compatibility and mandatory English warning for AEP and Bridge.
 run_http() {
