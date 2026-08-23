@@ -69,6 +69,11 @@ class AdministrationInterfaceTests(unittest.TestCase):
     def test_root_reserves_a_stable_scrollbar_gutter(self) -> None:
         self.assertIn("html{scrollbar-gutter:stable}", ADMIN_CSS)
 
+    def test_certificate_regeneration_uses_neutral_secondary_button(self) -> None:
+        main_source = (Path(__file__).resolve().parents[1] / "src" / "agent_control_plane" / "main.py").read_text(encoding="utf-8")
+        self.assertIn('id="certificate-regenerate" class="secondary"', main_source)
+        self.assertIn(".secondary{border:1px solid var(--line);border-radius:7px;padding:9px 12px;background:var(--surface2);color:var(--text);font:inherit;font-weight:700;cursor:pointer}", ADMIN_CSS)
+
     def test_navigation_and_bounded_polling_use_targeted_view_loaders(self) -> None:
         main_source = (
             Path(__file__).resolve().parents[1]

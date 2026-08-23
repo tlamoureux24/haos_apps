@@ -200,7 +200,7 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v1.1.3</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v1.1.4</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
@@ -283,6 +283,10 @@ class SurfaceTests(unittest.TestCase):
 
 
 class AdministrationUiTests(unittest.TestCase):
+    def test_certificate_regeneration_uses_neutral_secondary_button(self) -> None:
+        self.assertIn(".secondary{background:var(--surface2);font-weight:700}", ADMIN_CSS)
+        self.assertIn('id="certificate-regenerate" class="secondary"', ADMIN_JS)
+
     def test_shared_suite_conventions_are_present(self) -> None:
         for contract in (
             ":root{color-scheme:light;scrollbar-gutter:stable",

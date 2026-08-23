@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.4
+
+- Harmonize the neutral certificate-regeneration button with Agent Execution Plane.
+
 ## 1.1.3
 
 - Report a degraded service when an invalid certificate prevents the public
