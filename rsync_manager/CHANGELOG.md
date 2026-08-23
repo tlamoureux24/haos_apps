@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.16 - 2026-08-23
+
+- Keep the AppArmor profile in complain mode while correcting the three actual S6 legacy-service entry points used by cron, runner and web.
+- Prevent these longruns from falling into nested `//null-...` learning profiles, which made every descendant access appear as a separate missing permission.
+- Preserve the complete runtime, CIFS and explicit `/mnt/**` audit baseline for one new bounded validation capture.
+
 ## 1.3.15 - 2026-08-23
 
 - Replace implicit complain-violation collection with AppArmor's explicit rule-level audit mechanism for the bounded CIFS fixture.
