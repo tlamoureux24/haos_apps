@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.3
+
+- Report a degraded service when the standalone HTTPS listener cannot start
+  because its certificate is invalid.
+- Show listener state on Transport & TLS and confirm neutral certificate
+  regeneration with an explicit fingerprint-change warning.
+
 ## 1.1.2
 
 - Enrich the Overview with real model availability, enablement, provider and

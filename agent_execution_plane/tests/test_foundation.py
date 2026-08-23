@@ -43,7 +43,11 @@ class FoundationTests(unittest.TestCase):
         self.assertIn("response.ok&&data.status==='ready'", ADMIN_JS)
         self.assertIn("serviceUnavailable:'Service indisponible'", ADMIN_JS)
         self.assertIn("serviceUnavailable:'Service unavailable'", ADMIN_JS)
+        self.assertIn("serviceDegraded:'Service dégradé'", ADMIN_JS)
+        self.assertIn("listenerNotStarted:'Listener non démarré'", ADMIN_JS)
+        self.assertIn("confirm(tr('confirmCertificateRegeneration'))", ADMIN_JS)
         self.assertIn(".health.unavailable", ADMIN_CSS)
+        self.assertIn(".health.degraded", ADMIN_CSS)
 
     def test_control_plane_configuration_has_page_action_and_explicit_feedback(self):
         main_source=Path(__file__).parents[1].joinpath("src/agent_execution_plane/main.py").read_text(encoding="utf-8")

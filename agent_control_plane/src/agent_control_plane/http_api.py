@@ -134,9 +134,10 @@ async def admin_status(request: Request) -> JSONResponse:
     audit = await run_in_threadpool(request.app.state.control_plane.audit_status)
     active_connectors = [item for item in connectors if not item["archived_at"]]
     active_tasks = [item for item in tasks if not item["archived_at"]]
+    public_listener_status = request.app.state.public_listener_status()
     return JSONResponse(
         {
-            "status": "ready",
+            "status": public_listener_status,
             "surface": "admin",
             **counts,
             "connectors": {

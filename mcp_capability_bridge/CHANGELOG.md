@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.3
+
+- Report a degraded service when an invalid certificate prevents the public
+  MCP listener from starting.
+- Show listener state on Transport & TLS and confirm neutral certificate
+  regeneration with an explicit fingerprint-change warning.
+
 ## 1.1.2
 
 - Enrich the Overview with live configuration and runtime metrics.

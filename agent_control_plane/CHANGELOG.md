@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.2
+
+- Report a degraded service when an invalid HTTPS certificate prevents a
+  public listener from starting.
+- Show listener state on Transport & TLS and make certificate regeneration a
+  neutral, explicitly confirmed action.
+
 ## 1.1.1
 
 - Standardize MCP on port `8098` and move event intake to `8100`.

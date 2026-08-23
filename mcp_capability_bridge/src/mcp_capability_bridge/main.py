@@ -163,8 +163,10 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
     async def status(_: Request) -> JSONResponse:
         namespaces = state.store.list_namespaces(include_archived=True)
         targets = state.store.list_targets()
+        certificate = certificate_payload()
+        service_status = "not_ready" if not database_ready(state.settings.database_path) else ("degraded" if certificate.get("valid") is False else "ready")
         runtime=state.counters.snapshot();runtime["active_sessions"]=state.web_sessions.count()
-        return JSONResponse({"status": "ready" if database_ready(state.settings.database_path) else "not_ready", "version": __version__, "database_generation": 1, "public_surface": "authenticated_mcp", "adapters": state.store.registry.describe(), "namespaces": {"active": sum(item["status"] == "active" for item in namespaces), "revoked": sum(item["status"] == "revoked" for item in namespaces), "archived": sum(item["status"] == "archived" for item in namespaces)}, "targets": len(targets), "target_summary": {"enabled": sum(bool(item["enabled"]) for item in targets), "disabled": sum(not bool(item["enabled"]) for item in targets)}, "publications": len(state.store.list_publications()), "runtime": runtime})
+        return JSONResponse({"status": service_status, "version": __version__, "database_generation": 1, "public_surface": "authenticated_mcp", "adapters": state.store.registry.describe(), "namespaces": {"active": sum(item["status"] == "active" for item in namespaces), "revoked": sum(item["status"] == "revoked" for item in namespaces), "archived": sum(item["status"] == "archived" for item in namespaces)}, "targets": len(targets), "target_summary": {"enabled": sum(bool(item["enabled"]) for item in targets), "disabled": sum(not bool(item["enabled"]) for item in targets)}, "publications": len(state.store.list_publications()), "runtime": runtime})
 
     def certificate_payload() -> dict[str, object]:
         result:dict[str,object]={"configured":state.settings.public_transport=="https","source":state.settings.certificate_source}
@@ -176,7 +178,9 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
         return result
 
     async def transport(request:Request)->JSONResponse:
-        if request.method=="GET":return JSONResponse({"mcp":{"transport":state.settings.public_transport,"internal_port":8098,"path":"/mcp"},"certificate":certificate_payload()})
+        if request.method=="GET":
+            certificate=certificate_payload()
+            return JSONResponse({"mcp":{"transport":state.settings.public_transport,"internal_port":8098,"path":"/mcp","listener_status":"not_started" if certificate.get("valid") is False else "running"},"certificate":certificate})
         if not csrf_valid(request):return JSONResponse({"error":{"code":"csrf_failed"}},status_code=403)
         if state.settings.certificate_source!="self_generated":return JSONResponse({"error":{"code":"external_certificate_cannot_be_regenerated"}},status_code=409)
         generate_certificate(state.settings.data_dir/"private"/"tls",replace=True)

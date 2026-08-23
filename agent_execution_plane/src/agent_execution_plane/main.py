@@ -81,8 +81,9 @@ async def ready(_: Request) -> JSONResponse:
 
 async def admin_status(_: Request) -> JSONResponse:
     available = database_ready(settings.database_path)
+    listener_status = "degraded" if available and certificate_payload().get("valid") is False else ("ready" if available else "not_ready")
     return JSONResponse(
-        {"status": "ready" if available else "not_ready", "version": __version__, "surface": "admin"},
+        {"status": listener_status, "version": __version__, "surface": "admin"},
         status_code=200 if available else 503,
     )
 
@@ -205,7 +206,8 @@ def certificate_payload() -> dict[str, object]:
 
 async def transport_admin(request: Request) -> JSONResponse:
     if request.method == "GET":
-        return JSONResponse({"api":{"transport":settings.public_transport,"internal_port":8098,"paths":["/api/v1/execute","/api/v1/executions/{execution_id}"]},"certificate":certificate_payload()})
+        certificate=certificate_payload()
+        return JSONResponse({"api":{"transport":settings.public_transport,"internal_port":8098,"paths":["/api/v1/execute","/api/v1/executions/{execution_id}"],"listener_status":"not_started" if certificate.get("valid") is False else "running"},"certificate":certificate})
     if not csrf_valid(request): return JSONResponse({"error":{"code":"csrf_failed"}},status_code=403)
     if settings.certificate_source != "self_generated": return JSONResponse({"error":{"code":"external_certificate_cannot_be_regenerated"}},status_code=409)
     generate_certificate(settings.data_dir/"private"/"tls",replace=True)

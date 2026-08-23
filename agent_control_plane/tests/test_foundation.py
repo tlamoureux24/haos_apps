@@ -223,7 +223,13 @@ class AdministrationInterfaceTests(unittest.TestCase):
         self.assertIn("status.status==='ready'", ADMIN_JS)
         self.assertIn("Service indisponible", ADMIN_JS)
         self.assertIn("Service unavailable", ADMIN_JS)
+        self.assertIn("Service dégradé", ADMIN_JS)
+        self.assertIn("Service degraded", ADMIN_JS)
+        self.assertIn("status.status==='degraded'", ADMIN_JS)
+        self.assertIn("listener non démarré", ADMIN_JS)
+        self.assertIn("confirm(warning)", ADMIN_JS)
         self.assertIn(".health.unavailable", ADMIN_CSS)
+        self.assertIn(".health.degraded", ADMIN_CSS)
 
     def test_task_drawer_contains_the_optional_fixed_argument_editor(self) -> None:
         for contract in (
