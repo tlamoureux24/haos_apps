@@ -279,7 +279,7 @@ if settings.surface == "mcp":
 
 @asynccontextmanager
 async def lifespan(_: Starlette):
-    if mcp_server is None:
+    if settings.surface == "admin":
         await asyncio.to_thread(
             control_plane.record_audit,
             actor_identity_id=None,
@@ -335,9 +335,11 @@ async def lifespan(_: Starlette):
                 reason_code="success",
                 correlation_id=f"lifecycle-{uuid4()}",
             )
-    else:
+    elif mcp_server is not None:
         async with mcp_server.session_manager.run():
             yield
+    else:
+        yield
 
 app = Starlette(
     debug=False,

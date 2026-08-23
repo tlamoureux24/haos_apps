@@ -834,6 +834,13 @@ class PublicSurfaceTests(unittest.TestCase):
     def test_admin_root_is_exposed(self) -> None:
         self.assertIn("/", exposed_paths("admin"))
 
+    def test_only_admin_surface_owns_maintenance_and_lifecycle_workers(self) -> None:
+        main_source = Path(__file__).resolve().parents[1].joinpath("src/agent_control_plane/main.py").read_text(encoding="utf-8")
+        lifespan_source = main_source.split("async def lifespan", 1)[1].split("app = Starlette", 1)[0]
+        self.assertIn('if settings.surface == "admin":', lifespan_source)
+        self.assertIn("elif mcp_server is not None:", lifespan_source)
+        self.assertIn("else:\n        yield", lifespan_source)
+
 
 class CredentialTests(unittest.TestCase):
     def test_configured_pepper_avoids_persistent_file_access(self) -> None:

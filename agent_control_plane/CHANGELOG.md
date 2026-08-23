@@ -4,6 +4,8 @@
 
 - Support both legacy and current `cryptography` certificate-validity APIs so
   TLS validation is identical in GitHub CI and the HAOS image.
+- Keep lifecycle, schedule, retention and audit maintenance workers exclusively
+  in the Ingress administration process after splitting event and MCP ports.
 
 ## 1.1.2
 
