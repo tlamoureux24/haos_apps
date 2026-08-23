@@ -1,4 +1,6 @@
-# MCP Capability Bridge 1.0.0
+# MCP Capability Bridge 1.0.1
+
+Guide complet des namespaces, templates SSH JSON, schémas d’entrée, cibles Web et intégrations ACP/AEP : [français](README.fr.md) | [English](README.md).
 
 Version 1.0.0 is the stable Lot 4 release. Its runtime, persistence, backup and
 restore, MCP, Web, SSH, ACP/AEP and AppArmor paths passed final real-HAOS

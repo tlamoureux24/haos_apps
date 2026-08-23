@@ -2,6 +2,8 @@
 
 [Français](#français) | [English](#english)
 
+Guide opérateur exhaustif : [français](README.fr.md) | [English](README.md). Il détaille chaque champ, les contrats JSON, les arguments fixes et les exemples Home Assistant.
+
 ---
 
 ## Français

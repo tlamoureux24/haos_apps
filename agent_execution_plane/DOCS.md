@@ -1,4 +1,6 @@
-# Agent Execution Plane 1.0.0
+# Agent Execution Plane 1.0.1
+
+Guide détaillé des modèles, de ChatGPT OAuth, du worker ACP et des requêtes JSON autonomes : [français](README.fr.md) | [English](README.md).
 
 ## Français
 

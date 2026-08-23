@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+- Expand the French and English operator guides with current Activity,
+  connector-maintenance, fixed-argument JSON, AEP worker, and transport-security
+  workflows.
+
 ## 1.0.0
 
 - Promote the already stable Home Assistant App to the 1.0 production version

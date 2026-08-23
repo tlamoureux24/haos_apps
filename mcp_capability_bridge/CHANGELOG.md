@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 — 2026-08-23
+
+- Expand the French and English guides with detailed namespace, SSH target,
+  JSON token-template/schema, Web-session, ACP/AEP integration, security, and
+  troubleshooting examples.
+
 ## 1.0.0 — 2026-08-22
 
 - Promote the Home Assistant App metadata to stable after complete real-HAOS

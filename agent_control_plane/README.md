@@ -1407,3 +1407,66 @@ Stop the server and remove temporary firewall rules after testing.
 
 For protocol and schema details, see
 [MCP_COMPATIBILITY.md](MCP_COMPATIBILITY.md).
+
+## 20. Current operational workflows
+
+### Activity and connector maintenance
+
+**Activity** is a persistent, payload-free journal backed by ACP's audit chain. It records bounded administration, orchestration, security, and lifecycle markers such as `app_started`, `app_ready`, and `app_stopped`. It never stores event bodies, connector URLs, Bearers, sensitive fixed values, tool arguments/results, prompts, or reports.
+
+Ordinary connector editing preserves the protected Bearer. Endpoint replacement and secret rotation remain separate explicit operations:
+
+1. finish any execution that depends on the connector;
+2. use **Edit** for its name and, only when required, endpoint;
+3. use **Rotate secret** only to replace the Bearer;
+4. let ACP reconnect, validate schemas, and refresh inventory before committing.
+
+ACP refuses endpoint/secret changes during dependent execution. Failed validation retains the previous inventory but makes dependent paths fail closed, without returning the old endpoint or secret to the browser.
+
+### Fixed-argument JSON examples
+
+For an upstream schema such as:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "entity_id": {"type": "string"},
+    "action": {"type": "string", "enum": ["turn_on", "turn_off"]},
+    "authorization": {"type": "string"}
+  },
+  "required": ["entity_id", "action", "authorization"],
+  "additionalProperties": false
+}
+```
+
+Leave `action` agent-editable, enter an ordinary fixed `entity_id` as valid JSON:
+
+```json
+"light.office"
+```
+
+and a sensitive fixed `authorization` value as valid JSON:
+
+```json
+"Bearer REPLACE_WITH_TARGET_TOKEN"
+```
+
+Strings require JSON quotes. Numbers do not. A structured value is entered as a complete JSON value:
+
+```json
+{"site":"main","scope":["read","status"]}
+```
+
+ACP removes fixed properties from the model-visible schema, injects them server-side, validates the merged call, encrypts sensitive values at rest, and recursively redacts them from upstream results.
+
+### Connect an AEP worker
+
+1. Create a **Worker** identity with only `jobs.claim`, `jobs.heartbeat`, `jobs.complete`, and `jobs.fail`.
+2. Copy its one-time credential.
+3. In AEP **Control Plane**, configure `http://HOME_ASSISTANT_IP:ACP_PORT/mcp` and paste that credential.
+4. Confirm AEP reports a validated connection and successful claim polling.
+
+ACP remains authoritative for task revision, connector/schema fingerprints, fixed arguments, capability authorization, retries, lease, and report contract. AEP receives only the effective `allowed_capabilities` and never selects extra tools from inventory.
+
+The public MCP/event listener currently uses HTTP. Bearers authenticate but do not encrypt transport. Keep port `8098` on a trusted HAOS/LAN path or place a trusted TLS reverse proxy in front of it; never expose it directly to an untrusted network.

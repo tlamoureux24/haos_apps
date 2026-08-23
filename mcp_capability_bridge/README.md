@@ -2,7 +2,7 @@
 
 [Français](README.fr.md) | English
 
-Current release: **1.0.0 stable — Lots 0 through 4 accepted on real HAOS**.
+Current release: **1.0.1 stable**. Runtime acceptance remains the unchanged 1.0.0 Lots 0–4 baseline; 1.0.1 is a documentation release.
 
 MCP Capability Bridge is an independent Home Assistant OS App that exposes deliberately bounded access to non-MCP technical systems through standard MCP Streamable HTTP tools.
 
@@ -23,3 +23,167 @@ Authoritative design documents:
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
 
 Version 1.0.0 is the stable Lot 4 release after successful HAOS installation, persistence, backup/restore, endurance and AppArmor acceptance. SQLite generation 1 is now the production-data compatibility cutoff. See [installation and integration notes](DOCS.md).
+
+## Installation and network model
+
+Administration is available only through Home Assistant Ingress on internal port `8099`. The optional host mapping for `8098/tcp` exposes only public health checks and authenticated Streamable HTTP MCP at `/mcp`.
+
+```text
+Ingress 8099: administration only
+Public  8098: /health/live, /health/ready, /mcp
+```
+
+Do not publish `8098` unless an MCP client needs to reach the Bridge. The current endpoint is HTTP, so a Bearer token is not transport-encrypted outside an isolated trusted network unless a trusted TLS reverse proxy is used.
+
+## MCP clients and namespace isolation
+
+1. Open **MCP clients** and create a client with a clear display name.
+2. Copy the generated credential immediately. It cannot be displayed later.
+3. Create targets and bounded capabilities.
+4. Open **MCP access** and publish each required capability explicitly to that client.
+
+Each client sees only its own published inventory. Rotation invalidates the previous credential immediately and closes that client's Web sessions. Revoke blocks access; a client must be revoked before it can be archived. Technical keys are generated automatically, stable, and shown only as operational identifiers.
+
+A generic client connects with:
+
+```text
+URL: http://HOME_ASSISTANT_IP:BRIDGE_PORT/mcp
+Header: Authorization: Bearer REPLACE_WITH_CLIENT_CREDENTIAL
+```
+
+## SSH targets
+
+Use a dedicated least-privilege account on every target. The Bridge creates a fresh SSH connection per call and permits no PTY, SSH agent, forwarding, stdin, caller-controlled environment, or free-form command.
+
+### Create and pin a target
+
+1. Enter host/IP, port, username, and password or private key authentication.
+2. Select **Scan host key**.
+3. Independently compare the displayed fingerprint with the target administrator's trusted value.
+4. Confirm only after that comparison.
+
+The pinned key is checked on every connection. If the server key legitimately changes, use the explicit rotation workflow and verify the new fingerprint again.
+
+### Define a bounded SSH capability
+
+The executable must be absolute. The token template is a JSON array containing either a fixed `literal` or a named `parameter`. Parameters are shell-quoted as single scalar tokens; they never become a command string.
+
+Example capability for reading one systemd unit:
+
+```text
+Executable: /usr/bin/systemctl
+```
+
+```json
+[
+  {"literal": "status"},
+  {"parameter": "unit"},
+  {"literal": "--no-pager"}
+]
+```
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "unit": {
+      "type": "string",
+      "enum": ["nginx.service", "docker.service"]
+    }
+  },
+  "required": ["unit"],
+  "additionalProperties": false
+}
+```
+
+This produces exactly `/usr/bin/systemctl status <validated-unit> --no-pager`. Prefer `enum`, `const`, patterns, and numeric limits over a broad string. Set a short timeout and realistic stdout/stderr byte limits. Mark **Effect possible** whenever the command can change state; callers must then treat a lost response as ambiguous and avoid automatic retry.
+
+A read-only fixed command uses only literals and an empty object schema:
+
+```json
+[
+  {"literal": "--version"}
+]
+```
+
+```json
+{
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}
+```
+
+After saving, publish the generated `ssh_<technical-key>` tool only to the clients that need it.
+
+## Web targets and sessions
+
+Web automation runs in a fresh disposable Chromium profile. Its actual authority is exactly the authority of the configured Web account, so use a dedicated account with the smallest possible role.
+
+1. Enter the exact base origin, such as `https://router.example.local`—not an arbitrary navigation URL.
+2. Resolve it in the UI and confirm the expected addresses. Address changes fail closed as possible DNS rebinding.
+3. Keep TLS verification enabled unless a narrowly understood local exception is unavoidable.
+4. Choose no authentication, HTTP Basic, or a bounded configured login form.
+5. Set inactivity and absolute session lifetimes, then run **Test browser**.
+6. Publish only the required generated Web tools.
+
+For form authentication, the selectors are administrator configuration and never MCP arguments:
+
+```text
+Login path: /login
+Username selector: input[name="username"]
+Password selector: input[name="password"]
+Submit selector: button[type="submit"]
+```
+
+The nine bounded tools are `open`, `snapshot`, `wait`, `navigate`, `click`, `fill`, `select`, `press`, and `close`. A typical call sequence is:
+
+```json
+{"name":"web_router_open","arguments":{}}
+```
+
+```json
+{"name":"web_router_snapshot","arguments":{"session":"SESSION_HANDLE"}}
+```
+
+```json
+{"name":"web_router_click","arguments":{"session":"SESSION_HANDLE","reference":"OPAQUE_REFERENCE"}}
+```
+
+References come only from the latest accessibility snapshot. Every attempted action invalidates that reference generation; take another snapshot before the next action. Handles and references are scoped to the client, credential generation, target, browser session, and current page generation.
+
+The Bridge refuses arbitrary URLs, CSS selectors, JavaScript, password/hidden/file fields, uploads, downloads, and unrestricted keys. `navigate` accepts only a relative path on the approved origin. Sessions close on explicit close, inactivity, absolute lifetime, credential rotation/revocation, failure, or App shutdown and never survive restart or backup.
+
+## Integration examples
+
+### Bridge → ACP → AEP
+
+1. Create a dedicated Bridge MCP client for ACP.
+2. Publish only the Bridge capabilities ACP may discover.
+3. In ACP **Connectors**, create a Streamable HTTP connector using the Bridge `/mcp` URL and that Bearer.
+4. In an ACP task, select only the required discovered tools and optionally fix sensitive arguments server-side.
+5. AEP receives only ACP's final effective capability envelope.
+
+### Standalone AEP → Bridge
+
+In the AEP request, use the Bridge endpoint and a dedicated Bridge client credential. Copy the exact tool name, description, and `input_schema` from MCP discovery into AEP's `mcp.tools` array. Do not manually simplify the schema: AEP verifies exact compatibility.
+
+## Outcomes, capacity, and troubleshooting
+
+The Bridge never automatically replays SSH or Web operations. If a returned error includes `effect_possible: true`, the target may have applied the action even though its response was lost.
+
+Global, namespace, adapter, and target concurrency limits reject immediately with `*_busy`; there is no hidden queue. MCP request bodies above 256 KiB are rejected before protocol buffering.
+
+| Symptom | Check |
+|---|---|
+| `401` on `/mcp` | Correct namespace credential, not rotated/revoked/archived |
+| Tool missing | Capability enabled and explicitly published to this namespace |
+| SSH host-key refusal | Compare current trusted fingerprint; rotate only after independent verification |
+| SSH argument refusal | Valid JSON, exact parameter names, schema type/enum/pattern |
+| Web resolution changed | Re-resolve, investigate DNS/address change, then explicitly confirm |
+| Browser session failed | Temporarily use DEBUG and inspect sanitized `MCB_BROWSER_DIAG` entries |
+| Stale Web reference | Take a fresh snapshot; references are single-generation values |
+
+Activity persists only bounded metadata such as client, tool, adapter, outcome, source and duration. Credentials, arguments, results, browser contents and SSH output are not stored in the journal.

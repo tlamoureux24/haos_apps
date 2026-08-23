@@ -1452,3 +1452,66 @@ Arrêtez le serveur et retirez toute règle temporaire de pare-feu après le tes
 
 Pour les détails du protocole et des schémas pris en charge, voir
 [MCP_COMPATIBILITY.md](MCP_COMPATIBILITY.md).
+
+## 20. Parcours opérationnels actuels
+
+### Activité et maintenance des connecteurs
+
+**Activité** est un journal persistant sans payload adossé à la chaîne d’audit ACP. Il conserve des métadonnées bornées pour l’administration, l’orchestration, la sécurité et le cycle de vie, notamment `app_started`, `app_ready` et `app_stopped`. Il ne stocke jamais corps d’événement, URL de connecteur, Bearer, valeur fixe sensible, argument/résultat, prompt ou rapport.
+
+La modification ordinaire d’un connecteur conserve son Bearer protégé. Remplacement d’endpoint et rotation du secret restent deux opérations explicites distinctes :
+
+1. terminez toute exécution dépendante ;
+2. utilisez **Modifier** pour le nom et, uniquement si nécessaire, l’endpoint ;
+3. utilisez **Rotation du secret** seulement pour remplacer le Bearer ;
+4. laissez ACP reconnecter, valider les schémas et actualiser l’inventaire avant validation.
+
+ACP refuse ces changements pendant une exécution dépendante. Une validation échouée conserve l’ancien inventaire mais ferme les chemins dépendants, sans retourner l’ancien endpoint ou secret au navigateur.
+
+### Exemples JSON d’arguments fixes
+
+Pour un schéma amont comme :
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "entity_id": {"type": "string"},
+    "action": {"type": "string", "enum": ["turn_on", "turn_off"]},
+    "authorization": {"type": "string"}
+  },
+  "required": ["entity_id", "action", "authorization"],
+  "additionalProperties": false
+}
+```
+
+Laissez `action` modifiable par l’agent, saisissez `entity_id` comme valeur fixe ordinaire JSON valide :
+
+```json
+"light.office"
+```
+
+et `authorization` comme valeur fixe sensible JSON valide :
+
+```json
+"Bearer REMPLACER_PAR_LE_TOKEN_CIBLE"
+```
+
+Une chaîne exige ses guillemets JSON, contrairement à un nombre. Une structure est saisie comme valeur JSON complète :
+
+```json
+{"site":"principal","scope":["read","status"]}
+```
+
+ACP retire les propriétés fixes du schéma visible par le modèle, les injecte côté serveur, valide l’appel fusionné, chiffre les valeurs sensibles au repos et les expurge récursivement des résultats amont.
+
+### Connecter un worker AEP
+
+1. Créez une identité **Worker** avec uniquement `jobs.claim`, `jobs.heartbeat`, `jobs.complete` et `jobs.fail`.
+2. Copiez son credential affiché une seule fois.
+3. Dans **Control Plane** d’AEP, configurez `http://IP_HOME_ASSISTANT:PORT_ACP/mcp` et collez ce credential.
+4. Vérifiez qu’AEP annonce une connexion validée et des polls réussis.
+
+ACP reste l’autorité sur la révision de tâche, les empreintes connecteur/schéma, les arguments fixes, l’autorisation, les retries, le lease et le contrat de rapport. AEP reçoit uniquement `allowed_capabilities` effectif et ne choisit jamais d’outils supplémentaires dans l’inventaire.
+
+Le listener public MCP/événements utilise actuellement HTTP. Les Bearers authentifient mais ne chiffrent pas le transport. Conservez `8098` sur un chemin HAOS/LAN de confiance ou placez un reverse proxy TLS fiable devant lui ; ne l’exposez jamais directement à un réseau non fiable.

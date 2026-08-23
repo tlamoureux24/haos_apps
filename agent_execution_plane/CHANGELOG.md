@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+- Expand the French and English guides with detailed model-family setup, ACP
+  worker configuration, readable standalone JSON examples, lifecycle behavior,
+  security boundaries, and troubleshooting.
+
 ## 1.0.0
 
 - Promote the already stable Home Assistant App to the 1.0 production version
