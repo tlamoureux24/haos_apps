@@ -466,6 +466,15 @@ async def admin_check_connector(request: Request) -> JSONResponse:
             return error_response(404, "connector_not_found", correlation_id)
         try:
             tools = await discover_streamable_http(*config)
+        except ConnectorCertificateMismatch as error:
+            await run_in_threadpool(
+                request.app.state.control_plane.refresh_connector,
+                contract.connector_id,
+                None,
+                error.code,
+                correlation_id,
+            )
+            return error_response(422, error.code, correlation_id)
         except ConnectorSchemaRejected as error:
             log_schema_rejection(contract.connector_id, error, correlation_id)
             await run_in_threadpool(
@@ -603,6 +612,8 @@ async def admin_rotate_connector_secret(request: Request) -> JSONResponse:
         discovery_error = None
         try:
             tools = await discover_streamable_http(url, contract.bearer_token, certificate_sha256)
+        except ConnectorCertificateMismatch as error:
+            discovery_error = error.code
         except ConnectorSchemaRejected as error:
             discovery_error = error.code
             log_schema_rejection(contract.connector_id, error, correlation_id)
@@ -639,6 +650,8 @@ async def admin_rotate_connector_secret(request: Request) -> JSONResponse:
         return error_response(404, "connector_not_found", correlation_id)
     if discovery_error in SCHEMA_REJECTION_CODES:
         return error_response(422, discovery_error, correlation_id)
+    if discovery_error == "certificate_sha256_mismatch":
+        return error_response(422, discovery_error, correlation_id)
     if discovery_error:
         return error_response(503, "connector_unreachable", correlation_id)
     connector = next(
@@ -669,6 +682,15 @@ async def admin_set_connector_enabled(request: Request) -> JSONResponse:
                 return error_response(404, "connector_not_found", correlation_id)
             try:
                 tools = await discover_streamable_http(*config)
+            except ConnectorCertificateMismatch as error:
+                await run_in_threadpool(
+                    request.app.state.control_plane.refresh_connector,
+                    contract.connector_id,
+                    None,
+                    error.code,
+                    correlation_id,
+                )
+                return error_response(422, error.code, correlation_id)
             except ConnectorSchemaRejected as error:
                 log_schema_rejection(contract.connector_id, error, correlation_id)
                 await run_in_threadpool(

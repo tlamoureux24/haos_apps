@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.9
+
+- Report certificate fingerprint mismatches precisely when checking,
+  re-enabling, or rotating credentials for an existing MCP connector.
+
 ## 1.1.8
 
 - Preserve the active MCP connector configuration when an edited certificate

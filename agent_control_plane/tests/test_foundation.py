@@ -415,6 +415,26 @@ class ConnectorDiscoveryVisibilityTests(unittest.TestCase):
             self.assertEqual(connector["status"], "unreachable")
             self.assertEqual(connector["last_error_code"], "connection_failed")
 
+    def test_certificate_mismatch_check_is_precise_and_preserves_configuration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            control_plane, connector_id = self._connector(Path(directory))
+            before = control_plane.connector_change_transport_config(connector_id)
+            request = self.Request(control_plane, {"connector_id": connector_id})
+            with patch(
+                "agent_control_plane.http_api.discover_streamable_http",
+                new=AsyncMock(side_effect=ConnectorCertificateMismatch("certificate_sha256_mismatch")),
+            ):
+                response = self._run(admin_check_connector, request)
+            self.assertEqual(response.status_code, 422)
+            self.assertEqual(
+                json.loads(response.body)["error"]["code"],
+                "certificate_sha256_mismatch",
+            )
+            self.assertEqual(control_plane.connector_change_transport_config(connector_id), before)
+            connector = control_plane.list_connectors()[0]
+            self.assertEqual(connector["status"], "invalid")
+            self.assertEqual(connector["last_error_code"], "certificate_sha256_mismatch")
+
     def test_schema_rejections_remain_precise_in_admin_api_and_persistence(self) -> None:
         codes = (
             "unsupported_json_schema_keyword",
