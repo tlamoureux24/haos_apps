@@ -16,7 +16,10 @@ configuration:
     description: Saisir ou renouveler la clé API UniFi. Elle sera chiffrée localement puis ce champ sera vidé.
   verify_ssl:
     name: Vérifier le certificat TLS UniFi
-    description: Active la vérification du certificat TLS du contrôleur UniFi. Garder false pour les certificats UniFi auto-signés.
+    description: Valide le certificat avec les autorités système. Si désactivé, une empreinte SHA-256 est obligatoire.
+  unifi_certificate_sha256:
+    name: Empreinte SHA-256 du certificat UniFi
+    description: Empreinte obligatoire pour un certificat autogénéré, avec ou sans deux-points. Toute différence bloque le démarrage avant l'envoi de la clé API.
   dry_run:
     name: Mode simulation
     description: Valide et journalise les événements sans modifier UniFi.

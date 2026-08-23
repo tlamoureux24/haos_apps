@@ -14,8 +14,12 @@ if missing:
     errors.append(f"config.yaml missing: {', '.join(missing)}")
 if not re.search(r'^slug: "unifi_log_explorer"$', config_text, re.MULTILINE):
     errors.append("unexpected slug")
-if not re.search(r'^version: "1\.1\.6"$', config_text, re.MULTILINE):
-    errors.append("App version must be 1.1.6")
+if not re.search(r'^version: "1\.1\.7"$', config_text, re.MULTILINE):
+    errors.append("App version must be 1.1.7")
+for invariant in ("unifi_certificate_sha256", "fingerprint"):
+    source = config_text if invariant == "unifi_certificate_sha256" else (ROOT / "unifi_log_explorer.py").read_text()
+    if invariant not in source:
+        errors.append(f"missing TLS invariant: {invariant}")
 for expected in ('ingress: true', 'ingress_port: 8090', 'panel_title: "UniFi Log Explorer"',
                  'panel_icon: "mdi:file-search-outline"', 'panel_admin: true'):
     if expected not in config_text:

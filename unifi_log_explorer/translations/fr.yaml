@@ -19,7 +19,10 @@ configuration:
     description: Clé dédiée chiffrée localement puis effacée des options après redémarrage.
   verify_ssl:
     name: Vérifier le certificat TLS
-    description: Activez uniquement si le certificat de la console est reconnu par l'App.
+    description: Valide le certificat avec les autorités système. Si désactivé, une empreinte SHA-256 est obligatoire.
+  unifi_certificate_sha256:
+    name: Empreinte SHA-256 du certificat UniFi
+    description: Empreinte obligatoire pour un certificat autogénéré, avec ou sans deux-points. Toute différence bloque la connexion avant l'envoi de la clé API.
   flow_collection_enabled:
     name: Activer la collecte des Traffic Flows
     description: Archive périodiquement les Traffic Flows complets via l'API UniFi locale.

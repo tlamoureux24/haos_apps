@@ -5,7 +5,7 @@ d’un environnement UniFi.
 
 ## Mise en route
 
-1. Configurez l’URL HTTPS locale, le site UniFi et une clé API.
+1. Configurez l’URL HTTPS locale, le site UniFi, une clé API et soit la validation TLS système, soit l’empreinte SHA-256 du certificat autogénéré.
 2. Ajoutez dans `allowed_source_ips` chaque équipement autorisé à envoyer des
    événements.
 3. Conservez UDP `5514` publié, puis démarrez l’App.
@@ -17,6 +17,11 @@ d’un environnement UniFi.
 La clé API est chiffrée dans le volume privé puis retirée des options au
 redémarrage. La page Paramètres affiche la configuration en lecture seule : les
 modifications s’effectuent exclusivement dans les options de l’App.
+
+Sans certificat reconnu ou empreinte SHA-256 correcte, l’App refuse la connexion
+avant l’envoi de la clé API et inscrit la cause explicite dans ses logs. Relevez
+l’empreinte avec `openssl s_client -connect HOTE:443 -servername HOTE </dev/null
+2>/dev/null | openssl x509 -noout -fingerprint -sha256`.
 
 ## Interface
 

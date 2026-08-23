@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import io
 import json
 import sys
@@ -104,6 +105,38 @@ class AutoblockTests(unittest.TestCase):
 
     def history(self):
         return app.load_history()
+
+    def test_pinned_tls_is_verified_before_api_key_is_sent(self):
+        certificate = b"test-certificate"
+        config = mock.Mock(
+            verify_ssl=False,
+            unifi_certificate_sha256=hashlib.sha256(certificate).hexdigest(),
+            unifi_api_key="secret-test-key",
+        )
+        response = mock.MagicMock(status=200)
+        response.read.return_value = b'{"data": []}'
+        connection = mock.MagicMock()
+        connection.sock.getpeercert.return_value = certificate
+        connection.getresponse.return_value = response
+        with mock.patch.object(app.http.client, "HTTPSConnection", return_value=connection):
+            result = app.UniFiClient(config).request("GET", "https://192.168.1.1/test")
+        self.assertEqual(result, {"data": []})
+        connection.connect.assert_called_once_with()
+        connection.request.assert_called_once()
+        self.assertEqual(connection.request.call_args.kwargs["headers"]["X-API-KEY"], "secret-test-key")
+
+    def test_pinned_tls_mismatch_refuses_before_api_key_is_sent(self):
+        config = mock.Mock(
+            verify_ssl=False,
+            unifi_certificate_sha256="0" * 64,
+            unifi_api_key="secret-test-key",
+        )
+        connection = mock.MagicMock()
+        connection.sock.getpeercert.return_value = b"different-certificate"
+        with mock.patch.object(app.http.client, "HTTPSConnection", return_value=connection):
+            with self.assertRaisesRegex(RuntimeError, "fingerprint mismatch"):
+                app.UniFiClient(config).request("GET", "https://192.168.1.1/test")
+        connection.request.assert_not_called()
 
     def test_blocked_is_recorded_only_after_verified_update(self):
         client = Client([traffic_list([]), traffic_list(["8.8.8.8"])])

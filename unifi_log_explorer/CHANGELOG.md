@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.7
+
+- Require either system certificate validation or a configured SHA-256 certificate fingerprint before sending the UniFi API key.
+- Verify a pinned self-generated certificate on the established TLS socket before transmitting `X-API-KEY`, with explicit startup, probe and collection errors for missing or mismatched fingerprints.
+- Redact the API key from reflected UniFi error content and document fingerprint acquisition and certificate rotation in French and English.
+
 ## 1.1.6
 
 - Complete the full HAOS complain-mode audit by analyzing only the events recorded after the final 1.1.5 profile replacement.

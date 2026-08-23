@@ -34,7 +34,7 @@ IPv6, private, loopback, link-local, multicast, reserved, and other non-public s
 
 - `dry_run` is enabled by default.
 - `unifi_base_url` must use `https://`; plain HTTP is rejected to protect the UniFi API key in transit.
-- `verify_ssl: false` is supported for self-signed UniFi controller certificates, but the connection still uses HTTPS encryption.
+- TLS authentication is mandatory before the API key is sent: use `verify_ssl: true` for a trusted certificate, or configure `unifi_certificate_sha256` for a self-generated certificate.
 - The UniFi API key is accepted as a password option, encrypted into `/data/unifi_api_key.enc`, and then the configuration field is cleared.
 - The local decryption key is stored in `/data/unifi_api_key.key` and excluded from Home Assistant backups.
 - The webhook URL token is generated automatically and stored in `/data/state.json`.
@@ -110,7 +110,8 @@ If you change the mapped host port in the Home Assistant app network settings, r
 | --- | --- | --- | --- |
 | `unifi_base_url` | Yes, to start | empty | Local UniFi controller URL. Must use HTTPS, for example `https://192.168.1.1`. The same host is also used as the only accepted webhook source. The field may be blank only for first setup or reset-to-defaults. |
 | `unifi_api_key` | Yes, to start | empty | Dedicated UniFi API key used to read and update the traffic matching list. Enter it on first setup or after restoring from backup. The app encrypts it locally and clears this field automatically. |
-| `verify_ssl` | Yes | `false` | Enable TLS certificate verification for the UniFi controller. Keep `false` for self-signed UniFi certificates. |
+| `verify_ssl` | Yes | `false` | Validate the controller certificate with system trust authorities. When false, `unifi_certificate_sha256` is mandatory. |
+| `unifi_certificate_sha256` | For self-generated certificates | empty | SHA-256 certificate fingerprint. A missing or changed value stops the app before the API key is sent. Obtain it with `openssl s_client -connect HOST:443 -servername HOST </dev/null 2>/dev/null \| openssl x509 -noout -fingerprint -sha256`. |
 | `dry_run` | Yes | `true` | Validate events and log what would happen without writing to UniFi. |
 | `unifi_site_id` | No | empty | Optional UniFi site UUID. Leave empty for auto-detection when the controller has exactly one site. |
 | `traffic_matching_list_id` | No | empty | Optional existing UniFi traffic matching list UUID. Leave empty for auto-detection. |

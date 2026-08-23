@@ -34,7 +34,7 @@ Les IPv6, IP privées, loopback, link-local, multicast, réservées et autres ad
 
 - `dry_run` est activé par défaut.
 - `unifi_base_url` doit utiliser `https://`; le HTTP non chiffré est refusé pour protéger la clé API UniFi en transit.
-- `verify_ssl: false` est supporté pour les certificats UniFi auto-signés, mais la connexion reste chiffrée en HTTPS.
+- L’authentification TLS est obligatoire avant l’envoi de la clé API : utilisez `verify_ssl: true` pour un certificat reconnu, ou renseignez `unifi_certificate_sha256` pour un certificat autogénéré.
 - La clé API UniFi est saisie comme option de type mot de passe, chiffrée dans `/data/unifi_api_key.enc`, puis le champ de configuration est vidé.
 - La clé locale de déchiffrement est stockée dans `/data/unifi_api_key.key` et exclue des sauvegardes Home Assistant.
 - Le token d'URL webhook est généré automatiquement et stocké dans `/data/state.json`.
@@ -110,7 +110,8 @@ Si vous changez le port hôte mappé dans les paramètres réseau de l'app Home 
 | --- | --- | --- | --- |
 | `unifi_base_url` | Oui, pour démarrer | vide | URL locale du contrôleur UniFi. HTTPS obligatoire, par exemple `https://192.168.1.1`. Le même hôte est aussi utilisé comme seule source webhook acceptée. Le champ peut être vide uniquement au premier setup ou après reset des valeurs par défaut. |
 | `unifi_api_key` | Oui, pour démarrer | vide | Clé API UniFi dédiée utilisée pour lire et mettre à jour la liste Traffic Matching. À saisir au premier setup ou après restauration depuis backup. L'app la chiffre localement puis vide ce champ automatiquement. |
-| `verify_ssl` | Oui | `false` | Active la vérification du certificat TLS du contrôleur UniFi. Garder `false` pour les certificats UniFi auto-signés. |
+| `verify_ssl` | Oui | `false` | Valide le certificat avec les autorités système. Si false, `unifi_certificate_sha256` est obligatoire. |
+| `unifi_certificate_sha256` | Pour un certificat autogénéré | vide | Empreinte SHA-256 du certificat. Une valeur absente ou différente arrête l’app avant l’envoi de la clé API. À relever avec `openssl s_client -connect HOTE:443 -servername HOTE </dev/null 2>/dev/null \| openssl x509 -noout -fingerprint -sha256`. |
 | `dry_run` | Oui | `true` | Valide les événements et journalise ce qui serait fait sans écrire dans UniFi. |
 | `unifi_site_id` | Non | vide | UUID optionnel du site UniFi. Laisser vide pour détection automatique si le contrôleur n'a qu'un seul site. |
 | `traffic_matching_list_id` | Non | vide | UUID optionnel de la liste Traffic Matching UniFi existante. Laisser vide pour détection automatique. |

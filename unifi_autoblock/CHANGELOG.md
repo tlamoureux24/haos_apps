@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.4
+
+- Require either system certificate validation or a configured SHA-256 certificate fingerprint before sending the UniFi API key.
+- Verify a pinned self-generated certificate on the established TLS socket before transmitting `X-API-KEY`, and stop with an explicit error when the fingerprint is absent or different.
+- Create encrypted API-key data privately from the first byte, keep persistent webhook tokens in mode `0600`, redact reflected API keys from UniFi errors, and document the workflow in French and English.
+
 ## 0.5.3
 
 - Complete the HAOS complain-mode audit by analyzing only the events recorded after the 0.5.2 `unifi_autoblock` profile replacement.

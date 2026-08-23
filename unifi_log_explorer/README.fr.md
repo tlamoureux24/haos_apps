@@ -57,6 +57,7 @@ le LAN.
 | `unifi_site_slug` | Identifiant interne du site UniFi, souvent `default`. |
 | `unifi_api_key` | Clé API utilisée pour lire les Traffic Flows. |
 | `verify_ssl` | Vérifie la chaîne TLS de la console lorsqu’elle est activée. |
+| `unifi_certificate_sha256` | Empreinte SHA-256 obligatoire lorsque `verify_ssl` est désactivé. |
 | `flow_collection_enabled` | Active la collecte périodique des Traffic Flows. |
 | `flow_poll_interval_seconds` | Intervalle entre deux collectes rapides. |
 | `flow_initial_backfill_minutes` | Profondeur demandée pour l’import initial. |
@@ -98,9 +99,15 @@ que nécessaire. L’interface ne l’affiche jamais et son fichier de chiffreme
 est exclu des sauvegardes. Après une restauration sur une autre installation,
 la clé doit être renseignée à nouveau.
 
-Un certificat autosigné nécessite généralement de laisser `verify_ssl`
-désactivé. L’activer est préférable dès que la chaîne du certificat est reconnue
-par l’App.
+La validation TLS est obligatoire avant l’envoi de la clé API. Utilisez
+`verify_ssl: true` lorsque la chaîne du certificat est reconnue. Pour un
+certificat UniFi autogénéré, laissez cette option désactivée et renseignez
+`unifi_certificate_sha256` ; une empreinte absente ou différente refuse la
+connexion avant authentification. Pour la relever localement :
+
+```sh
+openssl s_client -connect 192.168.1.1:443 -servername 192.168.1.1 </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256
+```
 
 ## Fonctionnement de la collecte
 
@@ -147,6 +154,7 @@ la section des événements récents.
 - limiter le port UDP `5514` aux réseaux devant envoyer Syslog/CEF ;
 - limiter autant que possible l’accès réseau de l’App à la console UniFi ;
 - renouveler la clé API en cas de doute sur sa confidentialité.
+- modifier l’empreinte SHA-256 uniquement après avoir vérifié indépendamment un renouvellement volontaire du certificat UniFi.
 
 ## Limites connues
 

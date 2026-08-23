@@ -55,6 +55,7 @@ French documentation: [README.fr.md](README.fr.md).
 | `unifi_site_slug` | Internal UniFi site identifier, commonly `default`. |
 | `unifi_api_key` | API key used to read Traffic Flows. |
 | `verify_ssl` | Verify the console TLS certificate chain when enabled. |
+| `unifi_certificate_sha256` | Required SHA-256 certificate fingerprint when `verify_ssl` is disabled. |
 | `flow_collection_enabled` | Enable periodic Traffic Flows collection. |
 | `flow_poll_interval_seconds` | Interval between fast collection cycles. |
 | `flow_initial_backfill_minutes` | Requested depth of the initial import. |
@@ -93,8 +94,14 @@ read-only collection can therefore have broader rights than this App needs. The
 key is never displayed, and its encryption key is excluded from backups. Enter
 the API key again after restoring the App to another installation.
 
-Self-signed certificates generally require `verify_ssl` to remain disabled.
-Enable it whenever the certificate chain is trusted by the App.
+TLS verification is mandatory before the API key is sent. Use `verify_ssl: true`
+when the certificate chain is trusted. For a self-generated UniFi certificate,
+keep it disabled and configure `unifi_certificate_sha256`; an absent or changed
+fingerprint refuses the connection before authentication. Obtain it locally with:
+
+```sh
+openssl s_client -connect 192.168.1.1:443 -servername 192.168.1.1 </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256
+```
 
 ## Collection behavior
 
@@ -138,6 +145,7 @@ recent-event section.
 - keep UDP `5514` limited to the networks that need to send Syslog/CEF;
 - restrict the App network access to the UniFi console where possible;
 - rotate the API key whenever its confidentiality is uncertain.
+- update the pinned SHA-256 fingerprint only after independently verifying an intentional UniFi certificate renewal.
 
 ## Known limitations
 

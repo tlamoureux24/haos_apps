@@ -18,6 +18,7 @@ Ouvrez UniFi Autoblock depuis la barre latérale Home Assistant pour consulter, 
 
 - `dry_run` est activé par défaut.
 - L'URL API UniFi doit utiliser HTTPS.
+- Avant l'envoi de la clé API, le certificat doit être reconnu par le système ou correspondre à `unifi_certificate_sha256`. L'absence ou la différence d'empreinte arrête l'app avec un log explicite.
 - La clé API UniFi est saisie comme mot de passe, chiffrée localement, puis le champ de configuration est vidé.
 - La clé locale de déchiffrement est exclue des sauvegardes Home Assistant.
 - Le token d'URL webhook et le token Bearer sont générés automatiquement.
@@ -57,7 +58,8 @@ Content: Default Content
 | --- | --- |
 | `unifi_base_url` | URL HTTPS du contrôleur UniFi local, par exemple `https://192.168.1.1`. L'hôte est aussi utilisé comme seule source webhook acceptée. |
 | `unifi_api_key` | Clé API UniFi dédiée. À saisir au premier setup ou après restauration depuis backup. L'app la chiffre localement et vide ce champ automatiquement. |
-| `verify_ssl` | Active la vérification du certificat TLS UniFi. Garder `false` pour les certificats UniFi auto-signés. |
+| `verify_ssl` | Valide le certificat TLS UniFi avec les autorités système. Si false, l’empreinte SHA-256 est obligatoire. |
+| `unifi_certificate_sha256` | Empreinte SHA-256 obligatoire lorsque `verify_ssl` est désactivé. À relever avec `openssl s_client -connect HOTE:443 -servername HOTE </dev/null 2>/dev/null \| openssl x509 -noout -fingerprint -sha256`. |
 | `dry_run` | Valide les événements sans écrire dans UniFi. |
 | `unifi_site_id` | UUID optionnel du site. Laisser vide pour détection automatique s'il n'existe qu'un seul site. |
 | `traffic_matching_list_id` | UUID optionnel de la liste Traffic Matching UniFi. Laisser vide pour détection automatique. |
@@ -128,6 +130,7 @@ Open UniFi Autoblock from the Home Assistant sidebar to view the latest 1000 con
 
 - `dry_run` is enabled by default.
 - The UniFi API URL must use HTTPS.
+- Before the API key is sent, the certificate must be system-trusted or match `unifi_certificate_sha256`. A missing or mismatched fingerprint stops the app with an explicit log message.
 - The UniFi API key is accepted as a password option, encrypted locally, and then the configuration field is cleared.
 - The local decryption key is excluded from Home Assistant backups.
 - The webhook URL token and Bearer token are generated automatically.
@@ -167,7 +170,8 @@ Content: Default Content
 | --- | --- |
 | `unifi_base_url` | HTTPS URL of the local UniFi controller, for example `https://192.168.1.1`. The host is also used as the only accepted webhook source. |
 | `unifi_api_key` | Dedicated UniFi API key. Enter it on first setup or after restoring from backup. The app encrypts it locally and clears this field automatically. |
-| `verify_ssl` | Enable UniFi TLS certificate verification. Keep `false` for self-signed UniFi certificates. |
+| `verify_ssl` | Validate the UniFi certificate with system trust authorities. When false, the SHA-256 fingerprint is required. |
+| `unifi_certificate_sha256` | Required SHA-256 fingerprint when `verify_ssl` is disabled. Obtain it with `openssl s_client -connect HOST:443 -servername HOST </dev/null 2>/dev/null \| openssl x509 -noout -fingerprint -sha256`. |
 | `dry_run` | Validate events without writing to UniFi. |
 | `unifi_site_id` | Optional site UUID. Leave empty for auto-detection when there is exactly one site. |
 | `traffic_matching_list_id` | Optional UniFi traffic matching list UUID. Leave empty for auto-detection. |

@@ -19,7 +19,10 @@ configuration:
     description: Dedicated key encrypted locally and cleared from the options after restart.
   verify_ssl:
     name: Verify TLS certificate
-    description: Enable only when the console certificate is trusted by the App.
+    description: Validate the certificate with system trust authorities. When disabled, a SHA-256 fingerprint is required.
+  unifi_certificate_sha256:
+    name: UniFi certificate SHA-256 fingerprint
+    description: Required for a self-generated certificate, with or without colons. Any mismatch blocks the connection before the API key is sent.
   flow_collection_enabled:
     name: Enable Traffic Flows collection
     description: Periodically archive complete Traffic Flows through the local UniFi API.

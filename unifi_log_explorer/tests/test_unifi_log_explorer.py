@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import tempfile
 import unittest
 from html.parser import HTMLParser
@@ -44,20 +45,35 @@ class ParserTests(unittest.TestCase):
         self.assertIn("switch", switch["message"])
 
     def test_flow_probe_uses_api_key_and_discards_flow(self):
-        response = mock.MagicMock()
+        certificate = b"test-certificate"
+        response = mock.MagicMock(status=200)
         response.read.return_value = b'{"data":[{"id":"sample","service":"HTTPS"}],"total_element_count":7,"has_next":true}'
-        response.__enter__.return_value = response
+        connection = mock.MagicMock()
+        connection.sock.getpeercert.return_value = certificate
+        connection.getresponse.return_value = response
         options = {"unifi_base_url": "https://192.168.1.1", "unifi_site_slug": "default",
-                   "unifi_api_key": "secret-test-key", "verify_ssl": False}
-        with mock.patch.object(ule.urllib.request, "urlopen", return_value=response) as urlopen:
+                   "unifi_api_key": "secret-test-key", "verify_ssl": False,
+                   "unifi_certificate_sha256": hashlib.sha256(certificate).hexdigest()}
+        with mock.patch.object(ule.http.client, "HTTPSConnection", return_value=connection):
             result = ule.flow_probe(options)
-        request = urlopen.call_args.args[0]
-        payload = ule.json.loads(request.data)
-        self.assertEqual(request.full_url, "https://192.168.1.1/proxy/network/v2/api/site/default/traffic-flows")
-        self.assertEqual(request.get_header("X-api-key"), "secret-test-key")
+        method, target = connection.request.call_args.args[:2]
+        payload = ule.json.loads(connection.request.call_args.kwargs["body"])
+        headers = connection.request.call_args.kwargs["headers"]
+        self.assertEqual(method, "POST")
+        self.assertEqual(target, "/proxy/network/v2/api/site/default/traffic-flows")
+        self.assertEqual(headers["X-API-KEY"], "secret-test-key")
         self.assertEqual(payload["pageSize"], 1)
         self.assertEqual(result["total"], 7)
         self.assertNotIn("data", result)
+
+    def test_untrusted_tls_without_fingerprint_refuses_before_connect(self):
+        options = {"unifi_base_url": "https://192.168.1.1", "unifi_site_slug": "default",
+                   "unifi_api_key": "secret-test-key", "verify_ssl": False,
+                   "unifi_certificate_sha256": ""}
+        with mock.patch.object(ule.http.client, "HTTPSConnection") as connection:
+            with self.assertRaisesRegex(RuntimeError, "empreinte|unifi_certificate_sha256"):
+                ule.flow_probe(options)
+        connection.assert_not_called()
 
     def test_flow_storage_deduplicates_unifi_id(self):
         flow = {"id": "stable-id", "flow_start_time": 1000, "flow_end_time": 2000,

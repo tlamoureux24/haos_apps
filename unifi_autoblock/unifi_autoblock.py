@@ -4,10 +4,14 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
+import http.client
 import ipaddress
 import json
 import logging
 import os
+import re
 import secrets
 import socket
 import ssl
@@ -75,6 +79,11 @@ def save_json_file(path: str, data: Any) -> None:
         json.dump(data, handle, indent=2, sort_keys=True)
         handle.write("\n")
     os.replace(tmp_path, path)
+
+
+def save_private_json_file(path: str, data: Any) -> None:
+    payload = (json.dumps(data, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    save_private_bytes(path, payload)
 
 
 def load_history() -> list[dict[str, Any]]:
@@ -151,8 +160,7 @@ def encrypt_unifi_api_key(api_key: str) -> None:
         "algorithm": "fernet",
         "token": encrypted.decode("ascii"),
     }
-    save_json_file(ENCRYPTED_API_KEY_PATH, payload)
-    os.chmod(ENCRYPTED_API_KEY_PATH, stat.S_IRUSR | stat.S_IWUSR)
+    save_private_json_file(ENCRYPTED_API_KEY_PATH, payload)
     LOGGER.info("Encrypted UniFi API key in local app data")
 
 
@@ -198,6 +206,19 @@ def parse_destination_ports(values: Any) -> set[int]:
             + ", ".join(str(port) for port in invalid_ports)
         )
     return ports
+
+
+def normalize_certificate_sha256(value: Any) -> str:
+    fingerprint = str(value or "").strip()
+    fingerprint = re.sub(r"^sha256\s+fingerprint\s*=\s*", "", fingerprint, flags=re.I)
+    fingerprint = fingerprint.replace(":", "").replace(" ", "").lower()
+    if fingerprint and not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
+        raise RuntimeError("unifi_certificate_sha256 must contain exactly 64 hexadecimal characters")
+    return fingerprint
+
+
+def sanitize_unifi_error(value: str, api_key: str) -> str:
+    return value.replace(api_key, "<redacted>") if api_key else value
 
 
 def save_supervisor_options(options: dict[str, Any], action: str) -> None:
@@ -317,6 +338,14 @@ class Config:
         self.webhook_token = ""
         self.webhook_auth_token = ""
         self.verify_ssl = bool(raw.get("verify_ssl", False))
+        self.unifi_certificate_sha256 = normalize_certificate_sha256(
+            raw.get("unifi_certificate_sha256")
+        )
+        if not self.verify_ssl and not self.unifi_certificate_sha256:
+            raise RuntimeError(
+                "Secure UniFi TLS refused: enable verify_ssl or configure "
+                "unifi_certificate_sha256 before the API key can be sent"
+            )
         self.dry_run = bool(raw.get("dry_run", True))
         self.allowed_destinations = set(str(v) for v in raw.get("allowed_destinations", []))
         self.allowed_destination_ports = parse_destination_ports(
@@ -440,10 +469,7 @@ def resolve_unifi_targets(config: Config, client: UniFiClient) -> None:
 class UniFiClient:
     def __init__(self, config: Config) -> None:
         self.config = config
-        if config.verify_ssl:
-            self.context = ssl.create_default_context()
-        else:
-            self.context = ssl._create_unverified_context()
+        self.context = ssl.create_default_context() if config.verify_ssl else ssl._create_unverified_context()
 
     def request(self, method: str, url: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         data = None
@@ -455,18 +481,38 @@ class UniFiClient:
             data = json.dumps(payload).encode("utf-8")
             headers["Content-Type"] = "application/json"
 
-        request = urllib.request.Request(url, data=data, headers=headers, method=method)
+        parsed = urllib.parse.urlsplit(url)
+        connection = http.client.HTTPSConnection(
+            parsed.hostname, parsed.port or 443, timeout=15, context=self.context
+        )
         try:
-            with urllib.request.urlopen(request, context=self.context, timeout=15) as response:
-                body = response.read().decode("utf-8")
-                if not body:
-                    return {}
-                return json.loads(body)
-        except urllib.error.HTTPError as err:
-            body = err.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"UniFi API {method} {url} failed: HTTP {err.code}: {body}") from err
-        except urllib.error.URLError as err:
-            raise RuntimeError(f"UniFi API {method} {url} failed: {err}") from err
+            connection.connect()
+            if self.config.unifi_certificate_sha256:
+                certificate = connection.sock.getpeercert(binary_form=True) if connection.sock else b""
+                actual = hashlib.sha256(certificate).hexdigest()
+                if not hmac.compare_digest(actual, self.config.unifi_certificate_sha256):
+                    raise RuntimeError(
+                        "Secure UniFi TLS refused: certificate SHA-256 fingerprint mismatch "
+                        f"(expected {self.config.unifi_certificate_sha256.upper()}, got {actual.upper()})"
+                    )
+            target = urllib.parse.urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+            connection.request(method, target, body=data, headers=headers)
+            response = connection.getresponse()
+            body = response.read().decode("utf-8", errors="replace")
+            if response.status >= 400:
+                safe_body = sanitize_unifi_error(body, self.config.unifi_api_key)
+                raise RuntimeError(f"UniFi API {method} {url} failed: HTTP {response.status}: {safe_body}")
+            return json.loads(body) if body else {}
+        except ssl.SSLCertVerificationError as err:
+            raise RuntimeError(
+                "Secure UniFi TLS refused: the controller certificate is not trusted; "
+                "configure its SHA-256 fingerprint or install a trusted certificate"
+            ) from err
+        except (OSError, http.client.HTTPException) as err:
+            safe_error = sanitize_unifi_error(str(err), self.config.unifi_api_key)
+            raise RuntimeError(f"UniFi API {method} {url} failed: {safe_error}") from err
+        finally:
+            connection.close()
 
     def list_sites(self) -> list[dict[str, Any]]:
         response = self.request("GET", self.config.integration_url("/sites?limit=200"))
@@ -492,6 +538,8 @@ class UniFiClient:
 
 def ensure_webhook_secrets(config: Config) -> tuple[str, str]:
     state = load_state()
+    if os.path.exists(STATE_PATH):
+        os.chmod(STATE_PATH, stat.S_IRUSR | stat.S_IWUSR)
     path_token = str(state.get("webhook_token") or "").strip()
     auth_token = str(state.get("webhook_auth_token") or "").strip()
     changed = False
@@ -506,7 +554,7 @@ def ensure_webhook_secrets(config: Config) -> tuple[str, str]:
         changed = True
         LOGGER.info("Generated a persistent webhook Bearer token")
     if changed:
-        save_json_file(STATE_PATH, state)
+        save_private_json_file(STATE_PATH, state)
     config.webhook_token = path_token
     config.webhook_auth_token = auth_token
     return path_token, auth_token
@@ -754,7 +802,7 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
                 backup_traffic_list(traffic_list)
                 client.update_traffic_list(payload)
                 record_expired_history(expired)
-            save_json_file(STATE_PATH, state)
+            save_private_json_file(STATE_PATH, state)
             append_history("already_present", source_ip, details)
             LOGGER.info(
                 "IP %s is already present in UniFi blocklist; IDS/IPS destination was %s:%s",
@@ -790,7 +838,7 @@ def process_event(event: dict[str, Any], config: Config, client: UniFiClient) ->
             "hit_count": 1,
             "last_details": details,
         }
-        save_json_file(STATE_PATH, state)
+        save_private_json_file(STATE_PATH, state)
         append_history("blocked", source_ip, details)
 
     LOGGER.info(
@@ -918,6 +966,10 @@ def main() -> None:
     LOGGER.info("UniFi base URL: %s", config.unifi_base_url)
     LOGGER.info("Traffic matching list name: %s", config.traffic_matching_list_name or "<auto-detect>")
     LOGGER.info("UniFi API key: %s", redact(config.unifi_api_key))
+    if config.verify_ssl:
+        LOGGER.info("UniFi TLS authentication: system certificate validation enabled")
+    else:
+        LOGGER.info("UniFi TLS authentication: pinned SHA-256 certificate fingerprint enabled")
     LOGGER.info("Dry run: %s", config.dry_run)
     ensure_webhook_secrets(config)
     LOGGER.info("============================================================")
