@@ -37,9 +37,9 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
     acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "1.1.5"', "stage: stable", "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    for text in ('slug: "agent_execution_plane"', 'version: "1.1.6"', "stage: stable", "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "1.1.5"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "1.1.6"' not in package: raise RuntimeError("Version sources differ")
     if "arch:\n  - amd64\nstartup:" not in config or "aarch64" in config: raise RuntimeError("Agent Execution Plane must support amd64 only")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 3: raise RuntimeError("Unprivileged listener variants missing")
