@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.3
+
+- Support both legacy and current `cryptography` certificate-validity APIs so
+  TLS validation is identical in GitHub CI and the HAOS image.
+
 ## 1.1.2
 
 - Report a degraded service when an invalid HTTPS certificate prevents a

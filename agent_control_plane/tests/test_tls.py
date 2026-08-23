@@ -5,6 +5,7 @@ import asyncio
 import ssl
 import tempfile
 import unittest
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -13,12 +14,20 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
-from agent_control_plane.tls import external_paths, generate_certificate, inspect_certificate
+from agent_control_plane.tls import certificate_validity, external_paths, generate_certificate, inspect_certificate
 from agent_control_plane.pinned_http import PinnedAsyncHTTPTransport, normalize_certificate_sha256
 import httpx
 
 
 class ServerCertificateTests(unittest.TestCase):
+    def test_legacy_cryptography_validity_is_normalized_to_utc(self) -> None:
+        before = datetime(2026, 1, 1)
+        after = datetime(2027, 1, 1)
+        self.assertEqual(
+            certificate_validity(SimpleNamespace(not_valid_before=before, not_valid_after=after)),
+            (before.replace(tzinfo=timezone.utc), after.replace(tzinfo=timezone.utc)),
+        )
+
     def test_generated_identity_is_persistent_and_private(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

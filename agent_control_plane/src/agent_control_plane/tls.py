@@ -76,6 +76,17 @@ def external_paths(ssl_dir: Path, cert_name: str, key_name: str) -> tuple[Path, 
     return paths[0], paths[1]
 
 
+def certificate_validity(certificate: x509.Certificate) -> tuple[datetime, datetime]:
+    """Return UTC-aware validity bounds across cryptography API generations."""
+    try:
+        return certificate.not_valid_before_utc, certificate.not_valid_after_utc
+    except AttributeError:
+        return (
+            certificate.not_valid_before.replace(tzinfo=timezone.utc),
+            certificate.not_valid_after.replace(tzinfo=timezone.utc),
+        )
+
+
 def inspect_certificate(source: str, certfile: Path, keyfile: Path) -> CertificateInfo:
     certificate = x509.load_pem_x509_certificate(certfile.read_bytes())
     private_key = serialization.load_pem_private_key(keyfile.read_bytes(), password=None)
@@ -83,7 +94,7 @@ def inspect_certificate(source: str, certfile: Path, keyfile: Path) -> Certifica
     if certificate.public_key().public_bytes(serialization.Encoding.DER, public_format) != private_key.public_key().public_bytes(serialization.Encoding.DER, public_format):
         raise ValueError("certificate_private_key_mismatch")
     now = datetime.now(timezone.utc)
-    not_before, not_after = certificate.not_valid_before_utc, certificate.not_valid_after_utc
+    not_before, not_after = certificate_validity(certificate)
     if now < not_before:
         raise ValueError("certificate_not_yet_valid")
     if now > not_after:
