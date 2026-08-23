@@ -26,6 +26,7 @@ from agent_execution_plane.admin_ui import ADMIN_CSS, ADMIN_JS
 from agent_execution_plane.codex_runtime import CodexRuntime, CodexRuntimeError
 from agent_execution_plane.database import database_ready, list_activity, record_activity
 from agent_execution_plane.execution import ExecutionEngine
+from agent_execution_plane.ingress import cookie_secure
 from agent_execution_plane.lifecycle import LifecycleStore
 from agent_execution_plane.mcp_client import session_factory
 from agent_execution_plane.models import Candidate, ModelStore
@@ -42,6 +43,8 @@ if os.geteuid() != 1000:
 settings = load_settings()
 icon_path = Path(os.environ.get("AGENT_EXECUTION_PLANE_ICON_PATH", "/app/icon.png"))
 csrf_token = secrets.token_urlsafe(32)
+
+
 codex_runtime = CodexRuntime(settings.data_dir / "private" / "codex-home")
 model_store = ModelStore(settings.database_path, settings.data_dir / "private", codex_runtime)
 lifecycle_store = LifecycleStore(settings.database_path)
@@ -65,7 +68,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if settings.surface == "admin":
             response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'self'"
             if request.method == "GET" and request.url.path == "/":
-                response.set_cookie("aep_csrf", csrf_token, httponly=False, secure=True, samesite="strict", path=request.headers.get("x-ingress-path", "/"))
+                response.set_cookie("aep_csrf", csrf_token, httponly=False, secure=cookie_secure(request), samesite="strict", path=request.headers.get("x-ingress-path", "/"))
         return response
 
 

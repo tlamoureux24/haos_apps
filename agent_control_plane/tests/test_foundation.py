@@ -30,6 +30,7 @@ from agent_control_plane.http_api import (
     admin_set_connector_enabled,
     admin_update_connector,
 )
+from agent_control_plane.ingress import cookie_secure
 from agent_control_plane.json_contracts import validate_json_schema
 from agent_control_plane.mcp_api import capability_result_content
 from agent_control_plane.policy import decide, validate_actions
@@ -66,6 +67,12 @@ class InternationalizationTests(unittest.TestCase):
 
 
 class AdministrationInterfaceTests(unittest.TestCase):
+    def test_csrf_cookie_matches_browser_facing_ingress_scheme(self) -> None:
+        http = SimpleNamespace(headers={}, url=SimpleNamespace(scheme="http"))
+        forwarded_https = SimpleNamespace(headers={"x-forwarded-proto": "https, http"}, url=SimpleNamespace(scheme="http"))
+        self.assertFalse(cookie_secure(http))
+        self.assertTrue(cookie_secure(forwarded_https))
+
     def test_root_reserves_a_stable_scrollbar_gutter(self) -> None:
         self.assertIn("html{scrollbar-gutter:stable}", ADMIN_CSS)
 

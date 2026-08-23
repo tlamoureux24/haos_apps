@@ -19,6 +19,7 @@ from starlette.routing import Mount, Route
 from agent_control_plane import __version__
 from agent_control_plane.admin_ui import ADMIN_CSS, ADMIN_JS
 from agent_control_plane.database import database_ready
+from agent_control_plane.ingress import cookie_secure
 from agent_control_plane.control_plane import ControlPlane
 from agent_control_plane.http_api import (
     admin_create_identity,
@@ -108,7 +109,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                     "acp_csrf",
                     csrf_token,
                     httponly=False,
-                    secure=True,
+                    secure=cookie_secure(request),
                     samesite="strict",
                     path=request.headers.get("x-ingress-path", "/"),
                 )

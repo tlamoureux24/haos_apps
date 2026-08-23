@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -15,12 +16,19 @@ from mcp_capability_bridge import __version__
 from mcp_capability_bridge.activity import ActivityJournal
 from mcp_capability_bridge.admin_ui import ADMIN_CSS, ADMIN_JS
 from mcp_capability_bridge.database import database_ready, initialize
+from mcp_capability_bridge.ingress import cookie_secure
 from mcp_capability_bridge.main import admin_page, build_runtime_state, create_apps
 from mcp_capability_bridge.runtime import load_log_configuration
 from mcp_capability_bridge.settings import Settings, load_settings
 
 
 class SettingsTests(unittest.TestCase):
+    def test_csrf_cookie_matches_browser_facing_ingress_scheme(self) -> None:
+        http = SimpleNamespace(headers={}, url=SimpleNamespace(scheme="http"))
+        forwarded_https = SimpleNamespace(headers={"x-forwarded-proto": "https, http"}, url=SimpleNamespace(scheme="http"))
+        self.assertFalse(cookie_secure(http))
+        self.assertTrue(cookie_secure(forwarded_https))
+
     def test_defaults_are_two_fixed_internal_listeners(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             settings = load_settings()
@@ -200,7 +208,12 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v1.1.5</b>", page.text)
+            self.assertNotIn("; Secure", page.headers["set-cookie"])
+            secure_page = await self.request(
+                self.admin, "GET", "/", headers={**headers, "X-Forwarded-Proto": "https"},
+            )
+            self.assertIn("; Secure", secure_page.headers["set-cookie"])
+            self.assertIn("MCP Capability Bridge <b>v1.1.6</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
