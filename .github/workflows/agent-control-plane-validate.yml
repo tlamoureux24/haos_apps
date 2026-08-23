@@ -426,9 +426,11 @@ jobs:
             --header "X-Ingress-Path: ${ingress_path}" \
             http://127.0.0.1:18099/admin/api/v1/reports | \
             jq -e '.reports | length == 1'
+          echo "SMOKE_STAGE=event-api-ready"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --header "Authorization: Bearer ${credential}" \
             http://127.0.0.1:18098/api/v1/events)" = "403"
+          echo "SMOKE_STAGE=event-api-method-isolation-ready"
           observer_response="$(curl --fail --silent \
             --request POST \
             --header "X-Ingress-Path: ${ingress_path}" \
@@ -438,7 +440,8 @@ jobs:
             --data '{"display_name":"CI observer","identity_type":"client","actions":["control_plane.status.read","permissions.effective.read","events.read","jobs.read","reports.read"]}' \
             http://127.0.0.1:18099/admin/api/v1/identities)"
           observer_credential="$(printf '%s' "${observer_response}" | jq -er '.credential')"
-          connector_response="$(curl --fail --silent \
+          echo "SMOKE_STAGE=mcp-observer-ready"
+          connector_status="$(curl --silent --output /tmp/connector-response.json --write-out '%{http_code}' \
             --request POST \
             --header "X-Ingress-Path: ${ingress_path}" \
             --header "X-CSRF-Token: ${csrf_token}" \
@@ -446,6 +449,11 @@ jobs:
             --header "Content-Type: application/json" \
             --data "$(jq --null-input --compact-output --arg token "${observer_credential}" '{display_name:"CI generic MCP",url:"http://127.0.0.1:8098/mcp",bearer_token:$token}')" \
             http://127.0.0.1:18099/admin/api/v1/connectors)"
+          if [[ "${connector_status}" != "201" ]]; then
+            jq -c '{error: .error.code}' /tmp/connector-response.json >&2
+            exit 1
+          fi
+          connector_response="$(cat /tmp/connector-response.json)"
           connector_id="$(printf '%s' "${connector_response}" | jq -er '.connector_id')"
           printf '%s' "${connector_response}" | jq -e '.status == "ready" and .tool_count == 8'
           curl --fail --silent \
