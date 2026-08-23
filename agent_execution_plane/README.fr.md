@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane `1.0.1` est un moteur de raisonnement et d’exécution utilisable en mode autonome. Il applique la priorité administrateur des modèles et les règles communes de fallback/non-replay à l’enveloppe exacte des capacités opérationnelles MCP fournie par la source courante.
+Agent Execution Plane `1.0.2` est un moteur de raisonnement et d’exécution utilisable en mode autonome. Il applique la priorité administrateur des modèles et les règles communes de fallback/non-replay à l’enveloppe exacte des capacités opérationnelles MCP fournie par la source courante.
 
 ## Frontière de responsabilité
 
@@ -89,8 +89,8 @@ La priorité `1` est essayée en premier. L’appelant ne choisit jamais le mod�
 
 ### Configurer le worker ACP
 
-1. Créez une identité ACP de type **Worker**.
-2. Accordez uniquement `jobs.claim`, `jobs.heartbeat`, `jobs.complete` et `jobs.fail`.
+1. Créez une identité ACP de type **Client MCP** dédiée au rôle de worker.
+2. Accordez-lui uniquement `jobs.claim`, `jobs.heartbeat`, `jobs.complete` et `jobs.fail` ; ce sont ces permissions qui définissent le rôle de worker.
 3. Copiez son credential Bearer affiché une seule fois.
 4. Dans **Control Plane** d’AEP, saisissez l’endpoint complet, par exemple `http://IP_HOME_ASSISTANT:8098/mcp`.
 5. Collez le credential worker et enregistrez.

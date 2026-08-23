@@ -1462,7 +1462,7 @@ ACP removes fixed properties from the model-visible schema, injects them server-
 
 ### Connect an AEP worker
 
-1. Create a **Worker** identity with only `jobs.claim`, `jobs.heartbeat`, `jobs.complete`, and `jobs.fail`.
+1. Create an **MCP client** identity dedicated to the worker role, with only `jobs.claim`, `jobs.heartbeat`, `jobs.complete`, and `jobs.fail`; these permissions define that role.
 2. Copy its one-time credential.
 3. In AEP **Control Plane**, configure `http://HOME_ASSISTANT_IP:ACP_PORT/mcp` and paste that credential.
 4. Confirm AEP reports a validated connection and successful claim polling.

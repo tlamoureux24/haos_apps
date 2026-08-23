@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane `1.0.1` is a standalone-capable model reasoning and execution engine. It applies administrator model priority and the common fallback/no-replay rules to exactly the MCP operational capability envelope supplied by the current source.
+Agent Execution Plane `1.0.2` is a standalone-capable model reasoning and execution engine. It applies administrator model priority and the common fallback/no-replay rules to exactly the MCP operational capability envelope supplied by the current source.
 
 ## Responsibility boundary
 
@@ -89,8 +89,8 @@ Priority `1` is tried first. The caller never selects a model. A model in use is
 
 ### ACP worker setup
 
-1. Create an ACP identity of type **Worker**.
-2. Grant only `jobs.claim`, `jobs.heartbeat`, `jobs.complete`, and `jobs.fail`.
+1. Create an ACP identity of type **MCP client** dedicated to the worker role.
+2. Grant it only `jobs.claim`, `jobs.heartbeat`, `jobs.complete`, and `jobs.fail`; these permissions define the worker role.
 3. Copy its one-time Bearer credential.
 4. In AEP **Control Plane**, enter ACP's full endpoint, for example `http://HOME_ASSISTANT_IP:8098/mcp`.
 5. Paste the worker credential and save.

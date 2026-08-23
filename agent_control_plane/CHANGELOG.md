@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2
+
+- Correct the worker setup guide: ACP workers use an identity of type MCP
+  client; the four job lifecycle permissions define its worker role.
+
 ## 1.0.1
 
 - Expand the French and English operator guides with current Activity,

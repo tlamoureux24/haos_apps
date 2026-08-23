@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2
+
+- Correct the ACP worker setup guide: create an MCP client identity and grant
+  only the four job lifecycle permissions that define the worker role.
+
 ## 1.0.1
 
 - Expand the French and English guides with detailed model-family setup, ACP

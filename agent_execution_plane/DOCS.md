@@ -1,4 +1,4 @@
-# Agent Execution Plane 1.0.1
+# Agent Execution Plane 1.0.2
 
 Guide détaillé des modèles, de ChatGPT OAuth, du worker ACP et des requêtes JSON autonomes : [français](README.fr.md) | [English](README.md).
 
@@ -6,7 +6,7 @@ Guide détaillé des modèles, de ChatGPT OAuth, du worker ACP et des requêtes 
 
 ### Intégration Agent Control Plane
 
-Dans **Control Plane**, configurez l’URL du serveur MCP public ACP et le Bearer d’une identité worker limitée à `jobs.claim`, `jobs.heartbeat`, `jobs.complete` et `jobs.fail`. La modification est validée avant enregistrement et le secret est chiffré au repos. Cette configuration reste facultative : le listener standalone et sa readiness ne dépendent jamais d’ACP.
+Dans **Control Plane**, configurez l’URL du serveur MCP public ACP et le Bearer d’une identité de type **Client MCP** dédiée au rôle de worker, limitée à `jobs.claim`, `jobs.heartbeat`, `jobs.complete` et `jobs.fail`. La modification est validée avant enregistrement et le secret est chiffré au repos. Cette configuration reste facultative : le listener standalone et sa readiness ne dépendent jamais d’ACP.
 
 AEP poll toutes les secondes quand le slot est libre et qu’un modèle compatible existe. Le claim ACP fournit l’enveloppe opérationnelle normative : seuls les noms et schémas effectifs de `allowed_capabilities` deviennent des outils modèle. Les outils lifecycle ne le deviennent jamais. Le résultat est persisté avant livraison ; une panne de livraison entraîne un retry identique sans nouvelle inférence. Un restart ne rejoue pas l’exécution.
 
@@ -55,7 +55,7 @@ Après restart, un pending est conservé exactement. Une active standalone devie
 
 ### Agent Control Plane integration
 
-In **Control Plane**, configure ACP's public MCP server URL and the Bearer for a worker identity limited to `jobs.claim`, `jobs.heartbeat`, `jobs.complete`, and `jobs.fail`. Changes are validated before storage and the credential is encrypted at rest. Configuration is optional: standalone operation and App readiness never depend on ACP.
+In **Control Plane**, configure ACP's public MCP server URL and the Bearer for an **MCP client** identity dedicated to the worker role, limited to `jobs.claim`, `jobs.heartbeat`, `jobs.complete`, and `jobs.fail`. Changes are validated before storage and the credential is encrypted at rest. Configuration is optional: standalone operation and App readiness never depend on ACP.
 
 AEP polls every second while the slot is free and a compatible model exists. The ACP claim supplies the normative operational envelope: only effective names and schemas in `allowed_capabilities` become model tools; lifecycle tools never do. The outcome is persisted before delivery, delivery failures retry the identical outcome without another inference, and restart never replays execution.
 

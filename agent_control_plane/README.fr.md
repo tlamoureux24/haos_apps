@@ -1507,7 +1507,7 @@ ACP retire les propriétés fixes du schéma visible par le modèle, les injecte
 
 ### Connecter un worker AEP
 
-1. Créez une identité **Worker** avec uniquement `jobs.claim`, `jobs.heartbeat`, `jobs.complete` et `jobs.fail`.
+1. Créez une identité **Client MCP** dédiée au rôle de worker, avec uniquement `jobs.claim`, `jobs.heartbeat`, `jobs.complete` et `jobs.fail` ; ce sont ces permissions qui définissent ce rôle.
 2. Copiez son credential affiché une seule fois.
 3. Dans **Control Plane** d’AEP, configurez `http://IP_HOME_ASSISTANT:PORT_ACP/mcp` et collez ce credential.
 4. Vérifiez qu’AEP annonce une connexion validée et des polls réussis.
