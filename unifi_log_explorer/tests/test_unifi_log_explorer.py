@@ -71,7 +71,7 @@ class ParserTests(unittest.TestCase):
                    "unifi_api_key": "secret-test-key", "verify_ssl": False,
                    "unifi_certificate_sha256": ""}
         with mock.patch.object(ule.http.client, "HTTPSConnection") as connection:
-            with self.assertRaisesRegex(RuntimeError, "empreinte|unifi_certificate_sha256"):
+            with self.assertRaisesRegex(RuntimeError, "fingerprint|unifi_certificate_sha256"):
                 ule.flow_probe(options)
         connection.assert_not_called()
 

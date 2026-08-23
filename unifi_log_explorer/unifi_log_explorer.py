@@ -82,8 +82,8 @@ def load_options():
     )
     if defaults["unifi_api_key"] and not defaults.get("verify_ssl") and not defaults["unifi_certificate_sha256"]:
         raise RuntimeError(
-            "Connexion TLS UniFi sécurisée refusée : activez verify_ssl ou configurez "
-            "unifi_certificate_sha256 avant l'envoi de la clé API"
+            "Secure UniFi TLS connection refused: enable verify_ssl or configure "
+            "unifi_certificate_sha256 before the API key is sent"
         )
     return defaults
 
@@ -93,7 +93,7 @@ def normalize_certificate_sha256(value):
     fingerprint = re.sub(r"^sha256\s+fingerprint\s*=\s*", "", fingerprint, flags=re.I)
     fingerprint = fingerprint.replace(":", "").replace(" ", "").lower()
     if fingerprint and not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
-        raise RuntimeError("unifi_certificate_sha256 doit contenir exactement 64 caractères hexadécimaux")
+        raise RuntimeError("unifi_certificate_sha256 must contain exactly 64 hexadecimal characters")
     return fingerprint
 
 
@@ -188,8 +188,8 @@ def traffic_flow_page(options, timestamp_from, timestamp_to, page_number=1, page
     verify_ssl = bool(options.get("verify_ssl"))
     if not verify_ssl and not fingerprint:
         raise RuntimeError(
-            "Connexion TLS UniFi sécurisée refusée : activez verify_ssl ou configurez "
-            "unifi_certificate_sha256 avant l'envoi de la clé API"
+            "Secure UniFi TLS connection refused: enable verify_ssl or configure "
+            "unifi_certificate_sha256 before the API key is sent"
         )
     context = ssl.create_default_context() if verify_ssl else ssl._create_unverified_context()
     connection = http.client.HTTPSConnection(
@@ -202,8 +202,8 @@ def traffic_flow_page(options, timestamp_from, timestamp_to, page_number=1, page
             actual = hashlib.sha256(certificate).hexdigest()
             if not hmac.compare_digest(actual, fingerprint):
                 raise RuntimeError(
-                    "Connexion TLS UniFi refusée : empreinte SHA-256 du certificat différente "
-                    f"(attendue {fingerprint.upper()}, reçue {actual.upper()})"
+                    "UniFi TLS connection refused: certificate SHA-256 fingerprint mismatch "
+                    f"(expected {fingerprint.upper()}, received {actual.upper()})"
                 )
         target = urllib.parse.urlunsplit(("", "", request_url.path or "/", request_url.query, ""))
         connection.request("POST", target, body=json.dumps(payload).encode(), headers={
@@ -216,8 +216,8 @@ def traffic_flow_page(options, timestamp_from, timestamp_to, page_number=1, page
         result = json.loads(body)
     except ssl.SSLCertVerificationError as exc:
         raise RuntimeError(
-            "Connexion TLS UniFi refusée : le certificat n'est pas reconnu ; configurez son "
-            "empreinte SHA-256 ou installez un certificat de confiance"
+            "UniFi TLS connection refused: the certificate is not trusted; configure its "
+            "SHA-256 fingerprint or install a trusted certificate"
         ) from exc
     except (OSError, http.client.HTTPException) as exc:
         raise RuntimeError(sanitize_unifi_error(str(exc), api_key)) from exc
@@ -1132,9 +1132,9 @@ def main():
     logging.basicConfig(level=getattr(logging, str(options["log_level"]).upper()), format="%(asctime)s %(levelname)s %(message)s")
     if options.get("unifi_api_key"):
         if options.get("verify_ssl"):
-            logging.info("Authentification TLS UniFi : validation du certificat système activée")
+            logging.info("UniFi TLS authentication: system certificate validation enabled")
         else:
-            logging.info("Authentification TLS UniFi : empreinte SHA-256 épinglée activée")
+            logging.info("UniFi TLS authentication: pinned SHA-256 certificate fingerprint enabled")
     store = Store(options)
     Collector("cef", CEF_PORT, store, parse_syslog_or_cef).start()
     threading.Thread(target=maintenance, args=(store,), daemon=True).start()

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.8
+
+- Standardize UniFi TLS runtime and startup log messages in English.
+
 ## 1.1.7
 
 - Require either system certificate validation or a configured SHA-256 certificate fingerprint before sending the UniFi API key.
