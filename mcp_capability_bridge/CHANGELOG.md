@@ -1,18 +1,24 @@
 # Changelog
 
-## 1.1.1 — 2026-08-23
+## 1.1.2
+
+- Enrich the Overview with live configuration and runtime metrics.
+- Normalize version headings so Home Assistant can isolate the current release
+  notes instead of displaying the complete changelog.
+
+## 1.1.1
 
 - Move MCP server-certificate controls to a dedicated Transport & TLS page.
 - Correct translated Home Assistant network descriptions.
 
-## 1.1.0 — 2026-08-23
+## 1.1.0
 
 - Default the MCP listener to HTTPS with persistent self-generated or external
   certificates, fingerprint visibility and explicit regeneration.
 - Preserve optional HTTP interoperability with an unencrypted-transport warning
   while keeping Ingress administration independent of public TLS validity.
 
-## 1.0.1 — 2026-08-23
+## 1.0.1
 
 - Expand the French and English guides with detailed namespace, SSH target,
   JSON token-template/schema, Web-session, ACP/AEP integration, security, and
@@ -20,7 +26,7 @@
 - Refresh the exact matching Alpine Chromium and ChromeDriver package revision
   required by the current HAOS base repository.
 
-## 1.0.0 — 2026-08-22
+## 1.0.0
 
 - Promote the Home Assistant App metadata to stable after complete real-HAOS
   Lot 4 acceptance of startup, UI, persistence, repeated MCP calls, Web-session
@@ -28,7 +34,7 @@
 - Declare SQLite generation 1 as the production-data compatibility cutoff.
 - Preserve the complete 0.7.0 runtime and protocol behavior unchanged.
 
-## 0.7.0 — 2026-08-22
+## 0.7.0
 
 - Prepare the Lot 4 production candidate with fail-fast global, namespace,
   adapter and target capacity limits; the Bridge never builds an implicit
@@ -45,7 +51,7 @@
   HAOS acceptance guidance. Version 0.7.0 remains a candidate until that
   acceptance permits the 1.0.0 production-data cutoff.
 
-## 0.6.2 — 2026-08-22
+## 0.6.2
 
 - Persist the Activity journal in SQLite so operational events survive an App
   restart.
@@ -53,7 +59,7 @@
 - Add the table directly to the disposable generation-one development schema,
   without a migration or generation change.
 
-## 0.6.1 — 2026-08-22
+## 0.6.1
 
 - Prevent password, hidden, file-upload and download elements from receiving
   opaque actionable references in accessibility snapshots.
@@ -64,7 +70,7 @@
   interactive actions, stale/concurrent calls, browser confinement and the
   complete ACP/AEP execution path with clean session shutdown.
 
-## 0.6.0 — 2026-08-22
+## 0.6.0
 
 - Implement Lot 3C with target-scoped relative navigation and opaque-reference
   click, fill, select and bounded key actions.
@@ -81,21 +87,21 @@
 - Add a disposable external Docker acceptance bench for real HAOS Lot 3C
   testing without involving or polluting ACP/AEP.
 
-## 0.5.4 — 2026-08-22
+## 0.5.4
 
 - Align the Activity journal with the shared ACP/AEP five-column presentation:
   Date, Event, Category, Status and Source.
 - Render the event code and safe MCP client/tool context as secondary technical
   metadata, and use the suite's common translated status badges.
 
-## 0.5.3 — 2026-08-22
+## 0.5.3
 
 - Add bilingual `app_started`, `app_ready` and `app_stopped` markers to the
   bounded, payload-free Activity journal.
 - Keep the existing runtime journal, polling behavior and MCP boundaries
   unchanged while aligning lifecycle visibility with ACP and AEP.
 
-## 0.5.2 — 2026-08-22
+## 0.5.2
 
 - Adds a Dockerized black-box Lot 3B acceptance runner outside the add-on image, avoiding ACP tasks, reports and audit pollution while testing live HAOS session isolation, rotation, revocation, expiry and fresh browser profiles.
 - Keeps control sessions alive during human rotation/revocation pauses so the 30-second inactivity test limit cannot create a false isolation failure.
@@ -105,12 +111,12 @@
 - Replaces the decorative status drawer and duplicate application tile with a live service-status badge backed by the administration status endpoint.
 - Adds a bilingual, polling Activity view containing only bounded runtime metadata: source address, client key, tool name, adapter, outcome and duration. Payloads, results and credentials are never retained or displayed.
 
-## 0.5.1 — 2026-08-22
+## 0.5.1
 
 - Keeps generated Web tools available for explicit MCP publication while excluding them from the SSH capability administration view.
 - Removes the inapplicable SSH edit/delete controls and undefined SSH metadata previously rendered for Web tools.
 
-## 0.5.0 — 2026-08-22
+## 0.5.0
 
 - Implements Lot 3B with target-scoped `web_<target>_open`, `web_<target>_snapshot`, `web_<target>_wait` and `web_<target>_close` read-only MCP capabilities.
 - Adds process-memory Chromium sessions bound to namespace, credential generation and target, with random opaque handles, per-session locking, bounded accessibility snapshots and known-secret redaction.
@@ -121,7 +127,7 @@
 
 All notable changes to MCP Capability Bridge will be documented in this file.
 
-## 0.4.6 — 2026-08-21
+## 0.4.6
 
 ### Fixed
 
@@ -131,7 +137,7 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 
 - The generated technical-key UX micro-lot from 0.4.5 was accepted on real HAOS: hidden fields, collision handling and rename stability all passed.
 
-## 0.4.5 — 2026-08-21
+## 0.4.5
 
 ### Changed
 
@@ -143,7 +149,7 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 
 - Cover accent and punctuation normalization, fallback and length bounds, namespace/target collisions, target rename stability, generated SSH tool names and capability rename stability.
 
-## 0.4.4 — 2026-08-21
+## 0.4.4
 
 ### Fixed
 
@@ -155,7 +161,7 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 - Lot 3A was accepted on real HAOS: Web target persistence, repeated browser connectivity, network and redirect confinement, absence of Web MCP tools, SSH non-regression, failure recovery and clean AppArmor operation all passed.
 - Added a separately bounded planned UX micro-lot for backend-generated, stable technical keys; no key behavior changes in 0.4.4.
 
-## 0.4.3 — 2026-08-21
+## 0.4.3
 
 ### Fixed
 
@@ -163,14 +169,14 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 - Allow targeted read access to the installed Fontconfig configuration and cache roots used by headless Chromium.
 - Keep Chromium arguments, network policy, MCP behavior, and all other AppArmor permissions unchanged.
 
-## 0.4.2 — 2026-08-21
+## 0.4.2
 
 ### Fixed
 
 - Apply the configured App log level to the `mcp_capability_bridge` logger so `MCB_BROWSER_DIAG` details are actually emitted in DEBUG and suppressed at INFO.
 - Keep Selenium and urllib3 at WARNING independently of the App level to prevent their unsanitized request payloads from reaching DEBUG logs.
 
-## 0.4.1 — 2026-08-21
+## 0.4.1
 
 ### Fixed
 
@@ -178,7 +184,7 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 - Convert Selenium session termination into the stable `browser_session_failed` API/UI error instead of an unhandled ASGI traceback.
 - Preserve deterministic driver, process, diagnostic-file and disposable-profile cleanup on browser startup or navigation failure.
 
-## 0.4.0 — 2026-08-21
+## 0.4.0
 
 ### Added
 
@@ -192,7 +198,7 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 - Chromium uses the HAOS container/AppArmor boundary with no Linux capabilities and `no-new-privileges`; its unavailable container-internal sandbox is explicitly disabled rather than silently assumed.
 - Browser resolution is pinned to confirmed addresses and all unlisted hostnames resolve to `~NOTFOUND`; unsupported schemes and origin-category escalation fail closed.
 
-## 0.3.0 — 2026-08-21
+## 0.3.0
 
 ### Added
 
@@ -213,7 +219,7 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 
 - Lot 2 was accepted on real HAOS: restricted SSH target/capability creation, direct and ACP/AEP invocation, fresh repeated connections, two-client namespace isolation, disable/re-enable, `In use` protection and restart persistence all passed without application error, credential disclosure or AppArmor denial.
 
-## 0.2.0 — 2026-08-21
+## 0.2.0
 
 - Validate private-key Unix modes under the unprivileged service identity so the container smoke test preserves its deliberate `DAC_OVERRIDE` removal.
 - Keep credential-persistence and ACP rotation contract tests deterministic for URL-safe secrets and rejected sessions.
@@ -237,7 +243,7 @@ All notable changes to MCP Capability Bridge will be documented in this file.
 
 - Lot 1 was accepted on real HAOS: two isolated MCP clients and ACP connected successfully, empty inventories remained isolated, credential rotation/revocation/archive behavior was immediate, configuration survived restart, and logs contained no secret, application error or AppArmor denial.
 
-## 0.1.0 — 2026-08-21
+## 0.1.0
 
 ### Added
 

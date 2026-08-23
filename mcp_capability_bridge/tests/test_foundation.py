@@ -200,12 +200,16 @@ class SurfaceTests(unittest.TestCase):
             headers = {"X-Ingress-Path": "/api/hassio_ingress/test"}
             page = await self.request(self.admin, "GET", "/", headers=headers)
             self.assertEqual(page.status_code, 200)
-            self.assertIn("MCP Capability Bridge <b>v1.1.1</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v1.1.2</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
             self.assertEqual(status["public_surface"], "authenticated_mcp")
             self.assertEqual(status["adapters"], [{"type_key": "ssh", "display_name": "SSH"}, {"type_key": "web", "display_name": "Web"}])
+            self.assertEqual(status["target_summary"], {"enabled": 0, "disabled": 0})
+            self.assertEqual(status["runtime"], {"active_operations": 0, "active_namespaces": 0, "active_targets": 0, "active_sessions": 0})
+            for element_id in ("namespace-count", "target-count", "publication-count", "adapter-count", "operation-count", "busy-client-count", "busy-target-count", "session-count"):
+                self.assertIn(f'id="{element_id}"', page.text)
             self.assertEqual((await self.request(self.admin, "GET", "/mcp", headers=headers)).status_code, 404)
         asyncio.run(scenario())
 

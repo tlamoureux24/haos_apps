@@ -26,6 +26,14 @@ class FoundationTests(unittest.TestCase):
         self.assertIn("`${tr('lifecycleState')}: ${tr(lifecycle)}`", ADMIN_JS)
         self.assertNotIn("`${tr('standaloneState')}: ${tr(configured?'configured':'notConfigured')}`", ADMIN_JS)
 
+    def test_overview_exposes_real_model_resource_metrics(self):
+        main_source = Path(__file__).parents[1].joinpath("src/agent_execution_plane/main.py").read_text(encoding="utf-8")
+        for element_id in ("available-model-count", "enabled-model-count", "used-model-count", "provider-family-count"):
+            self.assertIn(f'id="{element_id}"', main_source)
+        for expression in ("m.provider_state==='available'", "m=>m.enabled", "m=>m.in_use", "new Set(models.map(m=>m.provider_family)).size"):
+            self.assertIn(expression, ADMIN_JS)
+        self.assertIn("loadAcp(),loadModels()", ADMIN_JS)
+
     def test_service_badge_uses_real_admin_status_and_has_failure_state(self):
         main_source = Path(__file__).parents[1].joinpath("src/agent_execution_plane/main.py").read_text(encoding="utf-8")
         self.assertIn('Route("/admin/api/v1/status", admin_status)', main_source)

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2
+
+- Enrich the Overview with real model availability, enablement, provider and
+  in-use metrics.
+
 ## 1.1.1
 
 - Move standalone server-certificate controls to a dedicated Transport & TLS
