@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.7
+
+- Add optional SHA-256 certificate pinning for outbound HTTPS Web targets.
+- Verify the certificate used by Chromium before installing Basic credentials
+  or filling form credentials, with precise bilingual errors and safe logs.
+
 ## 1.1.6
 
 - Keep CSRF protection functional when Home Assistant Ingress is opened over

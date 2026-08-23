@@ -129,7 +129,7 @@ Web automation runs in a fresh disposable Chromium profile. Its actual authority
 
 1. Enter the exact base origin, such as `https://router.example.local`—not an arbitrary navigation URL.
 2. Resolve it in the UI and confirm the expected addresses. Address changes fail closed as possible DNS rebinding.
-3. Keep TLS verification enabled unless a narrowly understood local exception is unavoidable.
+3. Keep TLS verification enabled. For a self-generated HTTPS certificate, enter its independently verified SHA-256 fingerprint; leave the fingerprint empty for normal CA validation. Disabling TLS verification remains an explicit insecure fallback.
 4. Choose no authentication, HTTP Basic, or a bounded configured login form.
 5. Set inactivity and absolute session lifetimes, then run **Test browser**.
 6. Publish only the required generated Web tools.
@@ -160,6 +160,8 @@ The nine bounded tools are `open`, `snapshot`, `wait`, `navigate`, `click`, `fil
 References come only from the latest accessibility snapshot. Every attempted action invalidates that reference generation; take another snapshot before the next action. Handles and references are scoped to the client, credential generation, target, browser session, and current page generation.
 
 The Bridge refuses arbitrary URLs, CSS selectors, JavaScript, password/hidden/file fields, uploads, downloads, and unrestricted keys. `navigate` accepts only a relative path on the approved origin. Sessions close on explicit close, inactivity, absolute lifetime, credential rotation/revocation, failure, or App shutdown and never survive restart or backup.
+
+When a fingerprint is configured, the Bridge checks the certificate actually used by Chromium before installing HTTP Basic headers or filling form credentials. A mismatch fails closed with `web_certificate_sha256_mismatch` and one safe English log entry.
 
 ## Integration examples
 

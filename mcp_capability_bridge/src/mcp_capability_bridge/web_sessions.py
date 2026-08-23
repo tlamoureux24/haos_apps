@@ -21,6 +21,7 @@ from selenium.webdriver.chrome.service import Service
 
 from mcp_capability_bridge.contracts import AdapterCallError, InvocationContext
 from mcp_capability_bridge.web_adapter import NetworkPolicy
+from mcp_capability_bridge.web_tls import verify_driver_certificate
 
 MAX_NODES = 200
 MAX_FIELD = 512
@@ -105,6 +106,10 @@ class WebSessionManager:
                 raise AdapterCallError("web_session_limit")
         try:
             profile, driver = await asyncio.wait_for(asyncio.to_thread(self._start, configuration, policy, auth), 30)
+        except RuntimeError as exc:
+            if str(exc) in {"web_certificate_sha256_mismatch","web_certificate_unavailable"}:
+                raise AdapterCallError(str(exc)) from None
+            raise AdapterCallError("browser_session_failed") from exc
         except Exception as exc:
             raise AdapterCallError("browser_session_failed") from exc
         session = WebSession(context.namespace_id, context.credential_generation, context.target_id, self._digest(handle), time.monotonic(), time.monotonic(), configuration["inactivity_seconds"], configuration["absolute_seconds"], profile, driver, tuple(v for v in auth.values() if isinstance(v, str) and v), policy, lock=asyncio.Lock())
@@ -139,20 +144,23 @@ class WebSessionManager:
         for arg in ("--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-background-networking", "--disable-sync", "--disable-popup-blocking", "--no-first-run", "--remote-debugging-pipe", f"--host-resolver-rules={rules}", f"--user-data-dir={profile}", f"--load-extension={extension}"):
             options.add_argument(arg)
         options.add_experimental_option("prefs", {"download_restrictions": 3, "profile.default_content_setting_values": {"notifications": 2, "geolocation": 2, "media_stream": 2, "automatic_downloads": 2}})
-        if not configuration["verify_tls"]:
+        if not configuration["verify_tls"] or configuration.get("certificate_sha256"):
             options.add_argument("--ignore-certificate-errors")
         driver = self.driver_factory(service=Service("/usr/bin/chromedriver", service_args=["--log-level=WARNING"]), options=options)
         try:
             driver.set_page_load_timeout(20)
+            target = configuration["base_url"]
+            if auth["mode"] == "form":
+                target = policy.base_origin + configuration["authentication"]["login_path"]
+            driver.get(target)
+            verify_driver_certificate(driver,policy.base_origin,configuration.get("certificate_sha256",""))
             if auth["mode"] == "basic":
                 import base64
                 encoded = base64.b64encode(f'{auth["username"]}:{auth["password"]}'.encode()).decode()
                 driver.execute_cdp_cmd("Network.enable", {})
                 driver.execute_cdp_cmd("Network.setExtraHTTPHeaders", {"headers": {"Authorization": f"Basic {encoded}"}})
-            target = configuration["base_url"]
-            if auth["mode"] == "form":
-                target = policy.base_origin + configuration["authentication"]["login_path"]
-            driver.get(target)
+                driver.get(target)
+                verify_driver_certificate(driver,policy.base_origin,configuration.get("certificate_sha256",""))
             policy.authorize(driver.current_url, "authentication_origins" if auth["mode"] == "form" else "navigation_origins")
             if auth["mode"] == "form":
                 selectors = configuration["authentication"]

@@ -16,6 +16,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import WebDriverException
 
 from mcp_capability_bridge.web_adapter import NetworkPolicy
+from mcp_capability_bridge.web_tls import verify_driver_certificate
 
 BROWSER_ROOT=Path("/tmp/mcp-capability-bridge-browser")
 DIAGNOSTIC_LIMIT=8192
@@ -57,8 +58,9 @@ class BrowserRuntime:
             for argument in ("--headless=new","--no-sandbox","--disable-dev-shm-usage","--disable-gpu","--disable-crash-reporter","--disable-breakpad","--disable-background-networking","--disable-sync","--disable-extensions","--disable-popup-blocking","--no-first-run","--no-default-browser-check","--remote-debugging-pipe",f"--host-resolver-rules={rules}",f"--user-data-dir={profile}"):options.add_argument(argument)
             options.add_experimental_option("excludeSwitches",["disable-popup-blocking"])
             options.add_experimental_option("prefs",{"download_restrictions":3,"download.default_directory":"/dev/null","profile.managed_default_content_settings":{"javascript":2,"popups":2},"profile.default_content_setting_values":{"notifications":2,"geolocation":2,"media_stream":2,"automatic_downloads":2}})
-            if not configuration["verify_tls"]:options.add_argument("--ignore-certificate-errors")
+            if not configuration["verify_tls"] or configuration.get("certificate_sha256"):options.add_argument("--ignore-certificate-errors")
             driver=webdriver.Chrome(service=service,options=options);driver.set_page_load_timeout(20);driver.get(configuration["base_url"])
+            verify_driver_certificate(driver,policy.base_origin,configuration.get("certificate_sha256",""))
             policy.authorize(driver.current_url,"navigation_origins")
             if len(driver.window_handles)!=1:raise RuntimeError("browser_popup_denied")
             return {"status":"reachable","origin":policy.base_origin}

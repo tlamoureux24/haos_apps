@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,13 +17,16 @@ def config(mode="none"):
 
 
 class FakeDriver:
+    instances=[]
     current_url="https://app.internal/home"
     window_handles=["one"]
-    def __init__(self,*_,**__): self.quit_called=False;self.actions=[];self.node_name="Apply";self.element_type="";self.download=False
+    def __init__(self,*_,**__): self.quit_called=False;self.actions=[];self.cdp_methods=[];self.node_name="Apply";self.element_type="";self.download=False;self.instances.append(self)
     def set_page_load_timeout(self,_): pass
     def get(self,_): pass
     def execute_script(self,_): return 0
     def execute_cdp_cmd(self,method,args):
+        self.cdp_methods.append(method)
+        if method=="Network.getCertificate": return {"tableNames":[base64.b64encode(b"fixture-certificate").decode()]}
         if method=="Accessibility.getFullAXTree":
             return {"nodes":[{"role":{"value":"heading"},"name":{"value":"Welcome opaque-password"}},{"backendDOMNodeId":7,"role":{"value":"button"},"name":{"value":self.node_name}},{"backendDOMNodeId":8,"role":{"value":"textbox"},"name":{"value":"Name"}},{"role":{"value":"password"},"value":{"value":"opaque-password"}}]}
         if method=="DOM.resolveNode": return {"object":{"objectId":f'node-{args["backendNodeId"]}'}}
@@ -40,7 +45,7 @@ class FakeDriver:
 
 class WebSessionTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.temporary=tempfile.TemporaryDirectory();self.manager=WebSessionManager(Path(self.temporary.name),FakeDriver)
+        FakeDriver.instances.clear();self.temporary=tempfile.TemporaryDirectory();self.manager=WebSessionManager(Path(self.temporary.name),FakeDriver)
         self.patch=patch("mcp_capability_bridge.web_sessions.NetworkPolicy.verify_resolution",new=AsyncMock());self.patch.start()
         self.a=InvocationContext("namespace-a",1,"target");self.b=InvocationContext("namespace-b",1,"target")
 
@@ -57,6 +62,19 @@ class WebSessionTests(unittest.IsolatedAsyncioTestCase):
             await self.manager.close(self.b,opened["session"])
         with self.assertRaisesRegex(AdapterCallError,"invalid_web_session"):
             await self.manager.snapshot(InvocationContext("namespace-a",2,"target"),opened["session"])
+
+    async def test_certificate_pin_is_checked_before_basic_credentials_are_installed(self):
+        configuration=config("basic");configuration["certificate_sha256"]="0"*64
+        secret=b'{"mode":"basic","username":"reader","password":"opaque-password"}'
+        with self.assertLogs("mcp_capability_bridge.web_tls",level="WARNING"), self.assertRaisesRegex(AdapterCallError,"web_certificate_sha256_mismatch"):
+            await self.manager.open(self.a,configuration,secret)
+        driver=FakeDriver.instances[-1]
+        self.assertNotIn("Network.setExtraHTTPHeaders",driver.cdp_methods)
+
+        configuration["certificate_sha256"]=hashlib.sha256(b"fixture-certificate").hexdigest()
+        opened=await self.manager.open(self.a,configuration,secret)
+        session=await self.manager._lookup(self.a,opened["session"])
+        self.assertLess(session.driver.cdp_methods.index("Network.getCertificate"),session.driver.cdp_methods.index("Network.setExtraHTTPHeaders"))
 
     async def test_close_is_idempotent_and_profiles_are_disposable(self):
         first=await self.manager.open(self.a,config(),None);profiles=list(Path(self.temporary.name).glob("profile-*"));self.assertEqual(len(profiles),1)

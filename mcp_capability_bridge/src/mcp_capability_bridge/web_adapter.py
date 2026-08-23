@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, TYPE_CHECKING
 from urllib.parse import urlparse
 from mcp_capability_bridge.contracts import AdapterCallError, Capability, InvocationContext
+from mcp_capability_bridge.web_tls import normalize_certificate_sha256
 
 if TYPE_CHECKING:
     from mcp_capability_bridge.web_sessions import WebSessionManager
@@ -81,7 +82,7 @@ class WebAdapter:
     def __init__(self, sessions: "WebSessionManager | None" = None): self.sessions=sessions
     def validate_target(self,configuration:dict[str,Any],secret:bytes|None)->None:
         required={"base_url","resolved_addresses","navigation_origins","authentication_origins","resource_origins","websocket_origins","verify_tls","inactivity_seconds","absolute_seconds","authentication"}
-        if set(configuration)!=required:raise ValueError("invalid_web_target")
+        if not required.issubset(configuration) or set(configuration)-required-{"certificate_sha256"}:raise ValueError("invalid_web_target")
         base=origin(str(configuration["base_url"]));validate_addresses(configuration["resolved_addresses"])
         for category in ("navigation_origins","authentication_origins","resource_origins","websocket_origins"):
             values=configuration[category]
@@ -106,6 +107,8 @@ class WebAdapter:
             except Exception as exc:raise ValueError("invalid_web_authentication") from exc
             if set(credentials)!={"mode","username","password"} or credentials.get("mode")!=mode or not 1<=len(credentials.get("username",""))<=256 or not 1<=len(credentials.get("password",""))<=1024:raise ValueError("invalid_web_authentication")
         if not isinstance(configuration["verify_tls"],bool):raise ValueError("invalid_web_tls_policy")
+        certificate_sha256=normalize_certificate_sha256(configuration.get("certificate_sha256",""))
+        if certificate_sha256 and (not configuration["verify_tls"] or urlparse(base).scheme!="https"):raise ValueError("invalid_web_tls_policy")
         if not isinstance(configuration["inactivity_seconds"],int) or not 30<=configuration["inactivity_seconds"]<=3600:raise ValueError("invalid_web_session_limits")
         if not isinstance(configuration["absolute_seconds"],int) or not configuration["inactivity_seconds"]<=configuration["absolute_seconds"]<=14400:raise ValueError("invalid_web_session_limits")
     def capabilities(self,configuration:dict[str,Any]):
