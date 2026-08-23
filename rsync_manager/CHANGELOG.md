@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.12 - 2026-08-23
+
+- Replace the inconclusive SMTP execution witness with a bounded CIFS capability witness.
+- Restore the explicit `msmtp` execution permission and deliberately omit only AppArmor `SYS_ADMIN` while remaining in complain mode.
+- Require one small CIFS test job to distinguish complain enforcement, enforce behavior and missing audit delivery without changing the validated S6 baseline.
+
 ## 1.3.11 - 2026-08-23
 
 - Add one bounded AppArmor complain-mode witness by deliberately omitting only the explicit `msmtp` execution permission.

@@ -10,7 +10,8 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   capability dac_override,
   capability dac_read_search,
   capability setpcap,
-  capability sys_admin,
+  # Diagnostic witness: deliberately omit SYS_ADMIN in complain mode.
+  # One bounded CIFS test must still succeed and emit an AppArmor event.
   capability setgid,
   capability setuid,
 
@@ -150,8 +151,7 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   /sbin/mount.cifs ix,
   /usr/bin/env ix,
   /usr/bin/jq ix,
-  # Diagnostic witness: deliberately omit msmtp execution in complain mode.
-  # One SMTP test must still succeed and emit a bounded AppArmor ALLOWED event.
+  /usr/bin/msmtp ix,
   /usr/bin/rsync ix,
   /usr/bin/with-contenv rix,
   /usr/lib/bashio/bashio rix,
