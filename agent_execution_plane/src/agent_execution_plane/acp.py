@@ -185,7 +185,7 @@ class AcpBoundary:
             try:await self.step()
             except asyncio.CancelledError:raise
             except Exception as exc:
-                code="acp_request_timeout" if str(exc)=="acp_request_timeout" else "acp_unavailable"
+                code=str(exc) if str(exc) in {"acp_request_timeout","certificate_sha256_mismatch"} else "acp_unavailable"
                 self._record_worker_failure(code,exc)
             await asyncio.sleep(self.poll_interval)
     async def step(self):

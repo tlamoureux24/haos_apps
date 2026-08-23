@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.7
+
+- Keep the configured ACP connection after a remote certificate rotation and
+  report the runtime fingerprint mismatch precisely in status and logs.
+
 ## 1.1.6
 
 - Reject a mismatched pinned ACP certificate with one safe diagnostic and a

@@ -29,6 +29,7 @@ from agent_control_plane.fixed_arguments import (
     merge_arguments_with_sensitive_values,
     parse_constraints,
 )
+
 from agent_control_plane.json_contracts import validate_json_contract, validate_json_schema
 from agent_control_plane.policy import decide, validate_actions
 from agent_control_plane.redaction import redact
@@ -41,6 +42,7 @@ from agent_control_plane.security import (
 )
 
 
+CONNECTOR_INVALID_CODES = SCHEMA_REJECTION_CODES | {"certificate_sha256_mismatch"}
 GENESIS_HASH = "0" * 64
 ALLOWED_IDENTITY_TYPES = frozenset({"client", "event_source", "scheduler"})
 INCIDENT_SIMPLE_KEY = "simple"
@@ -880,7 +882,7 @@ class ControlPlane:
                 protected = protect_connector_config(self.pepper, normalized_url, bearer_token, certificate_sha256)
                 if inventory is None:
                     persisted_error = error_code or "connection_failed"
-                    status = "invalid" if persisted_error in SCHEMA_REJECTION_CODES else "unreachable"
+                    status = "invalid" if persisted_error in CONNECTOR_INVALID_CODES else "unreachable"
                     connection.execute(
                         """UPDATE connectors SET display_name=?,protected_config=?,display_endpoint=?,status=?,
                            updated_at=?,last_checked_at=?,last_error_code=? WHERE id=?""",
@@ -952,7 +954,7 @@ class ControlPlane:
                 raise ValueError("connector_changed")
             if inventory is None:
                 persisted_error = error_code or "connection_failed"
-                status = "invalid" if persisted_error in SCHEMA_REJECTION_CODES else "unreachable"
+                status = "invalid" if persisted_error in CONNECTOR_INVALID_CODES else "unreachable"
                 connection.execute(
                     """UPDATE connectors SET status=?,updated_at=?,last_checked_at=?,
                        last_error_code=? WHERE id=?""",
@@ -995,7 +997,7 @@ class ControlPlane:
                 return False
             if inventory is None:
                 persisted_error = error_code or "connection_failed"
-                status = "invalid" if persisted_error in SCHEMA_REJECTION_CODES else "unreachable"
+                status = "invalid" if persisted_error in CONNECTOR_INVALID_CODES else "unreachable"
                 connection.execute("UPDATE connectors SET status=?,updated_at=?,last_checked_at=?,last_error_code=? WHERE id=?", (status, now, now, persisted_error, connector_id))
                 reason = "schema_rejected" if status == "invalid" else "unreachable"
             else:

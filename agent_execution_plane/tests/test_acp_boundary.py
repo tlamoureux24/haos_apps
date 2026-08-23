@@ -42,6 +42,7 @@ class Session:
                 try:await self.owner.claim_gate.wait()
                 finally:self.owner.cancelled_claims+=1
             if self.owner.claim_error:raise RuntimeError("temporary")
+            if self.owner.pin_error:raise RuntimeError("certificate_sha256_mismatch")
             if self.owner.claimed:return {"claimed":False}
             self.owner.claimed=True
             return {"claimed":True,"job":{"id":"job-1","objective":"objective","input":{"safe":True},"allowed_capabilities":[{"name":"virtual.read","input_schema":{"type":"object","properties":{"value":{"type":"integer"}},"required":["value"]}}],"required_report_schema":{"type":"object","required":["schema_version","summary","findings"]}},"lease_token":"LEASE-SECRET","lease_expires_at":self.owner.expiry}
@@ -55,7 +56,7 @@ class Session:
 
 class Factory:
     def __init__(self):
-        self.calls=[];self.claimed=False;self.fail_delivery=False;self.heartbeat_failures=0;self.incompatible=False;self.bad_schema=False;self.connect_delay=0;self.claim_error=False;self.hang_claim=False;self.claim_gate=asyncio.Event();self.cancelled_claims=0
+        self.calls=[];self.claimed=False;self.fail_delivery=False;self.heartbeat_failures=0;self.incompatible=False;self.bad_schema=False;self.connect_delay=0;self.claim_error=False;self.pin_error=False;self.hang_claim=False;self.claim_gate=asyncio.Event();self.cancelled_claims=0
         self.expiry=(datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat().replace("+00:00","Z")
     def __call__(self,_):return Session(self)
 
@@ -108,6 +109,14 @@ class AcpBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.factory.claim_error=True;runner=asyncio.create_task(self.boundary.run());await asyncio.sleep(.03);self.boundary._stop.set();runner.cancel();await asyncio.gather(runner,return_exceptions=True)
         telemetry=AcpStore(self.database,self.store.key).telemetry();self.assertEqual(telemetry["last_error_code"],"acp_unavailable");self.assertIsNotNone(telemetry["last_error_at"])
         persisted=self.database.read_bytes().decode(errors="ignore");self.assertNotIn("WORKER-SECRET",persisted);self.assertNotIn("temporary",persisted)
+
+    async def test_runtime_certificate_rotation_is_reported_precisely(self):
+        await self.configure();self.factory.pin_error=True
+        runner=asyncio.create_task(self.boundary.run());await asyncio.sleep(.03);self.boundary._stop.set();runner.cancel();await asyncio.gather(runner,return_exceptions=True)
+        state=self.boundary.state()
+        self.assertEqual(state["connectivity"],"unavailable")
+        self.assertEqual(state["telemetry"]["last_error_code"],"certificate_sha256_mismatch")
+        self.assertTrue(state["configured"])
 
     async def test_stalled_claim_times_out_and_polling_recovers_without_restart(self):
         await self.configure();self.factory.hang_claim=True;self.boundary.request_timeout=.01
