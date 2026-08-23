@@ -27,13 +27,16 @@ def main() -> int:
     security = (ROOT / "src/mcp_capability_bridge/security.py").read_text(encoding="utf-8")
 
     for value in (
-        'slug: "mcp_capability_bridge"', 'version: "1.1.4"',
-        "  - aarch64", "  - amd64", "init: false", "stage: stable", "apparmor: true",
+        'slug: "mcp_capability_bridge"', 'version: "1.1.5"',
+        "  - amd64", "init: false", "stage: stable", "apparmor: true",
         "tmpfs: true", "backup: cold", "ingress: true", "ingress_port: 8099",
         "  8098/tcp: null",
     ):
         require(config, value, "App metadata invariant")
-    require(package, '__version__ = "1.1.4"', "synchronized package version")
+    require(package, '__version__ = "1.1.5"', "synchronized package version")
+    require(config, "arch:\n  - amd64\nstartup:", "AMD64-only architecture")
+    if "aarch64" in config:
+        raise RuntimeError("MCP Capability Bridge must support amd64 only")
     for dependency in ("mcp==1.28.1", "jsonschema[format-nongpl]==4.26.0", "cryptography==50.0.0", "asyncssh==2.24.0", "selenium==4.46.0"):
         require(requirements, dependency, "pinned dependency")
     require(dockerfile, "adduser -S -D -H", "unprivileged user")

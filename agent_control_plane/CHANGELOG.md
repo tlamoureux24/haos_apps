@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.5
+
+- Restrict the Home Assistant App to AMD64 only.
+
 ## 1.1.4
 
 - Harmonize the neutral certificate-regeneration button with Agent Execution Plane.

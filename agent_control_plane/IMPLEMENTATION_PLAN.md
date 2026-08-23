@@ -172,7 +172,7 @@ or a clean reinstall is no longer permitted as a schema-upgrade strategy.
 
 Keep and continue testing:
 
-- reproducible `amd64`/`aarch64` Home Assistant App build;
+- reproducible `amd64`-only Home Assistant App build;
 - unprivileged runtime and least-privilege AppArmor profile;
 - writable paths restricted to App data and runtime temporary directories;
 - separate listeners and non-sensitive liveness/readiness endpoints;

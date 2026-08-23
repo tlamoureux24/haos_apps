@@ -41,8 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_control_plane"',
-        'version: "1.1.4"',
-        "  - aarch64",
+        'version: "1.1.5"',
         "  - amd64",
         "init: false",
         "stage: stable",
@@ -59,8 +58,10 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "1.1.4"' not in package:
+    if '__version__ = "1.1.5"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
+    if "arch:\n  - amd64\nstartup:" not in config or "aarch64" in config:
+        raise RuntimeError("Agent Control Plane must support amd64 only")
     if "jsonschema[format-nongpl]==4.26.0" not in requirements:
         raise RuntimeError("MCP input schemas must retain the pinned reference validator")
     logging_config = ROOT / "src/agent_control_plane/uvicorn_logging.json"

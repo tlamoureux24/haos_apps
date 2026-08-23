@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.4
+
+- Restrict the Home Assistant App to AMD64 only.
+
 ## 1.1.3
 
 - Report a degraded service when the standalone HTTPS listener cannot start
