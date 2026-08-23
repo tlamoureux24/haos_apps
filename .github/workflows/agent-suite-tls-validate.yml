@@ -1,0 +1,31 @@
+name: Validate Agent Suite TLS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agent_control_plane/**"
+      - "agent_execution_plane/**"
+      - "mcp_capability_bridge/**"
+      - "scripts/agent_suite_tls_smoke.sh"
+      - ".github/workflows/agent-suite-tls-validate.yml"
+  pull_request:
+    paths:
+      - "agent_control_plane/**"
+      - "agent_execution_plane/**"
+      - "mcp_capability_bridge/**"
+      - "scripts/agent_suite_tls_smoke.sh"
+      - ".github/workflows/agent-suite-tls-validate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tls-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run real-socket TLS integration matrix
+        run: bash scripts/agent_suite_tls_smoke.sh
