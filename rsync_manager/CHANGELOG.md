@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.10 - 2026-08-23
+
+- Start a consolidated AppArmor complain-mode audit using the complete audited HAOS S6 baseline and all Rsync Manager-specific startup fixes.
+- Retain the disabled-cron-job correction from 1.3.9.
+- Limit the production audit campaign to a deliberately small CIFS/Rsync fixture so file-level events remain bounded and analyzable.
+
 ## 1.3.9 - 2026-08-23
 
 - Fix disabled jobs being included in the generated crontab because jq's `//` operator treats `false` as a fallback value.

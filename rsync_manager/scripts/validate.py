@@ -113,6 +113,20 @@ def main() -> int:
 
     if re.search(r"^\s*capability,\s*$", apparmor, flags=re.MULTILINE):
         raise RuntimeError("AppArmor must not grant every capability")
+    if "flags=(attach_disconnected,mediate_deleted,complain)" not in apparmor:
+        raise RuntimeError("The bounded diagnostic AppArmor profile must remain in complain mode")
+    for forbidden_rule in (
+        "  file,",
+        "  /bin/** ix,",
+        "  /sbin/** ix,",
+        "  /usr/bin/** ix,",
+        "  /usr/sbin/** ix,",
+        "  /usr/local/bin/** ix,",
+        "  /package/** ix,",
+        "  /command/** ix,",
+    ):
+        if forbidden_rule in apparmor:
+            raise RuntimeError(f"Broad AppArmor diagnostic rule: {forbidden_rule.strip()}")
     require(
         apparmor,
         (
@@ -120,16 +134,25 @@ def main() -> int:
             "capability dac_override,",
             "capability dac_read_search,",
             "capability setpcap,",
-            "/data/** rw,",
-            "/share/** rw,",
-            "/media/** rw,",
-            "/backup/** rw,",
-            "/mnt/** rwk,",
+            "/data/** rwlk,",
+            "/share/** rwlk,",
+            "/media/** rwlk,",
+            "/backup/** rwlk,",
+            "/mnt/** rwlk,",
+            "/etc/crontabs/** rwlk,",
+            "/command/s6-svwait ix,",
+            "/package/admin/s6-2.15.0.0/command/s6-svwait ix,",
+            "/run/s6-rc:s6-rc-init:*/servicedirs/cron/run rix,",
+            "/run/s6-rc:s6-rc-init:*/servicedirs/runner/run rix,",
+            "/run/s6-rc:s6-rc-init:*/servicedirs/web/run rix,",
+            "/usr/bin/rsync ix,",
+            "/usr/bin/msmtp ix,",
+            "/sbin/mount.cifs ix,",
         ),
         "AppArmor invariant",
     )
     for forbidden in ("/config/**", "/addons/**", "/ssl/**"):
-        if forbidden in apparmor:
+        if re.search(rf"^\s*{re.escape(forbidden)}", apparmor, flags=re.MULTILINE):
             raise RuntimeError(f"Overbroad AppArmor rule: {forbidden}")
 
     if "--tls-certcheck=on" not in manager or "--tls-certcheck=off" in manager:
