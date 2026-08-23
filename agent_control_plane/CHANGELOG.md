@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.8
+
+- Preserve the active MCP connector configuration when an edited certificate
+  fingerprint is rejected, and return the precise bilingual mismatch error.
+
 ## 1.1.7
 
 - Reject mismatched pinned MCP certificates with one safe English diagnostic

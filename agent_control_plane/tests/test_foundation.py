@@ -17,6 +17,7 @@ from agent_control_plane.database import database_ready, initialize_database
 from agent_control_plane.admin_ui import ADMIN_CSS, ADMIN_JS
 from agent_control_plane.control_plane import AuthorizationError, MAX_INCIDENT_SUBJECTS, ControlPlane, TaskExecutionActiveError, validate_json_contract
 from agent_control_plane.connectors import (
+    ConnectorCertificateMismatch,
     ConnectorSchemaRejected,
     connector_display_endpoint,
     validate_discovered_tool_schema,
@@ -531,6 +532,32 @@ class ConnectorDiscoveryVisibilityTests(unittest.TestCase):
                 item for item in control_plane.list_connectors() if item["id"] == no_secret_id
             )
             self.assertFalse(no_secret["has_secret"])
+
+    def test_endpoint_edit_rejects_certificate_mismatch_without_replacing_configuration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            control_plane, connector_id = self._connector(Path(directory))
+            before = control_plane.connector_change_transport_config(connector_id)
+            request = self.Request(
+                control_plane,
+                {
+                    "connector_id": connector_id,
+                    "display_name": "Wrong pin MCP",
+                    "url": None,
+                    "certificate_sha256": "0" * 64,
+                },
+            )
+            with patch(
+                "agent_control_plane.http_api.discover_streamable_http",
+                new=AsyncMock(side_effect=ConnectorCertificateMismatch("certificate_sha256_mismatch")),
+            ):
+                response = self._run(admin_update_connector, request)
+            self.assertEqual(response.status_code, 422)
+            self.assertEqual(
+                json.loads(response.body)["error"]["code"],
+                "certificate_sha256_mismatch",
+            )
+            self.assertEqual(control_plane.connector_change_transport_config(connector_id), before)
+            self.assertEqual(control_plane.list_connectors()[0]["display_name"], "Test MCP")
 
     def test_secret_rotation_replaces_control_plane_copy_without_disclosure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

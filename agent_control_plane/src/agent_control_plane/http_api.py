@@ -517,6 +517,8 @@ async def admin_update_connector(request: Request) -> JSONResponse:
                 return error_response(409, "connector_execution_active", correlation_id)
             try:
                 tools = await discover_streamable_http(target_url, bearer_token, target_fingerprint)
+            except ConnectorCertificateMismatch as error:
+                return error_response(422, error.code, correlation_id)
             except ConnectorSchemaRejected as error:
                 discovery_error = error.code
                 log_schema_rejection(contract.connector_id, error, correlation_id)
