@@ -5,6 +5,8 @@
 - Expand the French and English guides with detailed namespace, SSH target,
   JSON token-template/schema, Web-session, ACP/AEP integration, security, and
   troubleshooting examples.
+- Refresh the exact matching Alpine Chromium and ChromeDriver package revision
+  required by the current HAOS base repository.
 
 ## 1.0.0 — 2026-08-22
 

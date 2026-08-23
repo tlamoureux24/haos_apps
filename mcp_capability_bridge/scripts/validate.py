@@ -68,7 +68,7 @@ def main() -> int:
         raise RuntimeError("Implementation plan Lot 1 status must match delivery state")
     if "Accepted on real HAOS with version 0.3.0:" not in plan:
         raise RuntimeError("Implementation plan Lot 2 status must match delivery state")
-    for value in ("chromium=151.0.7922.108-r0","chromium-chromedriver=151.0.7922.108-r0"):
+    for value in ("chromium=151.0.7922.173-r0","chromium-chromedriver=151.0.7922.173-r0"):
         require(dockerfile,value,"pinned Lot 3A browser package")
     browser=(ROOT/"src/mcp_capability_bridge/browser_runtime.py").read_text()
     web=(ROOT/"src/mcp_capability_bridge/web_adapter.py").read_text()
