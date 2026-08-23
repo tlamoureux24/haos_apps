@@ -27,6 +27,7 @@ class Session:
     def __init__(self,owner):self.owner=owner
     async def __aenter__(self):
         if self.owner.connect_delay:await asyncio.sleep(self.owner.connect_delay)
+        if self.owner.connect_pin_error:raise RuntimeError("certificate_sha256_mismatch")
         return self
     async def __aexit__(self,*_):pass
     async def list_tools(self,cursor=None):
@@ -56,7 +57,7 @@ class Session:
 
 class Factory:
     def __init__(self):
-        self.calls=[];self.claimed=False;self.fail_delivery=False;self.heartbeat_failures=0;self.incompatible=False;self.bad_schema=False;self.connect_delay=0;self.claim_error=False;self.pin_error=False;self.hang_claim=False;self.claim_gate=asyncio.Event();self.cancelled_claims=0
+        self.calls=[];self.claimed=False;self.fail_delivery=False;self.heartbeat_failures=0;self.incompatible=False;self.bad_schema=False;self.connect_delay=0;self.connect_pin_error=False;self.claim_error=False;self.pin_error=False;self.hang_claim=False;self.claim_gate=asyncio.Event();self.cancelled_claims=0
         self.expiry=(datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat().replace("+00:00","Z")
     def __call__(self,_):return Session(self)
 
@@ -116,6 +117,15 @@ class AcpBoundaryTests(unittest.IsolatedAsyncioTestCase):
         state=self.boundary.state()
         self.assertEqual(state["connectivity"],"unavailable")
         self.assertEqual(state["telemetry"]["last_error_code"],"certificate_sha256_mismatch")
+        self.assertTrue(state["configured"])
+
+    async def test_idle_healthcheck_detects_certificate_rotation_without_models(self):
+        await self.configure();self.models.available=False;self.factory.connect_pin_error=True;self.boundary._next_healthcheck=0
+        runner=asyncio.create_task(self.boundary.run());await asyncio.sleep(.03);self.boundary._stop.set();runner.cancel();await asyncio.gather(runner,return_exceptions=True)
+        state=self.boundary.state()
+        self.assertEqual(state["connectivity"],"unavailable")
+        self.assertEqual(state["telemetry"]["last_error_code"],"certificate_sha256_mismatch")
+        self.assertEqual(state["telemetry"]["successful_polls"],0)
         self.assertTrue(state["configured"])
 
     async def test_stalled_claim_times_out_and_polling_recovers_without_restart(self):

@@ -7,6 +7,7 @@ import json
 import logging
 import secrets
 import sqlite3
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -96,6 +97,7 @@ class AcpStore:
     def reset_telemetry(self):
         stamp=now_iso();self._update_telemetry({"last_poll_success_at":None,"last_response_at":stamp,"available_jobs":None,"successful_polls":0,"last_error_at":None,"last_error_code":None})
     def record_response(self):self._update_telemetry({"last_response_at":now_iso()})
+    def record_health_response(self):self._update_telemetry({"last_response_at":now_iso(),"last_error_at":None,"last_error_code":None})
     def record_poll(self,available_jobs):
         stamp=now_iso();self._update_telemetry({"last_poll_success_at":stamp,"last_response_at":stamp,"available_jobs":available_jobs,"last_error_at":None,"last_error_code":None},increment_polls=True)
     def record_error(self,code):self._update_telemetry({"last_error_at":now_iso(),"last_error_code":code})
@@ -118,9 +120,9 @@ class AcpStore:
 
 
 class AcpBoundary:
-    def __init__(self,store:AcpStore,lifecycle:LifecycleStore,engine,model_store,mcp_factory,database:Path,*,poll_interval=1.0,heartbeat_interval=60.0,validation_timeout=15.0,request_timeout=15.0):
+    def __init__(self,store:AcpStore,lifecycle:LifecycleStore,engine,model_store,mcp_factory,database:Path,*,poll_interval=1.0,heartbeat_interval=60.0,validation_timeout=15.0,request_timeout=15.0,healthcheck_interval=30.0):
         self.store=store;self.lifecycle=lifecycle;self.engine=engine;self.model_store=model_store;self.mcp_factory=mcp_factory;self.database=database
-        self.poll_interval=poll_interval;self.heartbeat_interval=heartbeat_interval;self.validation_timeout=validation_timeout;self.request_timeout=request_timeout;self._stop=asyncio.Event();self._runner=None;self._worker=None;self.connectivity="not_configured"
+        self.poll_interval=poll_interval;self.heartbeat_interval=heartbeat_interval;self.validation_timeout=validation_timeout;self.request_timeout=request_timeout;self.healthcheck_interval=healthcheck_interval;self._next_healthcheck=0.0;self._stop=asyncio.Event();self._runner=None;self._worker=None;self.connectivity="not_configured"
     def state(self):
         config=self.store.configuration();meta=self.store.metadata()
         return {"configured":config is not None,"credential_configured":bool(config and config["credential_configured"]),"connectivity":self.store.connectivity(),"delivery":meta["phase"] if meta else None,"telemetry":self.store.telemetry()}
@@ -158,7 +160,7 @@ class AcpBoundary:
             if str(exc)=="certificate_sha256_mismatch":raise
             raise RuntimeError("acp_unavailable") from exc
         except Exception as exc:raise RuntimeError("acp_unavailable") from exc
-        self.store.save_configuration(url,credential,replace,certificate_sha256);self.store.reset_telemetry();self.connectivity="connected";self.store.set_connectivity("connected")
+        self.store.save_configuration(url,credential,replace,certificate_sha256);self.store.reset_telemetry();self.connectivity="connected";self.store.set_connectivity("connected");self._next_healthcheck=time.monotonic()+self.healthcheck_interval
     async def start(self):
         if self._runner and not self._runner.done():return
         self._stop.clear();self._runner=asyncio.create_task(self._supervise(),name="aep-acp-boundary-supervisor")
@@ -191,6 +193,11 @@ class AcpBoundary:
     async def step(self):
         config=self.store.configuration(include_credential=True)
         if not config:self.connectivity="not_configured";self.store.set_connectivity("not_configured");return
+        now=time.monotonic()
+        if now>=self._next_healthcheck:
+            self._next_healthcheck=now+self.healthcheck_interval
+            await asyncio.wait_for(self.validate_configuration(config["url"],config.get("credential"),config.get("certificate_sha256","")),timeout=self.request_timeout)
+            self.connectivity="connected";self.store.set_connectivity("connected");self.store.record_health_response()
         meta=self.store.metadata()
         if meta:
             if meta["phase"]=="pending":await self._deliver(meta)

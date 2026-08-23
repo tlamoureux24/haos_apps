@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.8
+
+- Probe the configured Control Plane periodically even when no model or job
+  polling is active, so certificate rotations immediately make stale trust
+  visible as `certificate_sha256_mismatch` and recover after reconfiguration.
+
 ## 1.1.7
 
 - Keep the configured ACP connection after a remote certificate rotation and
