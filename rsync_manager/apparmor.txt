@@ -162,6 +162,7 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   /usr/local/bin/rsync_runner.sh rix,
   /usr/sbin/crond ix,
   /usr/sbin/lighttpd ix,
+  /usr/sbin/mount.cifs ix,
   /www/cgi-bin/api.sh rix,
 
   # S6 runtime state.
@@ -171,6 +172,7 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   /run/s6-rc:s6-rc-init:*/{,**} rwk,
   /run/service/{,**} rwk,
   /run/s6-linux-init-container-results/{,**} rwk,
+  /run/crond.pid rwk,
   /run.sh rix,
 
   # Static Ingress assets and Lighttpd configuration.
@@ -206,6 +208,7 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   /etc/ssl/** r,
   /etc/ca-certificates/** r,
   /usr/share/ca-certificates/** r,
+  /proc/ r,
   /proc/** r,
   /proc/1/fd/1 rw,
   /proc/1/fd/2 rw,

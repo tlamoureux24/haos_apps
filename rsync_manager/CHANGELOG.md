@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.17 - 2026-08-23
+
+- Complete the bounded complain trace with the resolved `/usr/sbin/mount.cifs` executable used by Alpine in addition to its `/sbin` alias.
+- Allow enumeration of the `/proc/` root and creation of `/run/crond.pid`, the only direct-profile file accesses remaining after the S6 inheritance correction.
+- Keep the profile in complain mode for one final short CIFS/Rsync validation capture.
+
 ## 1.3.16 - 2026-08-23
 
 - Keep the AppArmor profile in complain mode while correcting the three actual S6 legacy-service entry points used by cron, runner and web.
