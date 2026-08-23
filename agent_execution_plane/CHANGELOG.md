@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.9
+
+- Hide HTTPS certificate guidance when the standalone API explicitly uses HTTP.
+
 ## 1.1.8
 
 - Probe the configured Control Plane periodically even when no model or job

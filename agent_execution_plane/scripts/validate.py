@@ -37,9 +37,9 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
     acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "1.1.8"', "stage: stable", "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    for text in ('slug: "agent_execution_plane"', 'version: "1.1.9"', "stage: stable", "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "1.1.8"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "1.1.9"' not in package: raise RuntimeError("Version sources differ")
     if "arch:\n  - amd64\nstartup:" not in config or "aarch64" in config: raise RuntimeError("Agent Execution Plane must support amd64 only")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 3: raise RuntimeError("Unprivileged listener variants missing")
@@ -49,6 +49,7 @@ def main() -> int:
         if invariant not in main_py + ui: raise RuntimeError(f"UI invariant missing: {invariant}")
     if ".app{max-width:1840px" not in ui or ".app{max-width:1400px" in ui: raise RuntimeError("Administration layout width must match Agent Control Plane")
     if ":root{color-scheme:light;scrollbar-gutter:stable;" not in ui: raise RuntimeError("Stable root scrollbar gutter missing")
+    if 'id="standalone-transport-help"' not in ui or "standalone-transport-help').hidden=data.api.transport!=='https'" not in ui: raise RuntimeError("HTTP transport must not display HTTPS certificate guidance")
     forbidden = ("chatgptauthtokens",)
     source = "".join(p.read_text(errors="ignore") for p in (ROOT / "src").rglob("*.py"))
     for item in forbidden:
