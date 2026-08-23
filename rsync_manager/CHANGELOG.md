@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.18 - 2026-08-23
+
+- Enforce the consolidated AppArmor profile after a clean bounded startup, Ingress, cron, CIFS and rsync audit.
+- Remove the temporary explicit `/mnt/**` audit modifier while retaining the validated recursive read/write/link/lock permissions required by rsync.
+- Preserve the corrected S6 legacy-service inheritance and Alpine `/usr/sbin/mount.cifs` runtime path.
+
 ## 1.3.17 - 2026-08-23
 
 - Complete the bounded complain trace with the resolved `/usr/sbin/mount.cifs` executable used by Alpine in addition to its `/sbin` alias.
