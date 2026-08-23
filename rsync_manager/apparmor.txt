@@ -10,8 +10,8 @@ profile rsync_manager flags=(attach_disconnected,mediate_deleted,complain) {
   capability dac_override,
   capability dac_read_search,
   capability setpcap,
-  # Diagnostic witness: deliberately omit SYS_ADMIN in complain mode.
-  # One bounded CIFS test must still succeed and emit an AppArmor event.
+  # Final diagnostic witness: allow SYS_ADMIN and explicitly audit its use.
+  audit capability sys_admin,
   capability setgid,
   capability setuid,
 

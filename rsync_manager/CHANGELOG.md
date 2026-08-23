@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.13 - 2026-08-23
+
+- End the diagnostic campaign with one explicit AppArmor audit witness for the required `SYS_ADMIN` capability.
+- Restore authorization for CIFS mounts as `audit capability sys_admin,` so the bounded test remains functional while requesting an allowed-use audit record.
+- Make this the final diagnostic release; retain the complete validated runtime baseline unchanged.
+
 ## 1.3.12 - 2026-08-23
 
 - Replace the inconclusive SMTP execution witness with a bounded CIFS capability witness.

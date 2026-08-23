@@ -133,6 +133,7 @@ def main() -> int:
             "capability dac_override,",
             "capability dac_read_search,",
             "capability setpcap,",
+            "audit capability sys_admin,",
             "/data/** rwlk,",
             "/share/** rwlk,",
             "/media/** rwlk,",
@@ -150,8 +151,8 @@ def main() -> int:
         ),
         "AppArmor invariant",
     )
-    if "capability sys_admin," in apparmor:
-        raise RuntimeError("The complain-mode CIFS witness must remain deliberately unallowed")
+    if re.search(r"^\s*capability sys_admin,\s*$", apparmor, flags=re.MULTILINE):
+        raise RuntimeError("SYS_ADMIN must retain its explicit audit qualifier")
     for forbidden in ("/config/**", "/addons/**", "/ssl/**"):
         if re.search(rf"^\s*{re.escape(forbidden)}", apparmor, flags=re.MULTILINE):
             raise RuntimeError(f"Overbroad AppArmor rule: {forbidden}")
