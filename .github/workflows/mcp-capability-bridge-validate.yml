@@ -45,9 +45,7 @@ jobs:
           base_reference="$(docker image inspect ghcr.io/home-assistant/base:latest --format '{{index .RepoDigests 0}}')"
           base_digest="${base_reference##*@}"
           test -n "${base_digest}"
-          docker buildx build --load \
-            --cache-from type=gha,scope=mcp-capability-bridge-amd64 \
-            --cache-to type=gha,mode=max,scope=mcp-capability-bridge-amd64 \
+          docker build \
             --build-arg BUILD_ARCH=amd64 \
             --build-arg "BUILD_VERSION=${version}" \
             --build-arg "BASE_IMAGE_DIGEST=${base_digest}" \

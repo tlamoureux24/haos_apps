@@ -42,9 +42,6 @@ jobs:
           cache: pip
           cache-dependency-path: agent_control_plane/requirements.txt
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Validate metadata and source
         run: |
           set -euo pipefail
@@ -68,9 +65,7 @@ jobs:
           base_digest="${base_reference##*@}"
           test -n "${base_digest}"
           test "${base_digest}" != "${base_reference}"
-          docker buildx build --load \
-            --cache-from type=gha,scope=agent-control-plane-amd64 \
-            --cache-to type=gha,mode=max,scope=agent-control-plane-amd64 \
+          docker build \
             --build-arg BUILD_ARCH=amd64 \
             --build-arg "BUILD_VERSION=${version}" \
             --build-arg "BASE_IMAGE_DIGEST=${base_digest}" \

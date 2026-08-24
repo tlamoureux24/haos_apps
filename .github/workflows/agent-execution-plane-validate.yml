@@ -27,8 +27,6 @@ jobs:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: agent_execution_plane/requirements.txt
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
       - name: Validate metadata, source, and tests
         run: |
           set -euo pipefail
@@ -45,14 +43,7 @@ jobs:
           base_reference="$(docker image inspect ghcr.io/home-assistant/base:latest --format '{{index .RepoDigests 0}}')"
           base_digest="${base_reference##*@}"
           test -n "${base_digest}"
-          docker buildx build --load \
-            --cache-from type=gha,scope=agent-execution-plane-amd64 \
-            --cache-to type=gha,mode=max,scope=agent-execution-plane-amd64 \
-            --build-arg BUILD_ARCH=amd64 \
-            --build-arg "BUILD_VERSION=${version}" \
-            --build-arg "BASE_IMAGE_DIGEST=${base_digest}" \
-            --tag "agent-execution-plane:${version}" \
-            agent_execution_plane
+          docker build --build-arg BUILD_ARCH=amd64 --build-arg "BUILD_VERSION=${version}" --build-arg "BASE_IMAGE_DIGEST=${base_digest}" --tag "agent-execution-plane:${version}" agent_execution_plane
           test "$(docker image inspect "agent-execution-plane:${version}" --format '{{index .Config.Labels "org.opencontainers.image.base.digest"}}')" = "${base_digest}"
       - name: Validate Codex executable AppArmor coverage
         run: |

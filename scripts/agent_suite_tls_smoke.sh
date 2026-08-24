@@ -27,16 +27,8 @@ version() { sed -n 's/^version: "\([^"]*\)"$/\1/p' "${root}/$1/config.yaml"; }
 build_image() {
   local app=$1 image=$2 app_version
   app_version="$(version "${app}")"
-  if [ "${GITHUB_ACTIONS:-}" = true ]; then
-    docker buildx build --load \
-      --cache-from "type=gha,scope=${image}-amd64" \
-      --build-arg BUILD_ARCH=amd64 \
-      --build-arg "BUILD_VERSION=${app_version}" \
-      --tag "${image}:${app_version}" "${root}/${app}" >/dev/null
-  else
-    docker build --build-arg BUILD_ARCH=amd64 --build-arg "BUILD_VERSION=${app_version}" \
-      --tag "${image}:${app_version}" "${root}/${app}" >/dev/null
-  fi
+  docker build --build-arg BUILD_ARCH=amd64 --build-arg "BUILD_VERSION=${app_version}" \
+    --tag "${image}:${app_version}" "${root}/${app}" >/dev/null
 }
 
 wait_url() {

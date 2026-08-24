@@ -30,17 +30,10 @@ GitHub Actions.
 
 ### Caches
 
-Les workflows ACP, AEP et MCP Bridge mettent en cache leurs dépendances Python
-à partir de leur propre `requirements.txt`. Ils construisent uniquement des
-images amd64 avec Buildx et alimentent un cache de couches Docker distinct par
-App. La suite TLS réutilise ces trois caches en lecture seule : chaque workflow
-d’App reste l’unique propriétaire de son cache, ce qui évite les écritures
-concurrentes lorsque les validations s’exécutent en parallèle.
-
-Les clés de cache tiennent compte des fichiers et instructions de construction.
-Une dépendance ou une couche modifiée est donc reconstruite normalement ; le
-cache ne permet pas de contourner un test ni de réutiliser une couche devenue
-invalide.
+Les workflows ACP, AEP et MCP Bridge mettent en cache les téléchargements de
+leurs dépendances Python à partir de leur propre `requirements.txt`. Une
+dépendance modifiée est récupérée normalement ; le cache ne permet pas de
+contourner un test.
 
 ### Concurrence
 
@@ -77,15 +70,9 @@ boundaries. It also remains manually dispatchable from GitHub Actions.
 
 ### Caches
 
-The ACP, AEP, and MCP Bridge workflows cache their Python dependencies from
-their respective `requirements.txt` files. They build amd64 images only with
-Buildx and populate a separate Docker layer cache for each App. The TLS suite
-reuses those three caches read-only: each App workflow remains the sole writer
-of its cache, avoiding concurrent writes while validations run in parallel.
-
-Cache keys account for build files and instructions. A changed dependency or
-layer is therefore rebuilt normally; caching cannot skip a test or reuse an
-invalidated layer.
+The ACP, AEP, and MCP Bridge workflows cache Python dependency downloads based
+on their respective `requirements.txt` files. A changed dependency is fetched
+normally; caching cannot skip a test.
 
 ### Concurrency
 
