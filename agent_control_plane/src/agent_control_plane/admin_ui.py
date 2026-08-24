@@ -20,6 +20,7 @@ ADMIN_CSS += ".health.unavailable{color:var(--bad)}"
 ADMIN_CSS += ".health.degraded{color:var(--amber)}"
 ADMIN_CSS += ".state.success,.state.recorded,.state.delivered{background:var(--cyan-soft);color:var(--good)}"
 ADMIN_CSS += ".state.dead_letter{background:color-mix(in srgb,var(--bad) 12%,var(--surface));color:var(--bad)}"
+ADMIN_CSS += ".status-indicator{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;font-weight:650;text-align:right}.status-indicator .status-dot{flex:0 0 auto;margin:0}"
 
 ADMIN_JS = r"""
 const root=document.querySelector('main'),base=root.dataset.base,csrf=root.dataset.csrf;
@@ -238,5 +239,9 @@ connectorDrawer.button.onclick=event=>{selectConnectorForm('connector-create');d
 retentionDrawer.button.onclick=event=>openDrawer(language==='en'?'Configure retention':'Configurer la rétention',retentionDrawer.panelId,event.currentTarget);
 homeAssistantDrawer.button.onclick=event=>{document.querySelector('#ha-settings-message').textContent='';openDrawer(language==='en'?'Configure Home Assistant':'Configurer Home Assistant',homeAssistantDrawer.panelId,event.currentTarget)};
 document.addEventListener('click',event=>{const scheduleEdit=event.target.closest('.schedule-edit'),mappingEdit=event.target.closest('.mapping-edit');if(scheduleEdit)openDrawer(language==='en'?'Edit schedule':'Modifier la planification',scheduleDrawer.panelId,scheduleEdit);if(mappingEdit)openDrawer(language==='en'?'Edit trigger':'Modifier le déclencheur',mappingDrawer.panelId,mappingEdit)});
+const haTokenDot=document.querySelector('#ha-token-dot'),haTokenStatus=document.createElement('div'),haTokenLabel=document.createElement('span');
+haTokenStatus.id='ha-token-status';haTokenStatus.className='status-indicator';haTokenStatus.setAttribute('aria-live','polite');haTokenLabel.id='ha-token-label';haTokenDot.setAttribute('aria-hidden','true');haTokenDot.replaceWith(haTokenStatus);haTokenStatus.append(haTokenDot,haTokenLabel);
+const updateHomeAssistantTokenStatus=()=>{const available=haTokenDot.classList.contains('ready'),label=available?(language==='en'?'Home Assistant API access available':'Accès API Home Assistant disponible'):(language==='en'?'Supervisor token unavailable':'Jeton Supervisor indisponible'),detail=available?(language==='en'?'SUPERVISOR_TOKEN is available to ACP. A test event confirms end-to-end delivery.':'SUPERVISOR_TOKEN est fourni à ACP. Un événement de test confirme la livraison de bout en bout.'):(language==='en'?'SUPERVISOR_TOKEN is unavailable; the Home Assistant API proxy cannot be used.':'SUPERVISOR_TOKEN est indisponible ; le proxy API Home Assistant ne peut pas être utilisé.');haTokenLabel.textContent=label;haTokenStatus.title=detail;haTokenStatus.setAttribute('aria-label',`${label}. ${detail}`)};
+new MutationObserver(updateHomeAssistantTokenStatus).observe(haTokenDot,{attributes:true,attributeFilter:['class']});updateHomeAssistantTokenStatus();
 showView(location.hash.slice(1)||localStorage.getItem('acp-view'));
 """

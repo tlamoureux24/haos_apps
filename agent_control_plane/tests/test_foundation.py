@@ -228,6 +228,10 @@ class AdministrationInterfaceTests(unittest.TestCase):
         self.assertIn("openDrawer(language==='en'?'Configure Home Assistant':'Configurer Home Assistant'", ADMIN_JS)
         self.assertIn('id="ha-retry"', main_source)
         self.assertIn('id="ha-history"', main_source)
+        self.assertIn("haTokenStatus.id='ha-token-status'", ADMIN_JS)
+        self.assertIn("'Accès API Home Assistant disponible'", ADMIN_JS)
+        self.assertIn("'Jeton Supervisor indisponible'", ADMIN_JS)
+        self.assertIn("SUPERVISOR_TOKEN est fourni à ACP", ADMIN_JS)
         handler = ADMIN_JS.split("document.querySelector('#ha-settings').onsubmit", 1)[1].split("document.querySelector('#ha-test')", 1)[0]
         self.assertIn("closeDrawer(true)", handler)
 

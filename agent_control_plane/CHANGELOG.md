@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.2
+
+- Label the Home Assistant API availability indicator in the notification
+  settings drawer and provide bilingual explanatory tooltips for both states.
+
 ## 1.2.1
 
 - Move Home Assistant notification activation and category settings into the
