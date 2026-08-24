@@ -7,12 +7,12 @@ import json
 import logging
 import os
 import signal
+import ssl
 from contextlib import contextmanager
 from pathlib import Path
 
 import uvicorn
 
-from mcp_capability_bridge.main import build_runtime_state, create_apps
 from mcp_capability_bridge.settings import load_settings
 from mcp_capability_bridge.tls import prepare_certificate
 
@@ -36,10 +36,38 @@ class ManagedServer(uvicorn.Server):
         yield
 
 
-async def serve() -> None:
+def _drop_privileges() -> None:
+    os.setgroups([])
+    os.setgid(1000)
+    os.setuid(1000)
+    if os.geteuid() != 1000 or os.getegid() != 1000:
+        raise RuntimeError("failed_to_drop_runtime_privileges")
+
+
+def _external_tls_context(settings):
+    try:
+        certificate = prepare_certificate(settings.data_dir, "external", settings.certfile, settings.keyfile)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(certificate.certfile, certificate.keyfile)
+        os.environ.update({
+            "MCP_CAPABILITY_BRIDGE_TLS_FINGERPRINT": certificate.fingerprint_sha256,
+            "MCP_CAPABILITY_BRIDGE_TLS_SUBJECT": certificate.subject,
+            "MCP_CAPABILITY_BRIDGE_TLS_ISSUER": certificate.issuer,
+            "MCP_CAPABILITY_BRIDGE_TLS_NOT_BEFORE": certificate.not_before,
+            "MCP_CAPABILITY_BRIDGE_TLS_NOT_AFTER": certificate.not_after,
+        })
+        return context, certificate
+    except Exception as exc:
+        os.environ["MCP_CAPABILITY_BRIDGE_EXTERNAL_TLS_ERROR"] = f"{type(exc).__name__}: {exc}"
+        return None, None
+
+
+async def serve(external_context=None, external_certificate=None) -> None:
     if os.geteuid() != 1000:
         raise RuntimeError("MCP Capability Bridge must run with UID 1000")
     settings = load_settings()
+    from mcp_capability_bridge.main import build_runtime_state, create_apps
     state=build_runtime_state(settings)
     admin_app, public_app = create_apps(state)
     log_config = load_log_configuration(settings.log_level)
@@ -53,17 +81,22 @@ async def serve() -> None:
         logger.warning("MCP endpoint uses unencrypted HTTP; namespace credentials, tool arguments, and tool results are not encrypted by this application")
     else:
         try:
-            if stage_error := os.environ.get("MCP_CAPABILITY_BRIDGE_EXTERNAL_TLS_STAGE_ERROR"):
-                raise RuntimeError(stage_error)
-            certificate=prepare_certificate(settings.data_dir,settings.certificate_source,settings.certfile,settings.keyfile)
-            public_options={"ssl_certfile":str(certificate.certfile),"ssl_keyfile":str(certificate.keyfile)}
+            if tls_error := os.environ.get("MCP_CAPABILITY_BRIDGE_EXTERNAL_TLS_ERROR"):
+                raise RuntimeError(tls_error)
+            certificate=external_certificate or prepare_certificate(settings.data_dir,settings.certificate_source,settings.certfile,settings.keyfile)
+            if external_context is None:
+                public_options={"ssl_certfile":str(certificate.certfile),"ssl_keyfile":str(certificate.keyfile)}
             logger.info("Public TLS certificate source: %s",certificate.source)
             logger.info("Public TLS certificate SHA-256: %s",certificate.fingerprint_sha256)
             logger.info("Public TLS certificate expires at: %s",certificate.not_after)
         except Exception as exc:
             public_enabled=False;logger.error("Public TLS certificate is invalid; MCP HTTPS listener was not started and Ingress administration remains available error=%s",str(exc))
     if public_enabled:
-        servers.append(ManagedServer(uvicorn.Config(public_app,host=settings.public_host,port=settings.public_port,log_level=settings.log_level,access_log=False,log_config=log_config,**public_options)))
+        public_config=uvicorn.Config(public_app,host=settings.public_host,port=settings.public_port,log_level=settings.log_level,access_log=False,log_config=log_config,**public_options)
+        if external_context is not None:
+            public_config.load()
+            public_config.ssl=external_context
+        servers.append(ManagedServer(public_config))
     loop = asyncio.get_running_loop()
 
     def request_shutdown() -> None:
@@ -89,4 +122,9 @@ async def serve() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(serve())
+    bootstrap_settings = load_settings()
+    context = certificate = None
+    if bootstrap_settings.public_transport == "https" and bootstrap_settings.certificate_source == "external":
+        context, certificate = _external_tls_context(bootstrap_settings)
+        _drop_privileges()
+    asyncio.run(serve(context, certificate))

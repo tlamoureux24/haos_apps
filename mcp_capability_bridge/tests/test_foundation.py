@@ -213,7 +213,7 @@ class SurfaceTests(unittest.TestCase):
                 self.admin, "GET", "/", headers={**headers, "X-Forwarded-Proto": "https"},
             )
             self.assertIn("; Secure", secure_page.headers["set-cookie"])
-            self.assertIn("MCP Capability Bridge <b>v1.1.10</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v1.1.11</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()
@@ -369,7 +369,9 @@ class RuntimeTopologyTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         launcher = (root / "run.sh").read_text(encoding="utf-8")
         runtime = (root / "src/mcp_capability_bridge/runtime.py").read_text(encoding="utf-8")
-        self.assertEqual(launcher.count("python3 -m mcp_capability_bridge.runtime"), 1)
+        self.assertEqual(launcher.count("python3 -m mcp_capability_bridge.runtime"), 2)
+        self.assertEqual(launcher.count("exec python3 -m mcp_capability_bridge.runtime"), 1)
+        self.assertEqual(launcher.count("exec su-exec mcp-capability-bridge:mcp-capability-bridge python3 -m mcp_capability_bridge.runtime"), 1)
         self.assertNotIn("python3 -m uvicorn", launcher)
         self.assertIn("asyncio.gather", runtime)
         self.assertIn("ManagedServer", runtime)

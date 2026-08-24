@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.13
+
+- Load an external `/ssl` private key into the TLS context during the privileged
+  bootstrap, then permanently drop to UID/GID 1000 before importing or serving
+  the application. The key is never copied or made readable to the runtime user.
+
 ## 1.1.12
 
 - Stage external TLS keys under ephemeral `/run` so HAOS capability dropping

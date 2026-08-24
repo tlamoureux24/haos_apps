@@ -27,15 +27,17 @@ def main() -> int:
     security = (ROOT / "src/mcp_capability_bridge/security.py").read_text(encoding="utf-8")
 
     for value in (
-        'slug: "mcp_capability_bridge"', 'version: "1.1.10"',
+        'slug: "mcp_capability_bridge"', 'version: "1.1.11"',
         "  - amd64", "init: false", "stage: stable", "apparmor: true",
         "tmpfs: true", "backup: cold", "ingress: true", "ingress_port: 8099",
         "  8098/tcp: null",
     ):
         require(config, value, "App metadata invariant")
-    require(package, '__version__ = "1.1.10"', "synchronized package version")
-    require(launcher + apparmor, "/run/mcp-capability-bridge-external-tls", "ephemeral external TLS staging")
-    if "/data/private/external-tls" in launcher + apparmor: raise RuntimeError("External TLS staging must remain ephemeral under /run")
+    require(package, '__version__ = "1.1.11"', "synchronized package version")
+    if "context.load_cert_chain" not in runtime or runtime.index("context.load_cert_chain") > runtime.rindex("_drop_privileges()"):
+        raise RuntimeError("External TLS key must be loaded before dropping privileges")
+    if "public_config.ssl=external_context" not in runtime or "stage_external_certificate" in launcher + runtime:
+        raise RuntimeError("External TLS must use an in-memory context without key staging")
     require(config, "arch:\n  - amd64\nstartup:", "AMD64-only architecture")
     if "aarch64" in config:
         raise RuntimeError("MCP Capability Bridge must support amd64 only")
@@ -47,8 +49,8 @@ def main() -> int:
     require(dockerfile, "COPY logo.png /app/logo.png", "authoritative logo packaging")
     require(launcher, "#!/usr/bin/with-contenv /bin/sh", "s6 environment launcher")
     require(launcher, "su-exec mcp-capability-bridge:mcp-capability-bridge", "privilege drop")
-    if launcher.count("python3 -m mcp_capability_bridge.runtime") != 1:
-        raise RuntimeError("Launcher must start exactly one Bridge runtime")
+    if launcher.count("exec python3 -m mcp_capability_bridge.runtime") != 1 or launcher.count("exec su-exec mcp-capability-bridge:mcp-capability-bridge python3 -m mcp_capability_bridge.runtime") != 1:
+        raise RuntimeError("Each transport branch must exec exactly one Bridge runtime")
     if "python3 -m uvicorn" in launcher:
         raise RuntimeError("Launcher must not split listeners across processes")
     for value in ("asyncio.gather", "ManagedServer", "signal.SIGTERM", "signal.SIGINT"):

@@ -25,15 +25,6 @@ else
   keyfile="${MCP_CAPABILITY_BRIDGE_KEYFILE:-}"
 fi
 
-if [ "${public_transport}" = "https" ] && [ "${certificate_source}" = "external" ]; then
-  stage_output=""
-  if ! stage_output="$(python3 -c 'from pathlib import Path; from mcp_capability_bridge.tls import stage_external_certificate; import sys; stage_external_certificate(sys.argv[1],sys.argv[2],Path("/run/mcp-capability-bridge-external-tls"),1000,1000)' "${certfile}" "${keyfile}" 2>&1)"; then
-    export MCP_CAPABILITY_BRIDGE_EXTERNAL_TLS_STAGE_ERROR="$(printf '%s\n' "${stage_output}" | tail -n 1)"
-  fi
-  certfile="server-cert.pem";keyfile="server-key.pem"
-  export MCP_CAPABILITY_BRIDGE_EXTERNAL_TLS_DIR=/run/mcp-capability-bridge-external-tls
-fi
-
 export MCP_CAPABILITY_BRIDGE_DATA_DIR="${MCP_CAPABILITY_BRIDGE_DATA_DIR:-/data}"
 export MCP_CAPABILITY_BRIDGE_LOG_LEVEL="${log_level}"
 export MCP_CAPABILITY_BRIDGE_PUBLIC_TRANSPORT="${public_transport}"
@@ -46,5 +37,7 @@ printf '%s [MCP Capability Bridge] INFO: Initializing generation-1 database sche
 su-exec mcp-capability-bridge:mcp-capability-bridge \
   python3 -m mcp_capability_bridge.database initialize
 
-exec su-exec mcp-capability-bridge:mcp-capability-bridge \
-  python3 -m mcp_capability_bridge.runtime
+if [ "${public_transport}" = "https" ] && [ "${certificate_source}" = "external" ]; then
+  exec python3 -m mcp_capability_bridge.runtime
+fi
+exec su-exec mcp-capability-bridge:mcp-capability-bridge python3 -m mcp_capability_bridge.runtime

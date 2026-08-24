@@ -3,9 +3,9 @@ name: Validate Agent Execution Plane App
 on:
   push:
     branches: [main]
-    paths: ["agent_execution_plane/**", ".github/workflows/agent-execution-plane-validate.yml"]
+    paths: ["agent_execution_plane/**", "scripts/external_tls_key_smoke.sh", ".github/workflows/agent-execution-plane-validate.yml"]
   pull_request:
-    paths: ["agent_execution_plane/**", ".github/workflows/agent-execution-plane-validate.yml"]
+    paths: ["agent_execution_plane/**", "scripts/external_tls_key_smoke.sh", ".github/workflows/agent-execution-plane-validate.yml"]
   workflow_dispatch:
 
 permissions:
@@ -48,6 +48,10 @@ jobs:
             --inventory agent_execution_plane-codex-executables.txt \
             --apparmor agent_execution_plane/apparmor.txt
           cat agent_execution_plane-codex-executables.txt
+      - name: Smoke-test root-only external TLS key
+        run: |
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
+          bash scripts/external_tls_key_smoke.sh aep "agent-execution-plane:${version}"
       - name: Smoke-test listeners, UI, logs, and persistence
         run: |
           set -euo pipefail

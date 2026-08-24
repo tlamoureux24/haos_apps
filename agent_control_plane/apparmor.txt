@@ -144,8 +144,6 @@ profile agent_control_plane flags=(attach_disconnected,mediate_deleted) {
   /data/private/ rw,
   /data/private/tls/ rw,
   /data/private/tls/** rwlk,
-  /run/agent-control-plane-external-tls/ rw,
-  /run/agent-control-plane-external-tls/** rwlk,
   /data/private/credential-pepper rwlk,
   /data/private/.credential-pepper.*.tmp rwlk,
   /data/options.json r,

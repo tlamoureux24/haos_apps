@@ -41,7 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_control_plane"',
-        'version: "1.1.12"',
+        'version: "1.1.13"',
         "  - amd64",
         "init: false",
         "stage: stable",
@@ -58,7 +58,7 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "1.1.12"' not in package:
+    if '__version__ = "1.1.13"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
     if "arch:\n  - amd64\nstartup:" not in config or "aarch64" in config:
         raise RuntimeError("Agent Control Plane must support amd64 only")
@@ -71,8 +71,11 @@ def main() -> int:
         raise RuntimeError("All Agent Control Plane listener variants must use timestamped logging")
     if "prepare_certificate" not in launcher or "2>&1" not in launcher or "tls_error=" not in launcher:
         raise RuntimeError("Concise TLS startup error handling missing")
-    if "/run/agent-control-plane-external-tls" not in launcher + apparmor or "/data/private/external-tls" in launcher + apparmor:
-        raise RuntimeError("External TLS staging must remain ephemeral under /run")
+    tls_server = (ROOT / "src/agent_control_plane/tls_server.py").read_text(encoding="utf-8")
+    if "context.load_cert_chain" not in tls_server or tls_server.index("context.load_cert_chain") > tls_server.rindex("_drop_privileges()"):
+        raise RuntimeError("External TLS key must be loaded before dropping privileges")
+    if "config.ssl = context" not in tls_server or "stage_external_certificate" in launcher + tls_server:
+        raise RuntimeError("External TLS must use an in-memory context without key staging")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile:
         raise RuntimeError("Home Assistant base image must continue to follow latest")
     if "FROM ghcr.io/home-assistant/base:latest@" in dockerfile:

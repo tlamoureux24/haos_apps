@@ -173,8 +173,12 @@ def create_apps(state: RuntimeState) -> tuple[Starlette, Starlette]:
         result:dict[str,object]={"configured":state.settings.public_transport=="https","source":state.settings.certificate_source}
         if state.settings.public_transport!="https":return result
         try:
-            info=prepare_certificate(state.settings.data_dir,state.settings.certificate_source,state.settings.certfile,state.settings.keyfile)
-            result.update({"valid":True,"fingerprint_sha256":info.fingerprint_sha256,"subject":info.subject,"issuer":info.issuer,"not_before":info.not_before,"not_after":info.not_after})
+            if tls_error := os.environ.get("MCP_CAPABILITY_BRIDGE_EXTERNAL_TLS_ERROR"):raise RuntimeError(tls_error)
+            if state.settings.certificate_source=="external" and os.environ.get("MCP_CAPABILITY_BRIDGE_TLS_FINGERPRINT"):
+                result.update({"valid":True,"fingerprint_sha256":os.environ["MCP_CAPABILITY_BRIDGE_TLS_FINGERPRINT"],"subject":os.environ["MCP_CAPABILITY_BRIDGE_TLS_SUBJECT"],"issuer":os.environ["MCP_CAPABILITY_BRIDGE_TLS_ISSUER"],"not_before":os.environ["MCP_CAPABILITY_BRIDGE_TLS_NOT_BEFORE"],"not_after":os.environ["MCP_CAPABILITY_BRIDGE_TLS_NOT_AFTER"]})
+            else:
+                info=prepare_certificate(state.settings.data_dir,state.settings.certificate_source,state.settings.certfile,state.settings.keyfile)
+                result.update({"valid":True,"fingerprint_sha256":info.fingerprint_sha256,"subject":info.subject,"issuer":info.issuer,"not_before":info.not_before,"not_after":info.not_after})
         except Exception as exc:result.update({"valid":False,"error":str(exc)})
         return result
 

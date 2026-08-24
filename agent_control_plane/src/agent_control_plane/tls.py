@@ -76,26 +76,6 @@ def external_paths(ssl_dir: Path, cert_name: str, key_name: str) -> tuple[Path, 
     return paths[0], paths[1]
 
 
-def stage_external_certificate(cert_name: str, key_name: str, directory: Path, uid: int, gid: int, source_root: Path = Path("/ssl")) -> tuple[Path, Path]:
-    sources = external_paths(source_root, cert_name, key_name)
-    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if directory.is_symlink() or not directory.is_dir():
-        raise ValueError("external_certificate_stage_invalid")
-    certfile, keyfile = directory / "server-cert.pem", directory / "server-key.pem"
-    for path in (certfile, keyfile):
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
-    inspect_certificate("external", *sources)
-    _write_private(certfile, sources[0].read_bytes(), 0o644)
-    _write_private(keyfile, sources[1].read_bytes(), 0o600)
-    os.chown(directory, uid, gid)
-    os.chown(certfile, uid, gid)
-    os.chown(keyfile, uid, gid)
-    return certfile, keyfile
-
-
 def certificate_validity(certificate: x509.Certificate) -> tuple[datetime, datetime]:
     """Return UTC-aware validity bounds across cryptography API generations."""
     try:
@@ -132,7 +112,7 @@ def inspect_certificate(source: str, certfile: Path, keyfile: Path) -> Certifica
 
 
 def prepare_certificate(data_dir: Path, source: str, cert_name: str = "", key_name: str = "", ssl_dir: Path | None = None) -> CertificateInfo:
-    ssl_dir = ssl_dir or Path(os.environ.get("AGENT_CONTROL_PLANE_EXTERNAL_TLS_DIR", "/ssl"))
+    ssl_dir = ssl_dir or Path("/ssl")
     if source == "self_generated":
         certfile, keyfile = generate_certificate(data_dir / "private" / "tls", "Agent Control Plane")
     elif source == "external":

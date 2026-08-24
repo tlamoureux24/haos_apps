@@ -37,15 +37,17 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
     acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "1.1.12"', "stage: stable", "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    for text in ('slug: "agent_execution_plane"', 'version: "1.1.13"', "stage: stable", "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "1.1.12"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "1.1.13"' not in package: raise RuntimeError("Version sources differ")
     if "arch:\n  - amd64\nstartup:" not in config or "aarch64" in config: raise RuntimeError("Agent Execution Plane must support amd64 only")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 3: raise RuntimeError("Unprivileged listener variants missing")
     if launcher.count("--log-config /app/src/agent_execution_plane/uvicorn_logging.json") != 3: raise RuntimeError("Timestamped listener logging missing")
     if "prepare_certificate" not in launcher or "2>&1" not in launcher or "tls_error=" not in launcher: raise RuntimeError("Concise TLS startup error handling missing")
-    if "/run/agent-execution-plane-external-tls" not in launcher + apparmor or "/data/private/external-tls" in launcher + apparmor: raise RuntimeError("External TLS staging must remain ephemeral under /run")
+    tls_server=(ROOT/"src/agent_execution_plane/tls_server.py").read_text()
+    if "context.load_cert_chain" not in tls_server or tls_server.index("context.load_cert_chain")>tls_server.rindex("_drop_privileges()"): raise RuntimeError("External TLS key must be loaded before dropping privileges")
+    if "config.ssl = context" not in tls_server or "stage_external_certificate" in launcher+tls_server: raise RuntimeError("External TLS must use an in-memory context without key staging")
     if "os.geteuid() != 1000" not in main_py or "ingress_only" not in main_py or "x-ingress-path" not in main_py: raise RuntimeError("Ingress boundary missing")
     for invariant in ("Agent Execution Plane <b>v{__version__}</b>", "/admin/assets/icon.png", "aep-language", "navigator.language", "aep-theme", "prefers-color-scheme", "activityTitle", "app_stopped:'Application arrêtée'", "app_stopped:'Application stopped'"):
         if invariant not in main_py + ui: raise RuntimeError(f"UI invariant missing: {invariant}")

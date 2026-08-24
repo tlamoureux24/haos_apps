@@ -6,11 +6,13 @@ on:
       - main
     paths:
       - "agent_control_plane/**"
+      - "scripts/external_tls_key_smoke.sh"
       - ".gitignore"
       - ".github/workflows/agent-control-plane-validate.yml"
   pull_request:
     paths:
       - "agent_control_plane/**"
+      - "scripts/external_tls_key_smoke.sh"
       - ".gitignore"
       - ".github/workflows/agent-control-plane-validate.yml"
   workflow_dispatch:
@@ -80,6 +82,11 @@ jobs:
           path: agent_control_plane-base-image.txt
           if-no-files-found: error
           retention-days: 90
+
+      - name: Smoke-test root-only external TLS key
+        run: |
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_control_plane/config.yaml)"
+          bash scripts/external_tls_key_smoke.sh acp "agent-control-plane:${version}"
 
       - name: Build ephemeral AppArmor trace image
         run: |

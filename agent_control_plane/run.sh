@@ -28,15 +28,6 @@ else
 fi
 
 external_tls_error=""
-if { [ "${events_transport}" = "https" ] || [ "${mcp_transport}" = "https" ]; } && [ "${certificate_source}" = "external" ]; then
-  if stage_output="$(PYTHONPATH=/app/src python3 -c 'from pathlib import Path; from agent_control_plane.tls import stage_external_certificate; import sys; stage_external_certificate(sys.argv[1],sys.argv[2],Path("/run/agent-control-plane-external-tls"),1000,1000)' "${certfile}" "${keyfile}" 2>&1)"; then
-    certfile="server-cert.pem";keyfile="server-key.pem"
-  else
-    external_tls_error="$(printf '%s\n' "${stage_output}" | tail -n 1)";certfile="server-cert.pem";keyfile="server-key.pem"
-    export AGENT_CONTROL_PLANE_EXTERNAL_TLS_STAGE_ERROR="${external_tls_error}"
-  fi
-  export AGENT_CONTROL_PLANE_EXTERNAL_TLS_DIR=/run/agent-control-plane-external-tls
-fi
 
 export AGENT_CONTROL_PLANE_DATA_DIR="${AGENT_CONTROL_PLANE_DATA_DIR:-/data}"
 export AGENT_CONTROL_PLANE_LOG_LEVEL="${log_level}"
@@ -81,32 +72,35 @@ stop_servers() {
 }
 trap stop_servers TERM INT EXIT
 
+tls_ready=false
+tls_values=""
+if [ "${events_transport}" = "https" ] || [ "${mcp_transport}" = "https" ]; then
+  tls_probe="su-exec agent-control-plane:agent-control-plane"
+  [ "${certificate_source}" != "external" ] || tls_probe=""
+  if tls_values="$(${tls_probe} python3 -c 'from agent_control_plane.settings import load_settings; from agent_control_plane.tls import prepare_certificate; s=load_settings(); i=prepare_certificate(s.data_dir,s.certificate_source,s.certfile,s.keyfile); print(i.certfile); print(i.keyfile); print(i.fingerprint_sha256); print(i.not_after); print(i.subject); print(i.issuer); print(i.not_before)' 2>&1)"; then
+    tls_ready=true
+    tls_cert_path="$(printf '%s\n' "${tls_values}" | sed -n '1p')"
+    tls_key_path="$(printf '%s\n' "${tls_values}" | sed -n '2p')"
+    tls_fingerprint="$(printf '%s\n' "${tls_values}" | sed -n '3p')"
+    tls_expiry="$(printf '%s\n' "${tls_values}" | sed -n '4p')"
+    export AGENT_CONTROL_PLANE_TLS_FINGERPRINT="${tls_fingerprint}" AGENT_CONTROL_PLANE_TLS_NOT_AFTER="${tls_expiry}" AGENT_CONTROL_PLANE_TLS_SUBJECT="$(printf '%s\n' "${tls_values}"|sed -n '5p')" AGENT_CONTROL_PLANE_TLS_ISSUER="$(printf '%s\n' "${tls_values}"|sed -n '6p')" AGENT_CONTROL_PLANE_TLS_NOT_BEFORE="$(printf '%s\n' "${tls_values}"|sed -n '7p')"
+    log_info "Public TLS certificate source: ${certificate_source}"
+    log_info "Public TLS certificate SHA-256: ${tls_fingerprint}"
+    log_info "Public TLS certificate expires at: ${tls_expiry}"
+  else
+    tls_error="$(printf '%s\n' "${tls_values}" | tail -n 1)"
+    external_tls_error="${tls_error}"
+    export AGENT_CONTROL_PLANE_EXTERNAL_TLS_ERROR="${tls_error}"
+    log_error "Public TLS certificate is invalid; HTTPS listeners were not started and Ingress administration remains available error=${tls_error}"
+  fi
+fi
+
 log_info "Starting private Ingress administration listener"
 su-exec agent-control-plane:agent-control-plane env AGENT_CONTROL_PLANE_SURFACE=admin \
   python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8099 \
   --no-access-log --log-level "${log_level}" \
   --log-config /app/src/agent_control_plane/uvicorn_logging.json &
 admin_pid=$!
-
-tls_ready=false
-tls_values=""
-if [ "${events_transport}" = "https" ] || [ "${mcp_transport}" = "https" ]; then
-  if [ -n "${external_tls_error}" ]; then
-    log_error "Public TLS certificate is invalid; HTTPS listeners were not started and Ingress administration remains available error=${external_tls_error}"
-  elif tls_values="$(su-exec agent-control-plane:agent-control-plane python3 -c 'from agent_control_plane.settings import load_settings; from agent_control_plane.tls import prepare_certificate; s=load_settings(); i=prepare_certificate(s.data_dir,s.certificate_source,s.certfile,s.keyfile); print(i.certfile); print(i.keyfile); print(i.fingerprint_sha256); print(i.not_after)' 2>&1)"; then
-    tls_ready=true
-    tls_cert_path="$(printf '%s\n' "${tls_values}" | sed -n '1p')"
-    tls_key_path="$(printf '%s\n' "${tls_values}" | sed -n '2p')"
-    tls_fingerprint="$(printf '%s\n' "${tls_values}" | sed -n '3p')"
-    tls_expiry="$(printf '%s\n' "${tls_values}" | sed -n '4p')"
-    log_info "Public TLS certificate source: ${certificate_source}"
-    log_info "Public TLS certificate SHA-256: ${tls_fingerprint}"
-    log_info "Public TLS certificate expires at: ${tls_expiry}"
-  else
-    tls_error="$(printf '%s\n' "${tls_values}" | tail -n 1)"
-    log_error "Public TLS certificate is invalid; HTTPS listeners were not started and Ingress administration remains available error=${tls_error}"
-  fi
-fi
 
 if [ "${events_transport}" = "http" ]; then
   log_info "Event Intake API listening on HTTP port 8100, path /api/v1/events"
@@ -117,10 +111,13 @@ if [ "${events_transport}" = "http" ]; then
   events_pid=$!
 elif [ "${tls_ready}" = true ]; then
   log_info "Event Intake API listening on HTTPS port 8100, path /api/v1/events"
-  su-exec agent-control-plane:agent-control-plane env AGENT_CONTROL_PLANE_SURFACE=events \
-    python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8100 \
-    --ssl-certfile "${tls_cert_path}" --ssl-keyfile "${tls_key_path}" \
-    --no-access-log --log-level "${log_level}" --log-config /app/src/agent_control_plane/uvicorn_logging.json &
+  if [ "${certificate_source}" = "external" ]; then
+    AGENT_CONTROL_PLANE_SURFACE=events python3 -m agent_control_plane.tls_server &
+  else
+    su-exec agent-control-plane:agent-control-plane env AGENT_CONTROL_PLANE_SURFACE=events \
+      python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8100 --ssl-certfile "${tls_cert_path}" --ssl-keyfile "${tls_key_path}" \
+      --no-access-log --log-level "${log_level}" --log-config /app/src/agent_control_plane/uvicorn_logging.json &
+  fi
   events_pid=$!
 fi
 
@@ -133,10 +130,13 @@ if [ "${mcp_transport}" = "http" ]; then
   mcp_pid=$!
 elif [ "${tls_ready}" = true ]; then
   log_info "MCP Worker Endpoint listening on HTTPS port 8098, path /mcp"
-  su-exec agent-control-plane:agent-control-plane env AGENT_CONTROL_PLANE_SURFACE=mcp \
-    python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8098 \
-    --ssl-certfile "${tls_cert_path}" --ssl-keyfile "${tls_key_path}" \
-    --no-access-log --log-level "${log_level}" --log-config /app/src/agent_control_plane/uvicorn_logging.json &
+  if [ "${certificate_source}" = "external" ]; then
+    AGENT_CONTROL_PLANE_SURFACE=mcp python3 -m agent_control_plane.tls_server &
+  else
+    su-exec agent-control-plane:agent-control-plane env AGENT_CONTROL_PLANE_SURFACE=mcp \
+      python3 -m uvicorn agent_control_plane.main:app --host 0.0.0.0 --port 8098 --ssl-certfile "${tls_cert_path}" --ssl-keyfile "${tls_key_path}" \
+      --no-access-log --log-level "${log_level}" --log-config /app/src/agent_control_plane/uvicorn_logging.json &
+  fi
   mcp_pid=$!
 fi
 

@@ -155,8 +155,6 @@ profile mcp_capability_bridge flags=(attach_disconnected,mediate_deleted) {
   /data/private/ rw,
   /data/private/tls/ rw,
   /data/private/tls/** rwlk,
-  /run/mcp-capability-bridge-external-tls/ rw,
-  /run/mcp-capability-bridge-external-tls/** rwlk,
   /data/private/credential-pepper rwlk,
   /data/private/.credential-pepper.*.tmp rwlk,
   /data/private/target-secret-key rwlk,

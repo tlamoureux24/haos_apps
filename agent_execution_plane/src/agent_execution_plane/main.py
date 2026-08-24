@@ -201,9 +201,12 @@ def certificate_payload() -> dict[str, object]:
     result: dict[str, object] = {"configured": settings.public_transport == "https", "source": settings.certificate_source}
     if settings.public_transport != "https": return result
     try:
-        if stage_error := os.environ.get("AGENT_EXECUTION_PLANE_EXTERNAL_TLS_STAGE_ERROR"): raise RuntimeError(stage_error)
-        info=prepare_certificate(settings.data_dir,settings.certificate_source,settings.certfile,settings.keyfile)
-        result.update({"valid":True,"fingerprint_sha256":info.fingerprint_sha256,"subject":info.subject,"issuer":info.issuer,"not_before":info.not_before,"not_after":info.not_after})
+        if tls_error := os.environ.get("AGENT_EXECUTION_PLANE_EXTERNAL_TLS_ERROR"): raise RuntimeError(tls_error)
+        if settings.certificate_source == "external" and os.environ.get("AGENT_EXECUTION_PLANE_TLS_FINGERPRINT"):
+            result.update({"valid":True,"fingerprint_sha256":os.environ["AGENT_EXECUTION_PLANE_TLS_FINGERPRINT"],"subject":os.environ["AGENT_EXECUTION_PLANE_TLS_SUBJECT"],"issuer":os.environ["AGENT_EXECUTION_PLANE_TLS_ISSUER"],"not_before":os.environ["AGENT_EXECUTION_PLANE_TLS_NOT_BEFORE"],"not_after":os.environ["AGENT_EXECUTION_PLANE_TLS_NOT_AFTER"]})
+        else:
+            info=prepare_certificate(settings.data_dir,settings.certificate_source,settings.certfile,settings.keyfile)
+            result.update({"valid":True,"fingerprint_sha256":info.fingerprint_sha256,"subject":info.subject,"issuer":info.issuer,"not_before":info.not_before,"not_after":info.not_after})
     except Exception as exc: result.update({"valid":False,"error":str(exc)})
     return result
 
