@@ -200,3 +200,11 @@ class RetentionPolicyRequest(StrictContract):
 
 class RetentionRunRequest(StrictContract):
     confirm: Literal[True]
+
+
+class HomeAssistantSettingsRequest(StrictContract):
+    enabled: bool
+    task_available: bool
+    task_completed: bool
+    task_failed: bool
+    technical_error: bool

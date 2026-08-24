@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.0
+
+- Add optional, default-disabled Home Assistant event notifications for available,
+  completed and failed tasks, plus durable technical incidents.
+- Deliver through the documented Supervisor Core API proxy using
+  `SUPERVISOR_TOKEN`; no user URL, token, or `/ssl` access is required.
+- Persist delivery in a leased transactional outbox. Expired delivery leases are
+  recovered after crashes and the notification ID remains stable across retries.
+- Add a Home Assistant administration page, test and retry controls, delivery
+  status, and a bounded history of the latest 100 successful deliveries.
+- Move directly to database schema generation 15 without migration. Existing
+  App data must be removed once before installing this release.
+
 ## 1.1.13
 
 - Load an external `/ssl` private key into the TLS context during the privileged

@@ -39,6 +39,7 @@ from agent_control_plane.contracts import (
     ScheduleUpdateRequest,
     RetentionPolicyRequest,
     RetentionRunRequest,
+    HomeAssistantSettingsRequest,
 )
 from agent_control_plane.connectors import (
     SCHEMA_REJECTION_CODES,
@@ -170,6 +171,41 @@ async def admin_status(request: Request) -> JSONResponse:
             "audit": audit,
         }
     )
+
+
+async def admin_home_assistant_status(request: Request) -> JSONResponse:
+    status = await run_in_threadpool(request.app.state.control_plane.home_assistant_status)
+    notifications = await run_in_threadpool(request.app.state.control_plane.list_notifications)
+    return JSONResponse({**status, "notifications": notifications})
+
+
+async def admin_update_home_assistant(request: Request) -> JSONResponse:
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", request.state.correlation_id)
+    try:
+        contract = await json_contract(request, HomeAssistantSettingsRequest)
+    except (ValueError, ValidationError, OverflowError):
+        return error_response(422, "invalid_home_assistant_settings", request.state.correlation_id)
+    categories = {category: getattr(contract, category) for category in ("task_available", "task_completed", "task_failed", "technical_error")}
+    await run_in_threadpool(request.app.state.control_plane.update_home_assistant_settings, contract.enabled, categories, request.state.correlation_id)
+    return JSONResponse({"status": "updated"})
+
+
+async def admin_test_home_assistant(request: Request) -> JSONResponse:
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", request.state.correlation_id)
+    try:
+        notification_id = await run_in_threadpool(request.app.state.control_plane.queue_test_notification, request.state.correlation_id)
+    except ValueError as error:
+        return error_response(409, str(error), request.state.correlation_id)
+    return JSONResponse({"notification_id": notification_id, "status": "queued"}, status_code=202)
+
+
+async def admin_retry_home_assistant(request: Request) -> JSONResponse:
+    if not csrf_valid(request):
+        return error_response(403, "csrf_failed", request.state.correlation_id)
+    count = await run_in_threadpool(request.app.state.control_plane.retry_notifications, request.state.correlation_id)
+    return JSONResponse({"status": "queued", "count": count})
 
 
 async def admin_list_identities(request: Request) -> JSONResponse:

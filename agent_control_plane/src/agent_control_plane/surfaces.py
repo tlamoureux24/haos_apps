@@ -52,6 +52,10 @@ def exposed_paths(surface: str) -> tuple[str, ...]:
             "/admin/api/v1/retention",
             "/admin/api/v1/retention/update",
             "/admin/api/v1/retention/run",
+            "/admin/api/v1/home-assistant",
+            "/admin/api/v1/home-assistant/settings",
+            "/admin/api/v1/home-assistant/test",
+            "/admin/api/v1/home-assistant/retry",
             *HEALTH_PATHS,
         )
     if surface == "events":
