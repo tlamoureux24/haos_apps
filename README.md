@@ -251,6 +251,7 @@ Il n’est pas destiné à une installation Home Assistant Core seule sans Super
 ### Convention du dépôt
 
 - [Convention commune d’internationalisation](INTERNATIONALIZATION.md#français)
+- [Politique de CI et déclenchement des validations](CI.md#français)
 
 ### Mises à jour
 
@@ -526,6 +527,7 @@ It is not intended for a standalone Home Assistant Core installation without Sup
 ### Repository convention
 
 - [Shared internationalization convention](INTERNATIONALIZATION.md#english)
+- [CI and validation trigger policy](CI.md#english)
 
 ### Updates
 

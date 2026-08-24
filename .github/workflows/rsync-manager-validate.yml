@@ -6,15 +6,21 @@ on:
       - main
     paths:
       - "rsync_manager/**"
+      - "!rsync_manager/**/*.md"
       - ".github/workflows/rsync-manager-*.yml"
   pull_request:
     paths:
       - "rsync_manager/**"
+      - "!rsync_manager/**/*.md"
       - ".github/workflows/rsync-manager-*.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: rsync-manager-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:

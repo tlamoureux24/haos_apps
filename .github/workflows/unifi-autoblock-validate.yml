@@ -6,15 +6,21 @@ on:
       - main
     paths:
       - "unifi_autoblock/**"
+      - "!unifi_autoblock/**/*.md"
       - ".github/workflows/unifi-autoblock-validate.yml"
   pull_request:
     paths:
       - "unifi_autoblock/**"
+      - "!unifi_autoblock/**/*.md"
       - ".github/workflows/unifi-autoblock-validate.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: unifi-autoblock-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:

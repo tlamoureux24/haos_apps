@@ -6,15 +6,21 @@ on:
       - main
     paths:
       - "gatus/**"
+      - "!gatus/**/*.md"
       - ".github/workflows/gatus-*.yml"
   pull_request:
     paths:
       - "gatus/**"
+      - "!gatus/**/*.md"
       - ".github/workflows/gatus-*.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: gatus-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:

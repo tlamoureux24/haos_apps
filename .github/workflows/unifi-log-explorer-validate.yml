@@ -6,15 +6,21 @@ on:
       - main
     paths:
       - "unifi_log_explorer/**"
+      - "!unifi_log_explorer/**/*.md"
       - ".github/workflows/unifi-log-explorer-validate.yml"
   pull_request:
     paths:
       - "unifi_log_explorer/**"
+      - "!unifi_log_explorer/**/*.md"
       - ".github/workflows/unifi-log-explorer-validate.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: unifi-log-explorer-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:

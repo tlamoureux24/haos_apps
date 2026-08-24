@@ -6,15 +6,21 @@ on:
       - main
     paths:
       - "nginx_proxy_manager/**"
+      - "!nginx_proxy_manager/**/*.md"
       - ".github/workflows/nginx-proxy-manager-*.yml"
   pull_request:
     paths:
       - "nginx_proxy_manager/**"
+      - "!nginx_proxy_manager/**/*.md"
       - ".github/workflows/nginx-proxy-manager-*.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: nginx-proxy-manager-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:

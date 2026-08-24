@@ -3,13 +3,17 @@ name: Validate Agent Execution Plane App
 on:
   push:
     branches: [main]
-    paths: ["agent_execution_plane/**", "scripts/external_tls_key_smoke.sh", ".github/workflows/agent-execution-plane-validate.yml"]
+    paths: ["agent_execution_plane/**", "!agent_execution_plane/**/*.md", "scripts/external_tls_key_smoke.sh", ".github/workflows/agent-execution-plane-validate.yml"]
   pull_request:
-    paths: ["agent_execution_plane/**", "scripts/external_tls_key_smoke.sh", ".github/workflows/agent-execution-plane-validate.yml"]
+    paths: ["agent_execution_plane/**", "!agent_execution_plane/**/*.md", "scripts/external_tls_key_smoke.sh", ".github/workflows/agent-execution-plane-validate.yml"]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: agent-execution-plane-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:

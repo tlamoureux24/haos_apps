@@ -6,15 +6,21 @@ on:
       - main
     paths:
       - "adguard_home/**"
+      - "!adguard_home/**/*.md"
       - ".github/workflows/adguard-home-*.yml"
   pull_request:
     paths:
       - "adguard_home/**"
+      - "!adguard_home/**/*.md"
       - ".github/workflows/adguard-home-*.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: adguard-home-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:

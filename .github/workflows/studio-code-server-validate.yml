@@ -6,15 +6,21 @@ on:
       - main
     paths:
       - "studio_code_server/**"
+      - "!studio_code_server/**/*.md"
       - ".github/workflows/studio-code-server-*.yml"
   pull_request:
     paths:
       - "studio_code_server/**"
+      - "!studio_code_server/**/*.md"
       - ".github/workflows/studio-code-server-*.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: studio-code-server-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:

@@ -3,13 +3,17 @@ name: Validate MCP Capability Bridge App
 on:
   push:
     branches: [main]
-    paths: ["mcp_capability_bridge/**", "scripts/external_tls_key_smoke.sh", ".github/workflows/mcp-capability-bridge-validate.yml"]
+    paths: ["mcp_capability_bridge/**", "!mcp_capability_bridge/**/*.md", "scripts/external_tls_key_smoke.sh", ".github/workflows/mcp-capability-bridge-validate.yml"]
   pull_request:
-    paths: ["mcp_capability_bridge/**", "scripts/external_tls_key_smoke.sh", ".github/workflows/mcp-capability-bridge-validate.yml"]
+    paths: ["mcp_capability_bridge/**", "!mcp_capability_bridge/**/*.md", "scripts/external_tls_key_smoke.sh", ".github/workflows/mcp-capability-bridge-validate.yml"]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: mcp-capability-bridge-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
