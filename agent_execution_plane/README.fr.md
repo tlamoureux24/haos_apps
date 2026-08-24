@@ -1,6 +1,6 @@
 # Agent Execution Plane
 
-Agent Execution Plane `1.0.2` est un moteur de raisonnement et d’exécution utilisable en mode autonome. Il applique la priorité administrateur des modèles et les règles communes de fallback/non-replay à l’enveloppe exacte des capacités opérationnelles MCP fournie par la source courante.
+Agent Execution Plane est un moteur de raisonnement et d’exécution utilisable en mode autonome. Il applique la priorité administrateur des modèles et les règles communes de fallback/non-replay à l’enveloppe exacte des capacités opérationnelles MCP fournie par la source courante.
 
 ## Frontière de responsabilité
 
@@ -22,6 +22,19 @@ AEP conserve exactement une connexion Control Plane facultative. La vue d’ense
 
 Installez l’App, configurez un ou plusieurs modèles dans Ingress, puis mappez le port interne `8098/tcp` vers le port hôte souhaité dans la section **Réseau** de l’App Home Assistant. L’administration reste exclusivement accessible par Ingress sur le port interne `8099`.
 
+L’API autonome utilise par défaut HTTPS avec un certificat autogénéré
+persistant. **Transport & TLS** affiche l’état du listener, l’empreinte,
+l’expiration et la régénération. Les fichiers externes sont sélectionnés avec
+des noms relatifs à `/ssl`, par exemple `agent-suite-cert.pem` et
+`agent-suite-key.pem`. Consultez le [guide TLS bilingue](../TLS.md).
+
+| Option de l’App | Valeurs | Défaut | Explication |
+|---|---|---|---|
+| `public_transport` | `http`, `https` | `https` | Transport de l’API autonome |
+| `certificate_source` | `self_generated`, `external` | `self_generated` | Source du certificat HTTPS |
+| `certfile` | nom de fichier | vide | Certificat externe, relatif à `/ssl` |
+| `keyfile` | nom de fichier | vide | Clé privée externe, relative à `/ssl` |
+
 Ouvrez la vue **API** puis choisissez **Créer le credential**. Copiez immédiatement le token opaque : seul un verifier one-way est conservé et le token clair ne peut plus être récupéré. **Renouveler** invalide immédiatement l’ancien token ; **Révoquer** désactive les appels standalone authentifiés. Le journal Activité n’enregistre jamais ces tokens.
 
 ## API autonome
@@ -29,7 +42,7 @@ Ouvrez la vue **API** puis choisissez **Créer le credential**. Copiez immédiat
 Toutes les routes d’exécution exigent `Authorization: Bearer <AEP_STANDALONE_TOKEN>`. Les routes health restent publiques et non sensibles.
 
 ```bash
-curl -X POST 'http://HOTE_HOME_ASSISTANT:PORT_AEP/api/v1/execute' \
+curl -X POST 'https://HOTE_HOME_ASSISTANT:PORT_AEP/api/v1/execute' \
   -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' \
   -H 'Content-Type: application/json' \
   --data '{
@@ -48,14 +61,14 @@ Une soumission valide retourne HTTP `202` avec un `execution_id` opaque. Le poll
 
 ```bash
 curl -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' \
-  'http://HOTE_HOME_ASSISTANT:PORT_AEP/api/v1/executions/<EXECUTION_ID>'
+  'https://HOTE_HOME_ASSISTANT:PORT_AEP/api/v1/executions/<EXECUTION_ID>'
 ```
 
 Après réception durable du résultat, acquittez-le :
 
 ```bash
 curl -X POST -H 'Authorization: Bearer <AEP_STANDALONE_TOKEN>' \
-  'http://HOTE_HOME_ASSISTANT:PORT_AEP/api/v1/executions/<EXECUTION_ID>/ack'
+  'https://HOTE_HOME_ASSISTANT:PORT_AEP/api/v1/executions/<EXECUTION_ID>/ack'
 ```
 
 GET est répétable et ne libère jamais le slot. Avant ACK, une nouvelle soumission retourne `busy_pending_result`. Une exécution active retourne `busy_active`. Pour abandonner volontairement la livraison, l’Overview Ingress propose l’action confirmée **Abandonner le résultat en attente**, liée à l’ID affiché.
@@ -77,7 +90,10 @@ L’interface est bilingue FR/EN, claire/sombre et conserve le gutter global sta
 | Administration | `8099` | Ingress uniquement | Vue d’ensemble, Activité, Modèles, API et Control Plane |
 | Autonome | `8098` | Mapping hôte facultatif | `/health/live`, `/health/ready` et `/api/v1/*` |
 
-Mappez `8098/tcp` uniquement si un appelant autonome en a besoin. Les exemples HTTP actuels ne chiffrent pas les Bearers pendant le transport : restez sur un réseau isolé de confiance ou placez un reverse proxy TLS fiable devant AEP.
+Mappez `8098/tcp` uniquement si un appelant autonome en a besoin. HTTPS
+autogénéré est le mode par défaut. HTTP reste disponible pour la compatibilité,
+n’est pas chiffré et produit un avertissement explicite. Consultez le
+[guide d’exploitation TLS](../TLS.md).
 
 ### Familles de modèles
 
@@ -92,7 +108,7 @@ La priorité `1` est essayée en premier. L’appelant ne choisit jamais le mod�
 1. Créez une identité ACP de type **Client MCP** dédiée au rôle de worker.
 2. Accordez-lui uniquement `jobs.claim`, `jobs.heartbeat`, `jobs.complete` et `jobs.fail` ; ce sont ces permissions qui définissent le rôle de worker.
 3. Copiez son credential Bearer affiché une seule fois.
-4. Dans **Control Plane** d’AEP, saisissez l’endpoint complet, par exemple `https://IP_HOME_ASSISTANT:8100/mcp`.
+4. Dans **Control Plane** d’AEP, saisissez l’endpoint complet, par exemple `https://IP_HOME_ASSISTANT:8098/mcp`.
 5. Collez le credential worker et enregistrez.
 
 Si ACP utilise son certificat autogénéré, saisissez aussi son empreinte SHA-256
@@ -163,7 +179,7 @@ Validez puis envoyez :
 ```bash
 jq . request.json
 
-curl -X POST 'http://IP_HOME_ASSISTANT:PORT_AEP/api/v1/execute' \
+curl -X POST 'https://IP_HOME_ASSISTANT:PORT_AEP/api/v1/execute' \
   -H 'Authorization: Bearer REMPLACER_PAR_LE_TOKEN_AEP' \
   -H 'Content-Type: application/json' \
   --data-binary @request.json

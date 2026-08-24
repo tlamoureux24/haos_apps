@@ -1,4 +1,4 @@
-# MCP Capability Bridge 1.0.1
+# MCP Capability Bridge
 
 Guide complet des namespaces, templates SSH JSON, schémas d’entrée, cibles Web et intégrations ACP/AEP : [français](README.fr.md) | [English](README.md).
 
@@ -7,6 +7,14 @@ restore, MCP, Web, SSH, ACP/AEP and AppArmor paths passed final real-HAOS
 acceptance. SQLite generation 1 is the production-data compatibility cutoff.
 
 ## Français
+
+### TLS
+
+Le listener MCP `8098` utilise HTTPS autogénéré par défaut. HTTP reste
+disponible avec avertissement. Un certificat externe se configure avec des noms
+relatifs à `/ssl`, sans préfixe `/ssl/`. Consultez le
+[guide TLS bilingue](../TLS.md) pour les exemples OpenSSL, l’épinglage entrant
+et sortant, les permissions, la rotation et le dépannage.
 
 ### Installation et surfaces
 
@@ -108,6 +116,14 @@ Ces preuves acceptent le Lot 4 et autorisent la version 1.0.0 stable comme
 cutoff de conservation des données.
 
 ## English
+
+### TLS
+
+The MCP listener on `8098` defaults to self-generated HTTPS. HTTP remains
+available with a warning. Configure an external certificate with filenames
+relative to `/ssl`, without the `/ssl/` prefix. See the
+[bilingual TLS guide](../TLS.md) for OpenSSL examples, inbound and outbound
+pinning, permissions, rotation, and troubleshooting.
 
 ### Installation and surfaces
 

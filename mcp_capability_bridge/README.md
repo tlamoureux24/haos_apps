@@ -21,6 +21,7 @@ Authoritative design documents:
 - [Technical design](TECHNICAL_DESIGN.md)
 - [Threat model](THREAT_MODEL.md)
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
+- [TLS operations guide](../TLS.md)
 
 Version 1.0.0 is the stable Lot 4 release after successful HAOS installation, persistence, backup/restore, endurance and AppArmor acceptance. SQLite generation 1 is now the production-data compatibility cutoff. See [installation and integration notes](DOCS.md).
 
@@ -40,6 +41,19 @@ pinning. An external certificate can instead be loaded from `/ssl` and is then
 validated normally by clients. HTTP remains available for compatibility, but is
 unencrypted and always produces an English warning in the logs.
 
+For external TLS, enter filenames relative to `/ssl`, such as
+`agent-suite-cert.pem` and `agent-suite-key.pem`, never absolute paths. The
+**Transport & TLS** page reports listener state and certificate details. The
+[bilingual TLS guide](../TLS.md) covers OpenSSL generation, permissions,
+pinning, rotation, backup, and failure containment.
+
+| App option | Values | Default | Meaning |
+|---|---|---|---|
+| `public_transport` | `http`, `https` | `https` | Public MCP transport |
+| `certificate_source` | `self_generated`, `external` | `self_generated` | HTTPS certificate source |
+| `certfile` | filename | empty | External certificate filename relative to `/ssl` |
+| `keyfile` | filename | empty | External private-key filename relative to `/ssl` |
+
 ## MCP clients and namespace isolation
 
 1. Open **MCP clients** and create a client with a clear display name.
@@ -52,7 +66,7 @@ Each client sees only its own published inventory. Rotation invalidates the prev
 A generic client connects with:
 
 ```text
-URL: http://HOME_ASSISTANT_IP:BRIDGE_PORT/mcp
+URL: https://HOME_ASSISTANT_IP:BRIDGE_PORT/mcp
 Header: Authorization: Bearer REPLACE_WITH_CLIENT_CREDENTIAL
 ```
 

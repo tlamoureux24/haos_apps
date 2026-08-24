@@ -1,11 +1,12 @@
 # ACP, AEP and MCP Capability Bridge — Public Transport Security Design
 
-Status: **decisions validated; authoritative input for implementation**.
+Status: **implemented and accepted on HAOS; authoritative technical design**.
 
 This document records the shared transport-security design for Agent Control
 Plane (ACP), Agent Execution Plane (AEP), and MCP Capability Bridge (Bridge).
-It covers public application surfaces and outbound partner connections. Home
-Assistant Ingress administration remains mandatory and is explicitly outside
+It covers public application surfaces and outbound partner connections. The
+bilingual operations reference is [TLS.md](TLS.md). Home Assistant Ingress
+administration remains mandatory and is explicitly outside
 the TLS scope of this design: HAOS owns the user-facing security of Ingress.
 
 The design is intended for public applications deployed in different network
@@ -435,25 +436,20 @@ Each relevant flow is exercised over HTTP, system-trusted HTTPS, pinned HTTPS,
 and mismatch/failure cases. Tests prove that a TLS or fingerprint failure occurs
 before secret or payload delivery.
 
-## 13. Implementation sequencing
+## 13. Implementation and acceptance evidence
 
-No public migration or compatibility phase is required before changing the
-current repository because the present deployment owner accepts temporary
-interruption. This does not narrow the product design: HTTP remains a supported
-choice for public installations and external systems.
+The design is implemented across all three Apps. Real HAOS acceptance completed
+on 24 August 2026 covered HTTP, persistent self-generated HTTPS, regeneration,
+valid external certificates loaded from `/ssl`, missing and unreadable files,
+certificate/key mismatch, expiry, CA-certificate rejection, wrong-pin refusal,
+and recovery after installing the independently verified pin. ACP Event Intake
+remained available over HTTP when its HTTPS MCP listener was rejected.
 
-A safe implementation sequence is:
-
-1. common certificate generation, inspection, fingerprint, path, and outbound
-   peer-verification primitives with tests;
-2. ACP route/listener split and HAOS port publication;
-3. ACP server transport and connector/worker client TLS support;
-4. AEP public transport, ACP-boundary pinning, and standalone MCP pinning;
-5. Bridge public transport with failure containment inside its shared runtime;
-6. bilingual UI, English logs, documentation, threat models, and complete
-   cross-App tests;
-7. real HAOS validation of ports, watchdog behavior, restart, backup/restore,
-   generated certificate persistence, and all three flows.
+End-to-end acceptance covered AEP→ACP, ACP→MCP Capability Bridge, and MCP
+Capability Bridge→HTTPS Web target. Automated coverage is provided by
+`scripts/agent_suite_tls_smoke.sh` and `scripts/external_tls_key_smoke.sh`.
+Ingress administration remains available during public-listener failures, and
+no client silently downgrades transport or certificate validation.
 
 Implementation details may refine names and internal factoring, but they must
 not weaken the decisions or security invariants in this document without an

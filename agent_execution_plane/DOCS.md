@@ -1,8 +1,16 @@
-# Agent Execution Plane 1.0.2
+# Agent Execution Plane
 
 Guide détaillé des modèles, de ChatGPT OAuth, du worker ACP et des requêtes JSON autonomes : [français](README.fr.md) | [English](README.md).
 
 ## Français
+
+### TLS
+
+L’API autonome `8098` utilise HTTPS autogénéré par défaut. HTTP reste
+disponible avec avertissement. Un certificat externe se configure avec des noms
+relatifs à `/ssl`, sans préfixe `/ssl/`. Consultez le
+[guide TLS bilingue](../TLS.md) pour les exemples OpenSSL, l’épinglage, les
+permissions, la rotation et le dépannage.
 
 ### Intégration Agent Control Plane
 
@@ -52,6 +60,14 @@ Une seule référence `active_execution` ou un seul `pending_result` existe. Il 
 Après restart, un pending est conservé exactement. Une active standalone devient `execution_interrupted` pour le même ID sans replay. Seuls l’ID, la source et les timestamps sont persistés pendant active. Le pending contient l’outcome nécessaire à la livraison. Objectif, input, endpoint/Bearer MCP, outils, arguments/résultats MCP, conversation et raisonnement ne sont jamais persistés ou journalisés. Après ACK/abandon, aucun historique terminé ne reste.
 
 ## English
+
+### TLS
+
+The standalone API on `8098` defaults to self-generated HTTPS. HTTP remains
+available with a warning. Configure an external certificate with filenames
+relative to `/ssl`, without the `/ssl/` prefix. See the
+[bilingual TLS guide](../TLS.md) for OpenSSL examples, pinning, permissions,
+rotation, and troubleshooting.
 
 ### Agent Control Plane integration
 

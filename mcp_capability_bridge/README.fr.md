@@ -21,6 +21,7 @@ Documents de conception normatifs :
 - [Conception technique](TECHNICAL_DESIGN.md)
 - [Modèle de menaces](THREAT_MODEL.md)
 - [Plan d’implémentation](IMPLEMENTATION_PLAN.md)
+- [Guide d’exploitation TLS](../TLS.md)
 
 La version 1.0.0 est la livraison stable du Lot 4 après validation HAOS de l’installation, de la persistance, de la sauvegarde/restauration, de l’endurance et d’AppArmor. La génération SQLite 1 devient le cutoff de compatibilité des données de production. Consultez les [instructions d’installation et d’intégration](DOCS.md).
 
@@ -39,6 +40,20 @@ les logs affichent son empreinte SHA-256 pour vérification indépendante et
 épinglage. Un certificat externe peut être chargé depuis `/ssl`. HTTP reste
 disponible, mais il est non chiffré et produit un avertissement anglais.
 
+Pour TLS externe, saisissez des noms relatifs à `/ssl`, par exemple
+`agent-suite-cert.pem` et `agent-suite-key.pem`, jamais des chemins absolus. La
+page **Transport & TLS** indique l’état du listener et les détails du
+certificat. Le [guide TLS bilingue](../TLS.md) couvre la génération OpenSSL, les
+permissions, l’épinglage, la rotation, la sauvegarde et le confinement des
+pannes.
+
+| Option de l’App | Valeurs | Défaut | Explication |
+|---|---|---|---|
+| `public_transport` | `http`, `https` | `https` | Transport MCP public |
+| `certificate_source` | `self_generated`, `external` | `self_generated` | Source du certificat HTTPS |
+| `certfile` | nom de fichier | vide | Certificat externe, relatif à `/ssl` |
+| `keyfile` | nom de fichier | vide | Clé privée externe, relative à `/ssl` |
+
 ## Clients MCP et isolation des namespaces
 
 1. Ouvrez **Clients MCP** et créez un client avec un nom clair.
@@ -51,7 +66,7 @@ Chaque client voit uniquement son inventaire publié. La rotation invalide immé
 Connexion d’un client générique :
 
 ```text
-URL : http://IP_HOME_ASSISTANT:PORT_BRIDGE/mcp
+URL : https://IP_HOME_ASSISTANT:PORT_BRIDGE/mcp
 En-tête : Authorization: Bearer REMPLACER_PAR_LE_CREDENTIAL_CLIENT
 ```
 

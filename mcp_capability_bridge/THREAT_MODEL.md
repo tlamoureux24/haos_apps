@@ -1,5 +1,9 @@
 # MCP Capability Bridge — Threat Model
 
+Public-listener TLS and outbound certificate pinning follow the shared
+[transport security design](../TLS_TRANSPORT_DESIGN.md) and
+[bilingual operations guide](../TLS.md).
+
 Status: **normative threat model — audited and accepted for the 1.0.0 production cutoff**.
 
 ## 1. Assets

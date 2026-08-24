@@ -8,6 +8,14 @@ Guide opérateur exhaustif : [français](README.fr.md) | [English](README.md). I
 
 ## Français
 
+### TLS
+
+ACP sépare l’API événements (`8100`) de MCP/worker (`8098`). Les valeurs par
+défaut sont respectivement HTTP et HTTPS autogénéré. Un certificat externe se
+configure avec des noms relatifs au partage `/ssl`, sans préfixe `/ssl/`.
+Consultez le [guide TLS bilingue](../TLS.md) pour les exemples OpenSSL,
+l’épinglage, les permissions, la rotation et le dépannage.
+
 Agent Control Plane (ACP) orchestre des tâches pour des agents compatibles MCP.
 Il relie des événements, des planifications et des demandes manuelles à des
 tâches qui n'exposent que les outils MCP explicitement autorisés par
@@ -384,6 +392,14 @@ de vie, consulter [README.fr.md](README.fr.md).
 ---
 
 ## English
+
+### TLS
+
+ACP separates Event Intake (`8100`) from MCP/worker (`8098`). Their defaults are
+HTTP and self-generated HTTPS respectively. Configure an external certificate
+with filenames relative to `/ssl`, without a `/ssl/` prefix. See the
+[bilingual TLS guide](../TLS.md) for OpenSSL examples, pinning, permissions,
+rotation, and troubleshooting.
 
 Agent Control Plane (ACP) orchestrates tasks for MCP-compatible agents. It maps
 events, schedules, and manual requests to tasks that expose only the MCP tools

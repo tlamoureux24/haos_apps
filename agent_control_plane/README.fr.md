@@ -16,7 +16,7 @@ Documentation anglaise : [README.md](README.md).
 
 Références techniques : [compatibilité MCP](MCP_COMPATIBILITY.md),
 [modèle de menace](THREAT_MODEL.md), [plan d'implémentation](IMPLEMENTATION_PLAN.md)
-et [changelog](CHANGELOG.md).
+le [guide d’exploitation TLS](../TLS.md) commun et [changelog](CHANGELOG.md).
 
 ---
 
@@ -109,10 +109,18 @@ confiance.
 | `events_transport` | `http`, `https` | `http` | Transport des événements |
 | `mcp_transport` | `http`, `https` | `https` | Transport MCP/worker |
 | `certificate_source` | `self_generated`, `external` | `self_generated` | Source du certificat HTTPS partagé |
+| `certfile` | nom de fichier | vide | Certificat externe, relatif à `/ssl` |
+| `keyfile` | nom de fichier | vide | Clé privée externe, relative à `/ssl` |
 
 L’administration affiche l’empreinte SHA-256. Pour un certificat autogénéré,
 les clients épinglent cette valeur après vérification indépendante. Toute
 surface HTTP est non chiffrée et produit un avertissement anglais dans les logs.
+
+La page **Transport & TLS** expose les deux listeners, le certificat partagé,
+son empreinte, son expiration et les éventuelles erreurs. Saisissez des noms
+simples comme `agent-suite-cert.pem`, jamais `/ssl/agent-suite-cert.pem`. Le
+[guide TLS bilingue](../TLS.md) détaille génération, permissions, rotation,
+épinglage, sauvegarde et confinement des pannes.
 
 La limite d'ingestion protège l'API événementielle. Une source qui dépasse la
 limite reçoit HTTP `429` avec `Retry-After: 60`.
@@ -1515,9 +1523,13 @@ ACP retire les propriétés fixes du schéma visible par le modèle, les injecte
 
 1. Créez une identité **Client MCP** dédiée au rôle de worker, avec uniquement `jobs.claim`, `jobs.heartbeat`, `jobs.complete` et `jobs.fail` ; ce sont ces permissions qui définissent ce rôle.
 2. Copiez son credential affiché une seule fois.
-3. Dans **Control Plane** d’AEP, configurez `http://IP_HOME_ASSISTANT:PORT_ACP/mcp` et collez ce credential.
+3. Dans **Control Plane** d’AEP, configurez `https://IP_HOME_ASSISTANT:8098/mcp`, collez ce credential et saisissez l’empreinte SHA-256 vérifiée indépendamment lorsque le certificat ACP est autogénéré.
 4. Vérifiez qu’AEP annonce une connexion validée et des polls réussis.
 
 ACP reste l’autorité sur la révision de tâche, les empreintes connecteur/schéma, les arguments fixes, l’autorisation, les retries, le lease et le contrat de rapport. AEP reçoit uniquement `allowed_capabilities` effectif et ne choisit jamais d’outils supplémentaires dans l’inventaire.
 
-Le listener public MCP/événements utilise actuellement HTTP. Les Bearers authentifient mais ne chiffrent pas le transport. Conservez `8100` sur un chemin HAOS/LAN de confiance ou placez un reverse proxy TLS fiable devant lui ; ne l’exposez jamais directement à un réseau non fiable.
+ACP sépare le transport de l’API événements de celui de MCP/worker. Les valeurs
+par défaut sont HTTP sur `8100` et HTTPS autogénéré sur `8098`; chacun peut être
+modifié après vérification de la compatibilité des clients. Un Bearer sur HTTP
+authentifie mais ne chiffre pas le transport. Consultez le
+[guide d’exploitation TLS](../TLS.md).

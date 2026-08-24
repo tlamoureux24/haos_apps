@@ -1,5 +1,9 @@
 # Agent Execution Plane — Technical Design
 
+Public listener TLS, external certificate handling, and outbound fingerprint
+pinning follow the shared [transport security design](../TLS_TRANSPORT_DESIGN.md)
+and [bilingual operations guide](../TLS.md).
+
 Status: **technical design fixed for implementation**.
 
 This document translates the validated product behavior in `PROJECT_BRIEF.md` into a concrete implementation design. It does not create new product responsibilities. If an implementation detail conflicts with the project brief or the root architecture charter, the narrower Execution Plane product boundary wins and the conflicting detail must be corrected.

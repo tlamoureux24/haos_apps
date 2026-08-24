@@ -1,5 +1,9 @@
 # Agent Control Plane — threat model / Modèle de menace
 
+Le transport TLS entrant et l’épinglage sortant suivent la
+[conception de sécurité commune](../TLS_TRANSPORT_DESIGN.md) et le
+[guide d’exploitation bilingue](../TLS.md).
+
 [Français](#français) | [English](#english)
 
 ## Français
@@ -46,7 +50,7 @@ une recette manuelle déjà exécutée sur l’App réelle.
 | Source d’événements / planificateur → tâche | Une source choisit arbitrairement la tâche exécutée, duplication ou tempête | Mapping lie identité source + type d’événement + tâche ; la requête d’événement ne choisit pas la tâche ; idempotence, rate limit, cooldown, queue bornée, incidents atomiques et retries bornés ; planifications référencent une tâche prête | **Automatique + HAOS** — `control_plane.py`, `control_plane_smoke.py`, tests d’incidents/concurrence, recette Home Assistant réelle |
 | Audit → détection d’altération | Suppression/modification d’entrées ou rollback silencieux d’un refus | Entrées append-oriented chaînées par HMAC ; vérification complète et incrémentale avec revalidation de l’ancre ; incohérence déclenche un full check et ne remplace pas le dernier checkpoint valide ; refus critiques committés avant retour d’erreur | **Automatique + HAOS** — tests `AuditVerificationCheckpointTests`, tests de denied audit, vérifications HAOS 0.46.5/0.46.7 |
 | Processus App → hôte HAOS | Compromission de l’App puis exécution/fichiers/capabilities trop larges | Listeners UID 1000 ; App non privilégiée, sans host network ; AppArmor enforce ; seules capabilities `chown`, `kill`, `setgid`, `setuid` ; exécutables et écritures persistantes explicitement bornés ; réseau TCP inet/inet6 uniquement | **Automatique + HAOS** — `apparmor.txt`, `run.sh`, `config.yaml`, `scripts/validate.py`, trace d’exécutables CI et campagne AppArmor HAOS acceptée |
-| Réseau opérateur → port 8100 | Exposition Internet d’un bearer endpoint ou interception sur HTTP | Port non publié par défaut ; documentation limite l’usage direct à un LAN/VPN de confiance ; HTTPS peut être utilisé pour un connecteur amont mais Agent Control Plane n’est pas un terminateur TLS public | **Documenté** — `config.yaml`, README FR/EN, `MCP_COMPATIBILITY.md` |
+| Réseau opérateur → ports 8100/8098 | Exposition Internet d’un endpoint Bearer, interception HTTP ou faux certificat HTTPS | Ports non publiés par défaut ; transports configurables séparément ; avertissement HTTP ; validation préalable du certificat serveur ; certificat autogénéré épinglé ou certificat externe validé par CA | **Automatique + HAOS** — `config.yaml`, guide TLS, smoke tests et recette HAOS |
 
 ### Invariants d’autorisation vérifiés
 
@@ -78,8 +82,9 @@ Les propriétés suivantes doivent rester vraies à chaque release :
   nécessairement les pouvoirs de ses propres outils. Agent Control Plane limite ce que
   l’agent peut demander ; il ne peut pas garantir que l’implémentation amont d’un
   outil respecte sa description.
-- **Un Bearer volé reste utilisable jusqu’à révocation.** La confidentialité du
-  transport direct sur le réseau relève du LAN/VPN/TLS déployé par l’opérateur.
+- **Un Bearer volé reste utilisable jusqu’à révocation.** HTTPS protège le
+  transport lorsqu’il est choisi; un administrateur sélectionnant explicitement
+  HTTP accepte l’absence de confidentialité clairement signalée.
 - **L’audit est tamper-evident, pas un journal WORM externe.** Un attaquant ayant
   compromis à la fois les données persistantes et le secret cryptographique de
   l’App sort du modèle de détection fourni par la chaîne locale.
@@ -138,7 +143,7 @@ acceptance on the real App.
 | Event source/scheduler → task | Source chooses arbitrary task, replay, storm, or duplicate work | Mapping binds exact source identity + event type + task; event payload cannot choose task; idempotency, rate limit, cooldown, bounded queue, atomic grace incidents and bounded retries; schedules reference ready tasks | **Automated + HAOS** — `control_plane.py`, smoke/concurrency tests and real Home Assistant recipe |
 | Audit trail → tamper detection | Silent modification/removal or denial rollback | Append-oriented HMAC chain; full/incremental verification with authenticated-anchor revalidation; inconsistency triggers full traversal without replacing last valid checkpoint; critical denials committed before error return | **Automated + HAOS** — audit checkpoint/denial tests and 0.46.5/0.46.7 HAOS verification |
 | App process → HAOS host | Compromised process gains broad execution/files/capabilities | Listener UID 1000; non-privileged App, no host networking; enforcing AppArmor; only `chown`, `kill`, `setgid`, `setuid`; explicit executable and persistent-write allowlists; TCP inet/inet6 only | **Automated + HAOS** — `apparmor.txt`, `run.sh`, `config.yaml`, `scripts/validate.py`, CI executable tracing and accepted HAOS AppArmor campaign |
-| Operator network → port 8100 | Internet exposure of Bearer endpoint or cleartext interception | Port unpublished by default; direct use documented for trusted LAN/VPN only; Agent Control Plane is not a public TLS terminator | **Documented** — `config.yaml`, bilingual README, `MCP_COMPATIBILITY.md` |
+| Operator network → ports 8100/8098 | Internet exposure of a Bearer endpoint, HTTP interception, or a rogue HTTPS certificate | Ports unpublished by default; independently configurable transports; HTTP warning; server certificate preflight; pinned self-generated or CA-validated external certificate | **Automated + HAOS** — `config.yaml`, TLS guide, smoke tests, and HAOS acceptance |
 
 ### Authorization invariants
 
@@ -165,8 +170,9 @@ acceptance on the real App.
 - **Upstream MCP servers are untrusted for data**, but necessarily retain the
   power of their own tools. Agent Control Plane constrains what the agent may request;
   it cannot prove that an upstream implementation matches its description.
-- **A stolen Bearer remains usable until revocation.** Confidentiality of direct
-  network transport depends on operator LAN/VPN/TLS deployment.
+- **A stolen Bearer remains usable until revocation.** HTTPS protects direct
+  transport when selected; an administrator who explicitly selects HTTP accepts
+  its clearly reported lack of confidentiality.
 - **The audit is tamper-evident, not external WORM storage.** An attacker who
   compromises both persistent data and the App cryptographic secret is outside
   the local chain's tamper-detection trust assumption.

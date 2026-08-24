@@ -28,12 +28,22 @@ https://github.com/tlamoureux24/haos_apps
 
 ### Apps disponibles
 
+#### Support TLS officiel
+
+ACP, AEP et MCP Capability Bridge prennent officiellement en charge HTTP et
+HTTPS sur leurs surfaces publiques, les certificats autogénérés persistants,
+les certificats externes chargés depuis `/ssl`, la validation CA stricte et
+l’épinglage SHA-256. Les ports, permissions, exemples OpenSSL, rotations,
+sauvegardes et comportements d’erreur sont décrits dans le
+[guide TLS bilingue](TLS.md). La
+[conception technique](TLS_TRANSPORT_DESIGN.md) précise les frontières de
+confiance.
+
 #### MCP Capability Bridge
 
-App MCP autonome expérimentale destinée à transformer des accès techniques
-non-MCP en capacités strictement bornées. La version 0.2.0 fournit le serveur
-MCP authentifié, les namespaces multi-clients isolés et l’interface Ingress ;
-aucun adaptateur SSH ou Web n’est encore activé.
+App MCP autonome stable destinée à transformer des accès techniques non-MCP en
+capacités strictement bornées. Elle fournit un serveur MCP authentifié, des
+namespaces multi-clients isolés ainsi que des capacités SSH et Web bornées.
 
 Documentation détaillée :
 
@@ -273,12 +283,20 @@ https://github.com/tlamoureux24/haos_apps
 
 ### Available Apps
 
+#### Official TLS support
+
+ACP, AEP, and MCP Capability Bridge officially support HTTP and HTTPS on their
+public surfaces, persistent self-generated certificates, external certificates
+loaded from `/ssl`, strict CA validation, and SHA-256 pinning. Ports,
+permissions, OpenSSL examples, rotation, backup, and failure behavior are
+documented in the [bilingual TLS guide](TLS.md). See the
+[technical design](TLS_TRANSPORT_DESIGN.md) for trust boundaries.
+
 #### MCP Capability Bridge
 
-Experimental independent MCP App intended to turn non-MCP technical access
-into strictly bounded capabilities. Version 0.2.0 provides the authenticated
-MCP server, isolated multi-client namespaces and Ingress UI; no SSH or Web
-adapter is enabled yet.
+Stable independent MCP App intended to turn non-MCP technical access into
+strictly bounded capabilities. It provides the authenticated MCP server,
+isolated multi-client namespaces, and bounded SSH and Web capabilities.
 
 Detailed documentation:
 
