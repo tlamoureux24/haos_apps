@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.12
+
+- Stage external TLS keys under ephemeral `/run` so HAOS capability dropping
+  cannot block the privileged-to-unprivileged handoff.
+
 ## 1.1.11
 
 - Securely stage administrator-provided private keys from `/ssl` into the

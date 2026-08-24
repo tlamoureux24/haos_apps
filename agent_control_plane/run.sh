@@ -29,13 +29,13 @@ fi
 
 external_tls_error=""
 if { [ "${events_transport}" = "https" ] || [ "${mcp_transport}" = "https" ]; } && [ "${certificate_source}" = "external" ]; then
-  if stage_output="$(PYTHONPATH=/app/src python3 -c 'from pathlib import Path; from agent_control_plane.tls import stage_external_certificate; import sys; stage_external_certificate(sys.argv[1],sys.argv[2],Path("/data/private/external-tls"),1000,1000)' "${certfile}" "${keyfile}" 2>&1)"; then
+  if stage_output="$(PYTHONPATH=/app/src python3 -c 'from pathlib import Path; from agent_control_plane.tls import stage_external_certificate; import sys; stage_external_certificate(sys.argv[1],sys.argv[2],Path("/run/agent-control-plane-external-tls"),1000,1000)' "${certfile}" "${keyfile}" 2>&1)"; then
     certfile="server-cert.pem";keyfile="server-key.pem"
   else
     external_tls_error="$(printf '%s\n' "${stage_output}" | tail -n 1)";certfile="server-cert.pem";keyfile="server-key.pem"
     export AGENT_CONTROL_PLANE_EXTERNAL_TLS_STAGE_ERROR="${external_tls_error}"
   fi
-  export AGENT_CONTROL_PLANE_EXTERNAL_TLS_DIR=/data/private/external-tls
+  export AGENT_CONTROL_PLANE_EXTERNAL_TLS_DIR=/run/agent-control-plane-external-tls
 fi
 
 export AGENT_CONTROL_PLANE_DATA_DIR="${AGENT_CONTROL_PLANE_DATA_DIR:-/data}"
