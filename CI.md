@@ -15,18 +15,21 @@ dupliqué dans les documents utilisateur des Apps agents.
 
 ### Apps
 
-Chaque workflow d’App surveille son arborescence en excluant les fichiers
-Markdown. Un changement de code, configuration, traduction, packaging, test ou
-asset conserve donc la validation complète de l’App. Une modification purement
-documentaire ne construit aucune image. La modification du fichier YAML d’un
-workflow déclenche volontairement ce workflow afin de valider son évolution.
+Le workflow orchestrateur **Validate Agent Apps** détecte séparément les
+modifications ACP, AEP et MCP Bridge, puis appelle uniquement les validations
+complètes nécessaires. Une modification purement documentaire ne construit
+aucune image. Les workflows propres aux Apps restent aussi exécutables
+manuellement et servent de composants réutilisables à l’orchestrateur.
 
 ### Suite TLS agents
 
-La suite TLS surveille uniquement les fichiers qui peuvent modifier les
-listeners publics, les certificats, le pinning, les transports MCP/HTTP ou les
-frontières sortantes ACP/AEP/Bridge. Elle reste exécutable manuellement depuis
-GitHub Actions.
+L’orchestrateur active la suite TLS uniquement pour les fichiers qui peuvent
+modifier les listeners publics, les certificats, le pinning, les transports
+MCP/HTTP ou les frontières sortantes ACP/AEP/Bridge. Chaque App produit alors
+une image amd64 une seule fois. Ces trois images sont transférées comme
+artefacts internes au job TLS, qui les charge et exécute la matrice sans les
+reconstruire. Une App inchangée fournit seulement son image ; sa validation
+complète n’est pas rejouée. La suite autonome reste exécutable manuellement.
 
 ### Caches
 
@@ -56,17 +59,20 @@ and the absence of duplicated current-version labels in agent App user docs.
 
 ### Apps
 
-Each App workflow watches its App tree while excluding Markdown. Code,
-configuration, translation, packaging, test, and asset changes therefore retain
-the complete App validation. Documentation-only changes build no image.
-Changing a workflow YAML deliberately triggers that workflow so its evolution
-is validated.
+The **Validate Agent Apps** orchestrator detects ACP, AEP, and MCP Bridge
+changes separately, then calls only the required full validations.
+Documentation-only changes build no image. Per-App workflows also remain
+manually dispatchable and act as reusable components for the orchestrator.
 
 ### Agent TLS suite
 
-The TLS suite watches only files that can affect public listeners,
-certificates, pinning, MCP/HTTP transports, or ACP/AEP/Bridge outbound
-boundaries. It also remains manually dispatchable from GitHub Actions.
+The orchestrator enables the TLS suite only for files that can affect public
+listeners, certificates, pinning, MCP/HTTP transports, or ACP/AEP/Bridge
+outbound boundaries. Each App then produces one amd64 image exactly once. The
+three images are transferred as internal artifacts to the TLS job, which loads
+them and runs the matrix without rebuilding. An unchanged App only supplies its
+image; its full validation is not rerun. The standalone suite remains manually
+dispatchable.
 
 ### Caches
 

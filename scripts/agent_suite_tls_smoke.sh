@@ -59,9 +59,11 @@ assert_plaintext_rejected() {
 docker network create "${network}" >/dev/null
 gateway="$(docker network inspect "${network}" --format '{{(index .IPAM.Config 0).Gateway}}')"
 
-build_image agent_control_plane agent-control-plane
-build_image agent_execution_plane agent-execution-plane
-build_image mcp_capability_bridge mcp-capability-bridge
+if [ "${AGENT_SUITE_SKIP_BUILD:-false}" != true ]; then
+  build_image agent_control_plane agent-control-plane
+  build_image agent_execution_plane agent-execution-plane
+  build_image mcp_capability_bridge mcp-capability-bridge
+fi
 
 # Generated certificates: real TLS sockets, log metadata, key permissions and persistence.
 run_generated() {

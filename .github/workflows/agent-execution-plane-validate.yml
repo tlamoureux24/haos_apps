@@ -1,12 +1,22 @@
 name: Validate Agent Execution Plane App
 
 on:
-  push:
-    branches: [main]
-    paths: ["agent_execution_plane/**", "!agent_execution_plane/**/*.md", "scripts/external_tls_key_smoke.sh", ".github/workflows/agent-execution-plane-validate.yml"]
-  pull_request:
-    paths: ["agent_execution_plane/**", "!agent_execution_plane/**/*.md", "scripts/external_tls_key_smoke.sh", ".github/workflows/agent-execution-plane-validate.yml"]
+  workflow_call:
+    inputs:
+      full_validation:
+        type: boolean
+        default: true
+      export_image:
+        type: boolean
+        default: false
   workflow_dispatch:
+    inputs:
+      full_validation:
+        type: boolean
+        default: true
+      export_image:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,12 +32,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Set up Python with dependency cache
+        if: inputs.full_validation
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: agent_execution_plane/requirements.txt
       - name: Validate metadata, source, and tests
+        if: inputs.full_validation
         run: |
           set -euo pipefail
           python3 -m pip install --disable-pip-version-check --requirement agent_execution_plane/requirements.txt
@@ -45,7 +57,23 @@ jobs:
           test -n "${base_digest}"
           docker build --build-arg BUILD_ARCH=amd64 --build-arg "BUILD_VERSION=${version}" --build-arg "BASE_IMAGE_DIGEST=${base_digest}" --tag "agent-execution-plane:${version}" agent_execution_plane
           test "$(docker image inspect "agent-execution-plane:${version}" --format '{{index .Config.Labels "org.opencontainers.image.base.digest"}}')" = "${base_digest}"
+      - name: Export amd64 image for TLS integration
+        if: inputs.export_image
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
+          docker save "agent-execution-plane:${version}" | gzip -1 > "${RUNNER_TEMP}/agent-execution-plane-image.tar.gz"
+      - name: Upload amd64 image for TLS integration
+        if: inputs.export_image
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-execution-plane-image
+          path: ${{ runner.temp }}/agent-execution-plane-image.tar.gz
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
       - name: Validate Codex executable AppArmor coverage
+        if: inputs.full_validation
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
@@ -59,10 +87,12 @@ jobs:
             --apparmor agent_execution_plane/apparmor.txt
           cat agent_execution_plane-codex-executables.txt
       - name: Smoke-test root-only external TLS key
+        if: inputs.full_validation
         run: |
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
           bash scripts/external_tls_key_smoke.sh aep "agent-execution-plane:${version}"
       - name: Smoke-test listeners, UI, logs, and persistence
+        if: inputs.full_validation
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
@@ -122,6 +152,7 @@ jobs:
           docker exec aep-smoke su-exec agent-execution-plane:agent-execution-plane env PYTHONPATH=/app/src python3 -c 'from pathlib import Path; from agent_execution_plane.codex_runtime import CodexRuntime; runtime=CodexRuntime(Path("/data/private/codex-home")); runtime.smoke(); runtime.close()'
           curl -fsS -H 'X-Ingress-Path: /api/hassio_ingress/ci' http://127.0.0.1:18099/admin/api/v1/models | jq -e '.models == []'
       - name: Record Docker executable inventory (not HAOS AppArmor enforcement)
+        if: inputs.full_validation
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml)"
@@ -135,7 +166,8 @@ jobs:
             echo 'The uploaded executable inventory is Docker build/runtime evidence only.'
             echo 'Docker CI does not apply or validate the Home Assistant OS AppArmor profile; real HAOS acceptance remains required.'
           } >> "${GITHUB_STEP_SUMMARY}"
-      - uses: actions/upload-artifact@v6
+      - if: inputs.full_validation
+        uses: actions/upload-artifact@v6
         with:
           name: agent-execution-plane-apparmor-executables
           path: agent_execution_plane-apparmor-executables.txt

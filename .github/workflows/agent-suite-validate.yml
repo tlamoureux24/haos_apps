@@ -1,0 +1,173 @@
+name: Validate Agent Apps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agent_control_plane/**"
+      - "!agent_control_plane/**/*.md"
+      - "agent_execution_plane/**"
+      - "!agent_execution_plane/**/*.md"
+      - "mcp_capability_bridge/**"
+      - "!mcp_capability_bridge/**/*.md"
+      - "scripts/agent_suite_tls_smoke.sh"
+      - "scripts/external_tls_key_smoke.sh"
+      - "scripts/seed_acp_tls_event.py"
+      - ".gitignore"
+      - ".github/workflows/agent-control-plane-validate.yml"
+      - ".github/workflows/agent-execution-plane-validate.yml"
+      - ".github/workflows/mcp-capability-bridge-validate.yml"
+      - ".github/workflows/agent-suite-tls-validate.yml"
+      - ".github/workflows/agent-suite-validate.yml"
+  pull_request:
+    paths:
+      - "agent_control_plane/**"
+      - "!agent_control_plane/**/*.md"
+      - "agent_execution_plane/**"
+      - "!agent_execution_plane/**/*.md"
+      - "mcp_capability_bridge/**"
+      - "!mcp_capability_bridge/**/*.md"
+      - "scripts/agent_suite_tls_smoke.sh"
+      - "scripts/external_tls_key_smoke.sh"
+      - "scripts/seed_acp_tls_event.py"
+      - ".gitignore"
+      - ".github/workflows/agent-control-plane-validate.yml"
+      - ".github/workflows/agent-execution-plane-validate.yml"
+      - ".github/workflows/mcp-capability-bridge-validate.yml"
+      - ".github/workflows/agent-suite-tls-validate.yml"
+      - ".github/workflows/agent-suite-validate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-apps-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      acp: ${{ steps.filter.outputs.acp }}
+      aep: ${{ steps.filter.outputs.aep }}
+      bridge: ${{ steps.filter.outputs.bridge }}
+      tls: ${{ steps.filter.outputs.tls }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: filter
+        name: Select validations and image producers
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          acp=false
+          aep=false
+          bridge=false
+          tls=false
+
+          if [ "${EVENT_NAME}" = workflow_dispatch ]; then
+            acp=true
+            aep=true
+            bridge=true
+            tls=true
+            files=""
+          else
+            base="${BEFORE_SHA}"
+            if [ "${EVENT_NAME}" = pull_request ]; then
+              base="${BASE_SHA}"
+            fi
+            if [ -z "${base}" ] || [ "${base}" = "0000000000000000000000000000000000000000" ]; then
+              base="$(git rev-list --max-parents=0 "${HEAD_SHA}" | tail -1)"
+            fi
+            files="$(git diff --name-only "${base}" "${HEAD_SHA}")"
+          fi
+
+          while IFS= read -r file; do
+            [ -n "${file}" ] || continue
+            case "${file}" in
+              agent_control_plane/*|.github/workflows/agent-control-plane-validate.yml|.gitignore)
+                acp=true ;;
+              agent_execution_plane/*|.github/workflows/agent-execution-plane-validate.yml)
+                aep=true ;;
+              mcp_capability_bridge/*|.github/workflows/mcp-capability-bridge-validate.yml)
+                bridge=true ;;
+              scripts/external_tls_key_smoke.sh)
+                acp=true; aep=true; bridge=true ;;
+            esac
+
+            case "${file}" in
+              agent_control_plane/Dockerfile|agent_control_plane/config.yaml|agent_control_plane/run.sh|agent_control_plane/requirements.txt|\
+              agent_control_plane/src/agent_control_plane/admin_ui.py|agent_control_plane/src/agent_control_plane/connectors.py|agent_control_plane/src/agent_control_plane/http_api.py|agent_control_plane/src/agent_control_plane/main.py|agent_control_plane/src/agent_control_plane/mcp_api.py|agent_control_plane/src/agent_control_plane/pinned_http.py|agent_control_plane/src/agent_control_plane/settings.py|agent_control_plane/src/agent_control_plane/surfaces.py|agent_control_plane/src/agent_control_plane/tls.py|agent_control_plane/src/agent_control_plane/tls_server.py|\
+              agent_execution_plane/Dockerfile|agent_execution_plane/config.yaml|agent_execution_plane/run.sh|agent_execution_plane/requirements.txt|\
+              agent_execution_plane/src/agent_execution_plane/acp.py|agent_execution_plane/src/agent_execution_plane/admin_ui.py|agent_execution_plane/src/agent_execution_plane/main.py|agent_execution_plane/src/agent_execution_plane/mcp_client.py|agent_execution_plane/src/agent_execution_plane/pinned_http.py|agent_execution_plane/src/agent_execution_plane/settings.py|agent_execution_plane/src/agent_execution_plane/standalone.py|agent_execution_plane/src/agent_execution_plane/tls.py|agent_execution_plane/src/agent_execution_plane/tls_server.py|\
+              mcp_capability_bridge/Dockerfile|mcp_capability_bridge/config.yaml|mcp_capability_bridge/run.sh|mcp_capability_bridge/requirements.txt|\
+              mcp_capability_bridge/src/mcp_capability_bridge/admin_ui.py|mcp_capability_bridge/src/mcp_capability_bridge/main.py|mcp_capability_bridge/src/mcp_capability_bridge/mcp_api.py|mcp_capability_bridge/src/mcp_capability_bridge/runtime.py|mcp_capability_bridge/src/mcp_capability_bridge/settings.py|mcp_capability_bridge/src/mcp_capability_bridge/tls.py|mcp_capability_bridge/src/mcp_capability_bridge/web_adapter.py|mcp_capability_bridge/src/mcp_capability_bridge/web_sessions.py|mcp_capability_bridge/src/mcp_capability_bridge/web_tls.py|\
+              scripts/agent_suite_tls_smoke.sh|scripts/seed_acp_tls_event.py|.github/workflows/agent-suite-tls-validate.yml|.github/workflows/agent-suite-validate.yml)
+                tls=true ;;
+            esac
+          done <<< "${files}"
+
+          printf 'acp=%s\naep=%s\nbridge=%s\ntls=%s\n' \
+            "${acp}" "${aep}" "${bridge}" "${tls}" | tee -a "${GITHUB_OUTPUT}"
+
+  acp:
+    needs: changes
+    if: needs.changes.outputs.acp == 'true' || needs.changes.outputs.tls == 'true'
+    uses: ./.github/workflows/agent-control-plane-validate.yml
+    with:
+      full_validation: ${{ needs.changes.outputs.acp == 'true' }}
+      export_image: ${{ needs.changes.outputs.tls == 'true' }}
+
+  aep:
+    needs: changes
+    if: needs.changes.outputs.aep == 'true' || needs.changes.outputs.tls == 'true'
+    uses: ./.github/workflows/agent-execution-plane-validate.yml
+    with:
+      full_validation: ${{ needs.changes.outputs.aep == 'true' }}
+      export_image: ${{ needs.changes.outputs.tls == 'true' }}
+
+  bridge:
+    needs: changes
+    if: needs.changes.outputs.bridge == 'true' || needs.changes.outputs.tls == 'true'
+    uses: ./.github/workflows/mcp-capability-bridge-validate.yml
+    with:
+      full_validation: ${{ needs.changes.outputs.bridge == 'true' }}
+      export_image: ${{ needs.changes.outputs.tls == 'true' }}
+
+  tls:
+    needs: [changes, acp, aep, bridge]
+    if: >-
+      always() &&
+      needs.changes.outputs.tls == 'true' &&
+      needs.acp.result == 'success' &&
+      needs.aep.result == 'success' &&
+      needs.bridge.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download the three validated amd64 images
+        uses: actions/download-artifact@v7
+        with:
+          pattern: "*-image"
+          path: ${{ runner.temp }}/agent-images
+          merge-multiple: true
+      - name: Load validated amd64 images
+        run: |
+          set -euo pipefail
+          for archive in "${RUNNER_TEMP}"/agent-images/*-image.tar.gz; do
+            gzip -dc "${archive}" | docker load
+          done
+          test "$(docker image inspect agent-control-plane:$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_control_plane/config.yaml) --format '{{.Architecture}}')" = amd64
+          test "$(docker image inspect agent-execution-plane:$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml) --format '{{.Architecture}}')" = amd64
+          test "$(docker image inspect mcp-capability-bridge:$(sed -n 's/^version: "\([^"]*\)"$/\1/p' mcp_capability_bridge/config.yaml) --format '{{.Architecture}}')" = amd64
+      - name: Run real-socket TLS integration matrix without rebuilding
+        env:
+          AGENT_SUITE_SKIP_BUILD: "true"
+        run: bash scripts/agent_suite_tls_smoke.sh
