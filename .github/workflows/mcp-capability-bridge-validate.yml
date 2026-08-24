@@ -68,13 +68,13 @@ jobs:
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' mcp_capability_bridge/config.yaml)"
-          docker save "mcp-capability-bridge:${version}" | gzip -1 > "${RUNNER_TEMP}/mcp-capability-bridge-image.tar.gz"
+          docker save "mcp-capability-bridge:${version}" | zstd -T0 -1 -q -o "${RUNNER_TEMP}/mcp-capability-bridge-image.tar.zst"
       - name: Upload amd64 image for TLS integration
         if: inputs.export_image
         uses: actions/upload-artifact@v6
         with:
           name: mcp-capability-bridge-image
-          path: ${{ runner.temp }}/mcp-capability-bridge-image.tar.gz
+          path: ${{ runner.temp }}/mcp-capability-bridge-image.tar.zst
           compression-level: 0
           if-no-files-found: error
           retention-days: 1

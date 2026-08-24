@@ -161,8 +161,8 @@ jobs:
       - name: Load validated amd64 images
         run: |
           set -euo pipefail
-          for archive in "${RUNNER_TEMP}"/agent-images/*-image.tar.gz; do
-            gzip -dc "${archive}" | docker load
+          for archive in "${RUNNER_TEMP}"/agent-images/*-image.tar.zst; do
+            zstd -T0 -dc "${archive}" | docker load
           done
           test "$(docker image inspect agent-control-plane:$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_control_plane/config.yaml) --format '{{.Architecture}}')" = amd64
           test "$(docker image inspect agent-execution-plane:$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_execution_plane/config.yaml) --format '{{.Architecture}}')" = amd64
