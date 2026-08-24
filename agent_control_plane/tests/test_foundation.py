@@ -220,9 +220,16 @@ class AdministrationInterfaceTests(unittest.TestCase):
             "schedule-create",
             "connector-create",
             "retention-form",
+            "ha-settings",
         ):
             self.assertIn(f"'{form}'", ADMIN_JS)
         self.assertIn("drawer.classList.toggle('wide'", ADMIN_JS)
+        self.assertIn("homeAssistantDrawer=moveFormToDrawer('home-assistant','ha-settings','Configurer')", ADMIN_JS)
+        self.assertIn("openDrawer(language==='en'?'Configure Home Assistant':'Configurer Home Assistant'", ADMIN_JS)
+        self.assertIn('id="ha-retry"', main_source)
+        self.assertIn('id="ha-history"', main_source)
+        handler = ADMIN_JS.split("document.querySelector('#ha-settings').onsubmit", 1)[1].split("document.querySelector('#ha-test')", 1)[0]
+        self.assertIn("closeDrawer(true)", handler)
 
     def test_service_badge_uses_real_admin_status_and_has_failure_state(self) -> None:
         main_source = (

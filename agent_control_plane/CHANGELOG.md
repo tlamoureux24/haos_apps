@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1
+
+- Move Home Assistant notification activation and category settings into the
+  standard right-side administration drawer while keeping delivery status,
+  retry control, and bounded history on the main page.
+
 ## 1.2.0
 
 - Add optional, default-disabled Home Assistant event notifications for available,
