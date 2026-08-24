@@ -41,7 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_control_plane"',
-        'version: "1.1.13"',
+        'version: "1.2.0"',
         "  - amd64",
         "init: false",
         "stage: stable",
@@ -58,12 +58,14 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "1.1.13"' not in package:
+    if '__version__ = "1.2.0"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
     if "arch:\n  - amd64\nstartup:" not in config or "aarch64" in config:
         raise RuntimeError("Agent Control Plane must support amd64 only")
     if "jsonschema[format-nongpl]==4.26.0" not in requirements:
         raise RuntimeError("MCP input schemas must retain the pinned reference validator")
+    if "httpx==0.28.1" not in requirements:
+        raise RuntimeError("Home Assistant delivery must retain its direct pinned HTTP client")
     logging_config = ROOT / "src/agent_control_plane/uvicorn_logging.json"
     if not logging_config.is_file() or "%(asctime)s" not in logging_config.read_text(encoding="utf-8"):
         raise RuntimeError("Uvicorn logs must retain an explicit timestamp")
@@ -101,6 +103,12 @@ def main() -> int:
         raise RuntimeError("Agent Control Plane must not request privileged or host networking")
     if "hassio_role:" in config or "hassio_api:" in config:
         raise RuntimeError("Phase 0 must not request the Supervisor API")
+    if "homeassistant_api: true" not in config:
+        raise RuntimeError("Home Assistant Core proxy access must remain explicitly enabled")
+    home_assistant = (ROOT / "src/agent_control_plane/home_assistant.py").read_text(encoding="utf-8")
+    for invariant in ("http://supervisor/core/api/events/agent_control_plane_notification", "SUPERVISOR_TOKEN", "follow_redirects=False"):
+        if invariant not in home_assistant:
+            raise RuntimeError(f"Missing Home Assistant delivery invariant: {invariant}")
 
     for language in ("fr", "en"):
         translation = ROOT / "translations" / f"{language}.yaml"

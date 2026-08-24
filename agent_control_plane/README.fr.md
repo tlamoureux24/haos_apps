@@ -1533,3 +1533,48 @@ par défaut sont HTTP sur `8100` et HTTPS autogénéré sur `8098`; chacun peut 
 modifié après vérification de la compatibilité des clients. Un Bearer sur HTTP
 authentifie mais ne chiffre pas le transport. Consultez le
 [guide d’exploitation TLS](../TLS.md).
+
+## Notifications Home Assistant
+
+La page **Home Assistant**, placée après **Audit**, active cette fonction
+facultative, désactivée par défaut. ACP publie
+`agent_control_plane_notification` via le proxy Core officiel
+`http://supervisor/core/api/` et le `SUPERVISOR_TOKEN` fourni par HAOS. Aucun
+jeton, URL ou certificat Home Assistant n’est à saisir.
+
+Les catégories sont `task_available`, `task_completed`, `task_failed` et
+`technical_error`. Une tâche terminée transmet uniquement le `summary` validé
+du rapport sous le nom `conclusion`. Le rapport complet reste dans ACP.
+
+La file SQLite persistante utilise des leases récupérables après crash et garde
+le même `notification_id` pendant toutes les tentatives. La page conserve les
+livraisons non résolues et les 100 derniers succès.
+
+```yaml
+alias: "ACP - Notifications"
+triggers:
+  - trigger: event
+    event_type: agent_control_plane_notification
+actions:
+  - action: notify.mobile_app_mon_telephone
+    data:
+      title: >-
+        {% set e = trigger.event.data %}
+        ACP — {{ {'task_available':'Nouvelle tâche', 'task_completed':'Tâche terminée',
+                  'task_failed':'Échec de tâche', 'technical_error':'Incident technique'}.get(e.category, 'Notification') }}
+      message: >-
+        {% set e = trigger.event.data %}
+        {% if e.category == 'task_completed' %}
+          {{ e.task_name }} : {{ e.conclusion }}
+        {% elif e.category == 'task_available' %}
+          {{ e.task_name }} attend une prise en charge.
+        {% else %}
+          {{ e.task_name | default('Agent Control Plane') }} : {{ e.message }}
+        {% endif %}
+```
+
+### Rupture de données en 1.2.0
+
+La génération SQLite 15 est livrée sans migration depuis la génération 14.
+Avant d’installer la version 1.2.0, supprimez une fois les données de l’App,
+puis recréez sa configuration. Une ancienne base est refusée explicitement.

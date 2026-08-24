@@ -9,12 +9,17 @@ from collections.abc import Iterator
 from pathlib import Path
 
 
-SCHEMA_GENERATION = "14"
+SCHEMA_GENERATION = "15"
 SCHEMA_SQL = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE control_plane_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 INSERT INTO control_plane_metadata VALUES('application','agent_control_plane');
-INSERT INTO control_plane_metadata VALUES('schema_generation','14');
+INSERT INTO control_plane_metadata VALUES('schema_generation','15');
+INSERT INTO control_plane_metadata VALUES('ha_notifications_enabled','0');
+INSERT INTO control_plane_metadata VALUES('ha_notify_task_available','1');
+INSERT INTO control_plane_metadata VALUES('ha_notify_task_completed','1');
+INSERT INTO control_plane_metadata VALUES('ha_notify_task_failed','1');
+INSERT INTO control_plane_metadata VALUES('ha_notify_technical_error','1');
 CREATE TABLE identities(
   id TEXT PRIMARY KEY,display_name TEXT NOT NULL,identity_type TEXT NOT NULL,
   status TEXT NOT NULL,created_at TEXT NOT NULL,
@@ -140,6 +145,18 @@ CREATE TABLE reports(
   FOREIGN KEY(job_id) REFERENCES jobs(id),
   FOREIGN KEY(supersedes_id) REFERENCES reports(id));
 CREATE INDEX ix_reports_job ON reports(job_id);
+CREATE TABLE notification_outbox(
+  id TEXT PRIMARY KEY,category TEXT NOT NULL,job_id TEXT,payload_json TEXT NOT NULL,
+  state TEXT NOT NULL,attempt_count INTEGER NOT NULL,next_attempt_at TEXT NOT NULL,
+  delivery_lease_id TEXT,delivery_lease_expires_at TEXT,last_attempt_at TEXT,
+  delivered_at TEXT,last_error_code TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+  FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE SET NULL,
+  CHECK(category IN ('task_available','task_completed','task_failed','technical_error')),
+  CHECK(state IN ('pending','delivering','delivered','dead_letter')),
+  CHECK(attempt_count >= 0));
+CREATE UNIQUE INDEX ux_notification_job_category ON notification_outbox(job_id,category) WHERE job_id IS NOT NULL;
+CREATE INDEX ix_notification_delivery ON notification_outbox(state,next_attempt_at);
+CREATE INDEX ix_notification_history ON notification_outbox(created_at DESC);
 CREATE TABLE audit_entries(
   sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,
   occurred_at TEXT NOT NULL,actor_identity_id TEXT,credential_id TEXT,

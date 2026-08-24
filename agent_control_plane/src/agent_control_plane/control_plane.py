@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import sqlite3
 import secrets
 from dataclasses import dataclass
@@ -52,6 +53,9 @@ MAX_AGGREGATE_INPUT_BYTES = 128 * 1024
 MAX_PROMOTION_ATTEMPTS = 10
 AUDIT_INCREMENTAL_BATCH_SIZE = 1000
 AUDIT_FULL_VERIFICATION_INTERVAL = timedelta(hours=24)
+NOTIFICATION_CATEGORIES = ("task_available", "task_completed", "task_failed", "technical_error")
+NOTIFICATION_LEASE_SECONDS = 60
+NOTIFICATION_HISTORY_LIMIT = 100
 
 
 def utc_now() -> str:
@@ -132,6 +136,121 @@ class ControlPlane:
         self.pepper = load_or_create_pepper(private_dir / "credential-pepper")
         self.queue_limit = queue_limit
         self.intake_rate_limit_per_minute = intake_rate_limit_per_minute
+
+    @staticmethod
+    def _notification_settings(connection: sqlite3.Connection) -> dict[str, bool]:
+        rows = connection.execute(
+            "SELECT key,value FROM control_plane_metadata WHERE key LIKE 'ha_notif%'"
+        ).fetchall()
+        values = {row["key"]: row["value"] == "1" for row in rows}
+        return {
+            "enabled": values.get("ha_notifications_enabled", False),
+            **{category: values.get(f"ha_notify_{category}", True) for category in NOTIFICATION_CATEGORIES},
+        }
+
+    def home_assistant_status(self) -> dict[str, object]:
+        with connect(self.database_path) as connection:
+            settings = self._notification_settings(connection)
+            counts = {row["state"]: row["count"] for row in connection.execute(
+                "SELECT state,count(*) AS count FROM notification_outbox GROUP BY state"
+            ).fetchall()}
+            latest_success = connection.execute(
+                "SELECT delivered_at FROM notification_outbox WHERE state='delivered' ORDER BY delivered_at DESC LIMIT 1"
+            ).fetchone()
+            latest_failure = connection.execute(
+                "SELECT last_attempt_at,last_error_code FROM notification_outbox WHERE last_error_code IS NOT NULL ORDER BY last_attempt_at DESC LIMIT 1"
+            ).fetchone()
+        return {
+            "settings": settings,
+            "token_available": bool(os.environ.get("SUPERVISOR_TOKEN")),
+            "counts": {state: int(counts.get(state, 0)) for state in ("pending", "delivering", "delivered", "dead_letter")},
+            "last_success_at": latest_success["delivered_at"] if latest_success else None,
+            "last_failure": dict(latest_failure) if latest_failure else None,
+        }
+
+    def update_home_assistant_settings(self, enabled: bool, categories: dict[str, bool], correlation_id: str) -> None:
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            values = {"ha_notifications_enabled": enabled}
+            values.update({f"ha_notify_{category}": bool(categories[category]) for category in NOTIFICATION_CATEGORIES})
+            for key, value in values.items():
+                connection.execute("UPDATE control_plane_metadata SET value=? WHERE key=?", ("1" if value else "0", key))
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="home_assistant.settings_update", target_type="home_assistant", target_id=None, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"enabled": enabled, "categories": categories, "updated_at": now})
+
+    def _queue_notification(self, connection: sqlite3.Connection, category: str, job_id: str | None, payload: dict[str, object], force: bool = False) -> str | None:
+        settings = self._notification_settings(connection)
+        if not force and (not settings["enabled"] or not settings[category]):
+            return None
+        notification_id, now = str(uuid4()), utc_now()
+        event_data = {"schema_version": 1, "notification_id": notification_id, "category": category, **payload, "created_at": now}
+        connection.execute(
+            "INSERT OR IGNORE INTO notification_outbox(id,category,job_id,payload_json,state,attempt_count,next_attempt_at,created_at,updated_at) VALUES(?,?,?,?, 'pending',0,?,?,?)",
+            (notification_id, category, job_id, canonical_json(redact(event_data)), now, now, now),
+        )
+        return notification_id
+
+    def queue_test_notification(self, correlation_id: str) -> str:
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if not self._notification_settings(connection)["enabled"]:
+                raise ValueError("home_assistant_notifications_disabled")
+            notification_id = self._queue_notification(connection, "technical_error", None, {"severity": "info", "message": "Agent Control Plane test notification", "test": True}, force=True)
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="home_assistant.test", target_type="notification", target_id=notification_id, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={})
+        return str(notification_id)
+
+    def claim_notification(self) -> dict[str, object] | None:
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        lease_id = str(uuid4())
+        lease_expires = (now_dt + timedelta(seconds=NOTIFICATION_LEASE_SECONDS)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute("UPDATE notification_outbox SET state='pending',delivery_lease_id=NULL,delivery_lease_expires_at=NULL,updated_at=? WHERE state='delivering' AND delivery_lease_expires_at<=?", (now, now))
+            if not self._notification_settings(connection)["enabled"]:
+                return None
+            row = connection.execute("SELECT id,payload_json,attempt_count FROM notification_outbox WHERE state='pending' AND next_attempt_at<=? ORDER BY created_at LIMIT 1", (now,)).fetchone()
+            if row is None:
+                return None
+            updated = connection.execute("UPDATE notification_outbox SET state='delivering',delivery_lease_id=?,delivery_lease_expires_at=?,last_attempt_at=?,updated_at=? WHERE id=? AND state='pending'", (lease_id, lease_expires, now, now, row["id"])).rowcount
+            if updated != 1:
+                return None
+        return {"id": row["id"], "payload": json.loads(row["payload_json"]), "attempt_count": row["attempt_count"], "lease_id": lease_id}
+
+    def finish_notification(self, notification_id: str, lease_id: str, error_code: str | None) -> bool:
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("SELECT attempt_count FROM notification_outbox WHERE id=? AND state='delivering' AND delivery_lease_id=?", (notification_id, lease_id)).fetchone()
+            if row is None:
+                return False
+            attempts = int(row["attempt_count"]) + 1
+            if error_code is None:
+                connection.execute("UPDATE notification_outbox SET state='delivered',attempt_count=?,delivered_at=?,last_error_code=NULL,delivery_lease_id=NULL,delivery_lease_expires_at=NULL,updated_at=? WHERE id=?", (attempts, now, now, notification_id))
+                stale = connection.execute("SELECT id FROM notification_outbox WHERE state='delivered' ORDER BY delivered_at DESC LIMIT -1 OFFSET ?", (NOTIFICATION_HISTORY_LIMIT,)).fetchall()
+                if stale:
+                    connection.executemany("DELETE FROM notification_outbox WHERE id=?", [(item["id"],) for item in stale])
+            else:
+                delays = (5, 15, 60, 300, 900, 3600)
+                delay = delays[min(attempts - 1, len(delays) - 1)]
+                next_attempt = (now_dt + timedelta(seconds=delay)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+                state = "dead_letter" if attempts >= 20 else "pending"
+                connection.execute("UPDATE notification_outbox SET state=?,attempt_count=?,next_attempt_at=?,last_error_code=?,delivery_lease_id=NULL,delivery_lease_expires_at=NULL,updated_at=? WHERE id=?", (state, attempts, next_attempt, error_code, now, notification_id))
+        return True
+
+    def retry_notifications(self, correlation_id: str) -> int:
+        now = utc_now()
+        with connect(self.database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            count = connection.execute("UPDATE notification_outbox SET state='pending',next_attempt_at=?,delivery_lease_id=NULL,delivery_lease_expires_at=NULL,updated_at=? WHERE state IN ('pending','dead_letter')", (now, now)).rowcount
+            self._append_audit(connection, actor_identity_id=None, credential_id=None, action="home_assistant.retry", target_type="notification", target_id=None, decision="allowed", reason_code="ingress_admin", correlation_id=correlation_id, metadata={"count": count})
+        return count
+
+    def list_notifications(self, limit: int = 100) -> list[dict[str, object]]:
+        with connect(self.database_path) as connection:
+            rows = connection.execute("SELECT id,category,job_id,state,attempt_count,last_attempt_at,delivered_at,last_error_code,created_at FROM notification_outbox ORDER BY created_at DESC LIMIT ?", (min(max(limit, 1), 100),)).fetchall()
+        return [dict(row) for row in rows]
 
     def list_connectors(self) -> list[dict[str, object]]:
         with connect(self.database_path) as connection:
@@ -387,7 +506,7 @@ class ControlPlane:
         with connect(self.database_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
             task = connection.execute(
-                """SELECT d.name,r.id AS revision_id,r.input_schema_json
+                """SELECT d.name,d.display_name,r.id AS revision_id,r.input_schema_json
                    FROM task_definitions d JOIN task_revisions r ON r.task_definition_id=d.id
                    WHERE d.id=? AND d.enabled=1
                      AND r.revision=(SELECT max(r2.revision) FROM task_revisions r2 WHERE r2.task_definition_id=d.id)""",
@@ -433,6 +552,7 @@ class ControlPlane:
                 "INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES(?,NULL,?,?,?,?,?,?,?)",
                 (job_id, task["name"], "queued", policy_revision_id, task["revision_id"], canonical_json(redact(task_input)), now, now),
             )
+            self._queue_notification(connection, "task_available", job_id, {"severity": "info", "job_id": job_id, "task_name": task["display_name"]})
             self._append_audit(connection, actor_identity_id=None, credential_id=None, action="jobs.create", target_type="job", target_id=job_id, decision="allowed", reason_code=reason_code, correlation_id=correlation_id, metadata={"task_id": task_id})
         return job_id
 
@@ -590,7 +710,7 @@ class ControlPlane:
                 incident = connection.execute(
                     """SELECT i.*,m.enabled,m.cooldown_minutes,m.last_triggered_at,m.input_mode,
                               m.correlation_mode,m.event_type,d.id AS task_definition_id,
-                              d.name AS task_name,d.enabled AS task_enabled
+                              d.name AS task_name,d.display_name AS task_display_name,d.enabled AS task_enabled
                        FROM event_incidents i JOIN event_mappings m ON m.id=i.mapping_id
                        JOIN task_revisions r ON r.id=i.task_revision_id
                        JOIN task_definitions d ON d.id=r.task_definition_id
@@ -637,6 +757,7 @@ class ControlPlane:
                     "INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES(?,?,?,'queued',?,?,?,?,?)",
                     (job_id, anchor_event_id, incident["task_name"], incident["policy_revision_id"], incident["task_revision_id"], job_input, now, now),
                 )
+                self._queue_notification(connection, "task_available", job_id, {"severity": "info", "job_id": job_id, "task_name": incident["task_display_name"]})
                 connection.execute("DELETE FROM event_incidents WHERE id=?", (incident_id,))
                 connection.execute("UPDATE event_mappings SET last_triggered_at=?,updated_at=? WHERE id=?", (now, now, incident["mapping_id"]))
                 self._append_audit(connection, actor_identity_id=None, credential_id=None, action="events.incident_promote", target_type="incident", target_id=incident_id, decision="allowed", reason_code="accepted_after_grace", correlation_id=f"incident:{incident_id}:{now}", metadata={"job_id": job_id, "mapping_id": incident["mapping_id"], "subject_count": len(members)})
@@ -662,6 +783,7 @@ class ControlPlane:
             (attempts, reason, now, incident["id"]),
         )
         self._append_audit(connection, actor_identity_id=None, credential_id=None, action="events.incident_block", target_type="incident", target_id=incident["id"], decision="recorded", reason_code=reason, correlation_id=f"incident:{incident['id']}:{now}", metadata={"attempts": attempts})
+        self._queue_notification(connection, "technical_error", None, {"severity": "error", "incident_id": incident["id"], "task_name": incident["task_display_name"] if "task_display_name" in incident.keys() else "Agent Control Plane", "error_code": reason, "message": "An event incident could not be promoted after repeated attempts."})
 
     @staticmethod
     def _incident_job_input(incident: sqlite3.Row, members: list[sqlite3.Row]) -> str:
@@ -1377,7 +1499,7 @@ class ControlPlane:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
                 """SELECT j.state,j.event_id,j.task_name,j.policy_revision_id,j.task_revision_id,j.input_json,
-                          d.id AS task_definition_id,d.enabled
+                          d.id AS task_definition_id,d.display_name AS task_display_name,d.enabled
                    FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id
                    JOIN task_definitions d ON d.id=r.task_definition_id
                    WHERE j.id=?""",
@@ -1418,6 +1540,7 @@ class ControlPlane:
                    VALUES(?,?,?,'queued',?,?,?,?,?)""",
                 (new_job_id, None, job["task_name"], job["policy_revision_id"], job["task_revision_id"], job["input_json"], now, now),
             )
+            self._queue_notification(connection, "task_available", new_job_id, {"severity": "info", "job_id": new_job_id, "task_name": job["task_display_name"]})
             self._append_audit(
                 connection,
                 actor_identity_id=None,
@@ -1715,6 +1838,8 @@ class ControlPlane:
             connection.execute("INSERT INTO reports(id,job_id,schema_version,report_json,created_at) VALUES(?,?,?,?,?)", (report_id, job_id, schema_version, canonical_json(redact(report)), now))
             connection.execute("UPDATE job_attempts SET finished_at=?,outcome='completed',completion_key=? WHERE id=?", (now, completion_key, attempt["id"]))
             connection.execute("UPDATE jobs SET state='completed',updated_at=? WHERE id=? AND state='leased'", (now, job_id))
+            task_name = connection.execute("SELECT d.display_name FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id JOIN task_definitions d ON d.id=r.task_definition_id WHERE j.id=?", (job_id,)).fetchone()[0]
+            self._queue_notification(connection, "task_completed", job_id, {"severity": "success", "job_id": job_id, "report_id": report_id, "task_name": task_name, "conclusion": report["summary"]})
             self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.complete", target_type="job", target_id=job_id, decision="allowed", reason_code="completed", correlation_id=correlation_id, metadata={"report_id": report_id})
         return report_id
 
@@ -1738,6 +1863,9 @@ class ControlPlane:
             maximum = connection.execute("SELECT t.max_attempts FROM jobs j JOIN task_revisions t ON t.id=j.task_revision_id WHERE j.id=?", (job_id,)).fetchone()[0]
             state = "queued" if retryable and attempt["attempt_number"] < maximum else ("dead_letter" if retryable else "failed")
             connection.execute("UPDATE jobs SET state=?,updated_at=? WHERE id=? AND state='leased'", (state, now, job_id))
+            if state in {"failed", "dead_letter"}:
+                task_name = connection.execute("SELECT d.display_name FROM jobs j JOIN task_revisions r ON r.id=j.task_revision_id JOIN task_definitions d ON d.id=r.task_definition_id WHERE j.id=?", (job_id,)).fetchone()[0]
+                self._queue_notification(connection, "task_failed", job_id, {"severity": "error", "job_id": job_id, "task_name": task_name, "error_code": state, "message": reason.strip()})
             self._append_audit(connection, actor_identity_id=identity.identity_id, credential_id=identity.credential_id, action="jobs.fail", target_type="job", target_id=job_id, decision="allowed", reason_code=state, correlation_id=correlation_id, metadata={"reason": reason, "retryable": retryable})
         return state
 
@@ -2257,7 +2385,7 @@ class ControlPlane:
             if existing:
                 return IntakeResult(existing["event_id"], existing["job_id"], True, existing["outcome"] or ("accepted" if existing["job_id"] else "suppressed"))
             task_revision = connection.execute(
-                """SELECT r.id,d.id AS task_definition_id,d.name,m.id AS mapping_id,
+                """SELECT r.id,d.id AS task_definition_id,d.name,d.display_name,m.id AS mapping_id,
                           m.cooldown_minutes,m.grace_minutes,m.recovery_event_type,m.input_mode,m.last_triggered_at,
                           m.correlation_mode,
                           CASE WHEN m.recovery_event_type=? THEN 1 ELSE 0 END AS is_recovery
@@ -2442,6 +2570,7 @@ class ControlPlane:
                 "INSERT INTO jobs(id,event_id,task_name,state,policy_revision_id,task_revision_id,input_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
                 (job_id, event_id, task_name, "queued", identity.policy_revision_id, task_revision["id"], task_input, now, now),
             )
+            self._queue_notification(connection, "task_available", job_id, {"severity": "info", "job_id": job_id, "task_name": task_revision["display_name"]})
             connection.execute("UPDATE event_mappings SET last_triggered_at=?,updated_at=? WHERE id=?", (now, now, task_revision["mapping_id"]))
             self._append_audit(
                 connection,

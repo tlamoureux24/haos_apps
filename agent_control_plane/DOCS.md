@@ -734,6 +734,17 @@ inconsistency. JSONL export is available from the UI.
 Terminal operational data defaults to 90-day retention. Active jobs,
 configuration, and the audit trail are not deleted by that retention.
 
+### Outbound Home Assistant notifications
+
+Open **Home Assistant** after **Audit** to enable the optional event outbox,
+select categories, send a test event, retry unresolved deliveries, and inspect
+the bounded history. ACP uses the Supervisor-provided Core API proxy and token;
+do not configure a Core URL, long-lived token, or `/ssl` certificate.
+
+Version 1.2.0 uses a fresh SQLite generation 15. Remove generation 14 App data
+before installing it; there is intentionally no database migration in this
+release.
+
 ### Quick Home Assistant troubleshooting
 
 | HTTP / symptom | Likely cause |

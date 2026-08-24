@@ -31,6 +31,7 @@ from agent_control_plane.http_api import (
     admin_set_connector_enabled,
     admin_update_connector,
 )
+from agent_control_plane import home_assistant as home_assistant_delivery
 from agent_control_plane.ingress import cookie_secure
 from agent_control_plane.json_contracts import validate_json_schema
 from agent_control_plane.mcp_api import capability_result_content
@@ -94,12 +95,12 @@ class AdministrationInterfaceTests(unittest.TestCase):
             "const viewLoaders={overview:refresh,transport:loadTransport,activity:loadActivity,connectors:loadConnectors,'identities-view':loadIdentities,"
             "events:loadEvents,tasks:loadTaskComposer,triggers:loadMappings,"
             "schedules:loadSchedules,jobs:loadJobs,reports:loadReports,"
-            "audit:loadAuditPage}",
+            "audit:loadAuditPage,'home-assistant':loadHomeAssistant}",
             ADMIN_JS,
         )
         self.assertIn(
             "const autoRefreshIntervals={overview:10000,activity:5000,events:10000,jobs:5000,"
-            "reports:10000,audit:10000}",
+            "reports:10000,audit:10000,'home-assistant':5000}",
             ADMIN_JS,
         )
         self.assertNotIn("loadOperationalViews", ADMIN_JS)
@@ -108,7 +109,7 @@ class AdministrationInterfaceTests(unittest.TestCase):
         self.assertIn("#${view} details[open]", ADMIN_JS)
         self.assertIn("viewRefreshes.has(view)", ADMIN_JS)
         self.assertIn("if(document.visibilityState==='visible')refreshActiveView()", ADMIN_JS)
-        for view in ("overview", "activity", "events", "jobs", "reports", "audit"):
+        for view in ("overview", "activity", "events", "jobs", "reports", "audit", "home-assistant"):
             self.assertIn(f'data-freshness="{view}"', main_source)
         self.assertIn("Actualisé à l’instant", ADMIN_JS)
         self.assertIn("Actualisé il y a ${seconds} s", ADMIN_JS)
@@ -892,6 +893,7 @@ class PublicSurfaceTests(unittest.TestCase):
 
     def test_admin_root_is_exposed(self) -> None:
         self.assertIn("/", exposed_paths("admin"))
+        self.assertIn("/admin/api/v1/home-assistant", exposed_paths("admin"))
 
     def test_only_admin_surface_owns_maintenance_and_lifecycle_workers(self) -> None:
         main_source = Path(__file__).resolve().parents[1].joinpath("src/agent_control_plane/main.py").read_text(encoding="utf-8")
@@ -899,6 +901,61 @@ class PublicSurfaceTests(unittest.TestCase):
         self.assertIn('if settings.surface == "admin":', lifespan_source)
         self.assertIn("elif mcp_server is not None:", lifespan_source)
         self.assertIn("else:\n        yield", lifespan_source)
+
+
+class HomeAssistantNotificationTests(unittest.TestCase):
+    def _control_plane(self, root: Path) -> ControlPlane:
+        path = root / "control_plane.db"
+        initialize_database(path)
+        return ControlPlane(path, root / "private")
+
+    def test_disabled_by_default_and_test_requires_activation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            control_plane = self._control_plane(Path(directory))
+            self.assertFalse(control_plane.home_assistant_status()["settings"]["enabled"])
+            with self.assertRaisesRegex(ValueError, "notifications_disabled"):
+                control_plane.queue_test_notification("test")
+
+    def test_notification_identifier_is_stable_across_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            control_plane = self._control_plane(Path(directory))
+            control_plane.update_home_assistant_settings(True, {category: True for category in ("task_available", "task_completed", "task_failed", "technical_error")}, "settings")
+            notification_id = control_plane.queue_test_notification("test")
+            first = control_plane.claim_notification()
+            self.assertEqual(first["id"], notification_id)
+            self.assertEqual(first["payload"]["notification_id"], notification_id)
+            control_plane.finish_notification(notification_id, first["lease_id"], "home_assistant_timeout")
+            with sqlite3.connect(Path(directory) / "control_plane.db") as connection:
+                connection.execute("UPDATE notification_outbox SET next_attempt_at='2000-01-01T00:00:00.000Z' WHERE id=?", (notification_id,))
+            second = control_plane.claim_notification()
+            self.assertEqual(second["id"], notification_id)
+            self.assertEqual(second["payload"], first["payload"])
+
+    def test_expired_delivering_lease_is_recovered(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            control_plane = self._control_plane(root)
+            control_plane.update_home_assistant_settings(True, {category: True for category in ("task_available", "task_completed", "task_failed", "technical_error")}, "settings")
+            notification_id = control_plane.queue_test_notification("test")
+            control_plane.claim_notification()
+            with sqlite3.connect(root / "control_plane.db") as connection:
+                connection.execute("UPDATE notification_outbox SET delivery_lease_expires_at='2000-01-01T00:00:00.000Z' WHERE id=?", (notification_id,))
+            recovered = control_plane.claim_notification()
+            self.assertEqual(recovered["id"], notification_id)
+
+    def test_delivery_uses_supervisor_proxy_and_persisted_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            control_plane = self._control_plane(Path(directory))
+            control_plane.update_home_assistant_settings(True, {category: True for category in ("task_available", "task_completed", "task_failed", "technical_error")}, "settings")
+            notification_id = control_plane.queue_test_notification("test")
+            requests = []
+            transport = home_assistant_delivery.httpx.MockTransport(lambda request: requests.append(request) or home_assistant_delivery.httpx.Response(200, json={"message": "fired"}))
+            client_type = home_assistant_delivery.httpx.AsyncClient
+            with patch.dict(os.environ, {"SUPERVISOR_TOKEN": "test-token"}), patch.object(home_assistant_delivery.httpx, "AsyncClient", side_effect=lambda **_: client_type(transport=transport)):
+                self.assertTrue(asyncio.run(home_assistant_delivery.deliver_one(control_plane)))
+            self.assertEqual(str(requests[0].url), home_assistant_delivery.EVENT_URL)
+            self.assertEqual(json.loads(requests[0].content)["notification_id"], notification_id)
+            self.assertEqual(control_plane.list_notifications()[0]["state"], "delivered")
 
 
 class CredentialTests(unittest.TestCase):

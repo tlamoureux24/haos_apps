@@ -1490,3 +1490,48 @@ ACP has separate Event Intake and MCP/worker transports. Their defaults are
 HTTP on `8100` and self-generated HTTPS on `8098`; either can be changed after
 checking client compatibility. HTTP Bearers authenticate but do not encrypt
 transport. See the [TLS operations guide](../TLS.md).
+
+## Home Assistant notifications
+
+The optional **Home Assistant** page after **Audit** enables notifications;
+they are disabled by default. ACP fires `agent_control_plane_notification`
+through the official `http://supervisor/core/api/` proxy with the
+`SUPERVISOR_TOKEN` supplied by HAOS. No Home Assistant URL, token, certificate,
+or `/ssl` access is required.
+
+Categories are `task_available`, `task_completed`, `task_failed`, and
+`technical_error`. Completed tasks send only the validated report `summary` as
+`conclusion`; the complete report remains in ACP.
+
+The persistent SQLite outbox uses crash-recoverable delivery leases and keeps
+the same `notification_id` across every retry. The page retains all unresolved
+deliveries and the latest 100 successes.
+
+```yaml
+alias: "ACP - Notifications"
+triggers:
+  - trigger: event
+    event_type: agent_control_plane_notification
+actions:
+  - action: notify.mobile_app_my_phone
+    data:
+      title: >-
+        {% set e = trigger.event.data %}
+        ACP — {{ {'task_available':'New task', 'task_completed':'Task completed',
+                  'task_failed':'Task failed', 'technical_error':'Technical incident'}.get(e.category, 'Notification') }}
+      message: >-
+        {% set e = trigger.event.data %}
+        {% if e.category == 'task_completed' %}
+          {{ e.task_name }}: {{ e.conclusion }}
+        {% elif e.category == 'task_available' %}
+          {{ e.task_name }} is waiting to be processed.
+        {% else %}
+          {{ e.task_name | default('Agent Control Plane') }}: {{ e.message }}
+        {% endif %}
+```
+
+### 1.2.0 data reset
+
+SQLite generation 15 is shipped without a migration from generation 14.
+Remove the App data once before installing 1.2.0, then recreate its
+configuration. An old database is rejected explicitly.
