@@ -18,7 +18,8 @@ dupliqué dans les documents utilisateur des Apps agents.
 Chaque workflow d’App surveille son arborescence en excluant les fichiers
 Markdown. Un changement de code, configuration, traduction, packaging, test ou
 asset conserve donc la validation complète de l’App. Une modification purement
-documentaire ne construit aucune image.
+documentaire ne construit aucune image. La modification du fichier YAML d’un
+workflow déclenche volontairement ce workflow afin de valider son évolution.
 
 ### Suite TLS agents
 
@@ -51,6 +52,8 @@ and the absence of duplicated current-version labels in agent App user docs.
 Each App workflow watches its App tree while excluding Markdown. Code,
 configuration, translation, packaging, test, and asset changes therefore retain
 the complete App validation. Documentation-only changes build no image.
+Changing a workflow YAML deliberately triggers that workflow so its evolution
+is validated.
 
 ### Agent TLS suite
 
