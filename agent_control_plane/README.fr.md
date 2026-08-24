@@ -1546,6 +1546,51 @@ Les catégories sont `task_available`, `task_completed`, `task_failed` et
 `technical_error`. Une tâche terminée transmet uniquement le `summary` validé
 du rapport sous le nom `conclusion`. Le rapport complet reste dans ACP.
 
+Dans **Outils de développement → Événements → Écouter les événements**, saisissez
+exactement `agent_control_plane_notification`, laissez le filtre vide, commencez
+l’écoute, puis utilisez **Envoyer un événement de test** dans le drawer ACP.
+
+Tous les événements placent les champs suivants dans `trigger.event.data` :
+
+| Champ | Type | Description |
+| --- | --- | --- |
+| `schema_version` | entier | Version du contrat, actuellement `1` |
+| `notification_id` | UUID | Identifiant stable conservé pendant tous les retries |
+| `category` | chaîne | Une des quatre catégories ci-dessous |
+| `severity` | chaîne | `info`, `success` ou `error` selon la catégorie |
+| `created_at` | date ISO 8601 UTC | Date de création par ACP |
+
+Les données supplémentaires dépendent de `category` :
+
+| Catégorie | Données supplémentaires | Déclenchement |
+| --- | --- | --- |
+| `task_available` | `job_id`, `task_name` | Une nouvelle exécution attend une prise en charge ; `severity` vaut `info` |
+| `task_completed` | `job_id`, `report_id`, `task_name`, `conclusion` | Une tâche est terminée ; `conclusion` contient uniquement le résumé validé et `severity` vaut `success` |
+| `task_failed` | `job_id`, `task_name`, `error_code`, `message` | Une tâche termine en `failed` ou `dead_letter` ; `error_code` contient cet état, `message` la raison et `severity` vaut `error` |
+| `technical_error` | `incident_id`, `task_name`, `error_code`, `message` | Un incident ACP n’a pas pu être promu après plusieurs tentatives ; `severity` vaut `error` |
+
+Le bouton de test publie volontairement une variante `technical_error` avec
+`severity: info`, `message: Agent Control Plane test notification` et
+`test: true`. Cette variante de test ne contient pas `incident_id`,
+`error_code` ou `task_name`. Les clés absentes doivent donc être lues avec
+`default` dans les templates Home Assistant.
+
+Exemple de données reçues pour une tâche terminée :
+
+```yaml
+event_type: agent_control_plane_notification
+data:
+  schema_version: 1
+  notification_id: 7f65a7aa-29f1-44fb-8884-dd80b12006e5
+  category: task_completed
+  severity: success
+  created_at: "2026-08-24T09:12:34.567Z"
+  job_id: 7fd622f4-f298-43bc-b719-1369b4e4c662
+  report_id: b0703489-69ed-4c42-8d6f-0cef241414dc
+  task_name: Diagnostic quotidien
+  conclusion: Aucun incident détecté.
+```
+
 La file SQLite persistante utilise des leases récupérables après crash et garde
 le même `notification_id` pendant toutes les tentatives. La page conserve les
 livraisons non résolues et les 100 derniers succès.

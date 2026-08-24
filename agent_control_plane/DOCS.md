@@ -373,6 +373,23 @@ La rétention des données opérationnelles terminées est de 90 jours par défa
 Les jobs actifs, la configuration et l'audit ne sont pas supprimés par cette
 rétention.
 
+### Notifications sortantes vers Home Assistant
+
+ACP déclenche l’événement Home Assistant exact
+`agent_control_plane_notification`. Ses données communes sont
+`schema_version`, le `notification_id` stable pendant les retries, `category`,
+`severity` et `created_at`. Selon la catégorie sélectionnée, ACP ajoute :
+
+- `task_available` : `job_id`, `task_name` ;
+- `task_completed` : `job_id`, `report_id`, `task_name`, `conclusion` ;
+- `task_failed` : `job_id`, `task_name`, `error_code`, `message` ;
+- `technical_error` : `incident_id`, `task_name`, `error_code`, `message`.
+
+L’événement de test est un `technical_error` spécial avec `test: true`,
+`severity: info` et `message`, sans les autres champs d’incident technique. Les
+tables exhaustives des payloads et les exemples d’automatisation sont dans
+[README.fr.md](README.fr.md) et [README.md](README.md).
+
 ### Dépannage rapide Home Assistant
 
 | HTTP / symptôme | Cause probable |
@@ -740,6 +757,21 @@ Open **Home Assistant** after **Audit** to enable the optional event outbox,
 select categories, send a test event, retry unresolved deliveries, and inspect
 the bounded history. ACP uses the Supervisor-provided Core API proxy and token;
 do not configure a Core URL, long-lived token, or `/ssl` certificate.
+
+ACP fires the exact Home Assistant event name
+`agent_control_plane_notification`. Its common data are `schema_version`, the
+retry-stable `notification_id`, `category`, `severity`, and `created_at`.
+Depending on the selected category, it adds:
+
+- `task_available`: `job_id`, `task_name`;
+- `task_completed`: `job_id`, `report_id`, `task_name`, `conclusion`;
+- `task_failed`: `job_id`, `task_name`, `error_code`, `message`;
+- `technical_error`: `incident_id`, `task_name`, `error_code`, `message`.
+
+The test event is a special `technical_error` carrying `test: true`,
+`severity: info`, and `message`, without the other technical-incident fields.
+The exhaustive bilingual payload tables and automation examples are in
+[README.md](README.md) and [README.fr.md](README.fr.md).
 
 Version 1.2.0 uses a fresh SQLite generation 15. Remove generation 14 App data
 before installing it; there is intentionally no database migration in this

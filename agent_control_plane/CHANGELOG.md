@@ -4,6 +4,8 @@
 
 - Label the Home Assistant API availability indicator in the notification
   settings drawer and provide bilingual explanatory tooltips for both states.
+- Document the exact `agent_control_plane_notification` event contract, its
+  common fields, and category-specific payloads in French and English.
 
 ## 1.2.1
 

@@ -1503,6 +1503,51 @@ Categories are `task_available`, `task_completed`, `task_failed`, and
 `technical_error`. Completed tasks send only the validated report `summary` as
 `conclusion`; the complete report remains in ACP.
 
+In **Developer tools → Events → Listen to events**, enter exactly
+`agent_control_plane_notification`, leave the filter empty, start listening,
+then use **Send a test event** in the ACP drawer.
+
+Every event places these fields in `trigger.event.data`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `schema_version` | integer | Contract version, currently `1` |
+| `notification_id` | UUID | Stable identifier retained across every retry |
+| `category` | string | One of the four categories below |
+| `severity` | string | `info`, `success`, or `error`, depending on the category |
+| `created_at` | ISO 8601 UTC timestamp | Time at which ACP created the notification |
+
+Additional data depends on `category`:
+
+| Category | Additional data | Emission condition |
+| --- | --- | --- |
+| `task_available` | `job_id`, `task_name` | A new execution is waiting to be processed; `severity` is `info` |
+| `task_completed` | `job_id`, `report_id`, `task_name`, `conclusion` | A task completed; `conclusion` contains only the validated summary and `severity` is `success` |
+| `task_failed` | `job_id`, `task_name`, `error_code`, `message` | A task ended as `failed` or `dead_letter`; `error_code` contains that state, `message` the reason, and `severity` is `error` |
+| `technical_error` | `incident_id`, `task_name`, `error_code`, `message` | ACP could not promote an incident after repeated attempts; `severity` is `error` |
+
+The test button intentionally publishes a `technical_error` variant with
+`severity: info`, `message: Agent Control Plane test notification`, and
+`test: true`. This test variant has no `incident_id`, `error_code`, or
+`task_name`, so Home Assistant templates should read optional keys with
+`default`.
+
+Example data received for a completed task:
+
+```yaml
+event_type: agent_control_plane_notification
+data:
+  schema_version: 1
+  notification_id: 7f65a7aa-29f1-44fb-8884-dd80b12006e5
+  category: task_completed
+  severity: success
+  created_at: "2026-08-24T09:12:34.567Z"
+  job_id: 7fd622f4-f298-43bc-b719-1369b4e4c662
+  report_id: b0703489-69ed-4c42-8d6f-0cef241414dc
+  task_name: Daily diagnosis
+  conclusion: No incident detected.
+```
+
 The persistent SQLite outbox uses crash-recoverable delivery leases and keeps
 the same `notification_id` across every retry. The page retains all unresolved
 deliveries and the latest 100 successes.
