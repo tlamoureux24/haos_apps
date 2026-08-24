@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.10
+
+- Replace expected external-certificate tracebacks with one concise English
+  listener-containment error containing the underlying cause.
+
 ## 1.1.9
 
 - Hide HTTPS certificate guidance when the standalone API explicitly uses HTTP.

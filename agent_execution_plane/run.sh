@@ -65,7 +65,7 @@ if [ "${public_transport}" = "http" ]; then
     --no-access-log --log-level "${log_level}" --log-config /app/src/agent_execution_plane/uvicorn_logging.json &
   api_pid=$!
 else
-  if tls_values="$(su-exec agent-execution-plane:agent-execution-plane python3 -c 'from agent_execution_plane.settings import load_settings; from agent_execution_plane.tls import prepare_certificate; s=load_settings();i=prepare_certificate(s.data_dir,s.certificate_source,s.certfile,s.keyfile);print(i.certfile);print(i.keyfile);print(i.fingerprint_sha256);print(i.not_after)')"; then
+  if tls_values="$(su-exec agent-execution-plane:agent-execution-plane python3 -c 'from agent_execution_plane.settings import load_settings; from agent_execution_plane.tls import prepare_certificate; s=load_settings();i=prepare_certificate(s.data_dir,s.certificate_source,s.certfile,s.keyfile);print(i.certfile);print(i.keyfile);print(i.fingerprint_sha256);print(i.not_after)' 2>&1)"; then
     tls_cert_path="$(printf '%s\n' "${tls_values}"|sed -n '1p')";tls_key_path="$(printf '%s\n' "${tls_values}"|sed -n '2p')";tls_fingerprint="$(printf '%s\n' "${tls_values}"|sed -n '3p')";tls_expiry="$(printf '%s\n' "${tls_values}"|sed -n '4p')"
     log INFO "Standalone Execution API listening on HTTPS port 8098"
     log INFO "Public TLS certificate source: ${certificate_source}"
@@ -76,7 +76,8 @@ else
       --no-access-log --log-level "${log_level}" --log-config /app/src/agent_execution_plane/uvicorn_logging.json &
     api_pid=$!
   else
-    log ERROR "Public TLS certificate is invalid; Standalone Execution API was not started and Ingress administration remains available"
+    tls_error="$(printf '%s\n' "${tls_values}"|tail -n 1)"
+    log ERROR "Public TLS certificate is invalid; Standalone Execution API was not started and Ingress administration remains available error=${tls_error}"
   fi
 fi
 

@@ -1,6 +1,6 @@
 name: "Agent Execution Plane"
 slug: "agent_execution_plane"
-version: "1.1.9"
+version: "1.1.10"
 description: "Model reasoning and execution engine shell"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/agent_execution_plane"
 arch:

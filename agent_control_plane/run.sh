@@ -80,7 +80,7 @@ admin_pid=$!
 tls_ready=false
 tls_values=""
 if [ "${events_transport}" = "https" ] || [ "${mcp_transport}" = "https" ]; then
-  if tls_values="$(su-exec agent-control-plane:agent-control-plane python3 -c 'from agent_control_plane.settings import load_settings; from agent_control_plane.tls import prepare_certificate; s=load_settings(); i=prepare_certificate(s.data_dir,s.certificate_source,s.certfile,s.keyfile); print(i.certfile); print(i.keyfile); print(i.fingerprint_sha256); print(i.not_after)')"; then
+  if tls_values="$(su-exec agent-control-plane:agent-control-plane python3 -c 'from agent_control_plane.settings import load_settings; from agent_control_plane.tls import prepare_certificate; s=load_settings(); i=prepare_certificate(s.data_dir,s.certificate_source,s.certfile,s.keyfile); print(i.certfile); print(i.keyfile); print(i.fingerprint_sha256); print(i.not_after)' 2>&1)"; then
     tls_ready=true
     tls_cert_path="$(printf '%s\n' "${tls_values}" | sed -n '1p')"
     tls_key_path="$(printf '%s\n' "${tls_values}" | sed -n '2p')"
@@ -90,7 +90,8 @@ if [ "${events_transport}" = "https" ] || [ "${mcp_transport}" = "https" ]; then
     log_info "Public TLS certificate SHA-256: ${tls_fingerprint}"
     log_info "Public TLS certificate expires at: ${tls_expiry}"
   else
-    log_error "Public TLS certificate is invalid; HTTPS listeners were not started and Ingress administration remains available"
+    tls_error="$(printf '%s\n' "${tls_values}" | tail -n 1)"
+    log_error "Public TLS certificate is invalid; HTTPS listeners were not started and Ingress administration remains available error=${tls_error}"
   fi
 fi
 

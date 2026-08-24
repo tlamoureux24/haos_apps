@@ -41,7 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_control_plane"',
-        'version: "1.1.9"',
+        'version: "1.1.10"',
         "  - amd64",
         "init: false",
         "stage: stable",
@@ -58,7 +58,7 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "1.1.9"' not in package:
+    if '__version__ = "1.1.10"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
     if "arch:\n  - amd64\nstartup:" not in config or "aarch64" in config:
         raise RuntimeError("Agent Control Plane must support amd64 only")
@@ -69,6 +69,8 @@ def main() -> int:
         raise RuntimeError("Uvicorn logs must retain an explicit timestamp")
     if launcher.count("--log-config /app/src/agent_control_plane/uvicorn_logging.json") != 5:
         raise RuntimeError("All Agent Control Plane listener variants must use timestamped logging")
+    if "prepare_certificate" not in launcher or "2>&1" not in launcher or "tls_error=" not in launcher:
+        raise RuntimeError("Concise TLS startup error handling missing")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile:
         raise RuntimeError("Home Assistant base image must continue to follow latest")
     if "FROM ghcr.io/home-assistant/base:latest@" in dockerfile:
