@@ -77,6 +77,26 @@ Documentation détaillée :
 
 - [Documentation française](agent_control_plane/README.fr.md)
 
+#### Agent Execution Plane
+
+Moteur d’exécution autonome ou worker ACP. AEP applique la priorité des modèles
+définie par l’administrateur, limite chaque exécution à l’enveloppe exacte des
+outils MCP fournie par sa source et conserve les résultats en attente sans
+rejouer automatiquement une opération interrompue.
+
+Fonctionnalités principales :
+
+- API autonome authentifiée et connexion Control Plane facultative vers ACP ;
+- fournisseurs Ollama, OpenAI compatibles et ChatGPT OAuth ;
+- HTTPS public autogénéré ou externe avec épinglage SHA-256 sortant ;
+- slot d’exécution partagé, résultats persistants jusqu’à acquittement et
+  reprise sans replay après redémarrage ;
+- interface Ingress bilingue avec état des modèles, ressources et connexions.
+
+Documentation détaillée :
+
+- [Documentation française](agent_execution_plane/README.fr.md)
+
 #### Studio Code Server + Codex
 
 App Home Assistant expérimentale fournissant un espace de développement persistant accessible exclusivement par l’Ingress authentifié de Home Assistant.
@@ -247,6 +267,8 @@ Si la nouvelle version n’apparaît pas :
 Pour comprendre le fonctionnement d’une App ou obtenir de l’aide, consulter d’abord sa documentation française :
 
 - [Agent Control Plane](agent_control_plane/README.fr.md)
+- [Agent Execution Plane](agent_execution_plane/README.fr.md)
+- [MCP Capability Bridge](mcp_capability_bridge/README.fr.md)
 - [Rsync Manager](rsync_manager/README.fr.md)
 - [Studio Code Server + Codex](studio_code_server/README.fr.md)
 - [UniFi Autoblock](unifi_autoblock/README.fr.md)
@@ -329,6 +351,26 @@ Main features:
 Detailed documentation:
 
 - [English documentation](agent_control_plane/README.md)
+
+#### Agent Execution Plane
+
+Standalone execution engine or ACP worker. AEP applies administrator-defined
+model priority, constrains each execution to the exact MCP tool envelope
+provided by its source, and persists pending results without automatically
+replaying interrupted operations.
+
+Main features:
+
+- authenticated standalone API and optional Control Plane connection to ACP;
+- Ollama-compatible, OpenAI-compatible, and ChatGPT OAuth providers;
+- self-generated or external public HTTPS with outbound SHA-256 pinning;
+- shared execution slot, durable pending results until acknowledgement, and
+  restart recovery without replay;
+- bilingual Ingress UI with model, resource, and connection state.
+
+Detailed documentation:
+
+- [English documentation](agent_execution_plane/README.md)
 
 #### Studio Code Server + Codex
 
@@ -500,6 +542,8 @@ If the new version does not appear:
 For details or help with an App, consult its English documentation first:
 
 - [Agent Control Plane](agent_control_plane/README.md)
+- [Agent Execution Plane](agent_execution_plane/README.md)
+- [MCP Capability Bridge](mcp_capability_bridge/README.md)
 - [Rsync Manager](rsync_manager/README.md)
 - [Studio Code Server + Codex](studio_code_server/README.md)
 - [UniFi Autoblock](unifi_autoblock/README.md)

@@ -1,6 +1,6 @@
 # Agent Execution Plane — Implementation Plan
 
-Status: **authoritative implementation sequence — Lots 0, 1, 2 and 3 accepted; Lot 4 implemented pending HAOS acceptance**.
+Status: **authoritative implementation sequence — Lots 0 through 4 accepted on real HAOS**.
 
 This plan is derived from `PROJECT_BRIEF.md`, `TECHNICAL_DESIGN.md` and the root `ARCHITECTURE_CHARTER.md`.
 

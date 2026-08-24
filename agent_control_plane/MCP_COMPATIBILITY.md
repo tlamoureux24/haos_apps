@@ -11,7 +11,7 @@ actuelle d’Agent Control Plane. Elle distingue les fonctions prises en charge 
 SDK MCP épinglé de celles directement exercées par la CI d’Agent Control Plane ; elle
 ne constitue pas une certification de conformité complète au protocole MCP.
 
-La version actuelle d’Agent Control Plane utilise `mcp==1.28.1` pour son serveur MCP
+Le manifeste de dépendances d’Agent Control Plane utilise `mcp==1.28.1` pour son serveur MCP
 public et pour ses connexions MCP amont.
 
 ### Transports et rôles

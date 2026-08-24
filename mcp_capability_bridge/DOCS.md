@@ -2,9 +2,9 @@
 
 Guide complet des namespaces, templates SSH JSON, schémas d’entrée, cibles Web et intégrations ACP/AEP : [français](README.fr.md) | [English](README.md).
 
-Version 1.0.0 is the stable Lot 4 release. Its runtime, persistence, backup and
-restore, MCP, Web, SSH, ACP/AEP and AppArmor paths passed final real-HAOS
-acceptance. SQLite generation 1 is the production-data compatibility cutoff.
+The runtime, persistence, backup/restore, MCP, Web, SSH, ACP/AEP, TLS, and
+AppArmor paths have passed real-HAOS acceptance. SQLite generation 1 is the
+production-data compatibility cutoff.
 
 ## Français
 
@@ -88,8 +88,8 @@ restaurez-la, redémarrez, vérifiez la readiness, les clients/cibles/publicatio
 puis appelez une capacité inoffensive. Une session Web ouverte avant sauvegarde
 doit avoir disparu.
 
-La version 1.0.0 fige la génération SQLite `1` comme cutoff de compatibilité :
-toute modification durable ultérieure exigera une
+La génération SQLite `1` est le cutoff de compatibilité de production : toute
+modification durable ultérieure exige une
 migration versionnée, transactionnelle et testée depuis chaque version prise en
 charge. Une génération inconnue est toujours refusée au démarrage.
 
@@ -112,7 +112,7 @@ La recette finale a validé :
 - absence d’erreur applicative, fuite de secret et `apparmor="DENIED"` ;
 - consommation stable après les bancs externes Lot 3B/3C répétés.
 
-Ces preuves acceptent le Lot 4 et autorisent la version 1.0.0 stable comme
+Ces preuves valident le socle de production et la génération SQLite `1` comme
 cutoff de conservation des données.
 
 ## English
@@ -191,8 +191,8 @@ To test restore, stop the App, create and restore a HAOS backup, restart, verify
 readiness and all clients/targets/publications, then call one harmless
 capability. A Web session open before backup must be gone.
 
-Version 1.0.0 freezes SQLite generation `1` as the production compatibility
-cutoff: every later durable change requires a versioned,
+SQLite generation `1` is the production compatibility cutoff: every later
+durable change requires a versioned,
 transactional migration tested from every supported version. Unknown
 generations always fail startup.
 

@@ -820,7 +820,7 @@ Future releases must preserve these proofs as non-regression requirements.
 
 ## Schema and data-preservation policy after development
 
-Development is closed at version 0.46.8 and persisted Agent Control Plane data is
+The initial pre-1.0 development baseline closed at version 0.46.8; persisted Agent Control Plane data is
 non-disposable from this point forward. Existing 0.46.8 installations form the
 first persistence baseline. Fresh installations may still create the current
 schema directly, but any future release that changes persisted structure must
