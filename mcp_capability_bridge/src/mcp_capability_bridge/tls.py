@@ -28,6 +28,15 @@ def external_paths(root,cert_name,key_name):
  base=root.resolve();paths=[(base/name).resolve() for name in (cert_name,key_name)]
  if any(Path(name).is_absolute() or base not in path.parents for name,path in zip((cert_name,key_name),paths)):raise ValueError("external_certificate_path_invalid")
  return paths
+def stage_external_certificate(cert_name,key_name,directory,uid,gid,source_root=Path("/ssl")):
+ sources=external_paths(source_root,cert_name,key_name);directory.mkdir(mode=0o700,parents=True,exist_ok=True)
+ if directory.is_symlink() or not directory.is_dir():raise ValueError("external_certificate_stage_invalid")
+ certfile,keyfile=directory/"server-cert.pem",directory/"server-key.pem"
+ for path in (certfile,keyfile):
+  try:path.unlink()
+  except FileNotFoundError:pass
+ inspect_certificate("external",*sources);_write(certfile,sources[0].read_bytes(),0o644);_write(keyfile,sources[1].read_bytes(),0o600)
+ os.chown(directory,uid,gid);os.chown(certfile,uid,gid);os.chown(keyfile,uid,gid);return certfile,keyfile
 def inspect_certificate(source,certfile,keyfile):
  cert=x509.load_pem_x509_certificate(certfile.read_bytes());key=serialization.load_pem_private_key(keyfile.read_bytes(),None);fmt=serialization.PublicFormat.SubjectPublicKeyInfo
  if cert.public_key().public_bytes(serialization.Encoding.DER,fmt)!=key.public_key().public_bytes(serialization.Encoding.DER,fmt):raise ValueError("certificate_private_key_mismatch")
@@ -38,5 +47,6 @@ def inspect_certificate(source,certfile,keyfile):
   if cert.extensions.get_extension_for_class(x509.BasicConstraints).value.ca:raise ValueError("ca_certificate_not_allowed")
  except x509.ExtensionNotFound:pass
  context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);context.minimum_version=ssl.TLSVersion.TLSv1_2;context.load_cert_chain(certfile,keyfile);raw=hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest();return CertificateInfo(source,certfile,keyfile,":".join(raw[i:i+2].upper() for i in range(0,64,2)),cert.subject.rfc4514_string(),cert.issuer.rfc4514_string(),before.isoformat().replace("+00:00","Z"),after.isoformat().replace("+00:00","Z"))
-def prepare_certificate(data_dir,source,cert_name="",key_name="",ssl_dir=Path("/ssl")):
+def prepare_certificate(data_dir,source,cert_name="",key_name="",ssl_dir=None):
+ ssl_dir=ssl_dir or Path(os.environ.get("MCP_CAPABILITY_BRIDGE_EXTERNAL_TLS_DIR","/ssl"))
  paths=generate_certificate(data_dir/"private"/"tls") if source=="self_generated" else external_paths(ssl_dir,cert_name,key_name) if source=="external" else (_ for _ in ()).throw(ValueError("invalid_certificate_source"));return inspect_certificate(source,*paths)

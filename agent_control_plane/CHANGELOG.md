@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.11
+
+- Securely stage administrator-provided private keys from `/ssl` into the
+  unprivileged runtime with mode `0600` instead of requiring broad read access.
+
 ## 1.1.10
 
 - Replace expected external-certificate tracebacks with one concise English

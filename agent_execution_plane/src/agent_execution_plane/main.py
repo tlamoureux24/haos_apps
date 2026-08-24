@@ -201,6 +201,7 @@ def certificate_payload() -> dict[str, object]:
     result: dict[str, object] = {"configured": settings.public_transport == "https", "source": settings.certificate_source}
     if settings.public_transport != "https": return result
     try:
+        if stage_error := os.environ.get("AGENT_EXECUTION_PLANE_EXTERNAL_TLS_STAGE_ERROR"): raise RuntimeError(stage_error)
         info=prepare_certificate(settings.data_dir,settings.certificate_source,settings.certfile,settings.keyfile)
         result.update({"valid":True,"fingerprint_sha256":info.fingerprint_sha256,"subject":info.subject,"issuer":info.issuer,"not_before":info.not_before,"not_after":info.not_after})
     except Exception as exc: result.update({"valid":False,"error":str(exc)})

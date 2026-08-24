@@ -213,7 +213,7 @@ class SurfaceTests(unittest.TestCase):
                 self.admin, "GET", "/", headers={**headers, "X-Forwarded-Proto": "https"},
             )
             self.assertIn("; Secure", secure_page.headers["set-cookie"])
-            self.assertIn("MCP Capability Bridge <b>v1.1.8</b>", page.text)
+            self.assertIn("MCP Capability Bridge <b>v1.1.9</b>", page.text)
             self.assertIn('/api/hassio_ingress/test/admin/assets/admin.css', page.text)
             self.assertNotIn('name="key"', page.text)
             status = (await self.request(self.admin, "GET", "/admin/api/v1/status", headers=headers)).json()

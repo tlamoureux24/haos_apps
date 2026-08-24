@@ -27,6 +27,17 @@ else
   keyfile="${AGENT_CONTROL_PLANE_KEYFILE:-}"
 fi
 
+external_tls_error=""
+if { [ "${events_transport}" = "https" ] || [ "${mcp_transport}" = "https" ]; } && [ "${certificate_source}" = "external" ]; then
+  if stage_output="$(PYTHONPATH=/app/src python3 -c 'from pathlib import Path; from agent_control_plane.tls import stage_external_certificate; import sys; stage_external_certificate(sys.argv[1],sys.argv[2],Path("/data/private/external-tls"),1000,1000)' "${certfile}" "${keyfile}" 2>&1)"; then
+    certfile="server-cert.pem";keyfile="server-key.pem"
+  else
+    external_tls_error="$(printf '%s\n' "${stage_output}" | tail -n 1)";certfile="server-cert.pem";keyfile="server-key.pem"
+    export AGENT_CONTROL_PLANE_EXTERNAL_TLS_STAGE_ERROR="${external_tls_error}"
+  fi
+  export AGENT_CONTROL_PLANE_EXTERNAL_TLS_DIR=/data/private/external-tls
+fi
+
 export AGENT_CONTROL_PLANE_DATA_DIR="${AGENT_CONTROL_PLANE_DATA_DIR:-/data}"
 export AGENT_CONTROL_PLANE_LOG_LEVEL="${log_level}"
 export AGENT_CONTROL_PLANE_INTAKE_RATE_LIMIT="${intake_rate_limit}"
@@ -80,7 +91,9 @@ admin_pid=$!
 tls_ready=false
 tls_values=""
 if [ "${events_transport}" = "https" ] || [ "${mcp_transport}" = "https" ]; then
-  if tls_values="$(su-exec agent-control-plane:agent-control-plane python3 -c 'from agent_control_plane.settings import load_settings; from agent_control_plane.tls import prepare_certificate; s=load_settings(); i=prepare_certificate(s.data_dir,s.certificate_source,s.certfile,s.keyfile); print(i.certfile); print(i.keyfile); print(i.fingerprint_sha256); print(i.not_after)' 2>&1)"; then
+  if [ -n "${external_tls_error}" ]; then
+    log_error "Public TLS certificate is invalid; HTTPS listeners were not started and Ingress administration remains available error=${external_tls_error}"
+  elif tls_values="$(su-exec agent-control-plane:agent-control-plane python3 -c 'from agent_control_plane.settings import load_settings; from agent_control_plane.tls import prepare_certificate; s=load_settings(); i=prepare_certificate(s.data_dir,s.certificate_source,s.certfile,s.keyfile); print(i.certfile); print(i.keyfile); print(i.fingerprint_sha256); print(i.not_after)' 2>&1)"; then
     tls_ready=true
     tls_cert_path="$(printf '%s\n' "${tls_values}" | sed -n '1p')"
     tls_key_path="$(printf '%s\n' "${tls_values}" | sed -n '2p')"

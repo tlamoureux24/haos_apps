@@ -26,6 +26,16 @@ else
   certfile="${AGENT_EXECUTION_PLANE_CERTFILE:-}"
   keyfile="${AGENT_EXECUTION_PLANE_KEYFILE:-}"
 fi
+external_tls_error=""
+if [ "${public_transport}" = "https" ] && [ "${certificate_source}" = "external" ]; then
+  if stage_output="$(python3 -c 'from pathlib import Path; from agent_execution_plane.tls import stage_external_certificate; import sys; stage_external_certificate(sys.argv[1],sys.argv[2],Path("/data/private/external-tls"),1000,1000)' "${certfile}" "${keyfile}" 2>&1)"; then
+    certfile="server-cert.pem";keyfile="server-key.pem"
+  else
+    external_tls_error="$(printf '%s\n' "${stage_output}"|tail -n 1)";certfile="server-cert.pem";keyfile="server-key.pem"
+    export AGENT_EXECUTION_PLANE_EXTERNAL_TLS_STAGE_ERROR="${external_tls_error}"
+  fi
+  export AGENT_EXECUTION_PLANE_EXTERNAL_TLS_DIR=/data/private/external-tls
+fi
 export AGENT_EXECUTION_PLANE_DATA_DIR="${AGENT_EXECUTION_PLANE_DATA_DIR:-/data}"
 export AGENT_EXECUTION_PLANE_LOG_LEVEL="${log_level}"
 export AGENT_EXECUTION_PLANE_PUBLIC_TRANSPORT="${public_transport}"
@@ -65,7 +75,9 @@ if [ "${public_transport}" = "http" ]; then
     --no-access-log --log-level "${log_level}" --log-config /app/src/agent_execution_plane/uvicorn_logging.json &
   api_pid=$!
 else
-  if tls_values="$(su-exec agent-execution-plane:agent-execution-plane python3 -c 'from agent_execution_plane.settings import load_settings; from agent_execution_plane.tls import prepare_certificate; s=load_settings();i=prepare_certificate(s.data_dir,s.certificate_source,s.certfile,s.keyfile);print(i.certfile);print(i.keyfile);print(i.fingerprint_sha256);print(i.not_after)' 2>&1)"; then
+  if [ -n "${external_tls_error}" ]; then
+    log ERROR "Public TLS certificate is invalid; Standalone Execution API was not started and Ingress administration remains available error=${external_tls_error}"
+  elif tls_values="$(su-exec agent-execution-plane:agent-execution-plane python3 -c 'from agent_execution_plane.settings import load_settings; from agent_execution_plane.tls import prepare_certificate; s=load_settings();i=prepare_certificate(s.data_dir,s.certificate_source,s.certfile,s.keyfile);print(i.certfile);print(i.keyfile);print(i.fingerprint_sha256);print(i.not_after)' 2>&1)"; then
     tls_cert_path="$(printf '%s\n' "${tls_values}"|sed -n '1p')";tls_key_path="$(printf '%s\n' "${tls_values}"|sed -n '2p')";tls_fingerprint="$(printf '%s\n' "${tls_values}"|sed -n '3p')";tls_expiry="$(printf '%s\n' "${tls_values}"|sed -n '4p')"
     log INFO "Standalone Execution API listening on HTTPS port 8098"
     log INFO "Public TLS certificate source: ${certificate_source}"

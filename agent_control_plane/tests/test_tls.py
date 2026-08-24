@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
-from agent_control_plane.tls import certificate_validity, external_paths, generate_certificate, inspect_certificate
+from agent_control_plane.tls import certificate_validity, external_paths, generate_certificate, inspect_certificate, stage_external_certificate
 from agent_control_plane.pinned_http import PinnedAsyncHTTPTransport, normalize_certificate_sha256
 import httpx
 
@@ -54,6 +54,13 @@ class ServerCertificateTests(unittest.TestCase):
             for name in ("../cert.pem", "/tmp/cert.pem"):
                 with self.assertRaisesRegex(ValueError, "path_invalid"):
                     external_paths(root, name, "key.pem")
+
+    def test_external_key_is_staged_privately_for_unprivileged_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/"ssl";source.mkdir();generate_certificate(source,"ACP external")
+            certfile,keyfile=stage_external_certificate("server-cert.pem","server-key.pem",root/"private/external-tls",os.getuid(),os.getgid(),source)
+            self.assertEqual(keyfile.stat().st_mode&0o777,0o600);self.assertEqual(certfile.stat().st_mode&0o777,0o644)
+            self.assertEqual(inspect_certificate("external",certfile,keyfile).source,"external")
 
     def test_expired_certificate_is_rejected_before_listener_start(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

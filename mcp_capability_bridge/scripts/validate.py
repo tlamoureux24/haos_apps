@@ -27,13 +27,13 @@ def main() -> int:
     security = (ROOT / "src/mcp_capability_bridge/security.py").read_text(encoding="utf-8")
 
     for value in (
-        'slug: "mcp_capability_bridge"', 'version: "1.1.8"',
+        'slug: "mcp_capability_bridge"', 'version: "1.1.9"',
         "  - amd64", "init: false", "stage: stable", "apparmor: true",
         "tmpfs: true", "backup: cold", "ingress: true", "ingress_port: 8099",
         "  8098/tcp: null",
     ):
         require(config, value, "App metadata invariant")
-    require(package, '__version__ = "1.1.8"', "synchronized package version")
+    require(package, '__version__ = "1.1.9"', "synchronized package version")
     require(config, "arch:\n  - amd64\nstartup:", "AMD64-only architecture")
     if "aarch64" in config:
         raise RuntimeError("MCP Capability Bridge must support amd64 only")

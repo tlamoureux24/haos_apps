@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.9
+
+- Securely stage administrator-provided private keys from `/ssl` into the
+  unprivileged runtime with mode `0600` instead of requiring broad read access.
+
 ## 1.1.8
 
 - Enable Chromium's Network domain before reading a pinned Web target

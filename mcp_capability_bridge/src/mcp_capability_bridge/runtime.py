@@ -53,6 +53,8 @@ async def serve() -> None:
         logger.warning("MCP endpoint uses unencrypted HTTP; namespace credentials, tool arguments, and tool results are not encrypted by this application")
     else:
         try:
+            if stage_error := os.environ.get("MCP_CAPABILITY_BRIDGE_EXTERNAL_TLS_STAGE_ERROR"):
+                raise RuntimeError(stage_error)
             certificate=prepare_certificate(settings.data_dir,settings.certificate_source,settings.certfile,settings.keyfile)
             public_options={"ssl_certfile":str(certificate.certfile),"ssl_keyfile":str(certificate.keyfile)}
             logger.info("Public TLS certificate source: %s",certificate.source)
