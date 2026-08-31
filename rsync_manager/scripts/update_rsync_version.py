@@ -53,6 +53,11 @@ def main() -> int:
         r'^ARG BUILD_VERSION="[^"]+"$',
         f'ARG BUILD_VERSION="{new_app}"',
     )
+    replace_once(
+        ROOT / "rootfs/www/index.html",
+        r"Rsync Manager <b>v\d+\.\d+\.\d+</b>",
+        f"Rsync Manager <b>v{new_app}</b>",
+    )
     package_file.write_text(f"{package}\n", encoding="utf-8")
 
     changelog = ROOT / "CHANGELOG.md"
