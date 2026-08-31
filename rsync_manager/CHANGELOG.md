@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.19 - 2026-08-31
+
+- Update the Alpine rsync package from 3.4.3-r1 to 3.5.0-r0.
+
 ## 1.3.18 - 2026-08-23
 
 - Enforce the consolidated AppArmor profile after a clean bounded startup, Ingress, cron, CIFS and rsync audit.
