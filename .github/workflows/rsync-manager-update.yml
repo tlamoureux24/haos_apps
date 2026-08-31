@@ -157,6 +157,7 @@ jobs:
             rsync_manager/CHANGELOG.md \
             rsync_manager/Dockerfile \
             rsync_manager/config.yaml \
-            rsync_manager/rsync_package_version
+            rsync_manager/rsync_package_version \
+            rsync_manager/rootfs/www/index.html
           git commit -m "Update rsync package to ${RSYNC_PACKAGE}"
           git push
