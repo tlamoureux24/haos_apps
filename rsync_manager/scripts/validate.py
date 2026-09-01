@@ -181,6 +181,14 @@ def main() -> int:
         ),
         "disabled cron execution invariant",
     )
+    require(
+        manager,
+        (
+            'if [ "$TARGET_TYPE" = "cifs" ]',
+            "RSYNC_OPTS+=(--inplace --insecure-links --no-perms --no-owner --no-group --chmod=ugo=rwX)",
+        ),
+        "trusted CIFS rsync 3.5 compatibility invariant",
+    )
 
     scripts = list((ROOT / "rootfs").rglob("*.sh")) + [
         ROOT / "rootfs/etc/services.d/cron/run",

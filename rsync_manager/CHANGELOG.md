@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.20 - 2026-09-01
+
+- Restore trusted SMB/CIFS destination traversal compatibility with rsync 3.5.0 by applying `--insecure-links` only to the CIFS profile.
+- Add a validation invariant that prevents the scoped rsync 3.5.0 compatibility option from being dropped accidentally.
+
 ## 1.3.19 - 2026-08-31
 
 - Update the Alpine rsync package from 3.4.3-r1 to 3.5.0-r0.

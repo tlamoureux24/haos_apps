@@ -524,7 +524,10 @@ run_job() {
 
         TARGET_TYPE=$(echo "$JOB" | jq -r '.target.type // "local"')
         if [ "$TARGET_TYPE" = "cifs" ]; then
-            RSYNC_OPTS+=(--inplace --no-perms --no-owner --no-group --chmod=ugo=rwX)
+            # Rsync 3.5.0's hardened operator-path walk can reject valid CIFS
+            # directories. These mounts are configured by the App operator and
+            # isolated below /mnt, so restore the legacy walk for this profile.
+            RSYNC_OPTS+=(--inplace --insecure-links --no-perms --no-owner --no-group --chmod=ugo=rwX)
         fi
 
         jq -r '.excludes // [] | .[]' <<< "$JOB" | sed '/^[[:space:]]*$/d' > "$EXCLUDES_FILE"
