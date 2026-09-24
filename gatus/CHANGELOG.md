@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.37.0-1 - 2026-09-24
+
+- Update the official Gatus binary from 5.36.0 to 5.37.0.
+- Reset the Home Assistant package revision to 1.
+
 ## 5.36.0-8 - 2026-08-15
 
 - Add an optional private `homeassistant_token` App option for Gatus' native Home Assistant alert provider.
