@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.16.0-1 - 2026-09-25
+
+- Update the official Nginx Proxy Manager image from `2.15.1` to `2.16.0`.
+- Reset the Home Assistant package revision to `1`.
+
 ## 2.15.1-2
 
 - Remove the Home Assistant web UI shortcut because `[HOST]` can resolve to the
