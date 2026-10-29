@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.38.0-1 - 2026-10-29
+
+- Update the official Gatus binary from 5.37.0 to 5.38.0.
+- Reset the Home Assistant package revision to 1.
+
 ## 5.37.0-1 - 2026-09-24
 
 - Update the official Gatus binary from 5.36.0 to 5.37.0.
