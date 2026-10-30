@@ -222,13 +222,15 @@ version appears, the workflow:
 2. updates the pinned upstream and app versions;
 3. validates metadata, ports, security invariants, scripts and official assets;
 4. builds the wrapper and performs web, installation and DNS smoke tests;
-5. commits the validated update directly to the repository.
+5. publishes the `amd64` and `aarch64` App images to GHCR, then commits the
+   validated update to the repository.
 
 Home Assistant then offers the new package as an available update. Installing
 it remains voluntary. AdGuard Home's internal updater is disabled, as in the
 official Docker image.
 
-The workflow requires only `contents: write`; no personal access token is
+The workflow requires only `contents: write` and `packages: write`; no
+personal access token is
 needed when repository workflow permissions allow GitHub Actions to write.
 
 ## Scope and Support

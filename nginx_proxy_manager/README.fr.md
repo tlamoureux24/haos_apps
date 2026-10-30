@@ -140,12 +140,14 @@ stable au format sémantique existe, le workflow :
 2. actualise la version épinglée et remet la révision du paquet à `1` ;
 3. valide les versions, les métadonnées, les scripts et les visuels officiels ;
 4. construit l'enveloppe puis démarre NPM pour un test HTTP ;
-5. commit directement la mise à jour validée dans le dépôt.
+5. publie les images `amd64` et `aarch64` de l'App sur GHCR, puis commit la
+   mise à jour validée dans le dépôt.
 
 Home Assistant affiche ensuite la nouvelle version de l'App comme mise à jour
 disponible. Son installation reste une action volontaire dans Home Assistant.
 
-Le workflow de mise à jour demande uniquement le droit `contents: write` pour
+Le workflow de mise à jour demande uniquement les droits `contents: write` et
+`packages: write` pour
 son token GitHub temporaire. Aucun secret externe, token d'accès personnel ou
 changement global des permissions du dépôt n'est normalement nécessaire.
 

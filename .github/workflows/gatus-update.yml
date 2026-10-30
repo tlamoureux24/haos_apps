@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 concurrency:
   group: gatus-update
@@ -16,6 +17,9 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      branch: ${{ steps.commit.outputs.branch }}
+      sha: ${{ steps.commit.outputs.sha }}
 
     steps:
       - name: Check out repository
@@ -188,7 +192,8 @@ jobs:
           echo "Gatus did not report a successful unprivileged ICMP check" >&2
           exit 1
 
-      - name: Commit validated update
+      - name: Commit validated update to staging branch
+        id: commit
         if: steps.upstream.outputs.changed == 'true'
         env:
           GATUS_VERSION: ${{ steps.upstream.outputs.version }}
@@ -202,4 +207,21 @@ jobs:
             gatus/config.yaml \
             gatus/upstream_version
           git commit -m "Update Gatus to ${GATUS_VERSION}"
-          git push
+          # main only moves once the images for this commit are public.
+          branch="automation/gatus-update"
+          git push --force origin "HEAD:refs/heads/${branch}"
+          echo "branch=${branch}" >>"${GITHUB_OUTPUT}"
+          echo "sha=$(git rev-parse HEAD)" >>"${GITHUB_OUTPUT}"
+
+  publish:
+    needs: update
+    if: needs.update.outputs.sha != ''
+    uses: ./.github/workflows/app-images-publish.yml
+    permissions:
+      contents: write
+      packages: write
+    with:
+      apps: gatus
+      ref: ${{ needs.update.outputs.sha }}
+      promote: true
+      staging_branch: ${{ needs.update.outputs.branch }}

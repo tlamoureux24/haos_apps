@@ -230,13 +230,15 @@ sémantique apparaît, le workflow :
 2. actualise les versions amont et App ;
 3. valide métadonnées, ports, invariants de sécurité, scripts et visuels ;
 4. construit l'enveloppe et teste l'interface, l'installation et le DNS ;
-5. commit directement la mise à jour validée dans le dépôt.
+5. publie les images `amd64` et `aarch64` de l'App sur GHCR, puis commit la
+   mise à jour validée dans le dépôt.
 
 Home Assistant propose ensuite la nouvelle version. Son installation reste
 volontaire. La mise à jour interne d'AdGuard Home est désactivée, comme dans
 l'image Docker officielle.
 
-Le workflow demande seulement `contents: write`. Aucun token personnel n'est
+Le workflow demande seulement `contents: write` et `packages: write`. Aucun
+token personnel n'est
 nécessaire si les permissions du dépôt autorisent GitHub Actions à écrire.
 
 ## Périmètre et support

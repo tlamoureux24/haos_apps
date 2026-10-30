@@ -414,7 +414,7 @@ Lorsqu'une nouvelle version du paquet est disponible, le workflow :
 1. met a jour la version de paquet enregistree ;
 2. incremente la version de l'App ;
 3. valide, construit et teste l'interface ;
-4. publie la modification seulement si tous les controles reussissent.
+4. publie les images de l'App sur GHCR, puis la modification, seulement si tous les controles reussissent.
 
 Home Assistant propose ensuite la mise a jour normalement. Son installation reste volontaire, sauf si l'utilisateur active lui-meme les mises a jour automatiques dans Home Assistant.
 

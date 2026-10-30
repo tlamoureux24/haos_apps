@@ -3,6 +3,7 @@ slug: "adguard_home"
 version: "0.107.79-1"
 description: "Official AdGuard Home packaged as a Home Assistant app"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/adguard_home"
+image: "ghcr.io/tlamoureux24/{arch}-adguard_home"
 arch:
   - aarch64
   - amd64
