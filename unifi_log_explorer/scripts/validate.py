@@ -14,8 +14,8 @@ if missing:
     errors.append(f"config.yaml missing: {', '.join(missing)}")
 if not re.search(r'^slug: "unifi_log_explorer"$', config_text, re.MULTILINE):
     errors.append("unexpected slug")
-if not re.search(r'^version: "1\.1\.8"$', config_text, re.MULTILINE):
-    errors.append("App version must be 1.1.8")
+if not re.search(r'^version: "1\.1\.9"$', config_text, re.MULTILINE):
+    errors.append("App version must be 1.1.9")
 for invariant in ("unifi_certificate_sha256", "fingerprint"):
     source = config_text if invariant == "unifi_certificate_sha256" else (ROOT / "unifi_log_explorer.py").read_text()
     if invariant not in source:
@@ -99,7 +99,7 @@ for executable_rule in (
     "/command/s6-rc-compile ix,", "/command/s6-supervise ix,",
     "/command/s6-svscan ix,",
     "/package/admin/s6-linux-init/command/s6-linux-init-hpr ix,",
-    "/package/admin/s6-linux-init-1.2.0.1/command/s6-linux-init-hpr ix,",
+    "/package/admin/s6-linux-init-[0-9]*/command/s6-linux-init-hpr ix,",
     "/run.sh rix,",
 ):
     if executable_rule not in apparmor:

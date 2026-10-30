@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.21 - 2026-10-30
+
+- Follow the current Home Assistant base image (s6-overlay 3.2.3.2, s6 2.15.1.0,
+  s6-rc 0.7.0.0, s6-linux-init 1.2.0.2, execline 2.9.9.2): the AppArmor profile
+  now matches the versioned s6 package directories by version pattern while
+  keeping every executable name exact, so a routine base update no longer
+  breaks startup.
+- Read the s6 `user` and `user2` bundles from `/etc/s6-overlay/user-bundles.d`,
+  where s6-overlay 3.2.3.2 now defines them, instead of the deprecated
+  `/etc/s6-overlay/s6-rc.d` location.
+
 ## 1.3.20 - 2026-09-01
 
 - Restore trusted SMB/CIFS destination traversal compatibility with rsync 3.5.0 by applying `--insecure-links` only to the CIFS profile.

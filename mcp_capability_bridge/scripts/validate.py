@@ -27,13 +27,13 @@ def main() -> int:
     security = (ROOT / "src/mcp_capability_bridge/security.py").read_text(encoding="utf-8")
 
     for value in (
-        'slug: "mcp_capability_bridge"', 'version: "1.1.11"',
+        'slug: "mcp_capability_bridge"', 'version: "1.1.12"',
         "  - amd64", "init: false", "stage: stable", "apparmor: true",
         "tmpfs: true", "backup: cold", "ingress: true", "ingress_port: 8099",
         "  8098/tcp: null",
     ):
         require(config, value, "App metadata invariant")
-    require(package, '__version__ = "1.1.11"', "synchronized package version")
+    require(package, '__version__ = "1.1.12"', "synchronized package version")
     if "context.load_cert_chain" not in runtime or runtime.index("context.load_cert_chain") > runtime.rindex("_drop_privileges()"):
         raise RuntimeError("External TLS key must be loaded before dropping privileges")
     if "public_config.ssl=external_context" not in runtime or "stage_external_certificate" in launcher + runtime:
@@ -75,7 +75,7 @@ def main() -> int:
         raise RuntimeError("Implementation plan Lot 1 status must match delivery state")
     if "Accepted on real HAOS with version 0.3.0:" not in plan:
         raise RuntimeError("Implementation plan Lot 2 status must match delivery state")
-    for value in ("chromium=151.0.7922.173-r0","chromium-chromedriver=151.0.7922.173-r0"):
+    for value in ("chromium=155.0.8059.84-r0","chromium-chromedriver=155.0.8059.84-r0"):
         require(dockerfile,value,"pinned Lot 3A browser package")
     browser=(ROOT/"src/mcp_capability_bridge/browser_runtime.py").read_text()
     web=(ROOT/"src/mcp_capability_bridge/web_adapter.py").read_text()
