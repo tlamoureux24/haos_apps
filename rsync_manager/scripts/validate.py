@@ -143,7 +143,7 @@ def main() -> int:
             "/mnt/** rwlk,",
             "/etc/crontabs/** rwlk,",
             "/command/s6-svwait ix,",
-            "/package/admin/s6-2.15.0.0/command/s6-svwait ix,",
+            "/package/admin/s6-[0-9]*/command/s6-svwait ix,",
             "/run/s6-rc:s6-rc-init:*/servicedirs/cron/run rix,",
             "/run/s6-rc:s6-rc-init:*/servicedirs/runner/run rix,",
             "/run/s6-rc:s6-rc-init:*/servicedirs/web/run rix,",

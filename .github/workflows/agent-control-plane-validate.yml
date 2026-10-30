@@ -229,10 +229,14 @@ jobs:
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_control_plane/config.yaml)"
           docker run --rm --entrypoint /bin/sh "agent-control-plane:${version}" -c '
-            test "$(find /etc/s6-overlay/s6-rc.d -print | wc -l)" = 7
-            test "$(find /etc/s6-overlay/s6-rc.d/user/contents.d -print | wc -l)" = 1
-            test "$(find /etc/s6-overlay/s6-rc.d/user2/contents.d -print | wc -l)" = 1
-            test "$(readlink -f /command/printcontenv)" = "/package/admin/s6-overlay-3.2.3.0/command/printcontenv"
+            test "$(find /etc/s6-overlay/s6-rc.d -print | wc -l)" = 1
+            test "$(find /etc/s6-overlay/user-bundles.d -print | wc -l)" = 7
+            test "$(find /etc/s6-overlay/user-bundles.d/user/contents.d -print | wc -l)" = 1
+            test "$(find /etc/s6-overlay/user-bundles.d/user2/contents.d -print | wc -l)" = 1
+            case "$(readlink -f /command/printcontenv)" in
+              /package/admin/s6-overlay-[0-9]*/command/printcontenv) ;;
+              *) exit 1 ;;
+            esac
           '
 
       - name: Validate packaged s6-rc source inventory
@@ -241,7 +245,7 @@ jobs:
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_control_plane/config.yaml)"
           docker run --rm --entrypoint /bin/sh "agent-control-plane:${version}" -c '
-            root=/package/admin/s6-overlay-3.2.3.0/etc/s6-rc/sources
+            root="$(readlink -f /package/admin/s6-overlay)/etc/s6-rc/sources"
             test "$(find "${root}" -print | wc -l)" = 29
             test "$(find "${root}" -type d -print | wc -l)" = 10
             test "$(find "${root}" -type f -print | wc -l)" = 19
@@ -253,7 +257,7 @@ jobs:
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_control_plane/config.yaml)"
           docker run --rm --entrypoint /bin/sh "agent-control-plane:${version}" -c '
-            root=/package/admin/s6-overlay-3.2.3.0/etc/s6-rc/scripts
+            root="$(readlink -f /package/admin/s6-overlay)/etc/s6-rc/scripts"
             test "$(find "${root}" -print | wc -l)" = 6
             test "$(find "${root}" -type d -print | wc -l)" = 1
             test "$(find "${root}" -type f -print | wc -l)" = 5
@@ -266,7 +270,10 @@ jobs:
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' agent_control_plane/config.yaml)"
           docker run --rm --entrypoint /bin/sh "agent-control-plane:${version}" -c '
             test -L /usr/bin/with-contenv
-            test "$(readlink -f /usr/bin/with-contenv)" = "/package/admin/s6-overlay-3.2.3.0/command/with-contenv"
+            case "$(readlink -f /usr/bin/with-contenv)" in
+              /package/admin/s6-overlay-[0-9]*/command/with-contenv) ;;
+              *) exit 1 ;;
+            esac
           '
 
       - name: Validate su-exec path used by AppArmor

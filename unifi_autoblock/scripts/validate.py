@@ -16,7 +16,7 @@ launcher = (ROOT / "run.sh").read_text(encoding="utf-8")
 apparmor = (ROOT / "apparmor.txt").read_text(encoding="utf-8")
 
 for invariant in (
-    'slug: "unifi_autoblock"', 'version: "0.5.4"', "apparmor: true",
+    'slug: "unifi_autoblock"', 'version: "0.5.5"', "apparmor: true",
     "tmpfs: true", "hassio_api: true", "homeassistant_api: true",
     "ingress: true", "ingress_port: 8099",
 ):
@@ -84,7 +84,7 @@ for executable_rule in (
     "/command/execlineb ix,", "/command/s6-rc-compile ix,",
     "/command/s6-supervise ix,", "/command/s6-svscan ix,",
     "/package/admin/s6-linux-init/command/s6-linux-init-hpr ix,",
-    "/package/admin/s6-linux-init-1.2.0.1/command/s6-linux-init-hpr ix,",
+    "/package/admin/s6-linux-init-[0-9]*/command/s6-linux-init-hpr ix,",
     "/run.sh rix,",
 ):
     if executable_rule not in apparmor:
