@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.12
+
+- Follow the current Home Assistant base image (s6-overlay 3.2.3.2, s6 2.15.1.0,
+  s6-rc 0.7.0.0, s6-linux-init 1.2.0.2, execline 2.9.9.2): the AppArmor profile
+  now matches the versioned s6 package directories by version pattern while
+  keeping every executable name exact, so a routine base update no longer
+  breaks startup.
+- Read the s6 `user` and `user2` bundles from `/etc/s6-overlay/user-bundles.d`,
+  where s6-overlay 3.2.3.2 now defines them, instead of the deprecated
+  `/etc/s6-overlay/s6-rc.d` location.
+- Update the pinned Alpine Chromium and ChromeDriver packages to
+  155.0.8059.84-r0; 151.0.7922.173-r0 is no longer published.
+
 ## 1.1.11
 
 - Load an external `/ssl` private key into the TLS context during the privileged

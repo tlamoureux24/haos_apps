@@ -41,7 +41,7 @@ def main() -> int:
 
     required_config = (
         'slug: "agent_control_plane"',
-        'version: "1.2.2"',
+        'version: "1.2.3"',
         "  - amd64",
         "init: false",
         "stage: stable",
@@ -58,7 +58,7 @@ def main() -> int:
     for invariant in required_config:
         if invariant not in config:
             raise RuntimeError(f"Missing config invariant: {invariant}")
-    if '__version__ = "1.2.2"' not in package:
+    if '__version__ = "1.2.3"' not in package:
         raise RuntimeError("Package and App metadata versions must remain synchronized")
     if "arch:\n  - amd64\nstartup:" not in config or "aarch64" in config:
         raise RuntimeError("Agent Control Plane must support amd64 only")
@@ -213,17 +213,17 @@ def main() -> int:
     if "/sbin/**" in apparmor:
         raise RuntimeError("AppArmor must not grant broad access to /sbin")
     audited_s6_executables = (
-        "/package/admin/s6-2.15.0.0/command/s6-ipcclient ix,",
-        "/package/admin/s6-2.15.0.0/command/s6-ipcserver-access ix,",
-        "/package/admin/s6-2.15.0.0/command/s6-ipcserver-socketbinder ix,",
-        "/package/admin/s6-2.15.0.0/command/s6-ipcserverd ix,",
-        "/package/admin/s6-2.15.0.0/command/s6-sudo ix,",
-        "/package/admin/s6-2.15.0.0/command/s6-sudoc ix,",
-        "/package/admin/s6-2.15.0.0/command/s6-sudod ix,",
-        "/package/admin/s6-2.15.0.0/command/s6-svc ix,",
-        "/package/admin/s6-2.15.0.0/command/s6-svlisten ix,",
-        "/package/admin/s6-2.15.0.0/command/s6-svscanctl ix,",
-        "/package/admin/s6-linux-init-1.2.0.1/command/s6-linux-init-shutdown ix,",
+        "/package/admin/s6-[0-9]*/command/s6-ipcclient ix,",
+        "/package/admin/s6-[0-9]*/command/s6-ipcserver-access ix,",
+        "/package/admin/s6-[0-9]*/command/s6-ipcserver-socketbinder ix,",
+        "/package/admin/s6-[0-9]*/command/s6-ipcserverd ix,",
+        "/package/admin/s6-[0-9]*/command/s6-sudo ix,",
+        "/package/admin/s6-[0-9]*/command/s6-sudoc ix,",
+        "/package/admin/s6-[0-9]*/command/s6-sudod ix,",
+        "/package/admin/s6-[0-9]*/command/s6-svc ix,",
+        "/package/admin/s6-[0-9]*/command/s6-svlisten ix,",
+        "/package/admin/s6-[0-9]*/command/s6-svscanctl ix,",
+        "/package/admin/s6-linux-init-[0-9]*/command/s6-linux-init-shutdown ix,",
     )
     for executable_rule in audited_s6_executables:
         if executable_rule not in apparmor:
@@ -280,21 +280,23 @@ def main() -> int:
         raise RuntimeError("AppArmor must allow reading the canonical with-contenv target")
     if "/etc/s6-overlay/s6-rc.d/ r," not in apparmor:
         raise RuntimeError("AppArmor must allow s6-rc-compile to enumerate its source directory")
-    if "/etc/s6-overlay/s6-rc.d/user/ r," not in apparmor:
+    if "/etc/s6-overlay/user-bundles.d/ r," not in apparmor:
+        raise RuntimeError("AppArmor must allow s6-rc-compile to enumerate the user bundles directory")
+    if "/etc/s6-overlay/user-bundles.d/user/ r," not in apparmor:
         raise RuntimeError("AppArmor must allow s6-rc-compile to enumerate the user bundle directory")
-    if "/etc/s6-overlay/s6-rc.d/user/type r," not in apparmor:
+    if "/etc/s6-overlay/user-bundles.d/user/type r," not in apparmor:
         raise RuntimeError("AppArmor must allow reading the s6 user bundle type")
-    if "/etc/s6-overlay/s6-rc.d/user/contents.d/ r," not in apparmor:
+    if "/etc/s6-overlay/user-bundles.d/user/contents.d/ r," not in apparmor:
         raise RuntimeError("AppArmor must allow enumerating the s6 user bundle contents directory")
-    if "/etc/s6-overlay/s6-rc.d/user2/ r," not in apparmor:
+    if "/etc/s6-overlay/user-bundles.d/user2/ r," not in apparmor:
         raise RuntimeError("AppArmor must allow enumerating the s6 user2 bundle directory")
-    if "/etc/s6-overlay/s6-rc.d/user2/type r," not in apparmor:
+    if "/etc/s6-overlay/user-bundles.d/user2/type r," not in apparmor:
         raise RuntimeError("AppArmor must allow reading the s6 user2 bundle type")
-    if "/etc/s6-overlay/s6-rc.d/user2/contents.d/ r," not in apparmor:
+    if "/etc/s6-overlay/user-bundles.d/user2/contents.d/ r," not in apparmor:
         raise RuntimeError("AppArmor must allow enumerating the s6 user2 bundle contents directory")
     if "/package/** rix," in apparmor or "/package/admin/s6-overlay-*/libexec/** rix," in apparmor or "/package/admin/s6-overlay-*/etc/s6-rc/sources/** r," in apparmor or "/package/admin/s6-overlay-*/etc/s6-rc/scripts/** rix," in apparmor:
         raise RuntimeError("AppArmor must grant read access to s6-overlay scripts file by file")
-    if "/command/** rix," in apparmor or "/etc/s6-overlay/** r" in apparmor or "/etc/s6-overlay/s6-rc.d/user/** r" in apparmor:
+    if "/command/** rix," in apparmor or "/etc/s6-overlay/** r" in apparmor or "/etc/s6-overlay/user-bundles.d/** r" in apparmor:
         raise RuntimeError("AppArmor must not grant broad read access to command or s6-overlay trees")
 
     ignored_documents = (
