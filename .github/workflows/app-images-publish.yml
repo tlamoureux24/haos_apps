@@ -1,0 +1,291 @@
+name: Publish App Images
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "*/config.yaml"
+      - "scripts/app_images.py"
+      - ".github/workflows/app-images-publish.yml"
+  workflow_call:
+    inputs:
+      apps:
+        description: Space- or comma-separated App slugs, or all
+        required: true
+        type: string
+      ref:
+        description: Commit to build; defaults to the triggering commit
+        required: false
+        type: string
+        default: ""
+      promote:
+        description: Move main to the commit once every image is public
+        required: false
+        type: boolean
+        default: false
+      staging_branch:
+        description: Branch to delete after promotion
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: Space- or comma-separated App slugs, or all
+        required: true
+        type: string
+        default: all
+      promote:
+        description: Move main to this branch once every image is public
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CONTEXT_LABEL: io.github.tlamoureux24.haos-apps.context
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      apps: ${{ steps.plan.outputs.apps }}
+      count: ${{ steps.plan.outputs.count }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      released: ${{ steps.plan.outputs.released }}
+      sha: ${{ steps.plan.outputs.sha }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+
+      - name: Plan image builds
+        id: plan
+        env:
+          APPS: ${{ inputs.apps }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          python3 scripts/app_images.py check
+          sha="$(git rev-parse HEAD)"
+          released="$(git rev-parse origin/main)"
+          if [[ -z "${APPS}" ]]; then
+            # Push to main: publish the Apps whose config.yaml changed and
+            # compare against the versions that were live before this push.
+            matrix="$(python3 scripts/app_images.py matrix --before "${BEFORE}" --after "${sha}")"
+            if [[ -n "${BEFORE}" ]] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+              released="${BEFORE}"
+            fi
+          else
+            matrix="$(python3 scripts/app_images.py matrix --apps "${APPS}")"
+          fi
+          apps="$(python3 -c 'import json, sys; print(" ".join(sorted({i["app"] for i in json.load(sys.stdin)["include"]})))' <<<"${matrix}")"
+          count="$(python3 -c 'import json, sys; print(len(json.load(sys.stdin)["include"]))' <<<"${matrix}")"
+          {
+            echo "apps=${apps}"
+            echo "count=${count}"
+            echo "matrix=${matrix}"
+            echo "released=${released}"
+            echo "sha=${sha}"
+          } >>"${GITHUB_OUTPUT}"
+          echo "Planned ${count} image(s) for: ${apps:-none}"
+
+  build:
+    name: ${{ matrix.app }} (${{ matrix.arch }})
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    concurrency:
+      group: app-image-${{ matrix.app }}-${{ matrix.arch }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compare with published image
+        id: published
+        env:
+          APP: ${{ matrix.app }}
+          IMAGE: ${{ matrix.image }}
+          RELEASED_REF: ${{ needs.plan.outputs.released }}
+          VERSION: ${{ matrix.version }}
+        run: |
+          set -euo pipefail
+          reference="${IMAGE}:${VERSION}"
+          context="$(python3 scripts/app_images.py context --ref HEAD "${APP}")"
+          released="$(python3 scripts/app_images.py version --ref "${RELEASED_REF}" "${APP}")"
+          echo "context=${context}" >>"${GITHUB_OUTPUT}"
+          if ! published="$(docker buildx imagetools inspect "${reference}" --format '{{json .Image}}' 2>/dev/null)"; then
+            echo "build=true" >>"${GITHUB_OUTPUT}"
+            echo "${reference} is not published yet"
+            exit 0
+          fi
+          current="$(python3 scripts/app_images.py label "${CONTEXT_LABEL}" <<<"${published}")"
+          if [[ "${current}" == "${context}" ]]; then
+            echo "build=false" >>"${GITHUB_OUTPUT}"
+            echo "${reference} is already published from this build context"
+          elif [[ "${released}" == "${VERSION}" ]]; then
+            # Released tags are immutable: installed Apps may already run them.
+            echo "build=false" >>"${GITHUB_OUTPUT}"
+            echo "::warning title=${APP} ${VERSION}::${reference} was released from another build context; bump the App version to publish these changes."
+          else
+            # The tag was pre-published from a branch that changed before reaching main.
+            echo "build=true" >>"${GITHUB_OUTPUT}"
+            echo "${reference} is unreleased and will be rebuilt from the current context"
+          fi
+
+      - name: Build and push image
+        if: steps.published.outputs.build == 'true'
+        env:
+          APP: ${{ matrix.app }}
+          ARCH: ${{ matrix.arch }}
+          CONTEXT: ${{ steps.published.outputs.context }}
+          IMAGE: ${{ matrix.image }}
+          PLATFORM: ${{ matrix.platform }}
+          VERSION: ${{ matrix.version }}
+        run: |
+          set -euo pipefail
+          build_args=(
+            --build-arg "BUILD_ARCH=${ARCH}"
+            --build-arg "BUILD_VERSION=${VERSION}"
+          )
+          if grep -q '^ARG BASE_IMAGE_DIGEST' "${APP}/Dockerfile"; then
+            base="$(sed -n 's/^FROM \([^ ]*\).*/\1/p' "${APP}/Dockerfile" | head -n 1)"
+            base_digest="$(docker buildx imagetools inspect "${base}" | sed -n 's/^Digest: *//p')"
+            test -n "${base_digest}"
+            build_args+=(--build-arg "BASE_IMAGE_DIGEST=${base_digest}")
+          fi
+          docker buildx build --pull \
+            --platform "${PLATFORM}" \
+            --provenance=false \
+            --sbom=false \
+            "${build_args[@]}" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" \
+            --label "${CONTEXT_LABEL}=${CONTEXT}" \
+            --tag "${IMAGE}:${VERSION}" \
+            --push \
+            "${APP}"
+
+      - name: Verify public image
+        env:
+          APP: ${{ matrix.app }}
+          ARCH: ${{ matrix.arch }}
+          BUILT: ${{ steps.published.outputs.build }}
+          CONTEXT: ${{ steps.published.outputs.context }}
+          IMAGE: ${{ matrix.image }}
+          VERSION: ${{ matrix.version }}
+        run: |
+          set -euo pipefail
+          reference="${IMAGE}:${VERSION}"
+          repository="${IMAGE#ghcr.io/}"
+          token="$(curl --fail --silent --show-error \
+            "https://ghcr.io/token?scope=repository:${repository}:pull" \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin)["token"])')"
+          if ! curl --fail --silent --show-error --output /dev/null \
+            --header "Authorization: Bearer ${token}" \
+            --header "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json" \
+            "https://ghcr.io/v2/${repository}/manifests/${VERSION}"; then
+            echo "::error title=${APP} ${ARCH}::${reference} cannot be pulled anonymously. Set the ${repository#*/} GHCR package visibility to public." >&2
+            exit 1
+          fi
+          published="$(docker buildx imagetools inspect "${reference}" --format '{{json .Image}}')"
+          test "$(python3 scripts/app_images.py label io.hass.version <<<"${published}")" = "${VERSION}"
+          test "$(python3 scripts/app_images.py label io.hass.arch <<<"${published}")" = "${ARCH}"
+          if [[ "${BUILT}" == "true" ]]; then
+            test "$(python3 scripts/app_images.py label "${CONTEXT_LABEL}" <<<"${published}")" = "${CONTEXT}"
+          fi
+          echo "${reference} is publicly available"
+
+  promote:
+    needs:
+      - plan
+      - build
+    if: inputs.promote
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: app-images-promote-main
+      cancel-in-progress: false
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Move main to the published commit
+        env:
+          APPS: ${{ needs.plan.outputs.apps }}
+          PUBLISHED: ${{ needs.plan.outputs.sha }}
+          STAGING_BRANCH: ${{ inputs.staging_branch }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${PUBLISHED}"
+          promoted=false
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git merge-base --is-ancestor "${PUBLISHED}" origin/main; then
+              echo "${PUBLISHED} is already on main"
+              promoted=true
+              break
+            fi
+            git checkout --quiet --detach "${PUBLISHED}"
+            if ! git merge-base --is-ancestor origin/main HEAD; then
+              git rebase origin/main
+            fi
+            # The images were built from PUBLISHED; main may only move if
+            # every published App keeps exactly the same build context.
+            for app in ${APPS}; do
+              if [[ "$(python3 scripts/app_images.py context --ref HEAD "${app}")" != \
+                "$(python3 scripts/app_images.py context --ref "${PUBLISHED}" "${app}")" ]]; then
+                echo "::error title=${app}::main changed this App while its images were built; rerun the publication." >&2
+                exit 1
+              fi
+            done
+            if git push origin HEAD:refs/heads/main; then
+              echo "main now includes ${PUBLISHED} after attempt ${attempt}"
+              promoted=true
+              break
+            fi
+          done
+          if [[ "${promoted}" != "true" ]]; then
+            echo "::error::main kept moving; the published commit was not promoted." >&2
+            exit 1
+          fi
+          if [[ -n "${STAGING_BRANCH}" ]]; then
+            git push origin --delete "${STAGING_BRANCH}" || true
+          fi

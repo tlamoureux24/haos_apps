@@ -170,9 +170,10 @@ Un workflow quotidien détecte les nouvelles versions stables publiées par
 TwiN/gatus, vérifie les images amd64 et arm64, met à jour les métadonnées,
 construit l'App et exécute un test réel de démarrage et d'ICMP.
 
-Le workflow commit la nouvelle version dans le dépôt. Home Assistant propose
-ensuite la mise à jour, mais ne l'installe pas automatiquement sauf si
-l'utilisateur active lui-même les mises à jour automatiques.
+Le workflow publie les images de l'App sur GHCR, puis commit la nouvelle
+version dans le dépôt. Home Assistant propose ensuite la mise à jour, mais ne
+l'installe pas automatiquement sauf si l'utilisateur active lui-même les mises
+à jour automatiques.
 
 ## Projet amont
 

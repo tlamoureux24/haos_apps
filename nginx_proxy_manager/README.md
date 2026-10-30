@@ -135,12 +135,14 @@ is available, the workflow:
 2. updates the pinned upstream version and resets the package revision to `1`;
 3. validates version consistency, metadata, scripts and official assets;
 4. builds the wrapper and starts NPM for an HTTP smoke test;
-5. commits the validated update directly to the repository.
+5. publishes the `amd64` and `aarch64` App images to GHCR, then commits the
+   validated update to the repository.
 
 Home Assistant then shows the new app version as an available update. Installing
 that update remains a voluntary action in Home Assistant.
 
-The update workflow requests only `contents: write` for its short-lived GitHub
+The update workflow requests only `contents: write` and `packages: write` for
+its short-lived GitHub
 token. No external secret, personal access token, or repository-wide permission
 change is normally required.
 

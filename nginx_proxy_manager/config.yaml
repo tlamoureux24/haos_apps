@@ -3,6 +3,7 @@ slug: "nginx_proxy_manager"
 version: "2.16.0-1"
 description: "Official Nginx Proxy Manager packaged as a Home Assistant app"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/nginx_proxy_manager"
+image: "ghcr.io/tlamoureux24/{arch}-nginx_proxy_manager"
 arch:
   - aarch64
   - amd64

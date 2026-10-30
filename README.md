@@ -257,6 +257,8 @@ Il n’est pas destiné à une installation Home Assistant Core seule sans Super
 
 Home Assistant surveille les dépôts d’Apps ajoutés à la boutique. Lorsqu’une nouvelle version d’une App est publiée, elle apparaît comme mise à jour disponible dans l’interface Home Assistant.
 
+Chaque App déclare une image précompilée `ghcr.io/tlamoureux24/{arch}-<slug>` : le Supervisor la télécharge au lieu de construire l’App sur la machine Home Assistant, ce qui évite d’accumuler du cache de compilation Docker. La CI publie cette image avant de rendre la nouvelle version visible ; voir la [politique CI](CI.md#images-des-apps).
+
 Si la nouvelle version n’apparaît pas :
 
 1. Aller dans `Paramètres` > `Modules complémentaires` > `Boutique des modules complémentaires`.
@@ -532,6 +534,8 @@ It is not intended for a standalone Home Assistant Core installation without Sup
 ### Updates
 
 Home Assistant monitors App repositories added to the store. When a new App version is published, it appears as an available update in the Home Assistant interface.
+
+Each App declares a prebuilt `ghcr.io/tlamoureux24/{arch}-<slug>` image: Supervisor downloads it instead of building the App on the Home Assistant machine, which avoids accumulating Docker build cache. CI publishes that image before making the new version visible; see the [CI policy](CI.md#app-images).
 
 If the new version does not appear:
 

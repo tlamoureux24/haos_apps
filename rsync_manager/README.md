@@ -205,7 +205,7 @@ checks the installed Alpine package version. When it changes, the workflow:
 2. increments the Home Assistant App version;
 3. validates and builds the App;
 4. smoke-tests its web interface;
-5. commits the validated update.
+5. publishes the App images to GHCR, then commits the validated update.
 
 Home Assistant then offers the new App version normally. Installation remains
 manual unless the user explicitly enables automatic updates in Home Assistant.

@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 concurrency:
   group: studio-code-server-update
@@ -16,6 +17,9 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    outputs:
+      branch: ${{ steps.commit.outputs.branch }}
+      sha: ${{ steps.commit.outputs.sha }}
 
     steps:
       - name: Check out repository
@@ -148,7 +152,8 @@ jobs:
           echo "candidate did not become healthy" >&2
           exit 1
 
-      - name: Commit validated update
+      - name: Commit validated update to staging branch
+        id: commit
         if: steps.versions.outputs.changed == 'true'
         run: |
           set -euo pipefail
@@ -157,4 +162,21 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add studio_code_server
           git commit -m "Update Studio Code Server + Codex to ${version}"
-          git push
+          # main only moves once the images for this commit are public.
+          branch="automation/studio-code-server-update"
+          git push --force origin "HEAD:refs/heads/${branch}"
+          echo "branch=${branch}" >>"${GITHUB_OUTPUT}"
+          echo "sha=$(git rev-parse HEAD)" >>"${GITHUB_OUTPUT}"
+
+  publish:
+    needs: update
+    if: needs.update.outputs.sha != ''
+    uses: ./.github/workflows/app-images-publish.yml
+    permissions:
+      contents: write
+      packages: write
+    with:
+      apps: studio_code_server
+      ref: ${{ needs.update.outputs.sha }}
+      promote: true
+      staging_branch: ${{ needs.update.outputs.branch }}
