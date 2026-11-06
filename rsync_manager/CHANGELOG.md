@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.22 - 2026-11-06
+
+- Update the Alpine rsync package from 3.5.0-r0 to 3.5.2-r0.
+
 ## 1.3.21 - 2026-10-30
 
 - Follow the current Home Assistant base image (s6-overlay 3.2.3.2, s6 2.15.1.0,
