@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.14
+
+- Update `mcp` from 1.28.1 to 1.30.0 to fix GHSA-w4fh-qvv9-3v23, GHSA-5h93-6whr-6q8j,
+  GHSA-rwrf-2pqf-9j8j and GHSA-84m7-p3x7-pcfv.
+
 ## 1.1.13
 
 - Update the pinned Alpine Chromium and ChromeDriver packages to
