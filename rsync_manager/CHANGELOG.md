@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.23 - 2026-11-07
+
+- Update the Alpine rsync package from 3.5.2-r0 to 3.5.2-r1.
+
 ## 1.3.22 - 2026-11-06
 
 - Update the Alpine rsync package from 3.5.0-r0 to 3.5.2-r0.
