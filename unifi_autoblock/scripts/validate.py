@@ -16,7 +16,7 @@ launcher = (ROOT / "run.sh").read_text(encoding="utf-8")
 apparmor = (ROOT / "apparmor.txt").read_text(encoding="utf-8")
 
 for invariant in (
-    'slug: "unifi_autoblock"', 'version: "0.5.5"', "apparmor: true",
+    'slug: "unifi_autoblock"', 'version: "0.5.6"', "apparmor: true",
     "tmpfs: true", "hassio_api: true", "homeassistant_api: true",
     "ingress: true", "ingress_port: 8099",
 ):

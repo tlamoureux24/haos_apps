@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.6
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `alpine-release` `3.24.3-r0` → `3.24.4-r0`
+  - `apk-tools` `3.0.8-r0` → `3.0.9-r0`
+  - `libapk` `3.0.8-r0` → `3.0.9-r0`
+  - `libexpat` `2.9.0-r0` → `2.10.0-r0`
+  - `tzdata` `2026e-r0` → `2026f-r0`
+
 ## 0.5.5
 
 - Follow the current Home Assistant base image (s6-overlay 3.2.3.2, s6 2.15.1.0,
