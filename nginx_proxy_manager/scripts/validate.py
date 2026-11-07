@@ -33,6 +33,13 @@ def main() -> int:
     config = (ROOT / "config.yaml").read_text(encoding="utf-8")
     docker_upstream = match_one(r'^ARG NPM_VERSION="([^"]+)"$', dockerfile, "Docker NPM version")
     docker_package = match_one(r'^ARG BUILD_VERSION="([^"]+)"$', dockerfile, "Docker app version")
+    # Empty only until the update workflow pins the current version once.
+    match_one(r'^ARG NPM_DIGEST="((?:@sha256:[0-9a-f]{64})?)"$', dockerfile, "valid Docker NPM digest")
+    match_one(
+        r"^FROM docker\.io/jc21/nginx-proxy-manager:(\$\{NPM_VERSION\}\$\{NPM_DIGEST\})$",
+        dockerfile,
+        "digest-aware official base image",
+    )
     config_package = match_one(r'^version: "([^"]+)"$', config, "config app version")
     package_pattern = re.compile(rf"^{re.escape(upstream)}-(\d+)$")
 
