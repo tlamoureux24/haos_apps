@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.16.0-2 - 2026-11-07
+
+- Pin the official Nginx Proxy Manager `2.16.0` image by its multi-architecture digest `sha256:4393e642e233e5efd5adeb7f10918d4aaea71c9ed875b94190273fc8e87f9594`.
+- The upstream image content is unchanged.
+
 ## 2.16.0-1 - 2026-09-25
 
 - Update the official Nginx Proxy Manager image from `2.15.1` to `2.16.0`.
