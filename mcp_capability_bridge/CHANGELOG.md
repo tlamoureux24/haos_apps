@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.13
+
+- Update the pinned Alpine Chromium and ChromeDriver packages to
+  156.0.8078.79-r0; 155.0.8059.84-r0 is no longer published.
+
 ## 1.1.12
 
 - Follow the current Home Assistant base image (s6-overlay 3.2.3.2, s6 2.15.1.0,
