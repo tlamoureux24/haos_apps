@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.15
+
+- Update `mcp` from 1.28.1 to 1.30.0 to fix GHSA-w4fh-qvv9-3v23, GHSA-5h93-6whr-6q8j,
+  GHSA-rwrf-2pqf-9j8j and GHSA-84m7-p3x7-pcfv.
+- Update `cryptography` from 46.0.3 to 50.0.0 to fix GHSA-r6ph-v2qm-q3c2,
+  GHSA-m959-cc7f-wv43, GHSA-p423-j2cm-9vmq, GHSA-537c-gmf6-5ccf (bundled OpenSSL),
+  GHSA-g6cj-pr64-35w5, GHSA-jwv3-5hgf-82ww and GHSA-m2h6-j472-rp4c.
+
 ## 1.1.14
 
 - Follow the current Home Assistant base image (s6-overlay 3.2.3.2, s6 2.15.1.0,

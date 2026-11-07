@@ -37,9 +37,9 @@ def main() -> int:
     launcher = (ROOT / "run.sh").read_text()
     apparmor = (ROOT / "apparmor.txt").read_text()
     acp_apparmor = (REPOSITORY_ROOT / "agent_control_plane/apparmor.txt").read_text()
-    for text in ('slug: "agent_execution_plane"', 'version: "1.1.14"', "stage: stable", "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
+    for text in ('slug: "agent_execution_plane"', 'version: "1.1.15"', "stage: stable", "ingress_port: 8099", "  8098/tcp: null", "apparmor: true", "tmpfs: true"):
         if text not in config: raise RuntimeError(f"Missing metadata invariant: {text}")
-    if '__version__ = "1.1.14"' not in package: raise RuntimeError("Version sources differ")
+    if '__version__ = "1.1.15"' not in package: raise RuntimeError("Version sources differ")
     if "arch:\n  - amd64\nstartup:" not in config or "aarch64" in config: raise RuntimeError("Agent Execution Plane must support amd64 only")
     if "FROM ghcr.io/home-assistant/base:latest" not in dockerfile or "BASE_IMAGE_DIGEST" not in dockerfile: raise RuntimeError("Base provenance discipline missing")
     if "adduser -S -D -H" not in dockerfile or launcher.count("python3 -m uvicorn") != 3: raise RuntimeError("Unprivileged listener variants missing")
@@ -62,7 +62,7 @@ def main() -> int:
     if "capability sys_admin" in apparmor or "network raw" in apparmor or "complain" in apparmor: raise RuntimeError("Excess AppArmor privilege")
     if generic_s6_rules(apparmor) != generic_s6_rules(acp_apparmor): raise RuntimeError("Generic s6-overlay AppArmor rules must match the HAOS-proven Agent Control Plane bootstrap inventory")
     if "agent_control_plane" in apparmor or "credential-pepper" in apparmor: raise RuntimeError("Agent Execution Plane AppArmor must not inherit Agent Control Plane data permissions")
-    for invariant in ("cryptography==46.0.3", "httpx==0.28.1", "mcp==1.28.1", "jsonschema[format-nongpl]==4.26.0", "openai-codex==0.144.4", "openai-codex-cli-bin==0.144.4"):
+    for invariant in ("cryptography==50.0.0", "httpx==0.28.1", "mcp==1.30.0", "jsonschema[format-nongpl]==4.26.0", "openai-codex==0.144.4", "openai-codex-cli-bin==0.144.4"):
         if invariant not in (ROOT / "requirements.txt").read_text(): raise RuntimeError(f"Missing Lot 1 dependency: {invariant}")
     for invariant in ("/data/private/provider-key rwlk,", "/data/private/.provider-key.*.tmp rwlk,"):
         if invariant not in apparmor: raise RuntimeError(f"Missing provider-key AppArmor rule: {invariant}")
