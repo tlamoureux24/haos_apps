@@ -136,8 +136,10 @@ Le dépôt interroge chaque jour la dernière version officielle GitHub et perme
 aussi un déclenchement manuel depuis GitHub Actions. Lorsqu'une nouvelle version
 stable au format sémantique existe, le workflow :
 
-1. vérifie que l'image Docker officielle existe pour `amd64` et `arm64` ;
-2. actualise la version épinglée et remet la révision du paquet à `1` ;
+1. relève le digest multi-architecture de l'image Docker officielle et vérifie
+   que cette image précise existe pour `amd64` et `arm64` ;
+2. actualise la version et le digest épinglés, puis remet la révision du paquet
+   à `1` ;
 3. valide les versions, les métadonnées, les scripts et les visuels officiels ;
 4. construit l'enveloppe puis démarre NPM pour un test HTTP ;
 5. publie les images `amd64` et `aarch64` de l'App sur GHCR, puis commit la
@@ -145,6 +147,12 @@ stable au format sémantique existe, le workflow :
 
 Home Assistant affiche ensuite la nouvelle version de l'App comme mise à jour
 disponible. Son installation reste une action volontaire dans Home Assistant.
+
+L'image officielle est référencée par son étiquette et son digest : une
+étiquette republiée en amont ne peut donc pas modifier l'App publiée. Si
+l'étiquette de la version épinglée pointe plus tard vers un autre digest, le
+workflow quotidien échoue avec une erreur explicite au lieu de la suivre ; le
+nouveau digest doit alors être examiné puis épinglé manuellement.
 
 Le workflow de mise à jour demande uniquement les droits `contents: write` et
 `packages: write` pour

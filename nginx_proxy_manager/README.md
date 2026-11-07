@@ -131,8 +131,10 @@ The repository checks the official GitHub latest-release API every day and can
 also be checked manually from GitHub Actions. When a new stable semantic version
 is available, the workflow:
 
-1. verifies that the official Docker image exists for both `amd64` and `arm64`;
-2. updates the pinned upstream version and resets the package revision to `1`;
+1. resolves the multi-architecture digest of the official Docker image and
+   verifies that this exact image exists for both `amd64` and `arm64`;
+2. updates the pinned upstream version and digest, and resets the package
+   revision to `1`;
 3. validates version consistency, metadata, scripts and official assets;
 4. builds the wrapper and starts NPM for an HTTP smoke test;
 5. publishes the `amd64` and `aarch64` App images to GHCR, then commits the
@@ -140,6 +142,11 @@ is available, the workflow:
 
 Home Assistant then shows the new app version as an available update. Installing
 that update remains a voluntary action in Home Assistant.
+
+The official image is referenced by tag and digest, so a tag re-pushed upstream
+cannot change the published app. If the tag of the pinned version later points
+to a different digest, the daily workflow fails with an explicit error instead
+of following it; the new digest must then be reviewed and pinned manually.
 
 The update workflow requests only `contents: write` and `packages: write` for
 its short-lived GitHub

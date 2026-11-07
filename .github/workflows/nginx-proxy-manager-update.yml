@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Read latest stable upstream release
         id: upstream
@@ -50,39 +50,63 @@ jobs:
             exit 1
           fi
 
-          current="$(<nginx_proxy_manager/upstream_version)"
           echo "version=${version}" >>"${GITHUB_OUTPUT}"
-          if [[ "${version}" == "${current}" ]]; then
-            echo "changed=false" >>"${GITHUB_OUTPUT}"
-            echo "NPM ${version} is already current"
-          else
-            echo "changed=true" >>"${GITHUB_OUTPUT}"
-            echo "NPM update detected: ${current} -> ${version}"
-          fi
 
       - name: Set up Docker Buildx
-        if: steps.upstream.outputs.changed == 'true'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
-      - name: Verify official multi-architecture image
-        if: steps.upstream.outputs.changed == 'true'
+      - name: Resolve and verify official image digest
+        id: image
         env:
           NPM_VERSION: ${{ steps.upstream.outputs.version }}
         run: |
           set -euo pipefail
-          manifest="$(docker buildx imagetools inspect \
-            "docker.io/jc21/nginx-proxy-manager:${NPM_VERSION}")"
+          image="docker.io/jc21/nginx-proxy-manager"
+          digest="$(docker buildx imagetools inspect "${image}:${NPM_VERSION}" \
+            | sed -n 's/^Digest: *//p' | head -n 1)"
+          if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Cannot resolve the digest of ${image}:${NPM_VERSION}" >&2
+            exit 1
+          fi
+          # Check the platforms of the exact image that will be pinned.
+          manifest="$(docker buildx imagetools inspect "${image}:${NPM_VERSION}@${digest}")"
           grep -q 'linux/amd64' <<<"${manifest}"
           grep -q 'linux/arm64' <<<"${manifest}"
 
+          current="$(<nginx_proxy_manager/upstream_version)"
+          current_digest="$(sed -n 's/^ARG NPM_DIGEST="@\{0,1\}\([^"]*\)"$/\1/p' \
+            nginx_proxy_manager/Dockerfile)"
+          echo "digest=${digest}" >>"${GITHUB_OUTPUT}"
+          if [[ "${NPM_VERSION}" != "${current}" ]]; then
+            echo "changed=true" >>"${GITHUB_OUTPUT}"
+            echo "NPM update detected: ${current} -> ${NPM_VERSION} (${digest})"
+          elif [[ -z "${current_digest}" ]]; then
+            echo "changed=true" >>"${GITHUB_OUTPUT}"
+            echo "NPM ${current} is not pinned by digest yet; pinning ${digest}"
+          elif [[ "${current_digest}" == "${digest}" ]]; then
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
+            echo "NPM ${current} is already current and pinned to ${digest}"
+          else
+            # A released upstream tag now points to another image. Never follow
+            # it silently: it may be a legitimate rebuild or a compromised push.
+            echo "::error title=NPM ${current} tag moved::${image}:${current} moved from ${current_digest} to ${digest}. Investigate upstream before pinning the new digest manually." >&2
+            exit 1
+          fi
+
       - name: Update package version
-        if: steps.upstream.outputs.changed == 'true'
+        id: package
+        if: steps.image.outputs.changed == 'true'
         env:
           NPM_VERSION: ${{ steps.upstream.outputs.version }}
-        run: python3 nginx_proxy_manager/scripts/update_npm_version.py "${NPM_VERSION}"
+          NPM_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          python3 nginx_proxy_manager/scripts/update_npm_version.py "${NPM_VERSION}" "${NPM_DIGEST}"
+          package="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' nginx_proxy_manager/config.yaml)"
+          echo "package=${package}" >>"${GITHUB_OUTPUT}"
 
       - name: Validate package metadata and scripts
-        if: steps.upstream.outputs.changed == 'true'
+        if: steps.image.outputs.changed == 'true'
         run: |
           set -euo pipefail
           python3 nginx_proxy_manager/scripts/validate.py
@@ -92,22 +116,24 @@ jobs:
             nginx_proxy_manager/scripts/validate.py
 
       - name: Build wrapper
-        if: steps.upstream.outputs.changed == 'true'
+        if: steps.image.outputs.changed == 'true'
         env:
-          NPM_VERSION: ${{ steps.upstream.outputs.version }}
+          APP_VERSION: ${{ steps.package.outputs.package }}
         run: |
           set -euo pipefail
+          # NPM_VERSION and NPM_DIGEST come from the updated Dockerfile defaults,
+          # exactly as in the image publication workflow.
           docker build --pull \
-            --build-arg "NPM_VERSION=${NPM_VERSION}" \
-            --build-arg "BUILD_VERSION=${NPM_VERSION}-1" \
+            --build-arg "BUILD_VERSION=${APP_VERSION}" \
             --build-arg "BUILD_ARCH=amd64" \
-            --tag ha-npm-smoke:${NPM_VERSION} \
+            --tag "ha-npm-smoke:${APP_VERSION}" \
             nginx_proxy_manager
 
       - name: Smoke-test NPM startup
-        if: steps.upstream.outputs.changed == 'true'
+        if: steps.image.outputs.changed == 'true'
         env:
           NPM_VERSION: ${{ steps.upstream.outputs.version }}
+          APP_VERSION: ${{ steps.package.outputs.package }}
         run: |
           set -euo pipefail
           cleanup() {
@@ -119,7 +145,7 @@ jobs:
           docker run --detach \
             --name ha-npm-smoke \
             --publish 127.0.0.1:18081:81 \
-            "ha-npm-smoke:${NPM_VERSION}"
+            "ha-npm-smoke:${APP_VERSION}"
 
           for attempt in {1..60}; do
             if health="$(curl --fail --silent --show-error http://127.0.0.1:18081/api/ 2>/dev/null)"; then
@@ -143,9 +169,9 @@ jobs:
 
       - name: Commit validated update to staging branch
         id: commit
-        if: steps.upstream.outputs.changed == 'true'
+        if: steps.image.outputs.changed == 'true'
         env:
-          NPM_VERSION: ${{ steps.upstream.outputs.version }}
+          APP_VERSION: ${{ steps.package.outputs.package }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -154,7 +180,7 @@ jobs:
             nginx_proxy_manager/Dockerfile \
             nginx_proxy_manager/config.yaml \
             nginx_proxy_manager/upstream_version
-          git commit -m "Update Nginx Proxy Manager to ${NPM_VERSION}"
+          git commit -m "Update Nginx Proxy Manager app to ${APP_VERSION}"
           # main only moves once the images for this commit are public.
           branch="automation/nginx-proxy-manager-update"
           git push --force origin "HEAD:refs/heads/${branch}"
