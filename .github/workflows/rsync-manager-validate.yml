@@ -13,6 +13,8 @@ on:
       - "rsync_manager/**"
       - "!rsync_manager/**/*.md"
       - ".github/workflows/rsync-manager-*.yml"
+  # Called by the base refresh before it releases a rebuilt App.
+  workflow_call:
   workflow_dispatch:
 
 permissions:

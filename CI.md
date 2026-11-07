@@ -68,6 +68,27 @@ privé, le passer en public une fois dans ses paramètres ; tant que ce n’est
 pas fait, la vérification anonyme échoue et la nouvelle version n’atteint pas
 `main`.
 
+### Rafraîchissement de l’image de base
+
+Une version publiée n’étant jamais remplacée, un correctif Alpine ou de l’image
+de base Home Assistant (OpenSSL, musl, OpenSSH…) n’atteint une App installée
+qu’avec une nouvelle version. Le workflow **Refresh App base images** s’en
+charge chaque jour pour les Apps construites sur
+`ghcr.io/home-assistant/base` :
+
+1. il reconstruit chaque App sur l’image de base actuelle et compare sa base de
+   paquets Alpine avec celle de l’image publiée pour la version courante ;
+2. chaque App modifiée passe par son workflow de validation habituel ;
+3. chaque App validée reçoit une version de correctif suivie d’une entrée de
+   changelog qui liste les paquets modifiés, puis suit l’ordre de publication
+   ci-dessus via la branche `automation/app-base-refresh`.
+
+Une App qui échoue à la reconstruction ou à la validation ne bloque pas les
+autres, mais fait échouer le run, ce qui déclenche la notification e-mail de
+GitHub. `scripts/base_refresh.py` connaît chaque fichier qui porte la version
+d’une App (`VERSION_FILES`) : le run échoue avant toute modification si une
+version apparaît ailleurs.
+
 ### Caches
 
 Les workflows ACP, AEP et MCP Bridge mettent en cache les téléchargements de
@@ -147,6 +168,26 @@ Publication order:
 Every GHCR package must be public. If GitHub creates a new package as private,
 make it public once in its settings; until then, the anonymous check fails and
 the new version does not reach `main`.
+
+### Base image refresh
+
+Because a published version is never replaced, an Alpine or Home Assistant
+base image fix (OpenSSL, musl, OpenSSH, ...) only reaches an installed App
+through a new version. The **Refresh App base images** workflow does this every
+day for the Apps built on `ghcr.io/home-assistant/base`:
+
+1. it rebuilds each App on the current base image and compares its Alpine
+   package database with the published image of the current version;
+2. each changed App goes through its regular validation workflow;
+3. each validated App gets a patch version with a changelog entry listing the
+   changed packages, then follows the publication order above through the
+   `automation/app-base-refresh` branch.
+
+An App that fails to rebuild or validate does not hold back the others, but
+fails the run, which triggers GitHub's e-mail notification.
+`scripts/base_refresh.py` knows every file carrying an App version
+(`VERSION_FILES`): the run fails before changing anything if a version appears
+elsewhere.
 
 ### Caches
 
