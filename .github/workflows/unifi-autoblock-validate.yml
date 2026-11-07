@@ -13,6 +13,8 @@ on:
       - "unifi_autoblock/**"
       - "!unifi_autoblock/**/*.md"
       - ".github/workflows/unifi-autoblock-validate.yml"
+  # Called by the base refresh before it releases a rebuilt App.
+  workflow_call:
   workflow_dispatch:
 
 permissions:

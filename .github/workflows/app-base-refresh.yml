@@ -1,0 +1,303 @@
+name: Refresh App base images
+
+# Released App images are immutable. Alpine and Home Assistant base fixes
+# (OpenSSL, musl, OpenSSH, ...) therefore only reach installed Apps through a
+# new App version. Every day this workflow rebuilds each App built on the Home
+# Assistant base image, compares its Alpine packages with the published image
+# of the current version, validates the Apps that changed with their regular
+# validation workflow, then releases and publishes a new patch version.
+
+on:
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: Space- or comma-separated App slugs, or all
+        required: true
+        type: string
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-base-refresh
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      apps: ${{ steps.detect.outputs.apps }}
+      broken: ${{ steps.detect.outputs.broken }}
+      agent_control_plane: ${{ steps.detect.outputs.agent_control_plane }}
+      agent_execution_plane: ${{ steps.detect.outputs.agent_execution_plane }}
+      mcp_capability_bridge: ${{ steps.detect.outputs.mcp_capability_bridge }}
+      rsync_manager: ${{ steps.detect.outputs.rsync_manager }}
+      unifi_autoblock: ${{ steps.detect.outputs.unifi_autoblock }}
+      unifi_log_explorer: ${{ steps.detect.outputs.unifi_log_explorer }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check version locations
+        run: python3 scripts/base_refresh.py check
+
+      - name: Compare fresh builds with published images
+        id: detect
+        env:
+          REQUESTED: ${{ inputs.apps || 'all' }}
+        run: |
+          set -euo pipefail
+          changes_dir="${RUNNER_TEMP}/base-refresh"
+          mkdir -p "${changes_dir}"
+          requested=" ${REQUESTED//,/ } "
+
+          apk_database() {
+            local container
+            container="$(docker create "$1")"
+            docker cp "${container}:/lib/apk/db/installed" - | tar -xO
+            docker rm "${container}" >/dev/null
+          }
+
+          changed=()
+          broken=()
+          {
+            echo "## Base image refresh"
+            echo
+            echo "| App | Published version | Result |"
+            echo "| --- | --- | --- |"
+          } >>"${GITHUB_STEP_SUMMARY}"
+
+          for app in $(python3 scripts/base_refresh.py apps); do
+            if [[ "${requested}" != " all " && "${requested}" != *" ${app} "* ]]; then
+              continue
+            fi
+            version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' "${app}/config.yaml")"
+            image="$(sed -n 's/^image: "\([^"]*\)"$/\1/p' "${app}/config.yaml")"
+            published="${image/\{arch\}/amd64}:${version}"
+            echo "::group::${app} ${version}"
+
+            if ! docker pull --quiet "${published}" >/dev/null; then
+              echo "::warning title=${app}::${published} is not published yet; nothing to refresh."
+              echo "| ${app} | ${version} | not published |" >>"${GITHUB_STEP_SUMMARY}"
+              echo "::endgroup::"
+              continue
+            fi
+
+            # A failed rebuild means the App can no longer be built on the
+            # current base (for example a pinned package that was removed).
+            if ! docker build --pull \
+              --build-arg BUILD_ARCH=amd64 \
+              --build-arg "BUILD_VERSION=${version}" \
+              --tag "base-refresh-${app}" \
+              "${app}"; then
+              echo "::error title=${app} rebuild failed::${app} ${version} cannot be rebuilt on the current Home Assistant base image."
+              echo "| ${app} | ${version} | **rebuild failed** |" >>"${GITHUB_STEP_SUMMARY}"
+              broken+=("${app}")
+              echo "::endgroup::"
+              continue
+            fi
+
+            apk_database "${published}" >"${changes_dir}/${app}.published"
+            apk_database "base-refresh-${app}" >"${changes_dir}/${app}.fresh"
+            python3 scripts/base_refresh.py diff \
+              "${changes_dir}/${app}.published" "${changes_dir}/${app}.fresh" \
+              >"${changes_dir}/${app}.json"
+            count="$(python3 -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "${changes_dir}/${app}.json")"
+            if [[ "${count}" == "0" ]]; then
+              echo "${app} ${version}: Alpine packages are current"
+              echo "| ${app} | ${version} | current |" >>"${GITHUB_STEP_SUMMARY}"
+            else
+              echo "${app} ${version}: ${count} Alpine package change(s)"
+              cat "${changes_dir}/${app}.json"
+              echo "| ${app} | ${version} | ${count} package change(s) |" >>"${GITHUB_STEP_SUMMARY}"
+              changed+=("${app}")
+              echo "${app}=true" >>"${GITHUB_OUTPUT}"
+            fi
+            docker image rm --force "base-refresh-${app}" "${published}" >/dev/null 2>&1 || true
+            echo "::endgroup::"
+          done
+
+          echo "apps=${changed[*]}" >>"${GITHUB_OUTPUT}"
+          echo "broken=${broken[*]}" >>"${GITHUB_OUTPUT}"
+
+      - name: Keep package changes for the release job
+        if: steps.detect.outputs.apps != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: base-refresh-changes
+          path: ${{ runner.temp }}/base-refresh/*.json
+          retention-days: 7
+
+  # Each changed App goes through its regular validation workflow, which
+  # builds it with --pull on the same fresh base. Job IDs equal App slugs.
+  agent_control_plane:
+    needs: detect
+    if: needs.detect.outputs.agent_control_plane == 'true'
+    uses: ./.github/workflows/agent-control-plane-validate.yml
+    with:
+      full_validation: true
+
+  agent_execution_plane:
+    needs: detect
+    if: needs.detect.outputs.agent_execution_plane == 'true'
+    uses: ./.github/workflows/agent-execution-plane-validate.yml
+    with:
+      full_validation: true
+
+  mcp_capability_bridge:
+    needs: detect
+    if: needs.detect.outputs.mcp_capability_bridge == 'true'
+    uses: ./.github/workflows/mcp-capability-bridge-validate.yml
+    with:
+      full_validation: true
+
+  rsync_manager:
+    needs: detect
+    if: needs.detect.outputs.rsync_manager == 'true'
+    uses: ./.github/workflows/rsync-manager-validate.yml
+
+  unifi_autoblock:
+    needs: detect
+    if: needs.detect.outputs.unifi_autoblock == 'true'
+    uses: ./.github/workflows/unifi-autoblock-validate.yml
+
+  unifi_log_explorer:
+    needs: detect
+    if: needs.detect.outputs.unifi_log_explorer == 'true'
+    uses: ./.github/workflows/unifi-log-explorer-validate.yml
+
+  release:
+    needs:
+      - detect
+      - agent_control_plane
+      - agent_execution_plane
+      - mcp_capability_bridge
+      - rsync_manager
+      - unifi_autoblock
+      - unifi_log_explorer
+    # One App failing validation must not hold back the others.
+    if: ${{ !cancelled() && needs.detect.result == 'success' && needs.detect.outputs.apps != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      apps: ${{ steps.release.outputs.apps }}
+      branch: ${{ steps.commit.outputs.branch }}
+      sha: ${{ steps.commit.outputs.sha }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Download package changes
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: base-refresh-changes
+          path: ${{ runner.temp }}/base-refresh
+
+      - name: Release validated Apps
+        id: release
+        env:
+          CHANGED: ${{ needs.detect.outputs.apps }}
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          released=()
+          summary=()
+          for app in ${CHANGED}; do
+            result="$(python3 -c 'import json, os, sys; print(json.loads(os.environ["RESULTS"])[sys.argv[1]]["result"])' "${app}")"
+            if [[ "${result}" != "success" ]]; then
+              echo "::warning title=${app}::validation ${result}; this App is not released."
+              continue
+            fi
+            version="$(python3 scripts/base_refresh.py bump "${app}" "${RUNNER_TEMP}/base-refresh/${app}.json")"
+            python3 "${app}/scripts/validate.py"
+            released+=("${app}")
+            summary+=("${app} ${version}")
+            echo "Released ${app} ${version}"
+          done
+          python3 scripts/base_refresh.py check
+          python3 scripts/validate_docs.py
+          echo "apps=${released[*]}" >>"${GITHUB_OUTPUT}"
+          message="Refresh App base images"
+          if (( ${#summary[@]} )); then
+            message+=": $(IFS=,; echo "${summary[*]}" | sed 's/,/, /g')"
+          fi
+          echo "message=${message}" >>"${GITHUB_OUTPUT}"
+
+      - name: Commit release to staging branch
+        id: commit
+        if: steps.release.outputs.apps != ''
+        env:
+          APPS: ${{ steps.release.outputs.apps }}
+          MESSAGE: ${{ steps.release.outputs.message }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # shellcheck disable=SC2086 # APPS is a space-separated slug list.
+          git add --all -- ${APPS}
+          git commit -m "${MESSAGE}"
+          # main only moves once the images for this commit are public.
+          branch="automation/app-base-refresh"
+          git push --force origin "HEAD:refs/heads/${branch}"
+          echo "branch=${branch}" >>"${GITHUB_OUTPUT}"
+          echo "sha=$(git rev-parse HEAD)" >>"${GITHUB_OUTPUT}"
+
+  publish:
+    needs: release
+    if: ${{ !cancelled() && needs.release.outputs.sha != '' }}
+    uses: ./.github/workflows/app-images-publish.yml
+    permissions:
+      contents: write
+      packages: write
+    with:
+      apps: ${{ needs.release.outputs.apps }}
+      ref: ${{ needs.release.outputs.sha }}
+      promote: true
+      staging_branch: ${{ needs.release.outputs.branch }}
+
+  # Scheduled failures are e-mailed by GitHub: surface anything that kept an
+  # App from being refreshed, even when the other Apps were published.
+  report:
+    needs:
+      - detect
+      - agent_control_plane
+      - agent_execution_plane
+      - mcp_capability_bridge
+      - rsync_manager
+      - unifi_autoblock
+      - unifi_log_explorer
+      - release
+      - publish
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail on blocked refreshes
+        env:
+          BROKEN: ${{ needs.detect.outputs.broken }}
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, sys
+
+          failed = [
+              f"{job}: {data['result']}"
+              for job, data in json.loads(os.environ["RESULTS"]).items()
+              if data["result"] in ("failure", "cancelled")
+          ]
+          failed += [f"{app}: rebuild failed" for app in os.environ["BROKEN"].split()]
+          for line in failed:
+              print(f"::error title=Base refresh blocked::{line}")
+          sys.exit(1 if failed else 0)
+          PY

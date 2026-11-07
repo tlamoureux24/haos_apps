@@ -13,6 +13,8 @@ on:
       - "unifi_log_explorer/**"
       - "!unifi_log_explorer/**/*.md"
       - ".github/workflows/unifi-log-explorer-validate.yml"
+  # Called by the base refresh before it releases a rebuilt App.
+  workflow_call:
   workflow_dispatch:
 
 permissions:
