@@ -173,7 +173,7 @@ read -r own </proc/self/attr/current
 echo "claude=${own}"
 echo "shell=$(cat /proc/self/attr/current)"
 echo probe >/data/home/.claude-probe && echo "claude_home_write=ok"
-/usr/local/bin/claude-remote-setup </dev/null >/dev/null 2>&1 && echo "claude_exec_app=open" || echo "claude_exec_app=blocked"
+/usr/local/bin/claude-shell </dev/null >/dev/null 2>&1 && echo "claude_exec_app=open" || echo "claude_exec_app=blocked"
 curl --silent --max-time 3 --output /dev/null http://ha-mcp:9583/ && echo "shell_network=open" || echo "shell_network=blocked"
 cat /etc/claude-code/managed-mcp.json >/dev/null 2>&1 && echo "shell_mcp_url=readable" || echo "shell_mcp_url=blocked"
 cat /data/home/.claude/.credentials.json >/dev/null 2>&1 && echo "shell_credentials=readable" || echo "shell_credentials=blocked"
@@ -185,7 +185,10 @@ PROBE
   start_app "${run_id}-aa" "http://ha-mcp:9583/${secret}" --volume "${root}/claude-probe:/usr/local/bin/claude:ro"
   wait_healthy "${run_id}-aa"
   app_exec "${run_id}-aa" sh -c 'install -d -o claude -g claude -m 0700 /data/home/.claude && echo "{}" >/data/home/.claude/.credentials.json && chown claude:claude /data/home/.claude/.credentials.json'
-  probe="$(app_exec --user claude --env HOME=/data/home --workdir /data/workspace "${run_id}-aa" /usr/local/bin/claude probe 2>&1)"
+  # Through sh, as in the App: docker exec pins the first program it starts
+  # to the container profile, which would skip the transition.
+  probe="$(app_exec --user claude --env HOME=/data/home --workdir /data/workspace "${run_id}-aa" \
+    sh -c '/usr/local/bin/claude probe' 2>&1)"
   echo "${probe}"
   for expected in \
       "claude=claude_remote//claude (enforce)" \
