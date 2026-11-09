@@ -36,7 +36,8 @@ chown -R claude:claude "${DATA_HOME}" "${WORKSPACE}"
 
 log INFO "Starting Claude Remote ${BUILD_VERSION:-dev}"
 event app_started --status ok "version=${BUILD_VERSION:-dev}"
-claude_version="$(/usr/local/bin/claude --version 2>/dev/null | awk '{print $1}')"
+claude_version="$(s6-setuidgid claude env -i HOME="${DATA_HOME}" PATH=/usr/local/bin:/usr/bin:/bin \
+  /usr/local/bin/claude --version 2>/dev/null | awk '{print $1}')"
 state "claude_version=${claude_version:-unknown}" remote_control=starting mcp_reachable=unknown
 
 # --- HA-MCP server: the only MCP server Claude can use -----------------------

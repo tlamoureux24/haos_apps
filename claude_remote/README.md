@@ -59,9 +59,10 @@ From strongest to weakest:
    - Built-in tools are denied: shell (`Bash`), file read and write, `WebFetch`, `WebSearch`, subagents, and so on. Claude can therefore neither call the MCP URL itself nor read the file that holds it.
    - Modes that skip approvals (`bypassPermissions`, `auto`) are disabled, and only the App's hooks and rules apply.
    - Auto-updates, telemetry and error reporting are off. Claude Code is updated through a new App version, pinned by version and SHA-512 digest.
-4. **Lifecycle.** Start and stop the App, and the HA-MCP App if you like, when you need them: from the HA companion app, or with a dashboard button calling `hassio.app_start` / `hassio.app_stop`.
+4. **AppArmor profile, enforced by the kernel.** Claude Code runs in its own sub-profile: it can write only to its home, the workspace and `/tmp`, and can start no App script. Any program it starts (shell, ripgrep…) lands in a second sub-profile with no network, no access to the Claude login or the HA-MCP URL, and no way to start Claude again. Even if the policy above were bypassed, a shell started by Claude could not send anything out.
+5. **Lifecycle.** Start and stop the App, and the HA-MCP App if you like, when you need them: from the HA companion app, or with a dashboard button calling `hassio.app_start` / `hassio.app_stop`.
 
-What remains possible: the container keeps outbound Internet access, which it needs to reach Anthropic. Without a shell or `WebFetch`, Claude has no direct way to send data elsewhere.
+What remains possible: the container keeps outbound Internet access, which it needs to reach Anthropic. Without a shell or `WebFetch`, Claude has no direct way to send data elsewhere, and AppArmor keeps any program it starts off the network.
 
 The admin terminal gives a shell as the App's unprivileged user. It is restricted to HA administrators and has no Home Assistant token or configuration access.
 
