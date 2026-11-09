@@ -183,6 +183,7 @@ profile claude_remote flags=(attach_disconnected,mediate_deleted) {
   /usr/local/bin/claude-shell ix,
   /usr/local/bin/claude Cx -> claude,
 
+  / r,
   /** r,
   /data/{,**} rwlk,
   /tmp/{,**} rwlk,
@@ -228,6 +229,7 @@ profile claude_remote flags=(attach_disconnected,mediate_deleted) {
     /usr/bin/** Px -> claude_remote//claude_shell,
     /usr/sbin/** Px -> claude_remote//claude_shell,
 
+    / r,
     /** r,
     /data/home/{,**} rwlk,
     /data/workspace/{,**} rwlk,
@@ -267,6 +269,7 @@ profile claude_remote flags=(attach_disconnected,mediate_deleted) {
     /usr/sbin/** ix,
     deny /usr/local/bin/** x,
 
+    / r,
     /** r,
     /data/workspace/{,**} rwlk,
     /data/home/.claude/shell-snapshots/{,**} rw,

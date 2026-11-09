@@ -26,6 +26,10 @@ cleanup() {
   done
   "${engine}" network rm "${network}" >/dev/null 2>&1 || true
   rm -rf "${root}" 2>/dev/null || true
+  if [[ "${passed}" == "false" && "${APPARMOR:-}" == "1" ]]; then
+    echo "--- AppArmor denials (kernel log)"
+    sudo dmesg 2>/dev/null | grep -F 'apparmor="DENIED"' | grep -F claude_remote | tail -40 || true
+  fi
 }
 trap cleanup EXIT
 
