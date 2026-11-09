@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.15
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `libopenmpt` `0.8.9-r0` → `0.8.10-r0`
+
 ## 1.1.14
 
 - Update `mcp` from 1.28.1 to 1.30.0 to fix GHSA-w4fh-qvv9-3v23, GHSA-5h93-6whr-6q8j,
