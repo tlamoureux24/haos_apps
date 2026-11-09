@@ -16,6 +16,8 @@ readonly MIN_DELAY_S=10
 readonly MAX_DELAY_S=300
 # A run shorter than this counts as a failed start for the backoff.
 readonly HEALTHY_RUN_S=120
+# Remote Control output arriving within this pause belongs to one screen.
+readonly SCREEN_PAUSE_S=0.5
 
 log() {
   local level="$1"
@@ -46,14 +48,43 @@ setup_running() {
   [[ -e "${SETUP_LOCK}" ]] && ! flock -n "${SETUP_LOCK}" true
 }
 
-# Strip terminal control sequences, drop blank and repeated lines, timestamp.
+clean_line() {
+  printf '%s' "$1" | sed -E $'s/\x1b\\[[0-9;?]*[ -/]*[@-~]//g; s/\x1b\\][^\x07]*(\x07|\x1b\\\\)//g; s/\r//g; s/[[:cntrl:]]//g; s/^[[:space:]]+//; s/[[:space:]]+$//'
+}
+
+# Remote Control redraws its status screen every second. Lines arriving
+# together form one screen; a screen is complete after a short pause. Only
+# the lines that were not on the previous screen are logged, so an idle
+# connection logs nothing and every change (reconnecting, connected again,
+# new session) is logged once.
 relay_output() {
-  local line previous=""
-  while IFS= read -r line; do
-    line="$(printf '%s' "${line}" | sed -E $'s/\x1b\\[[0-9;?]*[ -/]*[@-~]//g; s/\x1b\\][^\x07]*(\x07|\x1b\\\\)//g; s/\r//g; s/[[:cntrl:]]//g')"
-    [[ -z "${line//[[:space:]]/}" || "${line}" == "${previous}" ]] && continue
-    previous="${line}"
-    log INFO "remote-control: ${line}"
+  local line pending="" status cleaned screen="" previous=$'\n'
+  local -a lines=()
+  while true; do
+    IFS= read -r -t "${SCREEN_PAUSE_S}" line
+    status=$?
+    if (( status > 128 )); then
+      # Pause: keep a partial line for the next read, then flush the screen.
+      pending+="${line}"
+    else
+      line="${pending}${line}"
+      pending=""
+      if (( status == 0 )) || [[ -n "${line}" ]]; then
+        cleaned="$(clean_line "${line}")"
+        [[ -n "${cleaned//[[:space:]]/}" ]] && lines+=("${cleaned}")
+      fi
+      (( status == 0 )) && continue
+    fi
+    if (( ${#lines[@]} )); then
+      printf -v screen '\n%s' "${lines[@]}"
+      screen+=$'\n'
+      for line in "${lines[@]}"; do
+        [[ "${previous}" == *$'\n'"${line}"$'\n'* ]] || log INFO "remote-control: ${line}"
+      done
+      previous="${screen}"
+      lines=()
+    fi
+    (( status > 128 )) || break
   done
 }
 

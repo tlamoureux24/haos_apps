@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3
+
+- Quieter App log: Remote Control redraws its status screen every second,
+  which wrote about six lines per second. Only lines that changed since the
+  previous screen are logged now, so an idle connection logs nothing and each
+  change (reconnecting, connected again, new session) is logged once.
+
 ## 0.1.2
 
 - AppArmor profile (`apparmor.txt`). The App profile denies mounts, raw
