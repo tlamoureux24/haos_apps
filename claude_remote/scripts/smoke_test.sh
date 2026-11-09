@@ -21,7 +21,10 @@ fi
 passed=false
 cleanup() {
   for name in "${run_id}" "${run_id}-empty" "${run_id}-invalid" "${run_id}-mcp" "${run_id}-probe" "${run_id}-aa"; do
-    if [[ "${passed}" == "false" && "${name}" == "${run_id}" ]]; then "${engine}" logs "${name}" 2>&1 | tail -40 || true; fi
+    if [[ "${passed}" == "false" && ( "${name}" == "${run_id}" || "${name}" == "${run_id}-aa" ) ]]; then
+      echo "--- ${name} log"
+      "${engine}" logs "${name}" 2>&1 | tail -40 || true
+    fi
     "${engine}" rm --force "${name}" >/dev/null 2>&1 || true
   done
   "${engine}" network rm "${network}" >/dev/null 2>&1 || true
@@ -158,8 +161,10 @@ if [[ "${APPARMOR:-}" == "1" ]]; then
   # one, then starts ordinary programs, which must land in claude_shell.
   cat >"${root}/claude-probe" <<'PROBE'
 #!/bin/bash
-# Only answers "probe"; "nested" proves that a program could start Claude.
+# Answers --version for the App start; "nested" proves that a program could
+# start Claude; "probe" runs the checks.
 case "${1:-}" in
+  --version) echo "0.0.0 (Claude Code probe)"; exit 0 ;;
   nested) echo nested-ran; exit 0 ;;
   probe) ;;
   *) exit 1 ;;
