@@ -20,8 +20,8 @@ jobs:
         run: docker build --build-arg BUILD_ARCH=amd64 --build-arg BUILD_VERSION=0.0.0 --tag cr claude_remote
       - name: Try profile variants
         run: |
-          set -uo pipefail
-          uname -r; apparmor_parser --version | head -1
+          set +e
+          uname -r; apparmor_parser --version | sed -n 1p
           python3 - <<'PY'
           import pathlib, re
           src = pathlib.Path("claude_remote/apparmor.txt").read_text()
