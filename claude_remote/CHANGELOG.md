@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2
+
+- AppArmor profile (`apparmor.txt`). The App profile denies mounts, raw
+  sockets and tracing, and limits writes to the App's own data. Claude Code
+  runs in its own sub-profile: network for claude.ai and HA-MCP, writes only
+  to its home, the workspace and `/tmp`. Every program it starts runs in a
+  second sub-profile with no network, no access to the Claude login or the
+  HA-MCP URL, and no way to start Claude again.
+- CI runs the App under this profile on an AppArmor kernel and checks both
+  sub-profiles.
+
 ## 0.1.1
 
 - Fix: Remote Control stayed waiting for setup when `claude-remote-setup` was

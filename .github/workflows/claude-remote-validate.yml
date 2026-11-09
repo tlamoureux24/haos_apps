@@ -56,8 +56,10 @@ jobs:
             --tag "claude-remote:${version}" \
             claude_remote
 
-      - name: Smoke-test the container
+      # The runner kernel enforces AppArmor: the App runs under apparmor.txt,
+      # as on Home Assistant OS.
+      - name: Smoke-test the container under its AppArmor profile
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' claude_remote/config.yaml)"
-          bash claude_remote/scripts/smoke_test.sh "claude-remote:${version}"
+          APPARMOR=1 bash claude_remote/scripts/smoke_test.sh "claude-remote:${version}"

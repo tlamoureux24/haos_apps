@@ -47,6 +47,7 @@ def main() -> int:
     launcher = read("run.sh")
     supervisor = read("remote-control.sh")
     nginx = read("nginx.conf")
+    apparmor = read("apparmor.txt")
 
     app_version = one(r'^version: "([^"]+)"$', config, "App version")
     if not re.fullmatch(SEMVER, app_version):
@@ -56,6 +57,7 @@ def main() -> int:
         'slug: "claude_remote"',
         "boot: manual",
         "init: false",
+        "apparmor: true",
         "ingress: true",
         "ingress_port: 8099",
         "panel_admin: true",
@@ -142,6 +144,27 @@ def main() -> int:
         if re.search(r"\becho\b[^\n]*\$\{?ha_mcp_url", text):
             raise RuntimeError(f"{name} must never print the HA-MCP URL")
     require(("allow 172.30.32.2;", "deny all;", "proxy_pass http://127.0.0.1:7681/;"), nginx, "nginx")
+
+    # Supervisor loads one top-level profile per App; the sub-profiles confine
+    # Claude Code and every program it starts.
+    top_level = re.findall(r"^profile (\S+)", apparmor, flags=re.MULTILINE)
+    if top_level != ["claude_remote"]:
+        raise RuntimeError(f"apparmor.txt must hold one top-level claude_remote profile: {top_level}")
+    shell = apparmor.split("  profile claude_shell", 1)[-1]
+    require((
+        "  /usr/local/bin/claude Cx -> claude,",
+        "  profile claude flags=",
+        "  profile claude_shell flags=",
+        "    /usr/bin/** Px -> claude_remote//claude_shell,",
+        "    deny /data/options.json r,",
+    ), apparmor, "AppArmor")
+    require((
+        "    deny network,",
+        "    deny capability,",
+        "    deny /usr/local/bin/** x,",
+        "    deny /data/home/.claude/.credentials.json r,",
+        "    deny /etc/claude-code/managed-mcp.json r,",
+    ), shell, "AppArmor claude_shell")
 
     for filename in (
         "CHANGELOG.md", "DOCS.md", "README.md", "README.fr.md", "claude-remote-setup.sh",

@@ -59,9 +59,10 @@ Du plus fort au plus faible :
    - Les outils internes sont interdits : shell (`Bash`), lecture et écriture de fichiers, `WebFetch`, `WebSearch`, sous-agents, etc. Claude ne peut donc ni appeler l'URL du MCP lui-même, ni lire le fichier qui la contient.
    - Les modes qui sautent les validations (`bypassPermissions`, `auto`) sont désactivés, et seuls les hooks et règles de l'App s'appliquent.
    - Mises à jour automatiques, télémétrie et rapports d'erreur désactivés. Claude Code est mis à jour par une nouvelle version de l'App, figée par version et par empreinte SHA-512.
-4. **Cycle de vie.** Démarre et arrête l'App, et si tu veux l'App HA-MCP, quand tu en as besoin : depuis l'app compagnon HA, ou avec un bouton de tableau de bord qui appelle `hassio.app_start` / `hassio.app_stop`.
+4. **Profil AppArmor, appliqué par le noyau.** Claude Code tourne dans son propre sous-profil : il ne peut écrire que dans son dossier personnel, l'espace de travail et `/tmp`, et ne peut lancer aucun script de l'App. Tout programme qu'il lance (shell, ripgrep…) bascule dans un second sous-profil sans réseau, sans accès à la connexion Claude ni à l'URL HA-MCP, et sans pouvoir relancer Claude. Même si les règles ci-dessus étaient contournées, un shell lancé par Claude ne pourrait rien envoyer à l'extérieur.
+5. **Cycle de vie.** Démarre et arrête l'App, et si tu veux l'App HA-MCP, quand tu en as besoin : depuis l'app compagnon HA, ou avec un bouton de tableau de bord qui appelle `hassio.app_start` / `hassio.app_stop`.
 
-Ce qui reste possible : le conteneur garde un accès Internet sortant, nécessaire pour joindre Anthropic. Sans shell ni `WebFetch`, Claude n'a pas de moyen direct d'envoyer des données ailleurs.
+Ce qui reste possible : le conteneur garde un accès Internet sortant, nécessaire pour joindre Anthropic. Sans shell ni `WebFetch`, Claude n'a pas de moyen direct d'envoyer des données ailleurs, et AppArmor coupe le réseau de tout programme qu'il lance.
 
 Le terminal d'administration donne un shell sous l'utilisateur non privilégié de l'App. Il est réservé aux administrateurs HA et n'a ni token Home Assistant ni accès à la configuration.
 

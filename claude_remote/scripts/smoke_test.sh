@@ -1,6 +1,8 @@
 #!/bin/bash
 # Container smoke test for Claude Remote, shared by the validate and update
 # workflows. Usage: smoke_test.sh IMAGE  (CONTAINER=podman to run locally)
+# APPARMOR=1 loads apparmor.txt on the host (sudo) and runs every App
+# container under it, then checks the claude and claude_shell sub-profiles.
 set -euo pipefail
 
 image="$1"
@@ -9,10 +11,16 @@ run_id="claude-remote-smoke-$$"
 root="$(mktemp -d)"
 network="${run_id}"
 secret="private_ci-secret-$$"
+app_dir="$(cd "$(dirname "$0")/.." && pwd)"
+security_opts=()
+if [[ "${APPARMOR:-}" == "1" ]]; then
+  sudo apparmor_parser --replace --write-cache "${app_dir}/apparmor.txt"
+  security_opts=(--security-opt apparmor=claude_remote)
+fi
 
 passed=false
 cleanup() {
-  for name in "${run_id}" "${run_id}-empty" "${run_id}-invalid" "${run_id}-mcp" "${run_id}-probe"; do
+  for name in "${run_id}" "${run_id}-empty" "${run_id}-invalid" "${run_id}-mcp" "${run_id}-probe" "${run_id}-aa"; do
     if [[ "${passed}" == "false" && "${name}" == "${run_id}" ]]; then "${engine}" logs "${name}" 2>&1 | tail -40 || true; fi
     "${engine}" rm --force "${name}" >/dev/null 2>&1 || true
   done
@@ -26,13 +34,14 @@ app_exec() { "${engine}" exec "$@"; }
 
 start_app() {
   local name="$1" url="$2"
+  shift 2
   mkdir -p "${root}/${name}"
   jq -n --arg url "${url}" '{log_level: "info", ha_mcp_url: $url, confirm_writes: true}' \
     >"${root}/${name}/options.json"
-  "${engine}" run --detach --name "${name}" --network "${network}" \
+  "${engine}" run --detach --name "${name}" --network "${network}" "${security_opts[@]}" \
     --env SUPERVISOR_TOKEN=ci-supervisor-token --env HASS_TOKEN=ci-hass-token \
     --env TZ=Europe/Paris \
-    --volume "${root}/${name}:/data:Z" "${image}" >/dev/null
+    --volume "${root}/${name}:/data:Z" "$@" "${image}" >/dev/null
 }
 
 wait_healthy() {
@@ -135,6 +144,54 @@ for _ in {1..30}; do
   sleep 1
 done
 [[ "${running}" == "false" ]] || fail "an invalid HA-MCP URL did not stop the App"
+
+# --- AppArmor: enforced profile and the two sub-profiles ----------------------
+if [[ "${APPARMOR:-}" == "1" ]]; then
+  label="$(app_exec "${run_id}" cat /proc/1/attr/current)"
+  [[ "${label}" == "claude_remote (enforce)" ]] || fail "App not confined by claude_remote: ${label}"
+
+  # A stand-in claude binary: it runs in claude_remote//claude like the real
+  # one, then starts ordinary programs, which must land in claude_shell.
+  cat >"${root}/claude-probe" <<'PROBE'
+#!/bin/bash
+# Only answers "probe"; "nested" proves that a program could start Claude.
+case "${1:-}" in
+  nested) echo nested-ran; exit 0 ;;
+  probe) ;;
+  *) exit 1 ;;
+esac
+read -r own </proc/self/attr/current
+echo "claude=${own}"
+echo "shell=$(cat /proc/self/attr/current)"
+echo probe >/data/home/.claude-probe && echo "claude_home_write=ok"
+/usr/local/bin/claude-remote-setup </dev/null >/dev/null 2>&1 && echo "claude_exec_app=open" || echo "claude_exec_app=blocked"
+curl --silent --max-time 3 --output /dev/null http://ha-mcp:9583/ && echo "shell_network=open" || echo "shell_network=blocked"
+cat /etc/claude-code/managed-mcp.json >/dev/null 2>&1 && echo "shell_mcp_url=readable" || echo "shell_mcp_url=blocked"
+cat /data/home/.claude/.credentials.json >/dev/null 2>&1 && echo "shell_credentials=readable" || echo "shell_credentials=blocked"
+touch /data/home/.bashrc 2>/dev/null && echo "shell_home_write=open" || echo "shell_home_write=blocked"
+touch /data/workspace/.probe 2>/dev/null && echo "shell_workspace_write=ok" || echo "shell_workspace_write=blocked"
+[[ "$(sh -c '/usr/local/bin/claude nested' 2>/dev/null)" == nested-ran ]] && echo "shell_exec_claude=open" || echo "shell_exec_claude=blocked"
+PROBE
+  chmod 0755 "${root}/claude-probe"
+  start_app "${run_id}-aa" "http://ha-mcp:9583/${secret}" --volume "${root}/claude-probe:/usr/local/bin/claude:ro"
+  wait_healthy "${run_id}-aa"
+  app_exec "${run_id}-aa" sh -c 'install -d -o claude -g claude -m 0700 /data/home/.claude && echo "{}" >/data/home/.claude/.credentials.json && chown claude:claude /data/home/.claude/.credentials.json'
+  probe="$(app_exec --user claude --env HOME=/data/home --workdir /data/workspace "${run_id}-aa" /usr/local/bin/claude probe 2>&1)"
+  echo "${probe}"
+  for expected in \
+      "claude=claude_remote//claude (enforce)" \
+      "shell=claude_remote//claude_shell (enforce)" \
+      "claude_home_write=ok" \
+      "claude_exec_app=blocked" \
+      "shell_network=blocked" \
+      "shell_mcp_url=blocked" \
+      "shell_credentials=blocked" \
+      "shell_home_write=blocked" \
+      "shell_workspace_write=ok" \
+      "shell_exec_claude=blocked"; do
+    grep -qxF "${expected}" <<<"${probe}" || fail "AppArmor probe: expected ${expected}"
+  done
+fi
 
 passed=true
 echo "Claude Remote smoke test passed"

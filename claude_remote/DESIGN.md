@@ -124,6 +124,18 @@ gateway form (`http://172.30.32.1:9583/private_<secret>`) reach it.
 - **Not used:** `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and
   `DISABLE_GROWTHBOOK` (both disable Remote Control); `claude setup-token`
   (model requests only, cannot run Remote Control).
+- **AppArmor:** `apparmor.txt` holds one top-level profile, `claude_remote`
+  (s6, nginx, ttyd, the Ingress page and the admin terminal, so it stays
+  broad on executables), and two sub-profiles. `claude_remote//claude` is
+  entered on every exec of `/usr/local/bin/claude`: network allowed, writes
+  limited to `/data/home`, `/data/workspace` and `/tmp`, no capability.
+  Anything it executes goes to `claude_remote//claude_shell`: no network, no
+  capability, no read of `.credentials.json`, `.claude.json` or
+  `managed-mcp.json`, no exec under `/usr/local/bin`. Without a login,
+  Claude Code 2.1.319 executes nothing (checked with strace). The validate
+  and update workflows load the profile on the runner kernel and run the
+  smoke test under it (`APPARMOR=1`), with a stand-in `claude` that checks
+  both sub-profiles.
 - **Ingress:** nginx on 8099 (only `172.30.32.2` allowed) in front of the
   status/journal page (Python stdlib, `127.0.0.1:8100`) and ttyd
   (`127.0.0.1:7681`, uid 1000).
@@ -138,6 +150,8 @@ the real device and a signed-in account:
 3. The prefix wildcards in the read-tool allow rules are honoured.
 4. `DISABLE_TELEMETRY` does not disable Remote Control (documented as fine
    from Claude Code 2.1.283 on subscription plans).
+5. Signed-in Claude Code runs under `claude_remote//claude`: the programs it
+   starts once signed in (if any) were not observable in CI.
 
 ## Notes on the existing ha-mcp setup
 

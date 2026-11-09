@@ -55,7 +55,7 @@ jobs:
             --build-arg "BUILD_VERSION=${version}" \
             --tag "claude-remote:${version}" \
             claude_remote
-          bash claude_remote/scripts/smoke_test.sh "claude-remote:${version}"
+          APPARMOR=1 bash claude_remote/scripts/smoke_test.sh "claude-remote:${version}"
 
       - name: Commit validated update to staging branch
         id: commit
