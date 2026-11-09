@@ -147,6 +147,8 @@ def main() -> int:
 
     # Supervisor loads one top-level profile per App; the sub-profiles confine
     # Claude Code and every program it starts.
+    if not apparmor.startswith("# ") or "\nabi <abi/3.0>,\n" not in apparmor:
+        raise RuntimeError("apparmor.txt must declare abi <abi/3.0> so sub-profile network rules apply")
     top_level = re.findall(r"^profile (\S+)", apparmor, flags=re.MULTILINE)
     if top_level != ["claude_remote"]:
         raise RuntimeError(f"apparmor.txt must hold one top-level claude_remote profile: {top_level}")
@@ -158,8 +160,7 @@ def main() -> int:
         "    /usr/bin/** Px -> claude_remote//claude_shell,",
         "    deny /data/options.json r,",
     ), apparmor, "AppArmor")
-    # Network and capabilities are denied by default; an explicit deny in a
-    # sub-profile also cut the parent's network (apparmor_parser 4.0.1).
+    # Network and capabilities are denied by default in the sub-profiles.
     for name, body in (("claude", apparmor.split("  profile claude flags=", 1)[-1].split("  profile claude_shell", 1)[0]),
                        ("claude_shell", shell)):
         if re.search(r"^\s*(deny\s+)?(capability|network)\b", body, flags=re.MULTILINE) and name == "claude_shell":

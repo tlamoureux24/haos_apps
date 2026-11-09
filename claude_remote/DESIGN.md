@@ -131,7 +131,9 @@ gateway form (`http://172.30.32.1:9583/private_<secret>`) reach it.
   limited to `/data/home`, `/data/workspace` and `/tmp`, no capability.
   Anything it executes goes to `claude_remote//claude_shell`: no network, no
   capability, no read of `.credentials.json`, `.claude.json` or
-  `managed-mcp.json`, no exec under `/usr/local/bin`. Without a login,
+  `managed-mcp.json`, no exec under `/usr/local/bin`. The file declares
+  `abi <abi/3.0>`: without it, Ubuntu's parser used a pinned older feature
+  set and sub-profiles inherited the parent's network. Without a login,
   Claude Code 2.1.319 executes nothing (checked with strace). The validate
   and update workflows load the profile on the runner kernel and run the
   smoke test under it (`APPARMOR=1`), with a stand-in `claude` that checks

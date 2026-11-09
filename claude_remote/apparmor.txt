@@ -1,3 +1,8 @@
+# Without an explicit ABI, Ubuntu's parser compiles against a pinned older
+# feature set where sub-profiles got the parent's network rules; ABI 3.0
+# (AppArmor 3.0 and later) mediates each sub-profile's network on its own.
+abi <abi/3.0>,
+
 #include <tunables/global>
 
 # Claude Remote AppArmor profile.
@@ -257,8 +262,6 @@ profile claude_remote flags=(attach_disconnected,mediate_deleted) {
     signal,
 
     # No network and no capability rule: AppArmor denies both by default.
-    # (An explicit "deny network," here also removed the parent's network
-    # with apparmor_parser 4.0.1.)
     deny mount,
     deny umount,
     deny pivot_root,
