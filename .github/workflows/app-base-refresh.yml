@@ -32,6 +32,7 @@ jobs:
     outputs:
       apps: ${{ steps.detect.outputs.apps }}
       broken: ${{ steps.detect.outputs.broken }}
+      claude_remote: ${{ steps.detect.outputs.claude_remote }}
       agent_control_plane: ${{ steps.detect.outputs.agent_control_plane }}
       agent_execution_plane: ${{ steps.detect.outputs.agent_execution_plane }}
       mcp_capability_bridge: ${{ steps.detect.outputs.mcp_capability_bridge }}
@@ -135,6 +136,11 @@ jobs:
 
   # Each changed App goes through its regular validation workflow, which
   # builds it with --pull on the same fresh base. Job IDs equal App slugs.
+  claude_remote:
+    needs: detect
+    if: needs.detect.outputs.claude_remote == 'true'
+    uses: ./.github/workflows/claude-remote-validate.yml
+
   agent_control_plane:
     needs: detect
     if: needs.detect.outputs.agent_control_plane == 'true'
@@ -174,6 +180,7 @@ jobs:
   release:
     needs:
       - detect
+      - claude_remote
       - agent_control_plane
       - agent_execution_plane
       - mcp_capability_bridge
@@ -270,6 +277,7 @@ jobs:
   report:
     needs:
       - detect
+      - claude_remote
       - agent_control_plane
       - agent_execution_plane
       - mcp_capability_bridge

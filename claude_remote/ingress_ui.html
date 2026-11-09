@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Remote</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f6f4; --card: #fff; --text: #1f1f1d; --muted: #6b6b66;
+          --line: #e2e1dc; --ok: #2e7d32; --warn: #b26a00; --err: #c62828; --accent: #c15f3c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1b1b19; --card: #262624; --text: #ecebe6; --muted: #a3a29c; --line: #3a3a37;
+            --ok: #81c784; --warn: #ffb74d; --err: #ef9a9a; --accent: #e08b6a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  main { max-width: 960px; margin: 0 auto; padding: 16px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 1.3rem; margin: 0; }
+  h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  nav { display: flex; gap: 8px; }
+  button, a.button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);
+                     background: var(--card); color: var(--text); cursor: pointer; text-decoration: none; }
+  button.active, a.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 16px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; }
+  .ok { color: var(--ok); } .warning { color: var(--warn); } .error { color: var(--err); } .info { color: var(--muted); }
+  p.hint { color: var(--muted); margin: 12px 0 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  td.ts { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 12px; }
+  select { font: inherit; padding: 4px; }
+  code { font-size: 0.92em; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Claude Remote</h1>
+    <nav>
+      <button data-lang="fr">FR</button>
+      <button data-lang="en">EN</button>
+    </nav>
+  </header>
+
+  <section>
+    <h2 data-i18n="status">État</h2>
+    <dl id="status"></dl>
+    <p class="hint" data-i18n="phone_hint"></p>
+  </section>
+
+  <section>
+    <h2 data-i18n="terminal">Terminal</h2>
+    <p data-i18n="terminal_hint"></p>
+    <a class="button primary" href="terminal/" target="_blank" rel="noopener" data-i18n="open_terminal">Ouvrir le terminal</a>
+  </section>
+
+  <section>
+    <header>
+      <h2 data-i18n="activity">Activité</h2>
+      <select id="category">
+        <option value="" data-i18n="all">Tout</option>
+        <option value="lifecycle" data-i18n="cat_lifecycle"></option>
+        <option value="account" data-i18n="cat_account"></option>
+        <option value="remote_control" data-i18n="cat_remote_control"></option>
+        <option value="mcp" data-i18n="cat_mcp"></option>
+      </select>
+    </header>
+    <table>
+      <thead><tr><th data-i18n="when">Date</th><th data-i18n="event">Événement</th><th data-i18n="details">Détails</th></tr></thead>
+      <tbody id="activity"></tbody>
+    </table>
+    <div class="pager">
+      <button id="prev">‹</button><span id="pageinfo"></span><button id="next">›</button>
+    </div>
+  </section>
+</main>
+<script>
+const T = {
+  fr: {
+    status: "État", terminal: "Terminal", activity: "Activité", all: "Tout", when: "Date", event: "Événement",
+    details: "Détails", open_terminal: "Ouvrir le terminal",
+    terminal_hint: "Sert à la première connexion (claude-remote-setup) et au dépannage. Le terminal tourne sous l’utilisateur non privilégié de l’App, sans accès à Home Assistant.",
+    phone_hint: "Utilisation : app Claude sur le téléphone ou claude.ai/code, onglet Code, environnement « Home Assistant ».",
+    app_version: "Version de l’App", claude_version: "Claude Code", logged_in: "Compte Claude",
+    remote_control: "Remote Control", mcp: "Serveur HA-MCP", mcp_reachable: "HA-MCP joignable", updated_at: "Mis à jour",
+    yes: "oui", no: "non", unknown: "inconnu", connected: "connecté", not_connected: "non connecté",
+    starting: "démarrage", waiting_login: "en attente de connexion", waiting_setup: "en attente d’installation (claude-remote-setup)", running: "actif", restarting: "redémarrage",
+    configured: "configuré", not_configured: "non configuré",
+    cat_lifecycle: "Cycle de vie", cat_account: "Compte", cat_remote_control: "Remote Control", cat_mcp: "HA-MCP",
+    app_started: "App démarrée", app_stopping: "Arrêt de l’App", mcp_configured: "Serveur HA-MCP configuré",
+    mcp_not_configured: "Aucune URL HA-MCP configurée", mcp_reachable: "HA-MCP joignable",
+    mcp_unreachable: "HA-MCP injoignable", login_required: "Connexion Claude requise",
+    login_detected: "Compte Claude connecté", setup_required: "Installation de Remote Control requise", setup_completed: "Installation de Remote Control terminée", remote_control_started: "Remote Control démarré",
+    remote_control_exited: "Remote Control arrêté", remote_control_restart_scheduled: "Redémarrage de Remote Control programmé",
+    page: "Page", none: "Aucune activité"
+  },
+  en: {
+    status: "Status", terminal: "Terminal", activity: "Activity", all: "All", when: "Date", event: "Event",
+    details: "Details", open_terminal: "Open terminal",
+    terminal_hint: "Used for the first sign-in (claude-remote-setup) and troubleshooting. The terminal runs as the App's unprivileged user, without Home Assistant access.",
+    phone_hint: "Usage: Claude app on the phone or claude.ai/code, Code tab, \"Home Assistant\" environment.",
+    app_version: "App version", claude_version: "Claude Code", logged_in: "Claude account",
+    remote_control: "Remote Control", mcp: "HA-MCP server", mcp_reachable: "HA-MCP reachable", updated_at: "Updated",
+    yes: "yes", no: "no", unknown: "unknown", connected: "signed in", not_connected: "not signed in",
+    starting: "starting", waiting_login: "waiting for sign-in", waiting_setup: "waiting for setup (claude-remote-setup)", running: "running", restarting: "restarting",
+    configured: "configured", not_configured: "not configured",
+    cat_lifecycle: "Lifecycle", cat_account: "Account", cat_remote_control: "Remote Control", cat_mcp: "HA-MCP",
+    app_started: "App started", app_stopping: "App stopping", mcp_configured: "HA-MCP server configured",
+    mcp_not_configured: "No HA-MCP URL configured", mcp_reachable: "HA-MCP reachable",
+    mcp_unreachable: "HA-MCP unreachable", login_required: "Claude sign-in required",
+    login_detected: "Claude account signed in", setup_required: "Remote Control setup required", setup_completed: "Remote Control setup completed", remote_control_started: "Remote Control started",
+    remote_control_exited: "Remote Control stopped", remote_control_restart_scheduled: "Remote Control restart scheduled",
+    page: "Page", none: "No activity"
+  }
+};
+const STATUS_CLASS = {
+  logged_in: { true: "ok", false: "warning" },
+  remote_control: { running: "ok", starting: "info", waiting_login: "warning", waiting_setup: "warning", restarting: "warning" },
+  mcp: { configured: "ok", not_configured: "error" },
+  mcp_reachable: { true: "ok", false: "error", unknown: "info" }
+};
+let lang = localStorage.getItem("claude-remote-lang") || (navigator.language.startsWith("fr") ? "fr" : "en");
+let page = 0;
+const t = (key) => (T[lang][key] ?? key);
+const el = (tag, text, cls) => { const node = document.createElement(tag); node.textContent = text; if (cls) node.className = cls; return node; };
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = t(node.dataset.i18n); });
+  document.querySelectorAll("[data-lang]").forEach((node) => node.classList.toggle("active", node.dataset.lang === lang));
+  refresh();
+}
+
+function statusText(key, value) {
+  if (key === "logged_in") return value === "true" ? t("connected") : t("not_connected");
+  if (key === "mcp_reachable") return value === "true" ? t("yes") : value === "false" ? t("no") : t("unknown");
+  return t(String(value));
+}
+
+async function loadStatus() {
+  const status = await (await fetch("api/status", { cache: "no-store" })).json();
+  const list = document.getElementById("status");
+  list.replaceChildren();
+  for (const key of ["app_version", "claude_version", "logged_in", "remote_control", "mcp", "mcp_reachable", "updated_at"]) {
+    if (status[key] === undefined || status[key] === "") continue;
+    const value = ["app_version", "claude_version", "updated_at"].includes(key) ? String(status[key]) : statusText(key, status[key]);
+    list.append(el("dt", t(key)), el("dd", value, STATUS_CLASS[key]?.[status[key]]));
+  }
+}
+
+async function loadActivity() {
+  const category = document.getElementById("category").value;
+  const data = await (await fetch(`api/activity?page=${page}&category=${encodeURIComponent(category)}`, { cache: "no-store" })).json();
+  const body = document.getElementById("activity");
+  body.replaceChildren();
+  if (!data.entries.length) {
+    const row = document.createElement("tr");
+    const cell = el("td", t("none"), "info"); cell.colSpan = 3; row.append(cell); body.append(row);
+  }
+  for (const entry of data.entries) {
+    const row = document.createElement("tr");
+    const details = Object.entries(entry.details || {}).map(([k, v]) => `${k}=${v}`).join(" ");
+    row.append(el("td", new Date(entry.ts).toLocaleString(lang), "ts"), el("td", t(entry.event), entry.status), el("td", details));
+    body.append(row);
+  }
+  document.getElementById("pageinfo").textContent = `${t("page")} ${data.page + 1} / ${data.pages}`;
+  document.getElementById("prev").disabled = data.page <= 0;
+  document.getElementById("next").disabled = data.page + 1 >= data.pages;
+}
+
+function refresh() { loadStatus().catch(() => {}); loadActivity().catch(() => {}); }
+
+document.querySelectorAll("[data-lang]").forEach((node) => node.addEventListener("click", () => {
+  lang = node.dataset.lang; localStorage.setItem("claude-remote-lang", lang); applyLang();
+}));
+document.getElementById("category").addEventListener("change", () => { page = 0; loadActivity(); });
+document.getElementById("prev").addEventListener("click", () => { page = Math.max(0, page - 1); loadActivity(); });
+document.getElementById("next").addEventListener("click", () => { page += 1; loadActivity(); });
+applyLang();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+name: Validate Claude Remote App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "claude_remote/**"
+      - "!claude_remote/**/*.md"
+      - ".github/workflows/claude-remote-*.yml"
+  pull_request:
+    paths:
+      - "claude_remote/**"
+      - "!claude_remote/**/*.md"
+      - ".github/workflows/claude-remote-*.yml"
+  # Called by the base refresh before it releases a rebuilt App.
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: claude-remote-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate metadata, scripts and tests
+        run: |
+          set -euo pipefail
+          python3 claude_remote/scripts/validate.py
+          for script in claude_remote/*.sh claude_remote/scripts/*.sh; do
+            bash -n "${script}"
+          done
+          python3 -m py_compile \
+            claude_remote/ingress_ui.py \
+            claude_remote/scripts/update_versions.py \
+            claude_remote/scripts/validate.py
+          python3 -m unittest discover -s claude_remote/tests -v
+
+      - name: Build amd64 image
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' claude_remote/config.yaml)"
+          docker build --pull \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg "BUILD_VERSION=${version}" \
+            --tag "claude-remote:${version}" \
+            claude_remote
+
+      - name: Smoke-test the container
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' claude_remote/config.yaml)"
+          bash claude_remote/scripts/smoke_test.sh "claude-remote:${version}"

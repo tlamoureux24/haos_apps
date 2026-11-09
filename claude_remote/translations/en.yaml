@@ -1,0 +1,10 @@
+configuration:
+  log_level:
+    name: Log level
+    description: Controls the verbosity of the App log.
+  ha_mcp_url:
+    name: Private HA-MCP URL
+    description: Complete URL displayed by the HA-MCP App, ending in /private_<secret>, for example http://192.168.1.15:9583/private_xxxx. It is the only server Claude can use. Read-only or read/write access is chosen in the HA-MCP App.
+  confirm_writes:
+    name: Confirm non-read tools
+    description: When enabled, HA-MCP read tools run directly and every other tool asks for approval in the Claude app. Has no effect while the HA-MCP App is in read-only mode.

@@ -1,0 +1,10 @@
+configuration:
+  log_level:
+    name: Niveau de journalisation
+    description: Contrôle le niveau de détail du journal de l’App.
+  ha_mcp_url:
+    name: URL privée HA-MCP
+    description: URL complète affichée par l’App HA-MCP, terminant par /private_<secret>, par exemple http://192.168.1.15:9583/private_xxxx. C’est le seul serveur utilisable par Claude. La lecture seule ou la lecture/écriture se choisit dans l’App HA-MCP.
+  confirm_writes:
+    name: Confirmer les outils hors lecture
+    description: Si activé, les outils de lecture HA-MCP s’exécutent directement et tout autre outil demande une validation dans l’app Claude. Sans effet tant que l’App HA-MCP est en lecture seule.

@@ -1,0 +1,35 @@
+name: "Claude Remote"
+slug: "claude_remote"
+version: "0.1.0"
+description: "Claude Code Remote Control limited to the Home Assistant MCP server"
+url: "https://github.com/tlamoureux24/haos_apps/tree/main/claude_remote"
+image: "ghcr.io/tlamoureux24/{arch}-claude_remote"
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: manual
+init: false
+tmpfs: true
+ingress: true
+ingress_port: 8099
+ingress_stream: true
+panel_icon: "mdi:robot-outline"
+panel_title: "Claude"
+panel_admin: true
+hassio_api: false
+homeassistant_api: false
+backup: hot
+backup_exclude:
+  - /data/home/.claude/.credentials.json
+  - /data/home/.claude/projects
+  - /data/home/.claude/shell-snapshots
+  - /data/home/.claude/todos
+options:
+  log_level: "info"
+  ha_mcp_url: ""
+  confirm_writes: true
+schema:
+  log_level: "list(trace|debug|info|notice|warning|error|fatal)"
+  ha_mcp_url: "password?"
+  confirm_writes: bool

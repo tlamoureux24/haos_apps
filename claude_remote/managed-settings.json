@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "defaultMode": "default",
+    "disableBypassPermissionsMode": "disable",
+    "disableAutoMode": "disable",
+    "deny": [
+      "Agent",
+      "Artifact",
+      "Bash",
+      "CronCreate",
+      "Edit",
+      "EnterWorktree",
+      "ExitWorktree",
+      "Glob",
+      "Grep",
+      "ListMcpResourcesTool",
+      "LSP",
+      "Monitor",
+      "NotebookEdit",
+      "PowerShell",
+      "PushNotification",
+      "Read",
+      "ReadMcpResourceTool",
+      "RemoteTrigger",
+      "ScheduleWakeup",
+      "SendFeedback",
+      "SendUserFile",
+      "ShareOnboardingGuide",
+      "WebFetch",
+      "WebSearch",
+      "Workflow",
+      "Write"
+    ]
+  },
+  "allowManagedPermissionRulesOnly": true,
+  "allowManagedHooksOnly": true,
+  "disableClaudeAiConnectors": true,
+  "env": {
+    "DISABLE_UPDATES": "1",
+    "DISABLE_AUTOUPDATER": "1",
+    "DISABLE_TELEMETRY": "1",
+    "DISABLE_ERROR_REPORTING": "1",
+    "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
+    "DISABLE_FEEDBACK_COMMAND": "1",
+    "USE_BUILTIN_RIPGREP": "0"
+  }
+}

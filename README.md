@@ -97,6 +97,23 @@ Documentation détaillée :
 
 - [Documentation française](agent_execution_plane/README.fr.md)
 
+#### Claude Remote
+
+App Home Assistant expérimentale qui fait tourner Claude Code en mode Remote Control, utilisable depuis l’app Claude ou claude.ai/code sans PC allumé ni exposition sur Internet.
+
+Fonctionnalités principales :
+
+- connexion uniquement sortante vers Anthropic, aucun port entrant ;
+- accès à Home Assistant uniquement via le serveur MCP privé de l’App HA-MCP, sans autre serveur MCP possible ;
+- aucun dossier Home Assistant monté, ni API Supervisor ou Core ;
+- shell, fichiers, web et sous-agents interdits par une politique Claude Code figée dans l’image ;
+- outils de lecture HA-MCP directs, autres outils soumis à validation dans l’app Claude ;
+- démarrage manuel, page Ingress avec état, journal d’activité et terminal d’installation.
+
+Documentation détaillée :
+
+- [Documentation française](claude_remote/README.fr.md)
+
 #### Studio Code Server + Codex
 
 App Home Assistant expérimentale fournissant un espace de développement persistant accessible exclusivement par l’Ingress authentifié de Home Assistant.
@@ -271,6 +288,7 @@ Pour comprendre le fonctionnement d’une App ou obtenir de l’aide, consulter 
 
 - [Agent Control Plane](agent_control_plane/README.fr.md)
 - [Agent Execution Plane](agent_execution_plane/README.fr.md)
+- [Claude Remote](claude_remote/README.fr.md)
 - [MCP Capability Bridge](mcp_capability_bridge/README.fr.md)
 - [Rsync Manager](rsync_manager/README.fr.md)
 - [Studio Code Server + Codex](studio_code_server/README.fr.md)
@@ -374,6 +392,23 @@ Main features:
 Detailed documentation:
 
 - [English documentation](agent_execution_plane/README.md)
+
+#### Claude Remote
+
+Experimental Home Assistant App running Claude Code in Remote Control mode, usable from the Claude app or claude.ai/code with no computer left on and nothing exposed to the Internet.
+
+Main features:
+
+- outbound connection to Anthropic only, no inbound port;
+- Home Assistant access only through the private MCP server of the HA-MCP App, with no other MCP server possible;
+- no Home Assistant folder mounted, no Supervisor or Core API;
+- shell, file, web and subagent tools denied by a Claude Code policy baked into the image;
+- HA-MCP read tools run directly, other tools need approval in the Claude app;
+- manual start, Ingress page with status, activity journal and setup terminal.
+
+Detailed documentation:
+
+- [English documentation](claude_remote/README.md)
 
 #### Studio Code Server + Codex
 
@@ -549,6 +584,7 @@ For details or help with an App, consult its English documentation first:
 
 - [Agent Control Plane](agent_control_plane/README.md)
 - [Agent Execution Plane](agent_execution_plane/README.md)
+- [Claude Remote](claude_remote/README.md)
 - [MCP Capability Bridge](mcp_capability_bridge/README.md)
 - [Rsync Manager](rsync_manager/README.md)
 - [Studio Code Server + Codex](studio_code_server/README.md)
