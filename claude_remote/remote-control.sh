@@ -1,11 +1,14 @@
 #!/bin/bash
 # Keeps `claude remote-control` running as the unprivileged claude user once
-# the account is signed in and the one-time setup has been accepted.
+# the account is signed in and both first-run questions have been answered.
 set -uo pipefail
 
 readonly DATA_HOME="/data/home"
 readonly WORKSPACE="/data/workspace"
-readonly SETUP_MARKER="${DATA_HOME}/.claude-remote/setup-done"
+# Claude Code itself records the two first-run answers in this file; the App
+# only reads them. claude-remote-setup holds the lock while it runs.
+readonly CLAUDE_CONFIG="${DATA_HOME}/.claude.json"
+readonly SETUP_LOCK="${DATA_HOME}/.claude-remote/setup.lock"
 readonly UI="/usr/local/lib/claude-remote/ingress_ui.py"
 readonly SESSION_NAME="Home Assistant"
 readonly POLL_S=20
@@ -30,6 +33,17 @@ as_claude() {
     PATH=/usr/local/bin:/usr/bin:/bin TERM=xterm-256color LANG=C.UTF-8 \
     TZ="${TZ:-}" \
     "$@"
+}
+
+# Workspace trusted and "Enable Remote Control?" answered yes, by a person.
+setup_done() {
+  jq -e --arg ws "${WORKSPACE}" \
+    '.remoteDialogSeen == true and .projects[$ws].hasTrustDialogAccepted == true' \
+    "${CLAUDE_CONFIG}" >/dev/null 2>&1
+}
+# A foreground setup run would otherwise compete with the background one.
+setup_running() {
+  [[ -e "${SETUP_LOCK}" ]] && ! flock -n "${SETUP_LOCK}" true
 }
 
 # Strip terminal control sequences, drop blank and repeated lines, timestamp.
@@ -67,7 +81,7 @@ while true; do
     logged_in=true
   fi
 
-  if [[ ! -f "${SETUP_MARKER}" ]]; then
+  if ! setup_done || setup_running; then
     if [[ "${setup_reported}" == "false" ]]; then
       log WARNING "Remote Control not set up yet: run claude-remote-setup once in the terminal"
       event setup_required --status warning

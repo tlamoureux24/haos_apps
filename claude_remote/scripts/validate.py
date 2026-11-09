@@ -131,7 +131,9 @@ def main() -> int:
         '.authMethod == "claude.ai"',
         "claude remote-control",
         "--permission-mode default",
-        "SETUP_MARKER",
+        "remoteDialogSeen == true",
+        "hasTrustDialogAccepted == true",
+        "setup_running",
     ), supervisor, "Remote Control loop")
     for text, name in ((launcher, "run.sh"), (supervisor, "remote-control.sh")):
         for variable in FORBIDDEN_ENV:

@@ -33,7 +33,7 @@ Phone / browser ──HTTPS──▶ Anthropic ◀──outbound HTTPS── Cla
    ```
 
    - Step 1: sign in to your Claude account. Open the link on any device; if a code is shown, paste it into the terminal.
-   - Step 2: Remote Control runs once in the foreground. Accept its questions (trust `/data/workspace`, enable Remote Control). When it shows it is ready, press Ctrl-C and answer `y`.
+   - Step 2: Remote Control runs once in the foreground. Accept its questions (trust `/data/workspace`, enable Remote Control). When it shows it is ready, press Ctrl-C or close the terminal.
 5. Within 20 seconds Remote Control runs in the background. On the phone: Claude app → **Code** → **Home Assistant** environment.
 
 ## Options
@@ -77,6 +77,6 @@ The admin terminal gives a shell as the App's unprivileged user. It is restricte
 | Symptom | Hint |
 | --- | --- |
 | "waiting for sign-in" | Run `claude-remote-setup` or `claude auth login` in the terminal. |
-| "waiting for setup" | Run `claude-remote-setup` and answer `y` at the end. |
+| "waiting for setup" | Run `claude-remote-setup` again and accept both questions (trust `/data/workspace`, then `y`). |
 | HA-MCP unreachable | Check that the HA-MCP App is started and the URL is right. If the HA IP changes, try `http://172.30.32.1:9583/private_xxxx`. |
-| Remote Control keeps restarting | Read the App log. To redo the setup: `rm ~/.claude-remote/setup-done`, restart the App, then `claude-remote-setup`. |
+| Remote Control keeps restarting | Read the App log. |
