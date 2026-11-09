@@ -1,0 +1,58 @@
+name: TMP AppArmor probe
+
+on:
+  push:
+    branches:
+      - feat/claude-remote-apparmor
+    paths:
+      - ".github/workflows/tmp-apparmor-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build image
+        run: docker build --build-arg BUILD_ARCH=amd64 --build-arg BUILD_VERSION=0.0.0 --tag cr claude_remote
+      - name: Try network rules in the shell sub-profile
+        run: |
+          set +e
+          cat /etc/apparmor/parser.conf 2>/dev/null | grep -v '^#' | grep -v '^$'
+          ls /etc/apparmor.d/abi/ 2>/dev/null
+          python3 - <<'PY'
+          import pathlib
+          src = pathlib.Path("claude_remote/apparmor.txt").read_text()
+          shell_marker = "    # No network and no capability rule: AppArmor denies both by default.\n"
+          def rename(text, name):
+              return text.replace("profile claude_remote ", f"profile {name} ").replace("claude_remote//", f"{name}//")
+          abi = src.replace("#include <tunables/global>\n", "abi <abi/4.0>,\n#include <tunables/global>\n")
+          explicit = src.replace(shell_marker, shell_marker + "    deny network inet,\n    deny network inet6,\n")
+          audit = src.replace(shell_marker, shell_marker + "    audit deny network inet,\n")
+          # Shell as a second top-level profile, indented so Supervisor's
+          # one-profile check still sees a single name.
+          start = src.index("  profile claude_shell flags")
+          end = src.rindex("}")
+          shell_block = src[start:end]
+          toplevel = src[:start] + src[end:] + "\n" + shell_block.replace("  profile claude_shell", " profile claude_remote_shell", 1)
+          toplevel = toplevel.replace("Px -> claude_remote//claude_shell", "Px -> claude_remote_shell")
+          variants = {"v_cur": src, "v_abi": abi, "v_explicit": explicit, "v_audit": audit, "v_top": toplevel}
+          for name, text in variants.items():
+              t = rename(text, name).replace("profile claude_remote_shell", f"profile {name}_shell").replace("Px -> claude_remote_shell", f"Px -> {name}_shell")
+              pathlib.Path(f"/tmp/{name}.txt").write_text(t)
+          PY
+          test_net='import socket
+          try:
+              socket.socket(socket.AF_INET, socket.SOCK_STREAM); print("inet ok")
+          except OSError as e:
+              print("inet denied", e.errno)'
+          for v in v_cur v_abi v_explicit v_audit v_top; do
+            sudo apparmor_parser --replace "/tmp/${v}.txt" || { echo "${v}: LOAD FAILED"; continue; }
+            shell="${v}//claude_shell"; [[ "${v}" == v_top ]] && shell="v_top_shell"
+            parent="$(docker run --rm --security-opt "apparmor=${v}" --entrypoint /usr/bin/python3 cr -c "${test_net}" 2>&1 | tail -1)"
+            child="$(docker run --rm --security-opt "apparmor=${shell}" --entrypoint /usr/bin/python3 cr -c "${test_net}" 2>&1 | tail -1)"
+            echo "RESULT ${v}: parent=${parent} | shell=${child}"
+          done
