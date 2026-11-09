@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1
+
+- Fix: Remote Control stayed waiting for setup when `claude-remote-setup` was
+  closed before its final y/N question. The App now reads the two answers that
+  Claude Code itself records (workspace trust, Remote Control enabled), so
+  pressing Ctrl-C or closing the terminal is enough.
+- The background Remote Control waits while `claude-remote-setup` runs, so two
+  "Home Assistant" environments never run at once.
+
 ## 0.1.0
 
 - First release: Claude Code 2.1.319 in Remote Control mode, driven from the
