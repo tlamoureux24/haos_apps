@@ -158,9 +158,15 @@ def main() -> int:
         "    /usr/bin/** Px -> claude_remote//claude_shell,",
         "    deny /data/options.json r,",
     ), apparmor, "AppArmor")
+    # Network and capabilities are denied by default; an explicit deny in a
+    # sub-profile also cut the parent's network (apparmor_parser 4.0.1).
+    for name, body in (("claude", apparmor.split("  profile claude flags=", 1)[-1].split("  profile claude_shell", 1)[0]),
+                       ("claude_shell", shell)):
+        if re.search(r"^\s*(deny\s+)?(capability|network)\b", body, flags=re.MULTILINE) and name == "claude_shell":
+            raise RuntimeError("claude_shell must have no network or capability rule")
+        if re.search(r"^\s*(deny\s+)?capability\b", body, flags=re.MULTILINE):
+            raise RuntimeError(f"{name} must have no capability rule")
     require((
-        "    deny network,",
-        "    deny capability,",
         "    deny /usr/local/bin/** x,",
         "    deny /data/home/.claude/.credentials.json r,",
         "    deny /etc/claude-code/managed-mcp.json r,",

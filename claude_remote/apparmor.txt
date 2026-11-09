@@ -7,7 +7,7 @@
 #   stays broad on executables; it denies mounts, raw sockets, ptrace and
 #   writes outside the App's own data.
 # claude_remote//claude: the Claude Code binary, entered on every exec of
-#   /usr/local/bin/claude. Network for claude.ai and HA-MCP, writes only to
+#   /usr/local/bin/claude. No capability. Network for claude.ai and HA-MCP, writes only to
 #   its home, the workspace and /tmp. Any other program it starts runs in
 #   claude_shell.
 # claude_remote//claude_shell: programs started by Claude Code (shell,
@@ -217,7 +217,6 @@ profile claude_remote flags=(attach_disconnected,mediate_deleted) {
     unix,
 
     ptrace (read, readby),
-    deny capability,
     deny mount,
     deny umount,
     deny pivot_root,
@@ -257,8 +256,9 @@ profile claude_remote flags=(attach_disconnected,mediate_deleted) {
 
     signal,
 
-    deny network,
-    deny capability,
+    # No network and no capability rule: AppArmor denies both by default.
+    # (An explicit "deny network," here also removed the parent's network
+    # with apparmor_parser 4.0.1.)
     deny mount,
     deny umount,
     deny pivot_root,
