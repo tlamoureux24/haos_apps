@@ -39,6 +39,9 @@ VERSION_FILES: dict[str, tuple[str, ...]] = {
         "scripts/validate.py",
         "src/agent_execution_plane/__init__.py",
     ),
+    "claude_remote": (
+        "config.yaml",
+    ),
     "mcp_capability_bridge": (
         "config.yaml",
         "scripts/validate.py",

@@ -1,0 +1,87 @@
+name: Update Claude Remote Claude Code
+
+on:
+  schedule:
+    - cron: "37 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: claude-remote-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      branch: ${{ steps.commit.outputs.branch }}
+      sha: ${{ steps.commit.outputs.sha }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve the latest Claude Code release
+        id: versions
+        run: |
+          set -euo pipefail
+          latest="$(curl --fail --silent --show-error https://registry.npmjs.org/@anthropic-ai%2fclaude-code/latest | jq -r '.version')"
+          [[ "${latest}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          current="$(sed -n 's/^ARG CLAUDE_CODE_VERSION="\([^"]*\)"$/\1/p' claude_remote/Dockerfile)"
+          echo "claude_code=${latest}" >>"${GITHUB_OUTPUT}"
+          if [[ "${latest}" == "${current}" ]]; then
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
+          else
+            echo "changed=true" >>"${GITHUB_OUTPUT}"
+          fi
+
+      - name: Update the pinned version and digests
+        if: steps.versions.outputs.changed == 'true'
+        run: python3 claude_remote/scripts/update_versions.py --claude-code "${{ steps.versions.outputs.claude_code }}"
+
+      - name: Validate, build and smoke-test the candidate
+        if: steps.versions.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python3 claude_remote/scripts/validate.py
+          python3 -m unittest discover -s claude_remote/tests
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' claude_remote/config.yaml)"
+          docker build --pull \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg "BUILD_VERSION=${version}" \
+            --tag "claude-remote:${version}" \
+            claude_remote
+          bash claude_remote/scripts/smoke_test.sh "claude-remote:${version}"
+
+      - name: Commit validated update to staging branch
+        id: commit
+        if: steps.versions.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\([^"]*\)"$/\1/p' claude_remote/config.yaml)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add claude_remote
+          git commit -m "Update Claude Remote to ${version} (Claude Code ${{ steps.versions.outputs.claude_code }})"
+          # main only moves once the images for this commit are public.
+          branch="automation/claude-remote-update"
+          git push --force origin "HEAD:refs/heads/${branch}"
+          echo "branch=${branch}" >>"${GITHUB_OUTPUT}"
+          echo "sha=$(git rev-parse HEAD)" >>"${GITHUB_OUTPUT}"
+
+  publish:
+    needs: update
+    if: needs.update.outputs.sha != ''
+    uses: ./.github/workflows/app-images-publish.yml
+    permissions:
+      contents: write
+      packages: write
+    with:
+      apps: claude_remote
+      ref: ${{ needs.update.outputs.sha }}
+      promote: true
+      staging_branch: ${{ needs.update.outputs.branch }}
