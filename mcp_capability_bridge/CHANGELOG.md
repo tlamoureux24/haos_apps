@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.16
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `libxslt` `1.1.43-r3` → `1.1.43-r4`
+
 ## 1.1.15
 
 - Rebuild on the current Home Assistant base image to pick up Alpine
