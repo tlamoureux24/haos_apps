@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- Update Claude Code to 2.1.322.
+
 ## 0.1.3
 
 - Quieter App log: Remote Control redraws its status screen every second,

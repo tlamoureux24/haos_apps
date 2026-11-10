@@ -1,6 +1,6 @@
 name: "Claude Remote"
 slug: "claude_remote"
-version: "0.1.3"
+version: "0.1.4"
 description: "Claude Code Remote Control limited to the Home Assistant MCP server"
 url: "https://github.com/tlamoureux24/haos_apps/tree/main/claude_remote"
 image: "ghcr.io/tlamoureux24/{arch}-claude_remote"
