@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.52
+
+- Update code-server to 4.145.2.
+- Update Codex CLI to 0.167.1.
+- Update Home Assistant CLI to 5.6.0.
+
 ## 0.1.51
 
 - Update code-server to 4.145.2.
