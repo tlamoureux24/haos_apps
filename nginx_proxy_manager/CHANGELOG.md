@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.17.0-1 - 2026-11-12
+
+- Update the official Nginx Proxy Manager image from `2.16.0` to `2.17.0`.
+- Pin the image by its multi-architecture digest `sha256:9cdfebbcbb6a70b84c538e6e39862c5d627171e5f4ea4bfda933f7643e3640a4`.
+- Reset the Home Assistant package revision to `1`.
+
 ## 2.16.0-2 - 2026-11-07
 
 - Pin the official Nginx Proxy Manager `2.16.0` image by its multi-architecture digest `sha256:4393e642e233e5efd5adeb7f10918d4aaea71c9ed875b94190273fc8e87f9594`.
