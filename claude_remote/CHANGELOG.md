@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5
+
+- Update Claude Code to 2.1.323.
+
 ## 0.1.4
 
 - Update Claude Code to 2.1.322.
