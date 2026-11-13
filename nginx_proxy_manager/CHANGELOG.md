@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.17.0-2 - 2026-11-13
+
+- Pin the rebuilt official Nginx Proxy Manager `2.17.0` image by its multi-architecture digest `sha256:91277490a919c792aa73b8d291af1ca84d32be74df988e543137976515763534`.
+- Upstream republished the `2.17.0` tag on 2026-11-13 from the same source commit `5c8aec9b`, after rebuilding its `nginx-full` base image with a build-only fix (retry of the Lua SSL download).
+
 ## 2.17.0-1 - 2026-11-12
 
 - Update the official Nginx Proxy Manager image from `2.16.0` to `2.17.0`.
