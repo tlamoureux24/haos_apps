@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.17
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `nss` `3.124-r0` → `3.133-r0`
+
 ## 1.1.16
 
 - Rebuild on the current Home Assistant base image to pick up Alpine
