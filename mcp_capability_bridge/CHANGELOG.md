@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.18
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `mbedtls3` `3.6.7-r0` → `3.6.8-r0`
+
 ## 1.1.17
 
 - Rebuild on the current Home Assistant base image to pick up Alpine
