@@ -1,10 +1,10 @@
-ARG NPM_VERSION="2.17.0"
+ARG NPM_VERSION="2.17.1"
 # Multi-architecture index digest of the official image, written by the update
 # workflow as "@sha256:<hex>". Empty only until that workflow first pins it.
-ARG NPM_DIGEST="@sha256:91277490a919c792aa73b8d291af1ca84d32be74df988e543137976515763534"
+ARG NPM_DIGEST="@sha256:04a9d0835560b9719ab577275f84fe1f713298a1c1e2bdefa034b87f10e062e1"
 FROM docker.io/jc21/nginx-proxy-manager:${NPM_VERSION}${NPM_DIGEST}
 
-ARG BUILD_VERSION="2.17.0-2"
+ARG BUILD_VERSION="2.17.1-1"
 ARG BUILD_ARCH
 
 LABEL \
