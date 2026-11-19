@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- Update Claude Code to 2.1.328.
+
 ## 0.1.9
 
 - Rebuild on the current Home Assistant base image to pick up Alpine
