@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `nginx` `1.30.6-r0` → `1.30.7-r0`
+
 ## 0.1.8
 
 - Update Claude Code to 2.1.327.

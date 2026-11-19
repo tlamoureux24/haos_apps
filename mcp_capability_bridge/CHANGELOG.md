@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.19
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `gnutls` `3.8.13-r0` → `3.8.14-r0`
+
 ## 1.1.18
 
 - Rebuild on the current Home Assistant base image to pick up Alpine
