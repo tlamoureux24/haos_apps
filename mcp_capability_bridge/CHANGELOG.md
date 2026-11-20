@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.20
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `libfontenc` `1.1.9-r0` → `1.1.10-r0`
+
 ## 1.1.19
 
 - Rebuild on the current Home Assistant base image to pick up Alpine
