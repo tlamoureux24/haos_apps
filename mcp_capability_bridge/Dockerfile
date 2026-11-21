@@ -12,7 +12,7 @@ LABEL \
   org.opencontainers.image.base.digest="${BASE_IMAGE_DIGEST}"
 
 RUN apk add --no-cache python3 py3-pip su-exec \
-      chromium=156.0.8078.79-r0 chromium-chromedriver=156.0.8078.79-r0 \
+      chromium=158.0.8127.36-r0 chromium-chromedriver=158.0.8127.36-r0 \
   && addgroup -S mcp-capability-bridge \
   && adduser -S -D -H -h /data -G mcp-capability-bridge -u 1000 mcp-capability-bridge
 

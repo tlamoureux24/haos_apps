@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.21
+
+- Update the pinned Alpine Chromium and ChromeDriver packages to
+  158.0.8127.36-r0; 156.0.8078.79-r0 is no longer published.
+
 ## 1.1.20
 
 - Rebuild on the current Home Assistant base image to pick up Alpine
