@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.5
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `py3-pip` `26.1.2-r0` → `26.1.2-r1`
+  - `py3-pip-pyc` `26.1.2-r0` → `26.1.2-r1`
+
 ## 1.2.4
 
 - Update `mcp` from 1.28.1 to 1.30.0 to fix GHSA-w4fh-qvv9-3v23, GHSA-5h93-6whr-6q8j,
