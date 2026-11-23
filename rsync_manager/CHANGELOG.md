@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.24 - 2026-11-23
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `glib` `2.88.1-r1` → `2.88.4-r0`
+
 ## 1.3.23 - 2026-11-07
 
 - Update the Alpine rsync package from 3.5.2-r0 to 3.5.2-r1.

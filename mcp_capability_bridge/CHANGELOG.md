@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.22
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `glib` `2.88.1-r1` → `2.88.4-r0`
+
 ## 1.1.21
 
 - Update the pinned Alpine Chromium and ChromeDriver packages to
