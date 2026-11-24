@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.11
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `libffi` `3.5.2-r1` → `3.8.1-r0`
+  - `pyc` `3.14.10-r1` → `3.14.10-r2`
+  - `python3` `3.14.10-r1` → `3.14.10-r2`
+  - `python3-ndbm` added (`3.14.10-r3`)
+  - `python3-pyc` `3.14.10-r1` → `3.14.10-r2`
+  - `python3-pycache-pyc0` `3.14.10-r1` → `3.14.10-r2`
+
 ## 1.1.10
 
 - Rebuild on the current Home Assistant base image to pick up Alpine

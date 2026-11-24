@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.25 - 2026-11-24
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `libffi` `3.5.2-r1` → `3.8.1-r0`
+
 ## 1.3.24 - 2026-11-23
 
 - Rebuild on the current Home Assistant base image to pick up Alpine
