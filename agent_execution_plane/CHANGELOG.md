@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.18
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `krb5-libs` `1.22.2-r1` → `1.22.3-r0`
+  - `libcrypto3` `3.5.9-r0` → `3.5.9-r1`
+  - `libexpat` `2.10.0-r0` → `2.11.0-r0`
+  - `libssl3` `3.5.9-r0` → `3.5.9-r1`
+  - `libxml2` `2.13.9-r2` → `2.13.9-r3`
+  - `zlib` `1.3.2-r1` → `1.4-r0`
+  - `zstd-libs` `1.5.7-r2` → `1.6.0-r1`
+
 ## 1.1.17
 
 - Rebuild on the current Home Assistant base image to pick up Alpine
