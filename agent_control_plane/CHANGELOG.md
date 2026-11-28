@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.8
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `libffi` `3.8.1-r0` → `3.8.2-r0`
+
 ## 1.2.7
 
 - Rebuild on the current Home Assistant base image to pick up Alpine

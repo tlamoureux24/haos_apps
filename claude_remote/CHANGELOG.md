@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.17
+
+- Rebuild on the current Home Assistant base image to pick up Alpine
+  package updates. The App code is unchanged.
+  - `libffi` `3.8.1-r0` → `3.8.2-r0`
+
 ## 0.1.16
 
 - Update Claude Code to 2.1.332.
